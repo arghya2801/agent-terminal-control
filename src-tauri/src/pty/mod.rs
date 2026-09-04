@@ -2,4 +2,6 @@
 //! output to the webview.
 
 pub mod pump;
+pub mod registry;
+pub mod session;
 pub mod shell;
