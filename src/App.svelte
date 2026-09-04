@@ -10,12 +10,16 @@
     toggleSidebar,
   } from './lib/stores.svelte';
   import {
+    focusTerminal,
     getActiveKey,
+    isTerminalFocused,
     listTabs,
     mount as mountTerminals,
     onChange,
+    onEscapeToApp,
     openTab,
     refit,
+    setDoubleEscapeEnabled,
   } from './terminal/manager';
   import type { Project, SessionMeta, TabKey } from './types';
 
@@ -24,6 +28,8 @@
   let activeKey = $state<TabKey | null>(null);
   let showDebug = $state(false);
   let error = $state<string | null>(null);
+  /** False while keys belong to the app rather than the shell. */
+  let termFocused = $state(true);
   let counter = 0;
 
   const open = $derived(sidebarOpen());
@@ -32,6 +38,7 @@
   function sync() {
     tabs = listTabs().map((t) => ({ key: t.key, title: t.title, exited: t.exited }));
     activeKey = getActiveKey();
+    termFocused = isTerminalFocused();
   }
 
   async function guard(fn: () => Promise<unknown>) {
@@ -67,6 +74,7 @@
 
   onMount(() => {
     const off = onChange(sync);
+    const offEscape = onEscapeToApp(() => (termFocused = false));
     mountTerminals(wrapper);
     // Settings decide whether the sidebar is open, which decides how wide the terminal
     // pane is. Spawning a shell before that lands means the PTY starts at one width and
@@ -77,6 +85,12 @@
     })();
 
     const onKey = (e: KeyboardEvent) => {
+      // Escape returns control to the shell without having to click.
+      if (!termFocused && e.key === 'Escape') {
+        e.preventDefault();
+        focusTerminal();
+        return;
+      }
       if (!e.ctrlKey) return;
       const k = e.key.toLowerCase();
       if (e.shiftKey && k === 'd') {
@@ -96,6 +110,7 @@
 
     return () => {
       off();
+      offEscape();
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', refit);
     };
@@ -103,6 +118,11 @@
 
   // The terminal shares the wrapper's geometry, so it must re-measure once the panel
   // has finished animating -- otherwise ConPTY keeps the old column count.
+  // Settings decide whether double-Escape is the way out of the terminal.
+  $effect(() => {
+    setDoubleEscapeEnabled(appState.settings?.ui.doubleEscapeLeavesTerminal ?? true);
+  });
+
   $effect(() => {
     void open;
     void width;
@@ -153,6 +173,11 @@
     <div class="panes" bind:this={wrapper}></div>
     {#if showDebug}
       <DebugOverlay {activeKey} />
+    {/if}
+    {#if !termFocused}
+      <button class="focus-hint" onclick={() => focusTerminal()}>
+        app keys active · <kbd>Esc</kbd> or click to type in the terminal
+      </button>
     {/if}
     {#if error}
       <div class="error">
@@ -218,6 +243,28 @@
     flex: 1;
     min-height: 0;
     padding: 6px 0 0 8px;
+  }
+  .focus-hint {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 5px 12px;
+    border: 1px solid #1f6feb;
+    border-radius: 20px;
+    background: rgba(13, 30, 55, 0.95);
+    color: #6cb6ff;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .focus-hint kbd {
+    padding: 1px 4px;
+    border: 1px solid #30363d;
+    border-radius: 3px;
+    background: #161b22;
+    font-family: ui-monospace, monospace;
+    font-size: 10px;
   }
   .error {
     position: absolute;

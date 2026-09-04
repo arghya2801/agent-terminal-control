@@ -146,7 +146,12 @@ fn parse_head(path: &Path) -> Option<Head> {
             _ => absorb_common(&mut head, &v),
         }
 
-        if head.cwd.is_some() && (head.ai_title.is_some() || head.first_message.is_some()) {
+        // Stop only once the *best* label is in hand. Real transcripts put `ai-title`
+        // below the first user turn, so bailing out as soon as any first message
+        // exists skips the good label entirely -- and when that first message is the
+        // useless "." there is nothing left but the uuid. Without an `ai-title` the
+        // read simply runs to the budget, which is bounded and cheap.
+        if head.cwd.is_some() && head.ai_title.is_some() {
             break;
         }
     }
@@ -341,6 +346,19 @@ mod tests {
         );
         assert_eq!(s.label_source, LabelSource::Uuid);
         assert_eq!(s.label, "dddddddd");
+    }
+
+    #[test]
+    fn a_late_ai_title_still_wins_over_an_earlier_message() {
+        // Real transcripts put `ai-title` below the first user turn. Stopping as soon
+        // as a cwd and any first message are in hand skips it, and a "." first message
+        // then leaves nothing but the uuid.
+        let s = read(
+            fixtures().join("D--Coding-portfolio2"),
+            "1a1a1a1a-8888-4888-8888-1a1a1a1a1a1a",
+        );
+        assert_eq!(s.label, "Run Astro portfolio with pnpm");
+        assert_eq!(s.label_source, LabelSource::AiTitle);
     }
 
     #[test]

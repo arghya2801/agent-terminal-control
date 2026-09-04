@@ -17,7 +17,13 @@ use serde::{Deserialize, Serialize};
 
 use super::session::{LabelSource, SessionMeta};
 
-pub const SCHEMA_VERSION: u32 = 1;
+/// Bump this whenever the parser could produce a different result for the same bytes.
+/// A cached entry records the parser's *output*, so a parsing fix is invisible until the
+/// cache is discarded -- which is a confusing way to discover that a fix "did not work".
+///
+/// 2: `ai-title` below the first user turn is no longer skipped (labels were falling
+///    back to the uuid for real transcripts).
+pub const SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Entry {

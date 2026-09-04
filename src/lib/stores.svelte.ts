@@ -7,6 +7,13 @@
 
 import { listen } from '@tauri-apps/api/event';
 import { indexRefresh, indexSnapshot, settingsGet, settingsSet } from './ipc';
+import {
+  anyExpanded,
+  isExpandedIn,
+  setAll,
+  toggleIn,
+  type Collapsed,
+} from './expansion';
 import type { IndexSnapshot, Settings } from '../types';
 
 const EVENT_INDEX_UPDATED = 'index://updated';
@@ -23,20 +30,28 @@ export const appState = $state({
   indexRevision: 0,
 });
 
-/** Which projects are expanded. Deliberately not persisted — cheap to redo, and stale
- *  expansion after the project list shifts is more annoying than useful. */
-const expandedKeys = $state<Record<string, boolean>>({});
+/** Tracked as the set of *collapsed* keys, so everything is expanded by default —
+ *  including projects that appear while the app is running. Deliberately not persisted:
+ *  cheap to redo, and stale expansion after the list shifts is more annoying than
+ *  useful. */
+const collapsed = $state<Collapsed>({});
 
 export function isExpanded(key: string): boolean {
-  return expandedKeys[key] === true;
+  return isExpandedIn(collapsed, key);
 }
 
 export function toggleExpanded(key: string) {
-  expandedKeys[key] = !expandedKeys[key];
+  toggleIn(collapsed, key);
 }
 
-export function setExpanded(key: string, open: boolean) {
-  expandedKeys[key] = open;
+/** Whether the header button should offer "collapse all" or "expand all". */
+export function anyProjectExpanded(): boolean {
+  return anyExpanded(collapsed, appState.index.projects.map((p) => p.key));
+}
+
+export function toggleAllProjects() {
+  const keys = appState.index.projects.map((p) => p.key);
+  setAll(collapsed, keys, anyExpanded(collapsed, keys));
 }
 
 function applySnapshot(snap: IndexSnapshot) {
@@ -48,9 +63,6 @@ export async function initStores() {
   try {
     appState.settings = await settingsGet();
     applySnapshot(await indexSnapshot());
-    // Open the most recent project by default so the sidebar is useful on first paint.
-    const first = appState.index.projects[0];
-    if (first) setExpanded(first.key, true);
     appState.error = null;
   } catch (e) {
     appState.error = String(e);

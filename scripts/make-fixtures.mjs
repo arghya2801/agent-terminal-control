@@ -125,6 +125,18 @@ write(
   { truncateLast: true },
 );
 
+// Case: the `ai-title` line sits BELOW the first human turn, and that first turn is
+// the useless "." message. A parser that stops as soon as it has a cwd plus any first
+// message never reaches the real title and falls back to the uuid. Mirrors a real
+// local transcript.
+write('D--Coding-portfolio2/1a1a1a1a-8888-4888-8888-1a1a1a1a1a1a.jsonl', [
+  mode(),
+  userLine({ text: '.', cwd: P2 }),
+  ...Array.from({ length: 3 }, (_, i) => snapshot(i)),
+  aiTitle('Run Astro portfolio with pnpm'),
+  userLine({ text: 'now actually do the thing', cwd: P2 }),
+]);
+
 // ---------------------------------------------------------------------------
 // D--Coding-deleted-project
 // Case: cwd points at a directory that no longer exists. Must show as exists:false,

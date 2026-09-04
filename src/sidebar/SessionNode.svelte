@@ -47,7 +47,8 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 8px;
-    padding: 4px 10px 4px 26px;
+    /* Indented well past the project row's text, or the tree reads as a flat list. */
+    padding: 4px 10px 4px 40px;
     border: none;
     background: transparent;
     color: #8b949e;

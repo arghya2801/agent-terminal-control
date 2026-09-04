@@ -1,6 +1,11 @@
 <script lang="ts">
   import ProjectNode from './ProjectNode.svelte';
-  import { appState, refresh } from '../lib/stores.svelte';
+  import {
+    anyProjectExpanded,
+    appState,
+    refresh,
+    toggleAllProjects,
+  } from '../lib/stores.svelte';
   import type { Project, SessionMeta, TabKey } from '../types';
 
   let {
@@ -16,6 +21,11 @@
   let refreshing = $state(false);
 
   const limit = $derived(appState.settings?.ui.sessionsPerProject ?? 15);
+  // Re-read on every index change so the label tracks projects appearing or vanishing.
+  const anyOpen = $derived.by(() => {
+    void appState.indexRevision;
+    return anyProjectExpanded();
+  });
 
   async function doRefresh() {
     refreshing = true;
@@ -28,9 +38,25 @@
 <div class="panel">
   <header>
     <span class="title">Projects</span>
-    <button class="refresh" class:spin={refreshing} onclick={doRefresh} title="Rescan sessions">
-      ⟳
-    </button>
+    <div class="actions">
+      <button
+        class="icon"
+        onclick={toggleAllProjects}
+        title={anyOpen ? 'Collapse all' : 'Expand all'}
+        aria-label={anyOpen ? 'Collapse all' : 'Expand all'}
+      >
+        {anyOpen ? '⌄' : '›'}
+      </button>
+      <button
+        class="icon"
+        class:spin={refreshing}
+        onclick={doRefresh}
+        title="Rescan sessions"
+        aria-label="Rescan sessions"
+      >
+        ⟳
+      </button>
+    </div>
   </header>
 
   <div class="list">
@@ -74,17 +100,24 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
   }
-  .refresh {
+  .actions {
+    display: flex;
+    gap: 2px;
+  }
+  .icon {
+    width: 20px;
     border: none;
+    border-radius: 4px;
     background: transparent;
     color: #6e7681;
-    font-size: 13px;
+    font-size: 12px;
     cursor: pointer;
   }
-  .refresh:hover {
+  .icon:hover {
+    background: #21262d;
     color: #539bf5;
   }
-  .refresh.spin {
+  .icon.spin {
     animation: spin 0.8s linear infinite;
   }
   @keyframes spin {

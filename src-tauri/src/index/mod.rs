@@ -148,8 +148,8 @@ mod tests {
                 .all(|f| !f.to_string_lossy().contains("subagents")),
             "{files:?}"
         );
-        // 3 game-tracker + 2 portfolio2 + 1 deleted-project + 1 headless.
-        assert_eq!(files.len(), 7, "{files:?}");
+        // 3 game-tracker + 3 portfolio2 + 1 deleted-project + 1 headless.
+        assert_eq!(files.len(), 8, "{files:?}");
     }
 
     #[test]
@@ -162,7 +162,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let snap = index(&d).scan(&fixture_settings(), false);
 
-        assert_eq!(snap.session_count, 7);
+        assert_eq!(snap.session_count, 8);
         let names: Vec<&str> = snap.projects.iter().map(|p| p.name.as_str()).collect();
         // The underscore proves cwd was read rather than the directory name decoded.
         assert!(names.contains(&"game_tracker_app"), "{names:?}");

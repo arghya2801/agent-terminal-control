@@ -28,32 +28,34 @@
 </script>
 
 <div class="project">
+  <!-- The whole row toggles expansion, so hitting a 10px chevron is never required.
+       Opening a shell is the explicit action on the right. -->
   <div class="row" class:active={projectActive}>
     <button
-      class="twisty"
+      class="disclosure"
       onclick={() => toggleExpanded(project.key)}
-      aria-label={open ? 'Collapse' : 'Expand'}
       aria-expanded={open}
+      title={open ? 'Collapse' : 'Expand'}
     >
-      {open ? '▾' : '▸'}
+      <span class="twisty" class:open>▸</span>
+      {#if project.pinned}<span class="pin">●</span>{/if}
+      <span class="text" class:missing={!launchable}>{project.name}</span>
+      <span class="count">{project.sessions.length}</span>
     </button>
 
+    <span class="age">{project.lastActiveMs > 0 ? relativeTime(project.lastActiveMs) : ''}</span>
+
     <button
-      class="name"
-      class:missing={!launchable}
+      class="open"
       disabled={!launchable}
       onclick={() => onOpenProject(project)}
       title={project.path
         ? `Open a shell in ${shortenPath(project.path, 80)}`
         : 'These sessions never recorded a working directory'}
+      aria-label="Open a shell here"
     >
-      {#if project.pinned}<span class="pin">●</span>{/if}
-      <span class="text">{project.name}</span>
+      ▸_
     </button>
-
-    <span class="count" title="{project.sessions.length} sessions">
-      {#if project.lastActiveMs > 0}{relativeTime(project.lastActiveMs)}{/if}
-    </span>
   </div>
 
   {#if open}
@@ -67,9 +69,7 @@
         />
       {/each}
       {#if hidden > 0}
-        <button class="more" onclick={() => (showAll = true)}>
-          show {hidden} more
-        </button>
+        <button class="more" onclick={() => (showAll = true)}>show {hidden} more</button>
       {/if}
       {#if project.sessions.length === 0}
         <div class="empty">no sessions yet</div>
@@ -81,9 +81,9 @@
 <style>
   .row {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     gap: 2px;
-    padding-right: 8px;
+    padding-right: 6px;
   }
   .row:hover {
     background: #161b22;
@@ -91,22 +91,13 @@
   .row.active {
     background: #1f6feb22;
   }
-  .twisty {
-    width: 18px;
-    padding: 2px 0;
-    border: none;
-    background: transparent;
-    color: #6e7681;
-    font-size: 10px;
-    cursor: pointer;
-  }
-  .name {
+  .disclosure {
     display: flex;
     min-width: 0;
     flex: 1;
     align-items: center;
-    gap: 5px;
-    padding: 5px 0;
+    gap: 6px;
+    padding: 7px 4px 7px 8px;
     border: none;
     background: transparent;
     color: #c9d1d9;
@@ -116,15 +107,27 @@
     text-align: left;
     cursor: pointer;
   }
-  .name.missing {
-    color: #6e7681;
-    cursor: default;
-    text-decoration: line-through;
+  .twisty {
+    flex-shrink: 0;
+    width: 10px;
+    color: #8b949e;
+    font-size: 11px;
+    transition: transform 120ms ease;
+  }
+  .disclosure:hover .twisty {
+    color: #539bf5;
+  }
+  .twisty.open {
+    transform: rotate(90deg);
   }
   .text {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .text.missing {
+    color: #6e7681;
+    text-decoration: line-through;
   }
   .pin {
     flex-shrink: 0;
@@ -133,13 +136,47 @@
   }
   .count {
     flex-shrink: 0;
+    padding: 0 5px;
+    border-radius: 8px;
+    background: #21262d;
+    color: #6e7681;
+    font-size: 9px;
+    line-height: 14px;
+  }
+  .age {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
     color: #6e7681;
     font-size: 10px;
+  }
+  .open {
+    flex-shrink: 0;
+    padding: 0 5px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: #6e7681;
+    font-family: ui-monospace, monospace;
+    font-size: 10px;
+    cursor: pointer;
+    opacity: 0;
+  }
+  .row:hover .open {
+    opacity: 1;
+  }
+  .open:hover:not(:disabled) {
+    background: #30363d;
+    color: #539bf5;
+  }
+  .open:disabled {
+    cursor: default;
+    opacity: 0;
   }
   .more,
   .empty {
     width: 100%;
-    padding: 3px 10px 6px 26px;
+    padding: 3px 10px 6px 40px;
     border: none;
     background: transparent;
     color: #6e7681;
