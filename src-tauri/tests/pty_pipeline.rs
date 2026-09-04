@@ -8,8 +8,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use ccpg_lib::pty::registry::PtyRegistry;
-use ccpg_lib::pty::session::{PtyEvent, SpawnOpts};
+use atc_lib::pty::registry::PtyRegistry;
+use atc_lib::pty::session::{PtyEvent, SpawnOpts};
 use tauri::ipc::Channel;
 
 const TIMEOUT: Duration = Duration::from_secs(30);

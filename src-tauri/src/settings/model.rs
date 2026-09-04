@@ -161,8 +161,8 @@ mod tests {
     fn round_trips_through_json() {
         let mut s = Settings::default();
         s.projects.pinned.push(PinnedProject {
-            path: r"D:\Coding\ccpg".into(),
-            display_name: Some("ccpg".into()),
+            path: r"D:\Coding\atc".into(),
+            display_name: Some("atc".into()),
             order: 0,
         });
         let text = serde_json::to_string(&s).unwrap();

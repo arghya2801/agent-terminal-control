@@ -17,6 +17,11 @@ pub const EVENT_INDEX_UPDATED: &str = "index://updated";
 pub const EVENT_SETTINGS_UPDATED: &str = "settings://updated";
 
 pub fn run() {
+    // Runs before the first load: the rename moved the config directory, and without
+    // this a long-time user is silently handed factory defaults.
+    if settings::migrate_legacy_config() {
+        eprintln!("carried settings over from the pre-rename config directory");
+    }
     let loaded = settings::load();
     if let settings::LoadOutcome::Invalid { error, .. } = &loaded {
         // Running on defaults for one session beats silently rewriting a config the user

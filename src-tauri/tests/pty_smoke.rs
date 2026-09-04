@@ -13,7 +13,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use ccpg_lib::pty::shell::resolve_shell;
+use atc_lib::pty::shell::resolve_shell;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 
 const TIMEOUT: Duration = Duration::from_secs(30);
@@ -108,11 +108,11 @@ fn spawns_a_real_shell_and_round_trips_a_command() {
     writer
         .lock()
         .unwrap()
-        .write_all(b"Write-Output ('CCPG' + '-OK')\r\n")
+        .write_all(b"Write-Output ('ATC' + '-OK')\r\n")
         .expect("write command");
     writer.lock().unwrap().flush().expect("flush");
 
-    if let Err(seen) = wait_for(&rx, "CCPG-OK", TIMEOUT) {
+    if let Err(seen) = wait_for(&rx, "ATC-OK", TIMEOUT) {
         panic!("never saw the marker within {TIMEOUT:?}. output so far:\n{seen}");
     }
 

@@ -8,7 +8,9 @@
 # refuses to send unless the app really has focus, so keys can never land elsewhere.
 param(
     [Parameter(Mandatory = $true)][string]$Keys,
-    [string]$TitleMatch = "claude-code-pseudo-gui",
+    # Matched on process name, not window title: "ATC" as a title substring would
+    # also match "Watch", "Patch" or "Dispatch" and capture the wrong window.
+    [string]$ProcessName = "atc",
     [int]$SettleMs = 900
 )
 $ErrorActionPreference = 'Stop'
@@ -28,8 +30,9 @@ public class Fg {
 }
 "@
 
-$proc = Get-Process | Where-Object { $_.MainWindowTitle -like "*$TitleMatch*" } | Select-Object -First 1
-if (-not $proc) { throw "no window matching '$TitleMatch'" }
+$proc = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
+    Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+if (-not $proc) { throw "no window for process '$ProcessName'" }
 $h = $proc.MainWindowHandle
 
 $ok = $false

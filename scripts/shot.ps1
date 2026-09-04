@@ -11,7 +11,9 @@
 # window to render itself, which works while it is occluded or in the background.
 param(
     [string]$Out = "shot.png",
-    [string]$TitleMatch = "claude-code-pseudo-gui",
+    # Matched on process name, not window title: "ATC" as a title substring would
+    # also match "Watch", "Patch" or "Dispatch" and capture the wrong window.
+    [string]$ProcessName = "atc",
     [switch]$Foreground   # fall back to a screen grab (needed if PrintWindow comes back blank)
 )
 $ErrorActionPreference = 'Stop'
@@ -30,8 +32,9 @@ public class Win32 {
 }
 "@
 
-$proc = Get-Process | Where-Object { $_.MainWindowTitle -like "*$TitleMatch*" } | Select-Object -First 1
-if (-not $proc) { throw "no window matching '$TitleMatch'. Is the app running?" }
+$proc = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
+    Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+if (-not $proc) { throw "no window for process '$ProcessName'. Is the app running?" }
 $h = $proc.MainWindowHandle
 
 $r = New-Object Win32+RECT

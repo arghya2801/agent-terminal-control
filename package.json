@@ -1,15 +1,15 @@
 {
-  "name": "claude-code-pseudo-gui",
+  "name": "atc",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "A thin project/session sidebar wrapped around a real terminal, for driving Claude Code.",
+  "description": "ATC - Agent Terminal Control. A project and session sidebar wrapped around a real terminal, for driving coding agents.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "play": "cross-env CCPG_CONFIG_DIR=./playground/config CCPG_DEV=1 tauri dev",
+    "play": "cross-env ATC_CONFIG_DIR=./playground/config ATC_DEV=1 tauri dev",
     "test": "npm run test:ts && npm run test:rs",
     "test:ts": "vitest run",
     "test:ts:watch": "vitest",

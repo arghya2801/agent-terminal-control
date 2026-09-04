@@ -48,6 +48,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "atc"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "notify",
+ "notify-debouncer-full",
+ "nucleo-matcher",
+ "portable-pty",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tempfile",
+ "thiserror 2.0.20",
+ "walkdir",
+ "webview2-com",
+ "windows",
+]
+
+[[package]]
 name = "atk"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -274,26 +294,6 @@ checksum = "005ec2760ca554fae18df7a11195552ec576cd665632a881bc011d5bb2fd4d80"
 dependencies = [
  "find-msvc-tools",
  "shlex",
-]
-
-[[package]]
-name = "ccpg"
-version = "0.1.0"
-dependencies = [
- "dunce",
- "notify",
- "notify-debouncer-full",
- "nucleo-matcher",
- "portable-pty",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tempfile",
- "thiserror 2.0.20",
- "walkdir",
- "webview2-com",
- "windows",
 ]
 
 [[package]]

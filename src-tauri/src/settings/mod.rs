@@ -8,20 +8,61 @@ use std::sync::RwLock;
 
 pub use model::{ClaudeSettings, PinnedProject, ProjectSettings, Settings, UiSettings};
 
-/// Config directory. `CCPG_CONFIG_DIR` lets the playground run against fixtures without
+/// Config directory. `ATC_CONFIG_DIR` lets the playground run against fixtures without
 /// touching the real config.
 pub fn config_dir() -> PathBuf {
-    if let Some(d) = std::env::var_os("CCPG_CONFIG_DIR") {
+    if let Some(d) = std::env::var_os("ATC_CONFIG_DIR") {
         return PathBuf::from(d);
     }
     let base = std::env::var_os("APPDATA")
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
-    base.join("dev.arghya.ccpg")
+    base.join("dev.arghya.atc")
 }
 
 pub fn settings_path() -> PathBuf {
     config_dir().join("settings.json")
+}
+
+/// The config directory used before the app was renamed to ATC.
+fn legacy_config_dir() -> Option<PathBuf> {
+    // Only meaningful for the real location; an overridden dir was never the old one.
+    if std::env::var_os("ATC_CONFIG_DIR").is_some() {
+        return None;
+    }
+    std::env::var_os("APPDATA")
+        .map(PathBuf::from)
+        .map(|b| b.join("dev.arghya.ccpg"))
+}
+
+/// Carry settings over from the pre-rename directory, once.
+///
+/// Renaming the app changed the Tauri identifier, which moves the config directory.
+/// Without this a long-time user silently loses their pinned projects and zoom level and
+/// is handed factory defaults, with their old file still sitting on disk unreferenced.
+///
+/// Deliberately a copy, not a move: if anything here is wrong, the original is still
+/// there. Only the settings file is carried; the index cache rebuilds itself in
+/// milliseconds and is not worth the risk of copying a stale one.
+pub fn migrate_from(legacy_dir: &std::path::Path, current_dir: &std::path::Path) -> bool {
+    let target = current_dir.join("settings.json");
+    let source = legacy_dir.join("settings.json");
+    // Never overwrite settings that already exist here.
+    if target.exists() || !source.is_file() {
+        return false;
+    }
+    if std::fs::create_dir_all(current_dir).is_err() {
+        return false;
+    }
+    std::fs::copy(&source, &target).is_ok()
+}
+
+/// Run the one-time migration against the real directories.
+pub fn migrate_legacy_config() -> bool {
+    match legacy_config_dir() {
+        Some(legacy) => migrate_from(&legacy, &config_dir()),
+        None => false,
+    }
 }
 
 #[derive(Debug)]
@@ -166,7 +207,7 @@ mod tests {
     #[test]
     fn the_config_dir_can_be_redirected_for_the_playground() {
         // npm run play relies on this to keep real config untouched.
-        let key = "CCPG_CONFIG_DIR";
+        let key = "ATC_CONFIG_DIR";
         let prev = std::env::var_os(key);
         std::env::set_var(key, r"D:\playground\config");
         assert_eq!(config_dir(), PathBuf::from(r"D:\playground\config"));
@@ -174,6 +215,65 @@ mod tests {
             Some(v) => std::env::set_var(key, v),
             None => std::env::remove_var(key),
         }
+    }
+
+    #[test]
+    fn migration_carries_settings_from_the_old_directory() {
+        // The rename moved the config directory; a user's pins must survive it.
+        let d = tmp();
+        let legacy = d.path().join("dev.arghya.ccpg");
+        let current = d.path().join("dev.arghya.atc");
+        std::fs::create_dir_all(&legacy).unwrap();
+        std::fs::write(legacy.join("settings.json"), r#"{"ui":{"zoom":1.5}}"#).unwrap();
+
+        assert!(migrate_from(&legacy, &current));
+        let LoadOutcome::Loaded(s) = load_from(&current.join("settings.json")) else {
+            panic!("expected the migrated file to load");
+        };
+        assert_eq!(s.ui.zoom, 1.5);
+    }
+
+    #[test]
+    fn migration_leaves_the_original_in_place() {
+        // A copy, not a move: if the migration is wrong, the old file is still there.
+        let d = tmp();
+        let legacy = d.path().join("old");
+        let current = d.path().join("new");
+        std::fs::create_dir_all(&legacy).unwrap();
+        std::fs::write(legacy.join("settings.json"), "{}").unwrap();
+
+        migrate_from(&legacy, &current);
+        assert!(legacy.join("settings.json").exists());
+    }
+
+    #[test]
+    fn migration_never_overwrites_existing_settings() {
+        let d = tmp();
+        let legacy = d.path().join("old");
+        let current = d.path().join("new");
+        std::fs::create_dir_all(&legacy).unwrap();
+        std::fs::create_dir_all(&current).unwrap();
+        std::fs::write(legacy.join("settings.json"), r#"{"ui":{"zoom":2.0}}"#).unwrap();
+        std::fs::write(current.join("settings.json"), r#"{"ui":{"zoom":1.0}}"#).unwrap();
+
+        assert!(!migrate_from(&legacy, &current), "should decline");
+        let LoadOutcome::Loaded(s) = load_from(&current.join("settings.json")) else {
+            panic!("expected Loaded");
+        };
+        assert_eq!(s.ui.zoom, 1.0, "existing settings must win");
+    }
+
+    #[test]
+    fn migration_is_idempotent_and_quiet_when_there_is_nothing_to_do() {
+        let d = tmp();
+        let legacy = d.path().join("absent");
+        let current = d.path().join("new");
+        assert!(!migrate_from(&legacy, &current));
+        // Running twice with a source present must still only copy once.
+        std::fs::create_dir_all(&legacy).unwrap();
+        std::fs::write(legacy.join("settings.json"), "{}").unwrap();
+        assert!(migrate_from(&legacy, &current));
+        assert!(!migrate_from(&legacy, &current));
     }
 
     #[test]
