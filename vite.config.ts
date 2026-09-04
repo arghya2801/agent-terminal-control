@@ -17,5 +17,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.ts'],
+    // TS units land with terminal/paneGroup in phase 1; until then an empty run is
+    // a pass, not a failure. Rust carries the phase-0 test weight.
+    passWithNoTests: true,
   },
 });
