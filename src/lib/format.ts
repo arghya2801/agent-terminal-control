@@ -27,3 +27,12 @@ export function shortenPath(path: string, max = 44): string {
   const tail = path.slice(-Math.floor((max - 1) / 2));
   return `${head}…${tail}`;
 }
+
+/** Match counter for the find bar: "3/17", or a word when there is nothing to count. */
+export function formatMatches(index: number, count: number, query: string): string {
+  if (!query) return '';
+  if (count <= 0) return 'no results';
+  // The addon reports -1 while a search is still settling, or past its highlight limit.
+  if (index < 0) return `${count}`;
+  return `${index + 1}/${count}`;
+}

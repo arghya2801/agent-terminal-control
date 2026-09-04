@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use crate::index::watcher::SessionWatcher;
 use crate::index::Index;
 use crate::pty::registry::PtyRegistry;
+use crate::settings::watcher::SettingsWatcher;
 use crate::settings::{Settings, SettingsStore};
 
 pub struct AppState {
@@ -15,6 +16,8 @@ pub struct AppState {
     /// The filesystem watcher stops on `Drop`, so it lives here for the life of the app
     /// rather than being dropped at the end of setup.
     pub watcher: Mutex<Option<SessionWatcher>>,
+    /// Same again for the settings file watcher.
+    pub settings_watcher: Mutex<Option<SettingsWatcher>>,
 }
 
 impl AppState {
@@ -24,6 +27,7 @@ impl AppState {
             settings: SettingsStore::new(settings),
             index: Index::new(cache_path),
             watcher: Mutex::new(None),
+            settings_watcher: Mutex::new(None),
         }
     }
 }

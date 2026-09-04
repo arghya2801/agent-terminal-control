@@ -10,12 +10,16 @@
     activeKey,
     onOpenProject,
     onOpenSession,
+    onProjectMenu,
+    onSessionMenu,
   }: {
     project: Project;
     limit: number;
     activeKey: TabKey | null;
     onOpenProject: (p: Project) => void;
     onOpenSession: (p: Project, s: SessionMeta) => void;
+    onProjectMenu: (e: MouseEvent, p: Project) => void;
+    onSessionMenu: (e: MouseEvent, p: Project, s: SessionMeta) => void;
   } = $props();
 
   let showAll = $state(false);
@@ -30,7 +34,12 @@
 <div class="project">
   <!-- The whole row toggles expansion, so hitting a 10px chevron is never required.
        Opening a shell is the explicit action on the right. -->
-  <div class="row" class:active={projectActive}>
+  <div
+    class="row"
+    class:active={projectActive}
+    role="group"
+    oncontextmenu={(e) => onProjectMenu(e, project)}
+  >
     <button
       class="disclosure"
       onclick={() => toggleExpanded(project.key)}
@@ -64,6 +73,7 @@
           projectPath={project.path}
           active={activeKey === `session:${session.id}`}
           onOpen={(s) => onOpenSession(project, s)}
+          onMenu={(e, s) => onSessionMenu(e, project, s)}
         />
       {/each}
       {#if hidden > 0}

@@ -1,10 +1,13 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import TabBar from './tabs/TabBar.svelte';
   import DebugOverlay from './debug/DebugOverlay.svelte';
   import Sidebar from './sidebar/Sidebar.svelte';
+  import FindBar from './terminal/FindBar.svelte';
   import {
+    adjustZoom,
     appState,
+    currentZoom,
     initStores,
     sidebarOpen,
     toggleSidebar,
@@ -21,13 +24,15 @@
     refit,
   } from './terminal/manager';
   import { matchChord, type Action } from './lib/keymap';
-  import { openDevtools } from './lib/ipc';
+  import { openDevtools, openSettingsFile } from './lib/ipc';
+  import { zoomLabel } from './lib/zoom';
   import type { Project, SessionMeta, TabKey } from './types';
 
   let wrapper: HTMLDivElement;
   let tabs = $state<{ key: TabKey; title: string; exited: boolean }[]>([]);
   let activeKey = $state<TabKey | null>(null);
   let showDebug = $state(false);
+  let showFind = $state(false);
   let error = $state<string | null>(null);
   let counter = 0;
 
@@ -95,6 +100,20 @@
       case 'toggleDevtools':
         void openDevtools();
         break;
+      case 'find':
+        // Re-opening while already open should put the cursor back in the box.
+        showFind = false;
+        void tick().then(() => (showFind = true));
+        break;
+      case 'zoomIn':
+        void adjustZoom(1);
+        break;
+      case 'zoomOut':
+        void adjustZoom(-1);
+        break;
+      case 'zoomReset':
+        void adjustZoom(0);
+        break;
     }
   }
 
@@ -160,6 +179,24 @@
       +
     </button>
     <div class="spacer"></div>
+    {#if currentZoom() !== 1}
+      <button
+        class="rail-btn zoom"
+        onclick={() => adjustZoom(0)}
+        title="Reset zoom (Ctrl+0)"
+        aria-label="Reset zoom"
+      >
+        {zoomLabel(currentZoom())}
+      </button>
+    {/if}
+    <button
+      class="rail-btn small"
+      onclick={() => openSettingsFile()}
+      title="Edit settings.json (applies live)"
+      aria-label="Edit settings"
+    >
+      ⚙
+    </button>
     <button
       class="rail-btn small"
       class:on={showDebug}
@@ -180,6 +217,9 @@
   <section class="main">
     <TabBar {tabs} {activeKey} onNew={newTab} />
     <div class="panes" bind:this={wrapper}></div>
+    {#if showFind}
+      <FindBar onClose={() => (showFind = false)} />
+    {/if}
     {#if showDebug}
       <DebugOverlay {activeKey} />
     {/if}
@@ -227,6 +267,12 @@
   }
   .rail-btn.small {
     font-size: 12px;
+  }
+  .rail-btn.zoom {
+    width: auto;
+    padding: 0 4px;
+    color: #539bf5;
+    font-size: 10px;
   }
   .spacer {
     flex: 1;

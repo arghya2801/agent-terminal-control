@@ -31,3 +31,13 @@ export const defaultFontFamily =
   '"FiraCode Nerd Font Mono", "CaskaydiaCove Nerd Font", "Cascadia Mono", Consolas, monospace';
 export const defaultFontSize = 13;
 export const defaultScrollback = 10_000;
+
+/** Colours for search highlights, so matches are visible against our palette. */
+export const searchDecorations = {
+  matchBackground: '#3b2f00',
+  matchBorder: '#7a6200',
+  matchOverviewRuler: '#daaa3f',
+  activeMatchBackground: '#7a6200',
+  activeMatchBorder: '#daaa3f',
+  activeMatchColorOverviewRuler: '#daaa3f',
+};

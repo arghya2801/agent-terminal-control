@@ -160,7 +160,11 @@ write(
 
 // ---------------------------------------------------------------------------
 // Case: a project directory containing no .jsonl at all — must not appear.
+//
+// Needs a .gitkeep: git cannot store an empty directory, so without one the case
+// disappears on a clean checkout and its test fails with "project dir exists".
 // ---------------------------------------------------------------------------
 mkdirSync(join(ROOT, 'D--Coding-empty'), { recursive: true });
+writeFileSync(join(ROOT, 'D--Coding-empty', '.gitkeep'), '', 'utf8');
 
 console.log(`fixtures written to ${ROOT}`);

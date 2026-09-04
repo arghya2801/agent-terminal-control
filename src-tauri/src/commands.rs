@@ -107,6 +107,25 @@ pub fn open_devtools(window: tauri::WebviewWindow) {
     let _ = window;
 }
 
+/// Open `settings.json` in whatever the user's editor for .json is.
+///
+/// Writes defaults first when the file does not exist yet, so the button is never a dead
+/// end on a fresh install.
+#[tauri::command]
+pub fn open_settings_file(state: State<'_, AppState>) -> AppResult<()> {
+    let path = crate::settings::settings_path();
+    if !path.exists() {
+        crate::settings::save(&state.settings.get()).map_err(crate::error::AppError::Io)?;
+    }
+    // `start` is a cmd builtin, so it needs a shell. The empty "" is the window title
+    // argument, without which a quoted path would be taken as the title.
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "", &path.to_string_lossy()])
+        .spawn()
+        .map_err(crate::error::AppError::Io)?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn open_in_explorer(path: String) -> AppResult<()> {
     let p = std::path::Path::new(&path);

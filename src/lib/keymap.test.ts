@@ -87,6 +87,32 @@ describe('matchChord', () => {
     });
   });
 
+  describe('zoom and find', () => {
+    it('claims the zoom keys on plain Ctrl', () => {
+      expect(matchChord(press('=', { ctrlKey: true }))).toBe('zoomIn');
+      expect(matchChord(press('-', { ctrlKey: true }))).toBe('zoomOut');
+      expect(matchChord(press('0', { ctrlKey: true }))).toBe('zoomReset');
+    });
+
+    it('accepts Ctrl+Shift+= as zoom in, since Shift reports the key as +', () => {
+      expect(matchChord(press('+', { ctrlKey: true, shiftKey: true }))).toBe('zoomIn');
+    });
+
+    it('claims Ctrl+Shift+F for find', () => {
+      expect(matchChord(press('F', { ctrlKey: true, shiftKey: true }))).toBe('find');
+    });
+
+    it('leaves plain Ctrl+F to the shell', () => {
+      expect(matchChord(press('f', { ctrlKey: true }))).toBeNull();
+    });
+
+    it('does not claim bare digits or minus', () => {
+      // Typing "0" or "-" at the prompt must never zoom.
+      expect(matchChord(press('0'))).toBeNull();
+      expect(matchChord(press('-'))).toBeNull();
+    });
+  });
+
   it('acts once per press, not on release', () => {
     expect(matchChord({ ...ctrlShift('B'), type: 'keyup' })).toBeNull();
   });

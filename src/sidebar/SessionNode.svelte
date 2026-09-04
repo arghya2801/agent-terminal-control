@@ -7,12 +7,14 @@
     projectPath,
     active = false,
     onOpen,
+    onMenu,
   }: {
     session: SessionMeta;
     /** Null when the project has no trusted path; resume is then disabled. */
     projectPath: string | null;
     active?: boolean;
     onOpen: (session: SessionMeta) => void;
+    onMenu: (e: MouseEvent, session: SessionMeta) => void;
   } = $props();
 
   // Without a directory there is nothing safe to launch in: the only other candidate
@@ -27,6 +29,7 @@
   class:disabled={!launchable}
   disabled={!launchable}
   onclick={() => onOpen(session)}
+  oncontextmenu={(e) => onMenu(e, session)}
   title={launchable
     ? `Resume ${session.label}\n${session.id}`
     : 'This session did not record a working directory, so it cannot be resumed'}

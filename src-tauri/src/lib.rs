@@ -13,6 +13,8 @@ use state::AppState;
 /// Emitted when the project/session index changes. Low-rate, so a plain event is right;
 /// `Channel` stays exclusive to the PTY stream.
 pub const EVENT_INDEX_UPDATED: &str = "index://updated";
+/// Emitted when `settings.json` changes on disk and actually differs from what is loaded.
+pub const EVENT_SETTINGS_UPDATED: &str = "settings://updated";
 
 pub fn run() {
     let loaded = settings::load();
@@ -42,10 +44,12 @@ pub fn run() {
             commands::settings_set,
             commands::settings_path,
             commands::open_in_explorer,
+            commands::open_settings_file,
             commands::open_devtools,
         ])
         .setup(|app| {
             start_watcher(app.handle());
+            start_settings_watcher(app.handle());
             disable_browser_accelerator_keys(app);
             Ok(())
         })
@@ -104,6 +108,45 @@ fn disable_browser_accelerator_keys(app: &tauri::App) {
     }
     #[cfg(not(windows))]
     let _ = app;
+}
+
+/// Apply `settings.json` edits without a restart.
+fn start_settings_watcher(app: &tauri::AppHandle) {
+    let path = settings::settings_path();
+    let handle = app.clone();
+
+    let watcher = settings::watcher::watch(&path, move || {
+        let state = handle.state::<AppState>();
+        match settings::load() {
+            // A typo mid-edit is normal. Keep what is loaded and say nothing further --
+            // the next save will be well-formed.
+            settings::LoadOutcome::Invalid { error, .. } => {
+                eprintln!("settings.json is not valid JSON, keeping current values: {error}");
+            }
+            outcome => {
+                let next = outcome.settings();
+                // Our own `settings_set` writes this file, which wakes this watcher.
+                // Comparing before emitting is what stops that becoming a loop.
+                if next == state.settings.get() {
+                    return;
+                }
+                state.settings.set(next.clone());
+                // The projects directory may have moved.
+                state.index.invalidate();
+                let _ = handle.emit(EVENT_SETTINGS_UPDATED, next);
+            }
+        }
+    });
+
+    match watcher {
+        Ok(w) => {
+            *app.state::<AppState>()
+                .settings_watcher
+                .lock()
+                .expect("lock") = Some(w)
+        }
+        Err(e) => eprintln!("could not watch {}: {e}", path.display()),
+    }
 }
 
 fn start_watcher(app: &tauri::AppHandle) {

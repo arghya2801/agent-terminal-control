@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { relativeTime, shortenPath } from './format';
+import { formatMatches, relativeTime, shortenPath } from './format';
 
 const NOW = 1_700_000_000_000;
 const MIN = 60_000;
@@ -44,5 +44,25 @@ describe('shortenPath', () => {
     expect(out.startsWith('D:')).toBe(true);
     expect(out.endsWith('directory')).toBe(true);
     expect(out).toContain('…');
+  });
+});
+
+describe('formatMatches', () => {
+  it('shows position and total', () => {
+    expect(formatMatches(2, 17, 'error')).toBe('3/17');
+  });
+
+  it('says so when nothing matched', () => {
+    expect(formatMatches(-1, 0, 'zzz')).toBe('no results');
+  });
+
+  it('shows nothing at all for an empty query', () => {
+    // An empty find bar should look idle, not like a failed search.
+    expect(formatMatches(-1, 0, '')).toBe('');
+  });
+
+  it('falls back to the bare count while the index is unsettled', () => {
+    // The addon reports -1 past its highlight limit.
+    expect(formatMatches(-1, 1200, 'e')).toBe('1200');
   });
 });

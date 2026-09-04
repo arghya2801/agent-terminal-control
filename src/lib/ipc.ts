@@ -69,3 +69,8 @@ export function openInExplorer(path: string): Promise<void> {
 export function openDevtools(): Promise<void> {
   return invoke('open_devtools');
 }
+
+/** Opens settings.json in the user's default editor, creating it if needed. */
+export function openSettingsFile(): Promise<void> {
+  return invoke('open_settings_file');
+}

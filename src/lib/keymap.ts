@@ -20,7 +20,11 @@ export type Action =
   | 'closeTab'
   | 'nextTab'
   | 'prevTab'
-  | 'toggleDevtools';
+  | 'toggleDevtools'
+  | 'find'
+  | 'zoomIn'
+  | 'zoomOut'
+  | 'zoomReset';
 
 /** The subset of KeyboardEvent this needs, so tests require no DOM. */
 export interface ChordEvent {
@@ -52,6 +56,16 @@ const BINDINGS: Binding[] = [
   // the Shift+Tab Claude Code uses to cycle permission modes.
   { key: 'tab', ctrl: true, shift: false, action: 'nextTab', label: 'Ctrl+Tab' },
   { key: 'tab', ctrl: true, shift: true, action: 'prevTab', label: 'Ctrl+Shift+Tab' },
+  { key: 'f', ctrl: true, shift: true, action: 'find', label: 'Ctrl+Shift+F' },
+  // Zoom takes plain Ctrl because nothing in a shell or in Claude Code binds these, and
+  // WebView2's own Ctrl+/- zoom is disabled. `=` and `-` report as `+` and `_` when
+  // Shift is held, and the numpad reports 'Add'/'Subtract'.
+  { key: '=', ctrl: true, shift: false, action: 'zoomIn', label: 'Ctrl+=' },
+  { key: '+', ctrl: true, shift: true, action: 'zoomIn', label: 'Ctrl+Shift+=' },
+  { key: 'add', ctrl: true, shift: false, action: 'zoomIn', label: 'Ctrl+=' },
+  { key: '-', ctrl: true, shift: false, action: 'zoomOut', label: 'Ctrl+-' },
+  { key: 'subtract', ctrl: true, shift: false, action: 'zoomOut', label: 'Ctrl+-' },
+  { key: '0', ctrl: true, shift: false, action: 'zoomReset', label: 'Ctrl+0' },
 ];
 
 export function matchChord(e: ChordEvent): Action | null {

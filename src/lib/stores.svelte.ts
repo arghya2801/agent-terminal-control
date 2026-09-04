@@ -6,6 +6,7 @@
  */
 
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { indexRefresh, indexSnapshot, settingsGet, settingsSet } from './ipc';
 import {
   anyExpanded,
@@ -14,9 +15,14 @@ import {
   toggleIn,
   type Collapsed,
 } from './expansion';
+import { normalizeZoom, stepZoom } from './zoom';
+import { applyTerminalSettings } from '../terminal/manager';
 import type { IndexSnapshot, Settings } from '../types';
 
 const EVENT_INDEX_UPDATED = 'index://updated';
+const EVENT_SETTINGS_UPDATED = 'settings://updated';
+/** Holding a zoom key should not write settings.json on every step. */
+const SETTINGS_SAVE_DEBOUNCE_MS = 400;
 
 /// Named `appState`, not `state`: an import called `state` shadows the `$state` rune
 /// in any component that uses it, which fails to compile in confusing ways.
@@ -59,9 +65,30 @@ function applySnapshot(snap: IndexSnapshot) {
   appState.indexRevision += 1;
 }
 
+/** Push settings into the parts of the app that are not reactive. */
+function applySettings(s: Settings) {
+  applyTerminalSettings(s.terminal);
+  void applyZoom(s.ui.zoom);
+}
+
+async function applyZoom(value: number) {
+  const z = normalizeZoom(value);
+  try {
+    await getCurrentWebview().setZoom(z);
+  } catch (e) {
+    appState.error = `zoom failed: ${e}`;
+    return;
+  }
+  // Zoom changes the cell size, so the terminal must be re-measured or the shell keeps
+  // wrapping at the old column count.
+  const { refit } = await import('../terminal/manager');
+  refit();
+}
+
 export async function initStores() {
   try {
     appState.settings = await settingsGet();
+    applySettings(appState.settings);
     applySnapshot(await indexSnapshot());
     appState.error = null;
   } catch (e) {
@@ -73,6 +100,13 @@ export async function initStores() {
   // Rust emits only when the rendered projection actually changed, so this is not a
   // firehose even while a session is being written to.
   await listen<IndexSnapshot>(EVENT_INDEX_UPDATED, (e) => applySnapshot(e.payload));
+
+  // settings.json edited outside the app. Rust only emits when it genuinely differs
+  // from what is loaded, so our own saves do not bounce back.
+  await listen<Settings>(EVENT_SETTINGS_UPDATED, (e) => {
+    appState.settings = e.payload;
+    applySettings(e.payload);
+  });
 }
 
 export async function refresh(force = false) {
@@ -91,6 +125,33 @@ export async function saveSettings(next: Settings) {
   } catch (e) {
     appState.error = String(e);
   }
+}
+
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+/** Update state and apply immediately, but write the file at most once per burst. */
+function saveSettingsDebounced(next: Settings) {
+  appState.settings = next;
+  if (saveTimer !== undefined) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveTimer = undefined;
+    void settingsSet(next).catch((e) => (appState.error = String(e)));
+  }, SETTINGS_SAVE_DEBOUNCE_MS);
+}
+
+export function currentZoom(): number {
+  return normalizeZoom(appState.settings?.ui.zoom ?? 1);
+}
+
+/** `direction` of 0 resets to 100%. */
+export async function adjustZoom(direction: 1 | -1 | 0) {
+  if (!appState.settings) return;
+  const next = direction === 0 ? 1 : stepZoom(currentZoom(), direction);
+  if (next === currentZoom()) return;
+  saveSettingsDebounced({
+    ...appState.settings,
+    ui: { ...appState.settings.ui, zoom: next },
+  });
+  await applyZoom(next);
 }
 
 export function sidebarOpen(): boolean {

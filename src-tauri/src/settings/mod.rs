@@ -1,6 +1,7 @@
 //! Loading and saving settings.
 
 pub mod model;
+pub mod watcher;
 
 use std::path::PathBuf;
 use std::sync::RwLock;

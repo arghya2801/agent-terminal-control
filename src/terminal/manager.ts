@@ -38,7 +38,9 @@ import {
   defaultFontSize,
   defaultScrollback,
   defaultTheme,
+  searchDecorations,
 } from './theme';
+import type { TerminalSettings } from '../types';
 
 /** Ack once this many unacked bytes accumulate. Matches the Rust backpressure window. */
 const ACK_BATCH = 64 * 1024;
@@ -66,6 +68,12 @@ const tabs = new Map<TabKey, Tab>();
 let activeKey: TabKey | null = null;
 let webgl: WebglAddon | null = null;
 let wrapper: HTMLElement | null = null;
+/** Latest settings-driven appearance; theme.ts stays the fallback. */
+let termOptions = {
+  fontFamily: defaultFontFamily,
+  fontSize: defaultFontSize,
+  scrollback: defaultScrollback,
+};
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -131,10 +139,10 @@ export async function openTab(
   wrapper.appendChild(container);
 
   const term = new Terminal({
-    fontFamily: defaultFontFamily,
-    fontSize: defaultFontSize,
+    fontFamily: termOptions.fontFamily,
+    fontSize: termOptions.fontSize,
     theme: defaultTheme,
-    scrollback: defaultScrollback,
+    scrollback: termOptions.scrollback,
     cursorBlink: true,
     cursorStyle: 'bar',
     allowProposedApi: true, // required by addon-unicode11
@@ -245,6 +253,77 @@ export function cycleTab(delta: number) {
   activate(keys[cycleIndex(current, keys.length, delta)]);
 }
 
+/**
+ * Apply appearance from settings to every open tab.
+ *
+ * Font size changes the cell size, so this must refit: the shell would otherwise keep
+ * wrapping at the old column count.
+ */
+export function applyTerminalSettings(s: TerminalSettings) {
+  termOptions = {
+    fontFamily: s.fontFamily || defaultFontFamily,
+    fontSize: s.fontSize || defaultFontSize,
+    scrollback: s.scrollback ?? defaultScrollback,
+  };
+  for (const t of tabs.values()) {
+    t.term.options.fontFamily = termOptions.fontFamily;
+    t.term.options.fontSize = termOptions.fontSize;
+    t.term.options.scrollback = termOptions.scrollback;
+  }
+  refit();
+}
+
+// --- find ------------------------------------------------------------------
+
+export interface FindResult {
+  index: number;
+  count: number;
+}
+
+type FindListener = (r: FindResult) => void;
+const findListeners = new Set<FindListener>();
+let findDisposer: (() => void) | null = null;
+
+export function onFindResults(fn: FindListener): () => void {
+  findListeners.add(fn);
+  return () => findListeners.delete(fn);
+}
+
+/** Subscribe to the active tab's search addon; results arrive asynchronously. */
+function bindFindResults() {
+  findDisposer?.();
+  findDisposer = null;
+  const tab = activeKey ? tabs.get(activeKey) : null;
+  if (!tab) return;
+  const sub = tab.search.onDidChangeResults((r) => {
+    for (const l of findListeners) l({ index: r.resultIndex, count: r.resultCount });
+  });
+  findDisposer = () => sub.dispose();
+}
+
+export function findInActiveTab(query: string, direction: 1 | -1 = 1): void {
+  const tab = activeKey ? tabs.get(activeKey) : null;
+  if (!tab) return;
+  if (!query) {
+    tab.search.clearDecorations();
+    for (const l of findListeners) l({ index: -1, count: 0 });
+    return;
+  }
+  const opts = { decorations: searchDecorations };
+  if (direction === 1) tab.search.findNext(query, opts);
+  else tab.search.findPrevious(query, opts);
+}
+
+export function clearFind(): void {
+  const tab = activeKey ? tabs.get(activeKey) : null;
+  tab?.search.clearDecorations();
+}
+
+export function focusActiveTerminal(): void {
+  const tab = activeKey ? tabs.get(activeKey) : null;
+  tab?.term.focus();
+}
+
 export function activate(key: TabKey) {
   if (!tabs.has(key)) return;
   activeKey = key;
@@ -271,6 +350,8 @@ export function activate(key: TabKey) {
   }
 
   tab.term.focus();
+  // Find results are per-terminal, so follow the active tab.
+  bindFindResults();
   scheduleFit();
   notify();
 }

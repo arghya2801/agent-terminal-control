@@ -77,6 +77,18 @@ export interface Settings {
     claudeProjectsDir: string | null;
     pinned: { path: string; displayName: string | null; order: number }[];
   };
-  ui: { sidebarWidth: number; sidebarOpen: boolean; sessionsPerProject: number };
+  ui: {
+    sidebarWidth: number;
+    sidebarOpen: boolean;
+    sessionsPerProject: number;
+    zoom: number;
+  };
+  terminal: TerminalSettings;
   claude: { command: string; resumeArgs: string[] };
+}
+
+export interface TerminalSettings {
+  fontFamily: string;
+  fontSize: number;
+  scrollback: number;
 }
