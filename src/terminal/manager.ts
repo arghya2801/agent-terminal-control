@@ -139,8 +139,12 @@ export async function openTab(
   };
   tabs.set(key, tab);
 
-  // Show it before measuring, or FitAddon reads a hidden (zero-sized) container.
+  // Show it before measuring, or FitAddon reads a hidden (zero-sized) container, and
+  // let the browser complete a layout pass first -- measuring in the same frame the
+  // container was inserted yields the pre-layout size. Spawning with the wrong column
+  // count then triggers a resize moments later, which garbles a replaying session.
   activate(key);
+  await nextLayout();
   const dims = measure(tab);
 
   // --- input path. MUST be wired before pty_spawn (see the module comment).
@@ -242,6 +246,13 @@ export async function closeTab(key: TabKey) {
 export function isBusy(key: TabKey): boolean {
   const tab = tabs.get(key);
   return !!tab && !!tab.ptyId && !tab.exited;
+}
+
+/** Resolves after the browser has laid out and painted at least once. */
+function nextLayout(): Promise<void> {
+  return new Promise((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+  );
 }
 
 function measure(tab: Tab): Dims {

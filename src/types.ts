@@ -40,3 +40,43 @@ export interface Dims {
   cols: number;
   rows: number;
 }
+
+export type LabelSource = 'aiTitle' | 'slug' | 'firstMessage' | 'uuid';
+
+export interface SessionMeta {
+  id: string;
+  file: string;
+  /** Authoritative cwd from the transcript. Null when the head budget found none. */
+  cwd: string | null;
+  gitBranch: string | null;
+  label: string;
+  labelSource: LabelSource;
+  mtimeMs: number;
+  size: number;
+}
+
+export interface Project {
+  key: string;
+  /** Null for the Unknown group, which has no usable path. */
+  path: string | null;
+  name: string;
+  pinned: boolean;
+  exists: boolean;
+  lastActiveMs: number;
+  sessions: SessionMeta[];
+}
+
+export interface IndexSnapshot {
+  projects: Project[];
+  sessionCount: number;
+}
+
+export interface Settings {
+  version: number;
+  projects: {
+    claudeProjectsDir: string | null;
+    pinned: { path: string; displayName: string | null; order: number }[];
+  };
+  ui: { sidebarWidth: number; sidebarOpen: boolean; sessionsPerProject: number };
+  claude: { command: string; resumeArgs: string[] };
+}
