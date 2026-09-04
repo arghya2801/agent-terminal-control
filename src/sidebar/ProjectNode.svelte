@@ -1,7 +1,7 @@
 <script lang="ts">
   import SessionNode from './SessionNode.svelte';
   import { isExpanded, toggleExpanded } from '../lib/stores.svelte';
-  import { relativeTime, shortenPath } from '../lib/format';
+  import { shortenPath } from '../lib/format';
   import type { Project, SessionMeta, TabKey } from '../types';
 
   let {
@@ -42,8 +42,6 @@
       <span class="text" class:missing={!launchable}>{project.name}</span>
       <span class="count">{project.sessions.length}</span>
     </button>
-
-    <span class="age">{project.lastActiveMs > 0 ? relativeTime(project.lastActiveMs) : ''}</span>
 
     <button
       class="open"
@@ -142,13 +140,6 @@
     color: #6e7681;
     font-size: 9px;
     line-height: 14px;
-  }
-  .age {
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    color: #6e7681;
-    font-size: 10px;
   }
   .open {
     flex-shrink: 0;

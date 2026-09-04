@@ -54,10 +54,6 @@ pub struct UiSettings {
     pub sidebar_width: u32,
     pub sidebar_open: bool,
     pub sessions_per_project: usize,
-    /// Tapping Escape twice hands the keyboard back to the app so chords like Ctrl+B
-    /// work. It shadows Claude Code's own double-Escape (jump back to a previous
-    /// message), so it is switchable.
-    pub double_escape_leaves_terminal: bool,
 }
 
 impl Default for UiSettings {
@@ -66,7 +62,6 @@ impl Default for UiSettings {
             sidebar_width: 260,
             sidebar_open: true,
             sessions_per_project: 15,
-            double_escape_leaves_terminal: true,
         }
     }
 }
@@ -170,21 +165,6 @@ mod tests {
         assert_eq!(
             c.resume_command("xyz"),
             "claude --resume xyz --fork-session"
-        );
-    }
-
-    #[test]
-    fn double_escape_defaults_on_but_can_be_switched_off() {
-        // It shadows Claude Code's own double-Escape, so a user who wants that back
-        // must be able to turn this off without losing the rest of their settings.
-        assert!(UiSettings::default().double_escape_leaves_terminal);
-
-        let s: Settings =
-            serde_json::from_str(r#"{"ui":{"doubleEscapeLeavesTerminal":false}}"#).unwrap();
-        assert!(!s.ui.double_escape_leaves_terminal);
-        assert_eq!(
-            s.ui.sidebar_width, 260,
-            "other ui fields keep their defaults"
         );
     }
 

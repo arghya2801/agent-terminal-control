@@ -33,8 +33,10 @@
 >
   <span class="label">{session.label}</span>
   <span class="meta">
-    {#if session.gitBranch && session.gitBranch !== 'main'}
-      <span class="branch">{session.gitBranch}</span>
+    {#if session.gitBranch}
+      <span class="branch" class:default={session.gitBranch === 'main'}>
+        {session.gitBranch}
+      </span>
     {/if}
     <span class="age">{age}</span>
   </span>
@@ -88,6 +90,11 @@
     color: #b083f0;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  /* `main` is the unremarkable case: shown so a bare row is never ambiguous, but
+     muted so the eye only stops on branches that are not the default. */
+  .branch.default {
+    color: #6e7681;
   }
   .age {
     color: #6e7681;

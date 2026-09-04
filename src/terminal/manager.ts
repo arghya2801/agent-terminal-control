@@ -22,8 +22,8 @@ import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 
-import { createDoubleTap } from '../lib/doubleTap';
 import { Channel, ptyAck, ptyKill, ptyResize, ptySpawn, ptyWrite } from '../lib/ipc';
+import { matchChord, type Action } from '../lib/keymap';
 import type { Dims, PtyEvent, SpawnOpts, TabKey } from '../types';
 import {
   debounce,
@@ -42,10 +42,6 @@ import {
 /** Ack once this many unacked bytes accumulate. Matches the Rust backpressure window. */
 const ACK_BATCH = 64 * 1024;
 const RESIZE_DEBOUNCE_MS = 50;
-/** Two Escapes closer together than this leave the terminal. Deliberately tight: a
- *  single Escape must still reach the shell, and Claude Code's own double-Escape is a
- *  real binding we are shadowing (see SESSION.md > Gotchas). */
-const DOUBLE_ESCAPE_MS = 300;
 
 export interface Tab {
   key: TabKey;
@@ -72,11 +68,8 @@ let wrapper: HTMLElement | null = null;
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
-const escapeListeners = new Set<Listener>();
-/** When false, keystrokes are for the app rather than the shell. */
-let terminalHasFocus = true;
-let doubleEscapeEnabled = true;
-const escapeTap = createDoubleTap(DOUBLE_ESCAPE_MS);
+type ChordListener = (action: Action) => void;
+const chordListeners = new Set<ChordListener>();
 
 /** Svelte subscribes here; the manager never imports Svelte. */
 export function onChange(fn: Listener): () => void {
@@ -98,40 +91,16 @@ export function getTab(key: TabKey): Tab | undefined {
 }
 
 /**
- * Notified when the user double-taps Escape to hand focus back to the app.
+ * Notified when an app chord is pressed while the terminal has focus.
  *
- * xterm owns the keyboard while it has focus, so app chords like Ctrl+B never arrive.
- * Rather than stealing a chord from the shell -- Ctrl+B is Claude Code's "background
- * this task" -- the terminal is blurred on demand and app keys work normally.
+ * xterm owns the keyboard when focused, and -- more importantly -- forwards whatever it
+ * handles to the PTY. Listening on `window` would therefore fire the app action *and*
+ * send the keystroke to the shell. Chords are matched inside xterm's own interceptor
+ * instead, where returning false consumes them outright.
  */
-export function onEscapeToApp(fn: Listener): () => void {
-  escapeListeners.add(fn);
-  return () => escapeListeners.delete(fn);
-}
-
-export function setDoubleEscapeEnabled(on: boolean) {
-  doubleEscapeEnabled = on;
-}
-
-export function isTerminalFocused(): boolean {
-  return terminalHasFocus;
-}
-
-/** Return keyboard control to the shell. */
-export function focusTerminal() {
-  const tab = activeKey ? tabs.get(activeKey) : null;
-  if (!tab) return;
-  terminalHasFocus = true;
-  tab.term.focus();
-  notify();
-}
-
-function leaveTerminal() {
-  const tab = activeKey ? tabs.get(activeKey) : null;
-  terminalHasFocus = false;
-  tab?.term.blur();
-  for (const l of escapeListeners) l();
-  notify();
+export function onChord(fn: ChordListener): () => void {
+  chordListeners.add(fn);
+  return () => chordListeners.delete(fn);
 }
 
 export function mount(el: HTMLElement) {
@@ -180,28 +149,16 @@ export async function openTab(
   term.loadAddon(fit);
   term.loadAddon(search);
 
-  // Returning false stops xterm handling the key *and* forwarding it to the PTY.
+  // Returning false stops xterm handling the key *and* forwarding it to the PTY, which
+  // is the whole point: an app chord must not also land in the shell.
   term.attachCustomKeyEventHandler((e) => {
-    if (e.type !== 'keydown') return true;
-    if (e.key !== 'Escape') {
-      escapeTap.reset();
-      return true;
-    }
-    if (!doubleEscapeEnabled) return true;
-    if (escapeTap.hit(performance.now())) {
-      leaveTerminal();
-      // Swallow only the second Escape; the first already reached the shell.
-      return false;
-    }
-    return true;
+    const action = matchChord(e);
+    if (!action) return true;
+    for (const l of chordListeners) l(action);
+    return false;
   });
 
   term.open(container);
-  // Clicking back into the terminal is the other way to resume typing at the shell.
-  container.addEventListener('mousedown', () => {
-    terminalHasFocus = true;
-    notify();
-  });
 
   const tab: Tab = {
     key,
@@ -293,7 +250,7 @@ export function activate(key: TabKey) {
     // Software rendering or RDP: the DOM renderer is correct, just slower.
   }
 
-  if (terminalHasFocus) tab.term.focus();
+  tab.term.focus();
   scheduleFit();
   notify();
 }
