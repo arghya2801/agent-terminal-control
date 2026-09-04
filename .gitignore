@@ -1,0 +1,23 @@
+# --- node / vite ---
+node_modules/
+dist/
+.vite/
+*.local
+coverage/
+
+# --- rust / tauri ---
+src-tauri/target/
+src-tauri/gen/
+
+# --- env ---
+.env
+.env.*
+!.env.example
+
+# --- dev playground (generated settings + cache) ---
+/playground/config/
+
+# --- misc ---
+*.log
+.DS_Store
+Thumbs.db
