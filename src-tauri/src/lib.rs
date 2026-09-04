@@ -42,9 +42,11 @@ pub fn run() {
             commands::settings_set,
             commands::settings_path,
             commands::open_in_explorer,
+            commands::open_devtools,
         ])
         .setup(|app| {
             start_watcher(app.handle());
+            disable_browser_accelerator_keys(app);
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -55,6 +57,53 @@ pub fn run() {
                 app.state::<AppState>().ptys.kill_all();
             }
         });
+}
+
+/// Stop WebView2 handling Chromium's own accelerator keys.
+///
+/// It consumes them before they reach the page, which is why Ctrl+Shift+B and
+/// Ctrl+Shift+D did nothing while Ctrl+Shift+T and Ctrl+Shift+W worked -- Chromium binds
+/// the first two (bookmarks bar, bookmark all tabs) and has nothing meaningful for the
+/// others. The action is a no-op in an embedded webview, but the key is still eaten, so
+/// the symptom is silence rather than an error.
+///
+/// Turning them off also stops Ctrl+R and F5 reloading the app, Ctrl+P opening a print
+/// dialog, and Ctrl+/- zooming -- all wrong in a terminal, and Ctrl+R in particular is
+/// Claude Code's verbose toggle. Clipboard keys are unaffected: Microsoft classes
+/// Ctrl+C/V/X and Ctrl+A as not browser-specific.
+///
+/// `wry` exposes a flag for this but Tauri never calls it, so the WebView2 default
+/// (enabled) stands and we reach for the COM interface directly.
+fn disable_browser_accelerator_keys(app: &tauri::App) {
+    #[cfg(windows)]
+    {
+        use tauri::Manager;
+        let Some(webview) = app.get_webview_window("main") else {
+            eprintln!("no main webview; browser accelerator keys left enabled");
+            return;
+        };
+        // Failing here costs a few shortcuts, not the app: warn and carry on rather
+        // than refusing to start.
+        let result = webview.with_webview(|platform| unsafe {
+            use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
+            use windows::core::Interface;
+
+            let apply = || -> windows::core::Result<()> {
+                let settings = platform.controller().CoreWebView2()?.Settings()?;
+                settings
+                    .cast::<ICoreWebView2Settings3>()?
+                    .SetAreBrowserAcceleratorKeysEnabled(false)
+            };
+            if let Err(e) = apply() {
+                eprintln!("could not disable browser accelerator keys: {e}");
+            }
+        });
+        if let Err(e) = result {
+            eprintln!("could not reach the platform webview: {e}");
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = app;
 }
 
 fn start_watcher(app: &tauri::AppHandle) {

@@ -32,6 +32,13 @@ walkdir = "2"
 # search
 nucleo-matcher = "0.3"
 
+# WebView2 swallows Chromium's accelerator keys (Ctrl+Shift+B, Ctrl+Tab, Ctrl+R...)
+# before they reach the page. Turning that off needs the raw COM interface. Versions are
+# pinned to what tauri already resolves so no duplicate crates appear in the tree.
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.38"
+windows = "0.61"
+
 [dev-dependencies]
 tempfile = "3"
 

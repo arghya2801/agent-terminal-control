@@ -11,6 +11,7 @@
   } from './lib/stores.svelte';
   import {
     closeTab,
+    cycleTab,
     getActiveKey,
     listTabs,
     mount as mountTerminals,
@@ -20,6 +21,7 @@
     refit,
   } from './terminal/manager';
   import { matchChord, type Action } from './lib/keymap';
+  import { openDevtools } from './lib/ipc';
   import type { Project, SessionMeta, TabKey } from './types';
 
   let wrapper: HTMLDivElement;
@@ -83,6 +85,15 @@
         break;
       case 'closeTab':
         if (activeKey) void closeTab(activeKey);
+        break;
+      case 'nextTab':
+        cycleTab(1);
+        break;
+      case 'prevTab':
+        cycleTab(-1);
+        break;
+      case 'toggleDevtools':
+        void openDevtools();
         break;
     }
   }

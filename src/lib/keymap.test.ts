@@ -19,6 +19,28 @@ describe('matchChord', () => {
     expect(matchChord(ctrlShift('T'))).toBe('newTab');
     expect(matchChord(ctrlShift('D'))).toBe('toggleDebug');
     expect(matchChord(ctrlShift('W'))).toBe('closeTab');
+    expect(matchChord(ctrlShift('I'))).toBe('toggleDevtools');
+  });
+
+  describe('tab cycling', () => {
+    it('cycles forward and back', () => {
+      expect(matchChord(press('Tab', { ctrlKey: true }))).toBe('nextTab');
+      expect(matchChord(press('Tab', { ctrlKey: true, shiftKey: true }))).toBe('prevTab');
+    });
+
+    it('never claims a bare Tab', () => {
+      // Completion in pwsh and in Claude Code both depend on Tab reaching the shell.
+      expect(matchChord(press('Tab'))).toBeNull();
+    });
+
+    it('never claims Shift+Tab', () => {
+      // That is Claude Code's permission-mode cycle.
+      expect(matchChord(press('Tab', { shiftKey: true }))).toBeNull();
+    });
+
+    it('ignores Tab with Alt held', () => {
+      expect(matchChord(press('Tab', { ctrlKey: true, altKey: true }))).toBeNull();
+    });
   });
 
   it('accepts the key in either case', () => {
@@ -59,6 +81,10 @@ describe('matchChord', () => {
     it('ignores unmapped Ctrl+Shift letters', () => {
       expect(matchChord(ctrlShift('K'))).toBeNull();
     });
+
+    it('ignores Ctrl+I, which is Tab on some terminals', () => {
+      expect(matchChord(press('i', { ctrlKey: true }))).toBeNull();
+    });
   });
 
   it('acts once per press, not on release', () => {
@@ -78,5 +104,8 @@ describe('chordLabel', () => {
     expect(chordLabel('newTab')).toBe('Ctrl+Shift+T');
     expect(chordLabel('toggleDebug')).toBe('Ctrl+Shift+D');
     expect(chordLabel('closeTab')).toBe('Ctrl+Shift+W');
+    expect(chordLabel('nextTab')).toBe('Ctrl+Tab');
+    expect(chordLabel('prevTab')).toBe('Ctrl+Shift+Tab');
+    expect(chordLabel('toggleDevtools')).toBe('Ctrl+Shift+I');
   });
 });

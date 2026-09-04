@@ -64,3 +64,8 @@ export function settingsPath(): Promise<string> {
 export function openInExplorer(path: string): Promise<void> {
   return invoke('open_in_explorer', { path });
 }
+
+/** Devtools, re-added under our own chord after WebView2's F12 was disabled. */
+export function openDevtools(): Promise<void> {
+  return invoke('open_devtools');
+}

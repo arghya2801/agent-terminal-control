@@ -91,6 +91,22 @@ pub fn settings_path() -> String {
 
 // --- misc ------------------------------------------------------------------
 
+/// Devtools, re-added under our own chord after WebView2's F12 was turned off.
+/// Debug builds only: release has no path to it at all.
+#[tauri::command]
+pub fn open_devtools(window: tauri::WebviewWindow) {
+    #[cfg(debug_assertions)]
+    {
+        if window.is_devtools_open() {
+            window.close_devtools();
+        } else {
+            window.open_devtools();
+        }
+    }
+    #[cfg(not(debug_assertions))]
+    let _ = window;
+}
+
 #[tauri::command]
 pub fn open_in_explorer(path: String) -> AppResult<()> {
     let p = std::path::Path::new(&path);

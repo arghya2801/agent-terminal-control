@@ -24,6 +24,7 @@ import '@xterm/xterm/css/xterm.css';
 
 import { Channel, ptyAck, ptyKill, ptyResize, ptySpawn, ptyWrite } from '../lib/ipc';
 import { matchChord, type Action } from '../lib/keymap';
+import { cycleIndex } from './cycle';
 import type { Dims, PtyEvent, SpawnOpts, TabKey } from '../types';
 import {
   debounce,
@@ -151,9 +152,17 @@ export async function openTab(
 
   // Returning false stops xterm handling the key *and* forwarding it to the PTY, which
   // is the whole point: an app chord must not also land in the shell.
+  //
+  // It does NOT stop DOM propagation, though. Without the explicit stopPropagation the
+  // event still bubbles to the window listener, which matches the same chord and runs
+  // the action a second time -- invisible for "new tab" (you get two) but a perfect
+  // no-op for every toggle, which is how this surfaced: Ctrl+Shift+B and Ctrl+Shift+D
+  // appeared dead while Ctrl+Shift+T and Ctrl+Shift+W appeared to work.
   term.attachCustomKeyEventHandler((e) => {
     const action = matchChord(e);
     if (!action) return true;
+    e.preventDefault();
+    e.stopPropagation();
     for (const l of chordListeners) l(action);
     return false;
   });
@@ -223,6 +232,17 @@ export async function openTab(
   tab.ptyId = await ptySpawn({ ...opts, cols: dims.cols, rows: dims.rows }, channel);
   notify();
   return tab;
+}
+
+/**
+ * Move `delta` tabs from the active one, wrapping. Uses the `tabs` Map's insertion
+ * order, which is the order the tab bar renders, so cycling matches what is on screen.
+ */
+export function cycleTab(delta: number) {
+  const keys = [...tabs.keys()];
+  if (keys.length < 2) return;
+  const current = activeKey ? keys.indexOf(activeKey) : -1;
+  activate(keys[cycleIndex(current, keys.length, delta)]);
 }
 
 export function activate(key: TabKey) {
