@@ -1,0 +1,19 @@
+:root {
+  --bg: #0b0d10;
+  --fg: #d6dae0;
+  --bg-chrome: #14171c;
+  --border: #232830;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+  color-scheme: dark;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+}
