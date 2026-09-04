@@ -3,7 +3,7 @@ name = "ccpg"
 version = "0.1.0"
 description = "claude-code-pseudo-gui"
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.82"
 
 [lib]
 # The `_lib` suffix keeps the lib name distinct from the bin name on Windows.

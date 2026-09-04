@@ -5,9 +5,13 @@ use tauri::ipc::Channel;
 use tauri::State;
 
 use crate::error::AppResult;
+use crate::index::IndexSnapshot;
 use crate::pty::session::{PtyEvent, SpawnOpts, StatsSnapshot};
 use crate::pty::shell::{resolve_shell, ShellInfo};
+use crate::settings::Settings;
 use crate::state::AppState;
+
+// --- pty -------------------------------------------------------------------
 
 #[tauri::command]
 pub fn pty_spawn(
@@ -46,4 +50,58 @@ pub fn pty_stats(id: String, state: State<'_, AppState>) -> AppResult<StatsSnaps
 #[tauri::command]
 pub fn resolve_shell_cmd(path: Option<String>) -> AppResult<ShellInfo> {
     Ok(resolve_shell(path.as_deref())?)
+}
+
+// --- index -----------------------------------------------------------------
+
+#[tauri::command]
+pub fn index_snapshot(state: State<'_, AppState>) -> AppResult<IndexSnapshot> {
+    Ok(state.index.scan(&state.settings.get(), false))
+}
+
+#[tauri::command]
+pub fn index_refresh(force: bool, state: State<'_, AppState>) -> AppResult<IndexSnapshot> {
+    // An explicit refresh should always report, even if nothing changed.
+    state.index.invalidate();
+    Ok(state.index.scan(&state.settings.get(), force))
+}
+
+// --- settings --------------------------------------------------------------
+
+#[tauri::command]
+pub fn settings_get(state: State<'_, AppState>) -> AppResult<Settings> {
+    Ok(state.settings.get())
+}
+
+#[tauri::command]
+pub fn settings_set(settings: Settings, state: State<'_, AppState>) -> AppResult<()> {
+    crate::settings::save(&settings).map_err(crate::error::AppError::Io)?;
+    state.settings.set(settings);
+    // Settings can repoint the projects directory, so the next scan must report.
+    state.index.invalidate();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn settings_path() -> String {
+    crate::settings::settings_path()
+        .to_string_lossy()
+        .into_owned()
+}
+
+// --- misc ------------------------------------------------------------------
+
+#[tauri::command]
+pub fn open_in_explorer(path: String) -> AppResult<()> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() {
+        return Err(crate::error::AppError::Message(format!(
+            "path no longer exists: {path}"
+        )));
+    }
+    std::process::Command::new("explorer")
+        .arg(p)
+        .spawn()
+        .map_err(crate::error::AppError::Io)?;
+    Ok(())
 }

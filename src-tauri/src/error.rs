@@ -1,8 +1,8 @@
 //! Command-facing error type.
 //!
 //! Tauri commands must return a serializable error, and the frontend only ever needs a
-//! message, so everything collapses to a tagged string rather than leaking Rust types
-//! across the IPC boundary.
+//! message, so everything collapses to a string rather than leaking Rust types across
+//! the IPC boundary.
 
 use serde::{Serialize, Serializer};
 
@@ -12,6 +12,10 @@ pub enum AppError {
     Pty(#[from] crate::pty::session::PtyError),
     #[error(transparent)]
     Shell(#[from] crate::pty::shell::ShellError),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error("{0}")]
+    Message(String),
 }
 
 impl Serialize for AppError {

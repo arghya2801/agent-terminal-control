@@ -15,7 +15,7 @@ pub fn config_dir() -> PathBuf {
     }
     let base = std::env::var_os("APPDATA")
         .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::temp_dir());
+        .unwrap_or_else(std::env::temp_dir);
     base.join("dev.arghya.ccpg")
 }
 
