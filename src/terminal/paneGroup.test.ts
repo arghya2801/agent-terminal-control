@@ -1,5 +1,53 @@
 import { describe, expect, it, vi } from 'vitest';
-import { debounce, dimsChanged, isUsableDims, paneStyle } from './paneGroup';
+import {
+  debounce,
+  dimsChanged,
+  isUsableDims,
+  paneStyle,
+  panesNeedingResize,
+} from './paneGroup';
+
+describe('panesNeedingResize', () => {
+  const target = { cols: 150, rows: 40 };
+
+  it('resizes a brand new pane even when every other pane already matches', () => {
+    // The regression. A tab opened after the first starts at xterm's 80x24 default
+    // while its PTY was spawned at the pane's real size. Deduping on shared geometry
+    // skipped it, so a resumed session rendered at 80 columns and wrapped into garbage
+    // until the window was nudged.
+    const panes = [
+      { key: 'existing', dims: { ...target } },
+      { key: 'fresh', dims: null },
+    ];
+    expect(panesNeedingResize(panes, target).map((p) => p.key)).toEqual(['fresh']);
+  });
+
+  it('does nothing when every pane already matches', () => {
+    const panes = [
+      { key: 'a', dims: { ...target } },
+      { key: 'b', dims: { ...target } },
+    ];
+    // Every ConPTY resize repaints the child, so a no-op pass must stay a no-op.
+    expect(panesNeedingResize(panes, target)).toEqual([]);
+  });
+
+  it('resizes every stale pane on a real geometry change', () => {
+    const panes = [
+      { key: 'a', dims: { cols: 80, rows: 24 } },
+      { key: 'b', dims: { cols: 80, rows: 24 } },
+    ];
+    expect(panesNeedingResize(panes, target)).toHaveLength(2);
+  });
+
+  it('resizes a pane that differs in only one axis', () => {
+    const panes = [{ key: 'a', dims: { cols: 150, rows: 39 } }];
+    expect(panesNeedingResize(panes, target)).toHaveLength(1);
+  });
+
+  it('handles an empty pane list', () => {
+    expect(panesNeedingResize([], target)).toEqual([]);
+  });
+});
 
 describe('dimsChanged', () => {
   it('treats the first measurement as a change', () => {

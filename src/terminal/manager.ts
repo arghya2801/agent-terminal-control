@@ -24,7 +24,13 @@ import '@xterm/xterm/css/xterm.css';
 
 import { Channel, ptyAck, ptyKill, ptyResize, ptySpawn, ptyWrite } from '../lib/ipc';
 import type { Dims, PtyEvent, SpawnOpts, TabKey } from '../types';
-import { debounce, dimsChanged, isUsableDims, paneStyle } from './paneGroup';
+import {
+  debounce,
+  dimsChanged,
+  isUsableDims,
+  paneStyle,
+  panesNeedingResize,
+} from './paneGroup';
 import {
   defaultFontFamily,
   defaultFontSize,
@@ -46,6 +52,10 @@ export interface Tab {
   ptyId: string | null;
   exited: boolean;
   exitCode: number | null;
+  /** Dimensions currently applied to this terminal and its PTY. Tracked per tab, not
+   *  globally: a new tab must be sized on arrival even though pane geometry is
+   *  unchanged. */
+  dims: Dims | null;
   /** Set while a command is running; drives the close-confirm in phase 3. */
   unacked: number;
 }
@@ -54,7 +64,6 @@ const tabs = new Map<TabKey, Tab>();
 let activeKey: TabKey | null = null;
 let webgl: WebglAddon | null = null;
 let wrapper: HTMLElement | null = null;
-let lastDims: Dims | null = null;
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -135,6 +144,7 @@ export async function openTab(
     ptyId: null,
     exited: false,
     exitCode: null,
+    dims: null,
     unacked: 0,
   };
   tabs.set(key, tab);
@@ -146,6 +156,10 @@ export async function openTab(
   activate(key);
   await nextLayout();
   const dims = measure(tab);
+  // Size the emulator to match what the PTY is about to be spawned with. Without this
+  // the Terminal keeps xterm's 80x24 default while the shell writes at the pane's real
+  // width, and a resumed session wraps into garbage until the window is nudged.
+  applyDims(tab, dims);
 
   // --- input path. MUST be wired before pty_spawn (see the module comment).
   term.onData((d) => {
@@ -271,14 +285,22 @@ const scheduleFit = debounce(() => {
   if (!active) return;
 
   const dims = measure(active);
-  if (!dimsChanged(lastDims, dims)) return;
-  lastDims = dims;
-
-  for (const t of tabs.values()) {
-    t.term.resize(dims.cols, dims.rows);
-    if (t.ptyId) void ptyResize(t.ptyId, dims.cols, dims.rows);
+  // Every pane shares the wrapper's geometry, but each tracks what it has actually been
+  // given -- so a newly opened tab is corrected even when nothing about the window moved.
+  for (const t of panesNeedingResize([...tabs.values()], dims)) {
+    applyDims(t, dims);
   }
 }, RESIZE_DEBOUNCE_MS);
+
+/** Resize the emulator and its PTY together, and remember what was applied. */
+function applyDims(tab: Tab, dims: Dims) {
+  if (!dimsChanged(tab.dims, dims)) return;
+  tab.dims = dims;
+  tab.term.resize(dims.cols, dims.rows);
+  // Only after a PTY exists; openTab applies dims before spawning, and passes the same
+  // values to pty_spawn so the two can never disagree.
+  if (tab.ptyId) void ptyResize(tab.ptyId, dims.cols, dims.rows);
+}
 
 export function refit() {
   scheduleFit();
