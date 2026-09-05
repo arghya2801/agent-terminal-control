@@ -1,14 +1,9 @@
 //! On-disk cache of parsed transcript heads.
 //!
-//! The scan re-runs on every watcher tick, and the corpus is already ~22MB. Re-parsing
-//! everything each time would be wasteful, but the naive `(size, mtime)` key is close to
-//! useless here: Claude *appends* to the live session constantly, so its size and mtime
-//! change every few seconds.
-//!
-//! The saving grace is that only the **head** is ever read, and appends never touch it.
-//! So a file that merely grew, whose cached entry already looks complete, is still valid
-//! — refresh the mtime and skip the parse. Only a shrink or an in-place rewrite forces a
-//! re-read.
+//! A `(size, mtime)` key would be near-useless here: Claude appends to the live session
+//! constantly, so both change every few seconds. But only the head is ever read and
+//! appends never touch it, so a file that merely grew with a complete cached entry is
+//! still valid. Only a shrink or an in-place rewrite forces a re-read.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -32,39 +27,7 @@ struct Entry {
     cwd: Option<PathBuf>,
     git_branch: Option<String>,
     label: String,
-    label_source: LabelSourceRepr,
-}
-
-/// Mirrors `LabelSource`; kept separate so the cache format is not hostage to an enum
-/// used elsewhere.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-enum LabelSourceRepr {
-    AiTitle,
-    Slug,
-    FirstMessage,
-    Uuid,
-}
-
-impl From<LabelSource> for LabelSourceRepr {
-    fn from(v: LabelSource) -> Self {
-        match v {
-            LabelSource::AiTitle => Self::AiTitle,
-            LabelSource::Slug => Self::Slug,
-            LabelSource::FirstMessage => Self::FirstMessage,
-            LabelSource::Uuid => Self::Uuid,
-        }
-    }
-}
-impl From<LabelSourceRepr> for LabelSource {
-    fn from(v: LabelSourceRepr) -> Self {
-        match v {
-            LabelSourceRepr::AiTitle => Self::AiTitle,
-            LabelSourceRepr::Slug => Self::Slug,
-            LabelSourceRepr::FirstMessage => Self::FirstMessage,
-            LabelSourceRepr::Uuid => Self::Uuid,
-        }
-    }
+    label_source: LabelSource,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,8 +38,6 @@ pub struct SessionCache {
     dirty: bool,
     #[serde(skip)]
     pub hits: u64,
-    #[serde(skip)]
-    pub misses: u64,
 }
 
 impl Default for SessionCache {
@@ -86,7 +47,6 @@ impl Default for SessionCache {
             entries: HashMap::new(),
             dirty: false,
             hits: 0,
-            misses: 0,
         }
     }
 }
@@ -154,14 +114,13 @@ impl SessionCache {
                     cwd: hit.cwd.clone(),
                     git_branch: hit.git_branch.clone(),
                     label: hit.label.clone(),
-                    label_source: hit.label_source.into(),
+                    label_source: hit.label_source,
                     mtime_ms,
                     size,
                 });
             }
         }
 
-        self.misses += 1;
         let parsed = parse(path)?;
         self.entries.insert(
             key,
@@ -171,7 +130,7 @@ impl SessionCache {
                 cwd: parsed.cwd.clone(),
                 git_branch: parsed.git_branch.clone(),
                 label: parsed.label.clone(),
-                label_source: parsed.label_source.into(),
+                label_source: parsed.label_source,
             },
         );
         self.dirty = true;
@@ -207,7 +166,7 @@ fn entry_still_valid(entry: &Entry, size: u64) -> bool {
     }
     // Grew. Trust the cached head only if it actually captured something; an entry that
     // fell back to the uuid may simply not have reached the label yet.
-    entry.cwd.is_some() && !matches!(entry.label_source, LabelSourceRepr::Uuid)
+    entry.cwd.is_some() && entry.label_source != LabelSource::Uuid
 }
 
 #[cfg(test)]

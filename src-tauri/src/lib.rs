@@ -10,22 +10,16 @@ use tauri::{Emitter, Manager};
 
 use state::AppState;
 
-/// Emitted when the project/session index changes. Low-rate, so a plain event is right;
-/// `Channel` stays exclusive to the PTY stream.
 pub const EVENT_INDEX_UPDATED: &str = "index://updated";
-/// Emitted when `settings.json` changes on disk and actually differs from what is loaded.
 pub const EVENT_SETTINGS_UPDATED: &str = "settings://updated";
 
 pub fn run() {
-    // Runs before the first load: the rename moved the config directory, and without
-    // this a long-time user is silently handed factory defaults.
+    // Must precede the first load, or an existing user gets factory defaults.
     if settings::migrate_legacy_config() {
         eprintln!("carried settings over from the pre-rename config directory");
     }
     let loaded = settings::load();
     if let settings::LoadOutcome::Invalid { error, .. } = &loaded {
-        // Running on defaults for one session beats silently rewriting a config the user
-        // hand-edited. The file is left exactly as it is.
         eprintln!("settings could not be parsed, using defaults: {error}");
     }
     let settings = loaded.settings();
@@ -42,12 +36,10 @@ pub fn run() {
             commands::pty_ack,
             commands::pty_kill,
             commands::pty_stats,
-            commands::resolve_shell_cmd,
             commands::index_snapshot,
             commands::index_refresh,
             commands::settings_get,
             commands::settings_set,
-            commands::settings_path,
             commands::open_in_explorer,
             commands::open_settings_file,
             commands::open_devtools,
@@ -68,21 +60,10 @@ pub fn run() {
         });
 }
 
-/// Stop WebView2 handling Chromium's own accelerator keys.
-///
-/// It consumes them before they reach the page, which is why Ctrl+Shift+B and
-/// Ctrl+Shift+D did nothing while Ctrl+Shift+T and Ctrl+Shift+W worked -- Chromium binds
-/// the first two (bookmarks bar, bookmark all tabs) and has nothing meaningful for the
-/// others. The action is a no-op in an embedded webview, but the key is still eaten, so
-/// the symptom is silence rather than an error.
-///
-/// Turning them off also stops Ctrl+R and F5 reloading the app, Ctrl+P opening a print
-/// dialog, and Ctrl+/- zooming -- all wrong in a terminal, and Ctrl+R in particular is
-/// Claude Code's verbose toggle. Clipboard keys are unaffected: Microsoft classes
-/// Ctrl+C/V/X and Ctrl+A as not browser-specific.
-///
-/// `wry` exposes a flag for this but Tauri never calls it, so the WebView2 default
-/// (enabled) stands and we reach for the COM interface directly.
+/// WebView2 eats Chromium's accelerators before the page sees them, silently: Ctrl+Shift+B
+/// and Ctrl+Shift+D never arrive, and Ctrl+R would reload the app instead of reaching the
+/// shell. Tauri exposes no setting for this, hence the COM call. Clipboard keys are
+/// unaffected.
 fn disable_browser_accelerator_keys(app: &tauri::App) {
     #[cfg(windows)]
     {
@@ -91,8 +72,7 @@ fn disable_browser_accelerator_keys(app: &tauri::App) {
             eprintln!("no main webview; browser accelerator keys left enabled");
             return;
         };
-        // Failing here costs a few shortcuts, not the app: warn and carry on rather
-        // than refusing to start.
+        // Costs a few shortcuts, not the app, so never fatal.
         let result = webview.with_webview(|platform| unsafe {
             use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
             use windows::core::Interface;
@@ -115,7 +95,6 @@ fn disable_browser_accelerator_keys(app: &tauri::App) {
     let _ = app;
 }
 
-/// Apply `settings.json` edits without a restart.
 fn start_settings_watcher(app: &tauri::AppHandle) {
     let path = settings::settings_path();
     let handle = app.clone();
@@ -123,20 +102,18 @@ fn start_settings_watcher(app: &tauri::AppHandle) {
     let watcher = settings::watcher::watch(&path, move || {
         let state = handle.state::<AppState>();
         match settings::load() {
-            // A typo mid-edit is normal. Keep what is loaded and say nothing further --
-            // the next save will be well-formed.
+            // A typo mid-edit is normal; the next save will be well-formed.
             settings::LoadOutcome::Invalid { error, .. } => {
                 eprintln!("settings.json is not valid JSON, keeping current values: {error}");
             }
             outcome => {
                 let next = outcome.settings();
-                // Our own `settings_set` writes this file, which wakes this watcher.
-                // Comparing before emitting is what stops that becoming a loop.
+                // `settings_set` writes this file, waking this watcher; comparing first
+                // is what stops that becoming a loop.
                 if next == state.settings.get() {
                     return;
                 }
                 state.settings.set(next.clone());
-                // The projects directory may have moved.
                 state.index.invalidate();
                 let _ = handle.emit(EVENT_SETTINGS_UPDATED, next);
             }
@@ -161,8 +138,7 @@ fn start_watcher(app: &tauri::AppHandle) {
     let handle = app.clone();
     let watcher = index::watcher::watch(&root, move || {
         let state = handle.state::<AppState>();
-        // Only emit when the rendered projection actually differs -- a live session
-        // appends constantly and would otherwise re-render the sidebar continuously.
+        // A live session appends constantly; only emit when the projection differs.
         if let Some(snap) = state.index.scan_if_changed(&state.settings.get(), false) {
             let _ = handle.emit(EVENT_INDEX_UPDATED, snap);
         }

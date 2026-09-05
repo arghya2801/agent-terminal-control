@@ -1,23 +1,18 @@
 //! One live PTY: spawn, stream, resize, tear down.
 //!
-//! ## Threading
-//!
 //! ```text
-//! [reader thread] blocking read() --mpsc--> [pump thread] --Channel::send--> webview
-//!                                                ^ 8ms tick
+//! [reader] blocking read() --mpsc--> [pump] --Channel::send--> webview
+//!                                      ^ 8ms tick
 //! ```
 //!
-//! The split is not incidental. `Channel::send` bottoms out in `webview.eval()`, which
-//! is marshalled onto the Tauri main thread; calling it straight from the reader thread
-//! would let a TUI redraw storm flood the main thread with `ExecuteScript` calls and
-//! stall window input. The pump coalesces a tick's worth of reads into one send.
+//! The split matters: `Channel::send` bottoms out in `webview.eval()` on the Tauri main
+//! thread, so sending straight from the reader would let a TUI redraw storm stall window
+//! input. The pump coalesces a tick's worth of reads into one send.
 //!
-//! ## Backpressure
-//!
-//! `Channel::send` is fire-and-forget, so Rust cannot see the webview falling behind.
-//! The frontend acks bytes once xterm.js has parsed them; above `INFLIGHT_HIGH` the
-//! reader thread stops draining ConPTY, which pushes back on the child through the OS
-//! pipe. Bytes are never dropped — half an ANSI sequence corrupts the screen for good.
+//! `Channel::send` is fire-and-forget, so the frontend acks bytes once xterm has parsed
+//! them. Above `INFLIGHT_HIGH` the reader stops draining ConPTY, pushing back on the
+//! child through the OS pipe. Bytes are never dropped: half an ANSI sequence corrupts
+//! the screen permanently.
 
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -59,9 +54,6 @@ pub struct SpawnOpts {
     pub cwd: Option<String>,
     pub cols: u16,
     pub rows: u16,
-    /// Overrides the configured shell; `None` uses the resolved default.
-    pub shell: Option<String>,
-    pub args: Option<Vec<String>>,
     /// Typed into the shell after it starts, e.g. `claude --resume <uuid>`. Sent as
     /// input rather than argv so the user is left in an interactive shell afterwards.
     pub initial_command: Option<String>,
@@ -92,13 +84,12 @@ pub enum PtyError {
     Io(#[from] std::io::Error),
 }
 
-/// Counters behind the Ctrl+Shift+D debug overlay. The point is to measure the IPC
-/// behaviour this module claims rather than assume it.
+/// Counters behind the Ctrl+Shift+D overlay, so the claims above can be measured.
 #[derive(Debug, Default)]
 pub struct PtyStats {
     pub bytes_out: AtomicU64,
     pub sends: AtomicU64,
-    /// Sends whose serialized payload cleared Tauri's single-eval threshold.
+    /// Sends that cleared Tauri's single-eval threshold.
     pub sends_over_threshold: AtomicU64,
     pub inflight: AtomicUsize,
     pub paused_count: AtomicU64,
@@ -148,7 +139,7 @@ pub struct PtySession {
 
 impl PtySession {
     pub fn spawn(id: String, opts: SpawnOpts, ch: Channel<PtyEvent>) -> Result<Self, PtyError> {
-        let shell = resolve_shell(opts.shell.as_deref())?;
+        let shell = resolve_shell(None)?;
 
         let pty = native_pty_system()
             .openpty(PtySize {
@@ -160,7 +151,7 @@ impl PtySession {
             .map_err(|e| PtyError::Pty(e.to_string()))?;
 
         let mut cmd = CommandBuilder::new(shell.path.as_os_str());
-        for a in opts.args.as_ref().unwrap_or(&shell.args) {
+        for a in &shell.args {
             cmd.arg(a);
         }
         if let Some(cwd) = opts.cwd.as_deref().filter(|c| !c.is_empty()) {
@@ -397,16 +388,12 @@ fn spawn_pump_thread(
     });
 }
 
-/// ConPTY asks for the cursor position at startup and **deadlocks until something
-/// answers** -- it emits nothing further, so the terminal stays blank forever. Normally
-/// xterm.js answers automatically, which is why `term.onData` must be wired before
-/// `pty_spawn`. This is the safety net for when it does not: if no further output has
-/// arrived `CPR_GRACE` after the request, the stream is stalled and we answer ourselves.
+/// ConPTY asks for the cursor position at startup and deadlocks until something answers,
+/// emitting nothing further. xterm.js normally answers, which is why `term.onData` must
+/// be wired before `pty_spawn`; this is the safety net when it does not.
 ///
-/// Gating on "no new output" rather than "no input written" is deliberate. A session
-/// that types an initial command would otherwise look like it had answered, and stay
-/// deadlocked. Verified by `tests/pty_pipeline.rs`, which is headless and therefore
-/// always takes this path.
+/// Gates on "no new output" rather than "no input written": a session that types an
+/// initial command would otherwise look like it had answered and stay wedged.
 fn arm_cpr_watchdog(writer: Arc<Mutex<Box<dyn Write + Send>>>, stats: Arc<PtyStats>) {
     thread::spawn(move || {
         let before = stats.bytes_out.load(Ordering::Relaxed);

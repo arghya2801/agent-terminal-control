@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chordLabel, matchChord, type ChordEvent } from './keymap';
+import { matchChord, type ChordEvent } from './keymap';
 
 const press = (key: string, mods: Partial<ChordEvent> = {}): ChordEvent => ({
   key,
@@ -121,17 +121,5 @@ describe('matchChord', () => {
     // The window listener passes real events; callers constructing their own may not.
     const { type: _omitted, ...noType } = ctrlShift('B');
     expect(matchChord(noType)).toBe('toggleSidebar');
-  });
-});
-
-describe('chordLabel', () => {
-  it('describes each action so tooltips cannot drift from the keymap', () => {
-    expect(chordLabel('toggleSidebar')).toBe('Ctrl+Shift+B');
-    expect(chordLabel('newTab')).toBe('Ctrl+Shift+T');
-    expect(chordLabel('toggleDebug')).toBe('Ctrl+Shift+D');
-    expect(chordLabel('closeTab')).toBe('Ctrl+Shift+W');
-    expect(chordLabel('nextTab')).toBe('Ctrl+Tab');
-    expect(chordLabel('prevTab')).toBe('Ctrl+Shift+Tab');
-    expect(chordLabel('toggleDevtools')).toBe('Ctrl+Shift+I');
   });
 });

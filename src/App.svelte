@@ -123,9 +123,8 @@
     // xterm's interceptor so they never reach the shell.
     const offChord = onChord(runAction);
     mountTerminals(wrapper);
-    // Settings decide whether the sidebar is open, which decides how wide the terminal
-    // pane is. Spawning a shell before that lands means the PTY starts at one width and
-    // is resized moments later -- which corrupts a replayed session's scrollback.
+    // Settings decide whether the sidebar is open, and so how wide the pane is.
+    // Spawning before that lands starts the PTY at the wrong width.
     void (async () => {
       await initStores();
       await newTab();

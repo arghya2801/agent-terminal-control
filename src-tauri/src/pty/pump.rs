@@ -1,16 +1,12 @@
 //! Turning raw ConPTY bytes into IPC-sized UTF-8 chunks.
 //!
-//! Two problems live here, both pure and both easy to get subtly wrong:
+//! ConPTY reads land on arbitrary byte counts, so multi-byte characters straddle reads
+//! and cannot be decoded independently.
 //!
-//! 1. **UTF-8 never aligns with reads.** ConPTY hands us arbitrary byte counts, so a
-//!    multi-byte character routinely straddles two reads. Decoding each read
-//!    independently would corrupt it.
-//! 2. **Tauri's IPC has a size cliff.** A `Channel` JSON payload under 8192 bytes is
-//!    delivered by a single `webview.eval()`; above it, delivery takes a second IPC
-//!    round trip. The budget applies to the *serialized* string, where JSON expands
-//!    the ESC byte (0x1B) into a six-character escape. Claude Code's TUI is dense
-//!    enough in escapes that budgeting on raw byte length overshoots badly: 6000 ESC
-//!    bytes serialize to 36000 characters.
+//! Tauri delivers a `Channel` JSON payload under 8192 bytes in one `webview.eval()` and
+//! takes a second round trip above it. The budget applies to the *serialized* string,
+//! where JSON expands ESC (0x1B) sixfold — 6000 ESC bytes become 36000 characters — so
+//! budgeting on raw length overshoots badly on a TUI.
 
 /// Tauri's threshold for delivering a JSON channel payload in one `webview.eval()`.
 pub const MAX_JSON_DIRECT_EXECUTE: usize = 8192;

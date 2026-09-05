@@ -1,14 +1,9 @@
 //! Watching `~/.claude/projects` so the sidebar stays live.
 //!
-//! Two things make a naive watcher unusable here:
-//!
-//! - The watch must be recursive, because new project directories appear at runtime —
-//!   but that means every append to a multi-megabyte live transcript fires an event.
-//! - `ReadDirectoryChangesW` fires continuously during those appends.
-//!
-//! So events are filtered hard, debounced, and then the *rendered projection* is compared
-//! rather than the events themselves (see `Index::scan_if_changed`). An append that grows
-//! a file but changes nothing visible produces no re-render.
+//! The watch has to be recursive, since project directories appear at runtime, which
+//! means every append to a live transcript fires an event. Events are therefore filtered
+//! hard and debounced, and the rendered projection is compared rather than the events
+//! themselves — see `Index::scan_if_changed`.
 
 use std::path::Path;
 use std::time::Duration;

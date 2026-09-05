@@ -1,10 +1,8 @@
 //! Canonical identity for project directories.
 //!
-//! Every project is keyed by its path, and those paths arrive from two places that spell
-//! them differently: the `cwd` field inside session JSONL, and the settings file the user
-//! hand-edits. On Windows the same directory can be written with either separator, either
-//! case, a trailing slash, or an 8.3 short name. Without one canonical key the same
-//! project shows up two or three times in the sidebar.
+//! Paths arrive both from session JSONL and from a hand-edited settings file, and on
+//! Windows the same directory can differ in separator, case, trailing slash or 8.3 short
+//! name. Without one canonical key a project appears two or three times in the sidebar.
 
 use std::path::{Path, PathBuf};
 

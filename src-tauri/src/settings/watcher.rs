@@ -1,11 +1,5 @@
-//! Watching `settings.json` so edits apply without a restart.
-//!
-//! This is the whole configuration story: rather than build a settings UI, the file is
-//! authoritative and the app follows it live. You edit it in your own editor and the
-//! change lands immediately.
-//!
-//! The existing `index::watcher` cannot be reused — it filters for `.jsonl` two levels
-//! below a projects root.
+//! Watching `settings.json` so edits apply without a restart. The file is the whole
+//! configuration story; there is no settings UI.
 
 use std::path::Path;
 use std::time::Duration;
@@ -13,8 +7,7 @@ use std::time::Duration;
 use notify::RecursiveMode;
 use notify_debouncer_full::{new_debouncer, DebounceEventResult, Debouncer, RecommendedCache};
 
-/// Short enough to feel immediate, long enough to ride out an editor's write-truncate-
-/// write cycle, which would otherwise deliver a half-written file.
+/// Long enough to ride out an editor's write-truncate-write cycle.
 pub const DEBOUNCE: Duration = Duration::from_millis(300);
 
 pub type SettingsWatcher = Debouncer<notify::RecommendedWatcher, RecommendedCache>;

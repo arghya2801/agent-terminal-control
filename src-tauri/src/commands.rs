@@ -7,7 +7,6 @@ use tauri::State;
 use crate::error::AppResult;
 use crate::index::IndexSnapshot;
 use crate::pty::session::{PtyEvent, SpawnOpts, StatsSnapshot};
-use crate::pty::shell::{resolve_shell, ShellInfo};
 use crate::settings::Settings;
 use crate::state::AppState;
 
@@ -47,11 +46,6 @@ pub fn pty_stats(id: String, state: State<'_, AppState>) -> AppResult<StatsSnaps
     Ok(state.ptys.stats(&id)?)
 }
 
-#[tauri::command]
-pub fn resolve_shell_cmd(path: Option<String>) -> AppResult<ShellInfo> {
-    Ok(resolve_shell(path.as_deref())?)
-}
-
 // --- index -----------------------------------------------------------------
 
 #[tauri::command]
@@ -82,13 +76,6 @@ pub fn settings_set(settings: Settings, state: State<'_, AppState>) -> AppResult
     Ok(())
 }
 
-#[tauri::command]
-pub fn settings_path() -> String {
-    crate::settings::settings_path()
-        .to_string_lossy()
-        .into_owned()
-}
-
 // --- misc ------------------------------------------------------------------
 
 /// Devtools, re-added under our own chord after WebView2's F12 was turned off.
@@ -107,20 +94,22 @@ pub fn open_devtools(window: tauri::WebviewWindow) {
     let _ = window;
 }
 
-/// Open `settings.json` in whatever the user's editor for .json is.
-///
-/// Writes defaults first when the file does not exist yet, so the button is never a dead
-/// end on a fresh install.
+/// Open `settings.json` with the default handler, writing defaults first if it is
+/// missing so the button is never a dead end.
 #[tauri::command]
 pub fn open_settings_file(state: State<'_, AppState>) -> AppResult<()> {
     let path = crate::settings::settings_path();
     if !path.exists() {
         crate::settings::save(&state.settings.get()).map_err(crate::error::AppError::Io)?;
     }
-    // `start` is a cmd builtin, so it needs a shell. The empty "" is the window title
-    // argument, without which a quoted path would be taken as the title.
-    std::process::Command::new("cmd")
-        .args(["/C", "start", "", &path.to_string_lossy()])
+    // `explorer <file>` opens with the default handler and involves no shell; `cmd /C
+    // start` would interpret metacharacters in the path.
+    open_with_shell_handler(&path)
+}
+
+fn open_with_shell_handler(path: &std::path::Path) -> AppResult<()> {
+    std::process::Command::new("explorer")
+        .arg(path)
         .spawn()
         .map_err(crate::error::AppError::Io)?;
     Ok(())
@@ -134,9 +123,5 @@ pub fn open_in_explorer(path: String) -> AppResult<()> {
             "path no longer exists: {path}"
         )));
     }
-    std::process::Command::new("explorer")
-        .arg(p)
-        .spawn()
-        .map_err(crate::error::AppError::Io)?;
-    Ok(())
+    open_with_shell_handler(p)
 }

@@ -21,12 +21,9 @@ export function dimsChanged(prev: Dims | null, next: Dims): boolean {
 /**
  * Which panes still need resizing to reach `target`.
  *
- * Deduping against a single shared "last applied" value is wrong, and was a real bug: a
- * newly opened tab starts at xterm's 80x24 default while its PTY was spawned at the
- * pane's true size. Because the *pane* geometry had not changed, a shared check skipped
- * the resize entirely, so the terminal rendered at 80 columns while the shell wrote at
- * 150. A fresh prompt hides that; a resumed session wraps into garbage until the window
- * is nudged. Tracking dimensions per pane is what makes a new tab correct on arrival.
+ * Tracked per pane, not against one shared "last applied" value: a new tab starts at
+ * xterm's 80x24 default while its PTY was spawned at the pane's real size, and a shared
+ * check skips it because the pane geometry never changed.
  */
 export function panesNeedingResize<T extends { dims: Dims | null }>(
   panes: T[],

@@ -12,42 +12,17 @@ export const DEFAULT_ZOOM = 1.0;
 export const MIN_ZOOM = ZOOM_LEVELS[0];
 export const MAX_ZOOM = ZOOM_LEVELS[ZOOM_LEVELS.length - 1];
 
-/** Nearest rung to `value`, so a hand-edited settings file still behaves. */
-function nearestIndex(value: number): number {
-  let best = 0;
-  let bestDistance = Infinity;
-  for (let i = 0; i < ZOOM_LEVELS.length; i++) {
-    const d = Math.abs(ZOOM_LEVELS[i] - value);
-    if (d < bestDistance) {
-      bestDistance = d;
-      best = i;
-    }
-  }
-  return best;
-}
-
 /**
  * One step up (`+1`) or down (`-1`) the ladder, clamped at both ends.
  *
- * A value between rungs snaps in the direction of travel rather than to the nearest
- * rung, so a single keypress always visibly changes the zoom.
+ * A value between rungs moves to the next rung in the direction of travel, so a
+ * keypress always changes something even if settings were hand-edited off-ladder.
  */
 export function stepZoom(current: number, direction: 1 | -1): number {
-  const safe = Number.isFinite(current) ? current : DEFAULT_ZOOM;
-  const i = nearestIndex(safe);
-  const onRung = Math.abs(ZOOM_LEVELS[i] - safe) < 1e-9;
-
-  let next: number;
-  if (onRung) {
-    next = i + direction;
-  } else if (direction === 1) {
-    // Between rungs: move to the first rung strictly above.
-    next = ZOOM_LEVELS[i] > safe ? i : i + 1;
-  } else {
-    next = ZOOM_LEVELS[i] < safe ? i : i - 1;
-  }
-
-  return ZOOM_LEVELS[Math.min(Math.max(next, 0), ZOOM_LEVELS.length - 1)];
+  const z = normalizeZoom(current);
+  const next =
+    direction === 1 ? ZOOM_LEVELS.find((l) => l > z) : ZOOM_LEVELS.findLast((l) => l < z);
+  return next ?? z;
 }
 
 /** Coerce anything that arrives from settings into a usable level. */

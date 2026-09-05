@@ -10,8 +10,6 @@ export interface SpawnOpts {
   cwd?: string | null;
   cols: number;
   rows: number;
-  shell?: string | null;
-  args?: string[] | null;
   /** Typed into the shell after it starts, e.g. `claude --resume <uuid>`. */
   initialCommand?: string | null;
 }
@@ -22,12 +20,6 @@ export interface StatsSnapshot {
   sendsOverThreshold: number;
   inflight: number;
   pausedCount: number;
-}
-
-export interface ShellInfo {
-  path: string;
-  args: string[];
-  label: string;
 }
 
 /**

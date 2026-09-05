@@ -1,6 +1,6 @@
 import type { ITheme } from '@xterm/xterm';
 
-/** Default dark palette. Becomes settings-driven in phase 3. */
+/** Fallback palette, used when settings cannot be read. */
 export const defaultTheme: ITheme = {
   background: '#0b0d10',
   foreground: '#d6dae0',

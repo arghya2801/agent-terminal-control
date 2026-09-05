@@ -1,22 +1,17 @@
 //! Reading session metadata out of Claude Code's JSONL transcripts.
 //!
-//! Two constraints shape everything here.
+//! Only the head is read: transcripts reach several megabytes, and everything the
+//! sidebar needs sits near the top.
 //!
-//! **Only the head is read.** Transcripts reach several megabytes; the largest in local
-//! data is 3.8MB. Everything the sidebar needs sits near the top, so parsing stops after
-//! `MAX_LINES` or `MAX_BYTES`, whichever comes first, and exits earlier still once a
-//! `cwd` and a label are both in hand.
-//!
-//! **The directory name is never decoded.** `~/.claude/projects/<mangled>` collapses
-//! separators and underscores alike: `D:\Coding\game_tracker_app` becomes
-//! `D--Coding-game-tracker-app`, and the underscore is unrecoverable. The authoritative
-//! path is the `cwd` field inside the file.
+//! The directory name is never decoded. `~/.claude/projects/<mangled>` collapses
+//! separators and underscores alike -- `D:\Coding\game_tracker_app` becomes
+//! `D--Coding-game-tracker-app` -- so the `cwd` field inside the file is authoritative.
 
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// Runs of `file-history-snapshot` push the first human message deep — as far as line 11
@@ -28,7 +23,7 @@ const MAX_BYTES: u64 = 512 * 1024;
 const MIN_LABEL_LEN: usize = 3;
 const MAX_LABEL_LEN: usize = 72;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum LabelSource {
     AiTitle,
@@ -51,15 +46,6 @@ pub struct SessionMeta {
     pub label_source: LabelSource,
     pub mtime_ms: u64,
     pub size: u64,
-}
-
-impl SessionMeta {
-    /// False when no `cwd` was found. Such a session must never be used as a shell cwd:
-    /// the only other candidate would be a path reconstructed from the lossy directory
-    /// name, which would be wrong.
-    pub fn has_trusted_path(&self) -> bool {
-        self.cwd.is_some()
-    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -303,7 +289,7 @@ mod tests {
         // that the directory name cannot represent.
         let s = read(game_tracker(), "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa");
         assert_eq!(s.cwd, Some(PathBuf::from(r"D:\Coding\game_tracker_app")));
-        assert!(s.has_trusted_path());
+        assert!(s.cwd.is_some());
     }
 
     #[test]
@@ -379,7 +365,7 @@ mod tests {
             "99999999-7777-4777-8777-999999999999",
         );
         assert_eq!(s.cwd, None);
-        assert!(!s.has_trusted_path());
+        assert!(s.cwd.is_none());
         assert_eq!(s.label_source, LabelSource::Uuid);
     }
 

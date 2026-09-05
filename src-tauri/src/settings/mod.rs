@@ -35,15 +35,10 @@ fn legacy_config_dir() -> Option<PathBuf> {
         .map(|b| b.join("dev.arghya.ccpg"))
 }
 
-/// Carry settings over from the pre-rename directory, once.
+/// Carry settings over from the pre-rename config directory, once.
 ///
-/// Renaming the app changed the Tauri identifier, which moves the config directory.
-/// Without this a long-time user silently loses their pinned projects and zoom level and
-/// is handed factory defaults, with their old file still sitting on disk unreferenced.
-///
-/// Deliberately a copy, not a move: if anything here is wrong, the original is still
-/// there. Only the settings file is carried; the index cache rebuilds itself in
-/// milliseconds and is not worth the risk of copying a stale one.
+/// A copy rather than a move, so a bad migration cannot lose the original. Only the
+/// settings file: the index cache rebuilds itself in milliseconds.
 pub fn migrate_from(legacy_dir: &std::path::Path, current_dir: &std::path::Path) -> bool {
     let target = current_dir.join("settings.json");
     let source = legacy_dir.join("settings.json");

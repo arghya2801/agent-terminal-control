@@ -1,9 +1,5 @@
-//! Grouping sessions into projects.
-//!
-//! Two sources: the sessions discovered under `~/.claude/projects`, and whatever the user
-//! pinned in settings. (An earlier design also scanned the filesystem for git repos; that
-//! was dropped once the sidebar settled on listing only projects that have sessions,
-//! which made the scan find repos it would then hide.)
+//! Grouping sessions into projects: those found under `~/.claude/projects`, plus
+//! whatever the user pinned in settings.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -29,13 +25,6 @@ pub struct Project {
     pub exists: bool,
     pub last_active_ms: u64,
     pub sessions: Vec<SessionMeta>,
-}
-
-impl Project {
-    /// Whether this project can be opened as a shell cwd.
-    pub fn is_launchable(&self) -> bool {
-        self.path.is_some() && self.exists
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -236,10 +225,7 @@ mod tests {
         let p = &snap.projects[0];
         assert_eq!(p.key, UNKNOWN_KEY);
         assert_eq!(p.path, None);
-        assert!(
-            !p.is_launchable(),
-            "a reconstructed path must never be used"
-        );
+        assert!(p.path.is_none(), "a reconstructed path must never be used");
     }
 
     #[test]
@@ -319,7 +305,7 @@ mod tests {
             &Settings::default(),
         );
         assert!(!snap.projects[0].exists);
-        assert!(!snap.projects[0].is_launchable());
+        assert!(!snap.projects[0].exists);
         // It still appears, so old sessions remain reachable in the UI.
         assert_eq!(snap.projects[0].sessions.len(), 1);
     }

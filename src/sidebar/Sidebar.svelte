@@ -3,11 +3,11 @@
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import { openInExplorer } from '../lib/ipc';
   import { isPinned, togglePinned } from '../lib/pinned';
-  import { saveSettings } from '../lib/stores.svelte';
   import {
     anyProjectExpanded,
     appState,
     refresh,
+    saveSettings,
     toggleAllProjects,
   } from '../lib/stores.svelte';
   import type { Project, SessionMeta, TabKey } from '../types';
@@ -28,14 +28,8 @@
   async function copy(text: string) {
     try {
       await navigator.clipboard.writeText(text);
-    } catch {
-      // Older webviews reject the async API without a user-gesture context.
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      ta.remove();
+    } catch (e) {
+      appState.error = `could not copy: ${e}`;
     }
   }
 

@@ -1,18 +1,14 @@
 /**
- * Owns every live `Terminal` instance, outside the framework.
+ * Owns every live `Terminal`, outside the framework. Svelte renders an empty wrapper and
+ * this module appends panes into it; a component holding a `Terminal` could have it
+ * re-created by the reconciler, destroying scrollback and orphaning the PTY.
  *
- * Svelte renders an empty wrapper div and this module appends panes into it. No
- * component ever holds a `Terminal`: a reconciler that decides to re-create a node
- * would destroy the scrollback and orphan the PTY.
+ * Two rules that are expensive to rediscover:
  *
- * Two rules that are easy to violate and expensive to debug:
- *
- * - `term.onData` must be wired **before** `pty_spawn`. ConPTY asks for the cursor
- *   position at startup and stalls until a terminal answers; xterm.js answers for us,
- *   but only if it is already listening. (Rust has a 1.2s watchdog as a safety net, so
- *   the symptom of getting this wrong is a visible delay rather than a dead terminal.)
- * - Only the active tab may hold a WebGL context. WebView2 caps live contexts at ~16
- *   and silently kills the oldest beyond that.
+ * - `term.onData` must be wired before `pty_spawn`. ConPTY stalls at startup until a
+ *   terminal answers its cursor-position request, and xterm only answers if listening.
+ * - Only the active tab may hold a WebGL context; WebView2 caps them at ~16 and
+ *   silently kills the oldest beyond that.
  */
 
 import { Terminal } from '@xterm/xterm';
@@ -25,7 +21,7 @@ import '@xterm/xterm/css/xterm.css';
 import { Channel, ptyAck, ptyKill, ptyResize, ptySpawn, ptyWrite } from '../lib/ipc';
 import { matchChord, type Action } from '../lib/keymap';
 import { cycleIndex } from './cycle';
-import type { Dims, PtyEvent, SpawnOpts, TabKey } from '../types';
+import type { Dims, PtyEvent, SpawnOpts, TabKey, TerminalSettings } from '../types';
 import {
   debounce,
   dimsChanged,
@@ -40,7 +36,6 @@ import {
   defaultTheme,
   searchDecorations,
 } from './theme';
-import type { TerminalSettings } from '../types';
 
 /** Ack once this many unacked bytes accumulate. Matches the Rust backpressure window. */
 const ACK_BATCH = 64 * 1024;
@@ -56,11 +51,10 @@ export interface Tab {
   ptyId: string | null;
   exited: boolean;
   exitCode: number | null;
-  /** Dimensions currently applied to this terminal and its PTY. Tracked per tab, not
-   *  globally: a new tab must be sized on arrival even though pane geometry is
-   *  unchanged. */
+  /** Dimensions applied to this terminal and its PTY. Per tab, not global: a new tab
+   *  must be sized on arrival even though pane geometry is unchanged. */
   dims: Dims | null;
-  /** Set while a command is running; drives the close-confirm in phase 3. */
+  /** Bytes written but not yet acked to Rust, which releases backpressure. */
   unacked: number;
 }
 
@@ -158,14 +152,9 @@ export async function openTab(
   term.loadAddon(fit);
   term.loadAddon(search);
 
-  // Returning false stops xterm handling the key *and* forwarding it to the PTY, which
-  // is the whole point: an app chord must not also land in the shell.
-  //
-  // It does NOT stop DOM propagation, though. Without the explicit stopPropagation the
-  // event still bubbles to the window listener, which matches the same chord and runs
-  // the action a second time -- invisible for "new tab" (you get two) but a perfect
-  // no-op for every toggle, which is how this surfaced: Ctrl+Shift+B and Ctrl+Shift+D
-  // appeared dead while Ctrl+Shift+T and Ctrl+Shift+W appeared to work.
+  // Returning false stops xterm both handling the key and forwarding it to the PTY. It
+  // does not stop DOM propagation, so without stopPropagation the window listener runs
+  // the same chord a second time -- which cancels out every toggle.
   term.attachCustomKeyEventHandler((e) => {
     const action = matchChord(e);
     if (!action) return true;
@@ -192,10 +181,9 @@ export async function openTab(
   };
   tabs.set(key, tab);
 
-  // Show it before measuring, or FitAddon reads a hidden (zero-sized) container, and
-  // let the browser complete a layout pass first -- measuring in the same frame the
-  // container was inserted yields the pre-layout size. Spawning with the wrong column
-  // count then triggers a resize moments later, which garbles a replaying session.
+  // Must be visible and laid out before measuring: FitAddon reads zero from a hidden
+  // container, and measuring in the insertion frame yields the pre-layout size. Either
+  // spawns at the wrong width and garbles a replaying session on the resize that follows.
   activate(key);
   await nextLayout();
   const dims = measure(tab);
@@ -216,8 +204,7 @@ export async function openTab(
   const channel = new Channel<PtyEvent>();
   channel.onmessage = (msg) => {
     if (msg.t === 'o') {
-      // The write callback fires once xterm has parsed the payload; that is the honest
-      // moment to release backpressure.
+      // The callback fires once xterm has parsed the payload: the honest ack point.
       term.write(msg.d, () => {
         tab.unacked += msg.d.length;
         if (tab.unacked >= ACK_BATCH && tab.ptyId) {

@@ -72,8 +72,6 @@ fn opts(initial: Option<&str>) -> SpawnOpts {
         cwd: Some(env!("CARGO_MANIFEST_DIR").to_string()),
         cols: 120,
         rows: 30,
-        shell: None,
-        args: None,
         initial_command: initial.map(str::to_string),
     }
 }
