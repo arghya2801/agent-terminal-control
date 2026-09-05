@@ -30,3 +30,6 @@ src-tauri/icons/android/
 src-tauri/icons/ios/
 # Proof renders for eyeballing the mark at small sizes; regenerate with make-icon.mjs.
 assets/preview/
+
+# Development log: local notes, not part of the published project.
+SESSION.md
