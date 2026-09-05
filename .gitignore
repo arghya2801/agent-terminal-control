@@ -21,3 +21,12 @@ src-tauri/gen/
 *.log
 .DS_Store
 Thumbs.db
+
+# --- icon generation ---
+# `tauri icon` emits mobile icon sets; this is a Windows desktop app and does not
+# build them. Deleted rather than committed, and ignored so a regeneration cannot
+# quietly reintroduce ~40 unused files.
+src-tauri/icons/android/
+src-tauri/icons/ios/
+# Proof renders for eyeballing the mark at small sizes; regenerate with make-icon.mjs.
+assets/preview/

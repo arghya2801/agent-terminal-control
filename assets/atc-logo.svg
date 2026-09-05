@@ -1,0 +1,30 @@
+<!--
+  ATC — Agent Terminal Control
+
+  A runway threshold: the piano-key stripes painted where an aircraft touches down.
+  Three bars, not the authentic symmetric pairs. Four was tried and rendered at 16px:
+  the gaps turned to grey mush and the centreline vanished, leaving a white smear. At
+  taskbar size a 16px tile supports about three bars and two gaps before it stops being
+  a shape and starts being a texture. Legibility beat authenticity.
+
+  Source of truth for the icon. Regenerate the PNGs with:
+      node scripts/make-icon.mjs && npm run tauri icon assets/atc-logo.png
+
+  Geometry is deliberately chunky: this is rendered at 16px in a taskbar, where thin
+  strokes and fine gaps alias into a smear.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>ATC — Agent Terminal Control</title>
+
+  <!-- Tile. Radius is ~22% of the edge, matching modern desktop icon convention, and a
+       solid fill guarantees the mark reads on both light and dark taskbars. -->
+  <rect width="1024" height="1024" rx="228" fill="#539bf5" />
+
+  <!-- Threshold stripes. Bar 170 wide, gap 115: at 16px that is ~2.7px of white against
+       ~1.8px of blue, which both survive. Thinner bars or tighter gaps do not. -->
+  <g fill="#ffffff">
+    <rect x="142" y="232" width="170" height="560" rx="18" />
+    <rect x="427" y="232" width="170" height="560" rx="18" />
+    <rect x="712" y="232" width="170" height="560" rx="18" />
+  </g>
+</svg>
