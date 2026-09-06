@@ -60,7 +60,7 @@ graph LR
 | `index/watcher.rs` | Watches `~/.claude/projects`, filtered and debounced. |
 | `index/mod.rs` | Ties the above together: scan, cache, and "did the rendered result actually change". |
 | `settings/model.rs` | The settings struct. Every field defaults. |
-| `settings/mod.rs` | Load, save, config directory, migration from the pre-rename directory. |
+| `settings/mod.rs` | Load, save, config directory, migration from earlier config directories. |
 | `settings/watcher.rs` | Watches `settings.json` so edits apply live. |
 
 ### Frontend (`src/`)
@@ -87,7 +87,7 @@ graph LR
 
 ### Startup
 
-1. `lib::run()` migrates settings from the pre-rename config directory if needed, then loads `settings.json`.
+1. `lib::run()` migrates settings from an earlier config directory if needed, then loads `settings.json`.
 2. `AppState` is built with the PTY registry, settings, and index.
 3. Both watchers start; WebView2's accelerator keys are disabled.
 4. The frontend calls `initStores()`, which fetches settings and the first index snapshot, then applies zoom and terminal options.

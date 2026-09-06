@@ -8,34 +8,34 @@ use std::sync::RwLock;
 
 pub use model::{ClaudeSettings, PinnedProject, ProjectSettings, Settings, UiSettings};
 
+/// The folder users actually browse to, so it reads as a product name rather than a
+/// bundle identifier.
+const APP_DIR: &str = "Agent Terminal Control";
+
+/// Folder names this app has used before, newest first. The first one holding a settings
+/// file wins the migration.
+const LEGACY_APP_DIRS: [&str; 2] = ["dev.arghya.atc", "dev.arghya.ccpg"];
+
 /// Config directory. `ATC_CONFIG_DIR` lets the playground run against fixtures without
 /// touching the real config.
 pub fn config_dir() -> PathBuf {
     if let Some(d) = std::env::var_os("ATC_CONFIG_DIR") {
         return PathBuf::from(d);
     }
-    let base = std::env::var_os("APPDATA")
+    appdata().join(APP_DIR)
+}
+
+fn appdata() -> PathBuf {
+    std::env::var_os("APPDATA")
         .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
-    base.join("dev.arghya.atc")
+        .unwrap_or_else(std::env::temp_dir)
 }
 
 pub fn settings_path() -> PathBuf {
     config_dir().join("settings.json")
 }
 
-/// The config directory used before the app was renamed to ATC.
-fn legacy_config_dir() -> Option<PathBuf> {
-    // Only meaningful for the real location; an overridden dir was never the old one.
-    if std::env::var_os("ATC_CONFIG_DIR").is_some() {
-        return None;
-    }
-    std::env::var_os("APPDATA")
-        .map(PathBuf::from)
-        .map(|b| b.join("dev.arghya.ccpg"))
-}
-
-/// Carry settings over from the pre-rename config directory, once.
+/// Carry settings over from an earlier config directory, once.
 ///
 /// A copy rather than a move, so a bad migration cannot lose the original. Only the
 /// settings file: the index cache rebuilds itself in milliseconds.
@@ -54,10 +54,14 @@ pub fn migrate_from(legacy_dir: &std::path::Path, current_dir: &std::path::Path)
 
 /// Run the one-time migration against the real directories.
 pub fn migrate_legacy_config() -> bool {
-    match legacy_config_dir() {
-        Some(legacy) => migrate_from(&legacy, &config_dir()),
-        None => false,
+    // An overridden config dir was never one of the old locations.
+    if std::env::var_os("ATC_CONFIG_DIR").is_some() {
+        return false;
     }
+    let current = config_dir();
+    LEGACY_APP_DIRS
+        .iter()
+        .any(|old| migrate_from(&appdata().join(old), &current))
 }
 
 #[derive(Debug)]
@@ -256,6 +260,19 @@ mod tests {
             panic!("expected Loaded");
         };
         assert_eq!(s.ui.zoom, 1.0, "existing settings must win");
+    }
+
+    #[test]
+    fn the_config_folder_is_named_for_the_product_not_the_author() {
+        // It sits in every user's AppData, so it should not carry a bundle identifier.
+        let key = "ATC_CONFIG_DIR";
+        let prev = std::env::var_os(key);
+        std::env::remove_var(key);
+        let dir = config_dir();
+        if let Some(v) = prev {
+            std::env::set_var(key, v);
+        }
+        assert!(dir.ends_with("Agent Terminal Control"), "got {dir:?}");
     }
 
     #[test]
