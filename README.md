@@ -24,7 +24,25 @@ imitates a shell. Claude Code's TUI, PSReadLine, colours and Ctrl+C all behave n
 
 ## Install
 
-Download the installer from Releases, or run from source:
+Three downloads on the Releases page. Pick one.
+
+| File | What it is |
+|---|---|
+| `ATC_0.1.0_x64_en-US.msi` | [Recommended] MSI installer, for deploying through Group Policy or Intune. Needs admin. |
+| `ATC_0.1.0_x64-setup.exe` | NSIS installer. Per-user, no admin prompt. Adds a Start menu entry and an uninstaller. |
+| `atc.exe` | The bare executable. No installer, no Start menu entry, no uninstaller. Put it anywhere and run it. |
+
+All three are the same application. The installers do nothing but place that
+executable and register an uninstaller.
+
+The binaries are unsigned, so SmartScreen shows "Windows protected your PC" on first
+run. Click **More info**, then **Run anyway**.
+
+Settings and cache live in `%APPDATA%\Agent Terminal Control\`. Uninstalling does not
+remove them; delete that folder by hand if you want them gone.
+
+
+### From source
 
 ```
 npm install
@@ -32,7 +50,8 @@ npm run tauri dev      # development
 npm run tauri build    # produces exe, msi and nsis installer
 ```
 
-The binaries are unsigned, so SmartScreen warns on first run.
+Build output lands in `src-tauri/target/release/`, with the installers under
+`bundle/msi/` and `bundle/nsis/`.
 
 ## Capabilities
 
@@ -145,7 +164,3 @@ npm run play     # run against fixtures, leaving real data alone
 
 `scripts/` contains helpers for regenerating the icon and fixtures, capturing the window,
 and sending real keystrokes to the running app for testing shortcuts.
-
-## Licence
-
-Not yet chosen.
