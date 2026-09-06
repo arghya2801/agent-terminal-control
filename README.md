@@ -83,7 +83,9 @@ In the find bar: `Enter` next match, `Shift+Enter` previous, `Escape` close.
 
 ## Settings
 
-`%APPDATA%\dev.arghya.atc\settings.json`, created on first run. The gear icon in the
+`%APPDATA%\Agent Terminal Control\settings.json` — that is
+`C:\Users\<you>\AppData\Roaming\Agent Terminal Control\settings.json` — created on first
+run. The gear icon in the
 rail opens it. Every field is optional; missing ones take their default.
 
 ```jsonc
