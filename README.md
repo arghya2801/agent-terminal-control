@@ -28,12 +28,26 @@ Three downloads on the Releases page. Pick one.
 
 | File | What it is |
 |---|---|
-| `ATC_0.1.0_x64_en-US.msi` | [Recommended] MSI installer, for deploying through Group Policy or Intune. Needs admin. |
-| `ATC_0.1.0_x64-setup.exe` | NSIS installer. Per-user, no admin prompt. Adds a Start menu entry and an uninstaller. |
+| `ATC_<version>_x64_en-US.msi` | [Recommended] MSI installer. Installs for all users, needs admin. Also works for deploying through Group Policy or Intune. |
+| `ATC_<version>_x64-setup.exe` | NSIS installer. Per-user, no admin prompt. Closes every running `atc.exe` before installing, portable copies included. |
 | `atc.exe` | The bare executable. No installer, no Start menu entry, no uninstaller. Put it anywhere and run it. |
 
 All three are the same application. The installers do nothing but place that
-executable and register an uninstaller.
+executable, add a Start menu entry and register an uninstaller.
+
+### Updating
+
+There is no auto-update. Download the new release and run the same kind of file you
+installed:
+
+- **MSI:** run the new `.msi`. It replaces the installed version in place. Close ATC
+  first, or Windows asks to close it or restart.
+- **Setup exe:** run the new `setup.exe`. It also upgrades in place, and closes any
+  running ATC itself.
+- **`atc.exe`:** replace the file.
+
+Stick to one installer type. The MSI installs per machine and the setup exe per user,
+so switching between them leaves two separate installs. Settings are kept in every case.
 
 The binaries are unsigned, so SmartScreen shows "Windows protected your PC" on first
 run. Click **More info**, then **Run anyway**.
