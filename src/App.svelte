@@ -4,6 +4,8 @@
   import DebugOverlay from './debug/DebugOverlay.svelte';
   import Sidebar from './sidebar/Sidebar.svelte';
   import FindBar from './terminal/FindBar.svelte';
+  import SettingsPanel from './settings/SettingsPanel.svelte';
+  import UsagePanel from './usage/UsagePanel.svelte';
   import {
     adjustZoom,
     appState,
@@ -15,6 +17,7 @@
   import {
     closeTab,
     cycleTab,
+    displayTitle,
     getActiveKey,
     listTabs,
     mount as mountTerminals,
@@ -24,15 +27,21 @@
     refit,
   } from './terminal/manager';
   import { matchChord, type Action } from './lib/keymap';
-  import { openDevtools, openSettingsFile } from './lib/ipc';
+  import { openDevtools } from './lib/ipc';
   import { zoomLabel } from './lib/zoom';
   import type { Project, SessionMeta, TabKey } from './types';
 
   let wrapper: HTMLDivElement;
   let tabs = $state<{ key: TabKey; title: string; exited: boolean }[]>([]);
   let activeKey = $state<TabKey | null>(null);
+  let openProjectKeys = $state<Set<string>>(new Set());
   let showDebug = $state(false);
   let showFind = $state(false);
+  let page = $state<'settings' | 'usage' | null>(null);
+
+  function togglePage(p: 'settings' | 'usage') {
+    page = page === p ? null : p;
+  }
   let error = $state<string | null>(null);
   let counter = 0;
 
@@ -40,8 +49,13 @@
   const width = $derived(appState.settings?.ui.sidebarWidth ?? 260);
 
   function sync() {
-    tabs = listTabs().map((t) => ({ key: t.key, title: t.title, exited: t.exited }));
-    activeKey = getActiveKey();
+    const all = listTabs();
+    tabs = all.map((t) => ({ key: t.key, title: displayTitle(t), exited: t.exited }));
+    const nextActive = getActiveKey();
+    // Picking a tab means the user wants the terminal, not the page covering it.
+    if (nextActive !== activeKey) page = null;
+    activeKey = nextActive;
+    openProjectKeys = new Set(all.flatMap((t) => (t.projectKey ? [t.projectKey] : [])));
   }
 
   async function guard(fn: () => Promise<unknown>) {
@@ -60,7 +74,23 @@
 
   function openProject(p: Project) {
     if (!p.path) return;
-    return guard(() => openTab(`project:${p.key}`, p.name, { cwd: p.path }));
+    return guard(() => openTab(`project:${p.key}`, p.name, { cwd: p.path }, p.key));
+  }
+
+  /** Always a fresh tab, unlike openProject which focuses an existing one. */
+  function newShellIn(p: Project) {
+    if (!p.path) return;
+    counter += 1;
+    return guard(() => openTab(`plain:${counter}`, p.name, { cwd: p.path }, p.key));
+  }
+
+  function newClaudeIn(p: Project) {
+    if (!p.path) return;
+    counter += 1;
+    const command = appState.settings?.claude.command || 'claude';
+    return guard(() =>
+      openTab(`claude:${counter}`, p.name, { cwd: p.path, initialCommand: command }, p.key),
+    );
   }
 
   function openSession(p: Project, s: SessionMeta) {
@@ -72,7 +102,9 @@
     const command = claude
       ? [claude.command, ...claude.resumeArgs.map((a) => a.replace('{session}', s.id))].join(' ')
       : `claude --resume ${s.id}`;
-    return guard(() => openTab(`session:${s.id}`, s.label, { cwd, initialCommand: command }));
+    return guard(() =>
+      openTab(`session:${s.id}`, s.label, { cwd, initialCommand: command }, p.key),
+    );
   }
 
   // One implementation of every chord, so a shortcut behaves identically whether focus
@@ -177,6 +209,15 @@
     >
       +
     </button>
+    <button
+      class="rail-btn"
+      class:on={page === 'usage'}
+      onclick={() => togglePage('usage')}
+      title="Usage and spend"
+      aria-label="Usage and spend"
+    >
+      $
+    </button>
     <div class="spacer"></div>
     {#if currentZoom() !== 1}
       <button
@@ -190,9 +231,10 @@
     {/if}
     <button
       class="rail-btn small"
-      onclick={() => openSettingsFile()}
-      title="Edit settings.json (applies live)"
-      aria-label="Edit settings"
+      class:on={page === 'settings'}
+      onclick={() => togglePage('settings')}
+      title="Settings"
+      aria-label="Settings"
     >
       ⚙
     </button>
@@ -209,13 +251,25 @@
 
   <aside class="panel">
     {#if open}
-      <Sidebar {activeKey} onOpenProject={openProject} onOpenSession={openSession} />
+      <Sidebar
+        {activeKey}
+        {openProjectKeys}
+        onOpenProject={openProject}
+        onOpenSession={openSession}
+        onNewShell={newShellIn}
+        onNewClaude={newClaudeIn}
+      />
     {/if}
   </aside>
 
   <section class="main">
     <TabBar {tabs} {activeKey} onNew={newTab} />
     <div class="panes" bind:this={wrapper}></div>
+    {#if page === 'settings'}
+      <SettingsPanel onClose={() => (page = null)} />
+    {:else if page === 'usage'}
+      <UsagePanel onClose={() => (page = null)} />
+    {/if}
     {#if showFind}
       <FindBar onClose={() => (showFind = false)} />
     {/if}

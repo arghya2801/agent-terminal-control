@@ -1,6 +1,7 @@
 //! Discovering projects and their Claude sessions.
 
 pub mod cache;
+pub mod cost;
 pub mod project;
 pub mod session;
 pub mod watcher;

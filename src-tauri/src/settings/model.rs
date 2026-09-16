@@ -4,6 +4,7 @@
 //! Unknown fields are ignored rather than rejected, so a file written by a newer build
 //! does not brick an older one.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -39,6 +40,11 @@ pub struct ProjectSettings {
     /// the fixture corpus so real data is never touched.
     pub claude_projects_dir: Option<String>,
     pub pinned: Vec<PinnedProject>,
+    /// Sidebar names chosen by the user, by project path. Wins over a pinned
+    /// `display_name` and the directory name.
+    pub names: BTreeMap<String, String>,
+    /// Sidebar labels chosen by the user, by session uuid.
+    pub session_names: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

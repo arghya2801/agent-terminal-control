@@ -106,6 +106,31 @@ pub fn build(sessions: Vec<SessionMeta>, settings: &Settings) -> IndexSnapshot {
         order_of.insert(r.key, pin.order);
     }
 
+    // Renames are keyed by path as the user saw it; resolve so any spelling matches.
+    for (path, name) in &settings.projects.names {
+        let name = name.trim();
+        if name.is_empty() {
+            continue;
+        }
+        if let Some(p) = by_key.get_mut(&paths::resolve(path).key) {
+            p.name = name.to_string();
+        }
+    }
+    for p in by_key.values_mut() {
+        for s in &mut p.sessions {
+            if let Some(name) = settings
+                .projects
+                .session_names
+                .get(&s.id)
+                .map(|n| n.trim())
+                .filter(|n| !n.is_empty())
+            {
+                s.label = name.to_string();
+                s.label_source = super::session::LabelSource::Custom;
+            }
+        }
+    }
+
     let mut projects: Vec<Project> = by_key.into_values().collect();
 
     projects.sort_by(|a, b| {
@@ -308,6 +333,59 @@ mod tests {
         assert!(!snap.projects[0].exists);
         // It still appears, so old sessions remain reachable in the UI.
         assert_eq!(snap.projects[0].sessions.len(), 1);
+    }
+
+    #[test]
+    fn a_rename_beats_the_directory_and_pinned_names() {
+        let mut s = Settings::default();
+        s.projects.pinned.push(PinnedProject {
+            path: r"D:\Coding\portfolio2".into(),
+            display_name: Some("Pinned".into()),
+            order: 0,
+        });
+        s.projects
+            .names
+            .insert(r"d:/coding/portfolio2/".into(), "My Site".into());
+        let snap = build(vec![sess("a", Some(r"D:\Coding\portfolio2"), 1)], &s);
+        assert_eq!(snap.projects[0].name, "My Site");
+    }
+
+    #[test]
+    fn a_blank_rename_falls_back() {
+        let mut s = Settings::default();
+        s.projects
+            .names
+            .insert(r"D:\Coding\portfolio2".into(), "  ".into());
+        let snap = build(vec![sess("a", Some(r"D:\Coding\portfolio2"), 1)], &s);
+        assert_eq!(snap.projects[0].name, "portfolio2");
+    }
+
+    #[test]
+    fn a_session_rename_replaces_the_label() {
+        let mut s = Settings::default();
+        s.projects
+            .session_names
+            .insert("a".into(), "auth refactor".into());
+        let snap = build(
+            vec![
+                sess("a", Some(r"D:\Coding\p"), 1),
+                sess("b", Some(r"D:\Coding\p"), 2),
+            ],
+            &s,
+        );
+        let a = snap.projects[0]
+            .sessions
+            .iter()
+            .find(|x| x.id == "a")
+            .unwrap();
+        assert_eq!(a.label, "auth refactor");
+        assert_eq!(a.label_source, LabelSource::Custom);
+        let b = snap.projects[0]
+            .sessions
+            .iter()
+            .find(|x| x.id == "b")
+            .unwrap();
+        assert_eq!(b.label, "b");
     }
 
     #[test]

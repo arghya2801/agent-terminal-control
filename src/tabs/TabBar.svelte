@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { activate, closeTab, isBusy } from '../terminal/manager';
+  import { activate, closeTab, focusActiveTerminal, isBusy, renameTab } from '../terminal/manager';
+  import InlineRename from '../lib/InlineRename.svelte';
   import type { TabKey } from '../types';
 
   let { tabs, activeKey, onNew }: {
@@ -7,6 +8,14 @@
     activeKey: TabKey | null;
     onNew: () => void;
   } = $props();
+
+  let renaming = $state<TabKey | null>(null);
+
+  function finishRename(key: TabKey, name?: string) {
+    if (name !== undefined) renameTab(key, name);
+    renaming = null;
+    focusActiveTerminal();
+  }
 
   async function close(e: MouseEvent, key: TabKey) {
     e.stopPropagation();
@@ -19,18 +28,29 @@
 
 <div class="bar">
   {#each tabs as tab (tab.key)}
+    {#if renaming === tab.key}
+      <div class="tab" class:active={tab.key === activeKey}>
+        <InlineRename
+          value={tab.title}
+          onDone={(name) => finishRename(tab.key, name)}
+          onCancel={() => finishRename(tab.key)}
+        />
+      </div>
+    {:else}
     <button
       class="tab"
       class:active={tab.key === activeKey}
       class:exited={tab.exited}
       onclick={() => activate(tab.key)}
-      title={tab.title}
+      ondblclick={() => (renaming = tab.key)}
+      title="{tab.title} (double-click to rename)"
     >
       <span class="label">{tab.title}</span>
       <span class="close" role="button" tabindex="-1"
         onclick={(e) => close(e, tab.key)}
         onkeydown={() => {}}>×</span>
     </button>
+    {/if}
   {/each}
   <button class="new" onclick={onNew} title="New tab (Ctrl+Shift+T)">+</button>
 </div>

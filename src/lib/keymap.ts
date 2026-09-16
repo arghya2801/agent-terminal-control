@@ -75,3 +75,19 @@ export function matchChord(e: ChordEvent): Action | null {
   );
   return hit?.action ?? null;
 }
+
+/**
+ * Plain Ctrl+V while the program has bracketed paste on (Claude Code does, PSReadLine
+ * does not). Such a key is left to the browser's native paste instead of becoming ^V.
+ */
+export function isNativePaste(e: ChordEvent, bracketedPaste: boolean): boolean {
+  return (
+    bracketedPaste &&
+    e.type === 'keydown' &&
+    e.key.toLowerCase() === 'v' &&
+    e.ctrlKey &&
+    !e.shiftKey &&
+    !e.altKey &&
+    !e.metaKey
+  );
+}

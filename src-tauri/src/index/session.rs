@@ -26,6 +26,8 @@ const MAX_LABEL_LEN: usize = 72;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum LabelSource {
+    /// Renamed by the user in ATC.
+    Custom,
     AiTitle,
     Slug,
     FirstMessage,

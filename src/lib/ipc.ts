@@ -1,7 +1,7 @@
 /** Typed wrappers over the Rust command surface. One place for every command name. */
 
 import { Channel, invoke } from '@tauri-apps/api/core';
-import type { IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot } from '../types';
+import type { CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot } from '../types';
 
 export { Channel };
 
@@ -58,4 +58,14 @@ export function openDevtools(): Promise<void> {
 /** Opens settings.json in the user's default editor, creating it if needed. */
 export function openSettingsFile(): Promise<void> {
   return invoke('open_settings_file');
+}
+
+/** Token use and list-price cost per (UTC hour, project, model), across all transcripts. */
+export function usageCosts(): Promise<CostRow[]> {
+  return invoke<CostRow[]>('usage_costs');
+}
+
+/** Plan limits as `/usage` shows them. Shape belongs to the API, so kept loose. */
+export function claudeUsage(): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>('claude_usage');
 }

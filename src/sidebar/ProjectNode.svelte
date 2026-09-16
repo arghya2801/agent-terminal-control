@@ -1,5 +1,6 @@
 <script lang="ts">
   import SessionNode from './SessionNode.svelte';
+  import InlineRename from '../lib/InlineRename.svelte';
   import { isExpanded, toggleExpanded } from '../lib/stores.svelte';
   import { shortenPath } from '../lib/format';
   import type { Project, SessionMeta, TabKey } from '../types';
@@ -8,6 +9,11 @@
     project,
     limit,
     activeKey,
+    open: hasTab,
+    renaming,
+    onRenameProject,
+    onRenameSession,
+    onRenameCancel,
     onOpenProject,
     onOpenSession,
     onProjectMenu,
@@ -16,6 +22,12 @@
     project: Project;
     limit: number;
     activeKey: TabKey | null;
+    /** A tab is open somewhere for this project. */
+    open: boolean;
+    renaming: string | null;
+    onRenameProject: (p: Project, name: string) => void;
+    onRenameSession: (s: SessionMeta, name: string) => void;
+    onRenameCancel: () => void;
     onOpenProject: (p: Project) => void;
     onOpenSession: (p: Project, s: SessionMeta) => void;
     onProjectMenu: (e: MouseEvent, p: Project) => void;
@@ -37,20 +49,33 @@
   <div
     class="row"
     class:active={projectActive}
+    class:has-tab={hasTab}
     role="group"
     oncontextmenu={(e) => onProjectMenu(e, project)}
   >
-    <button
-      class="disclosure"
-      onclick={() => toggleExpanded(project.key)}
-      aria-expanded={open}
-      title={open ? 'Collapse' : 'Expand'}
-    >
-      <span class="twisty" class:open>▸</span>
-      {#if project.pinned}<span class="pin">●</span>{/if}
-      <span class="text" class:missing={!launchable}>{project.name}</span>
-      <span class="count">{project.sessions.length}</span>
-    </button>
+    {#if renaming === `p:${project.key}`}
+      <div class="disclosure">
+        <span class="twisty" class:open>▸</span>
+        <InlineRename
+          value={project.name}
+          onDone={(name) => onRenameProject(project, name)}
+          onCancel={onRenameCancel}
+        />
+      </div>
+    {:else}
+      <button
+        class="disclosure"
+        onclick={() => toggleExpanded(project.key)}
+        aria-expanded={open}
+        title={open ? 'Collapse' : 'Expand'}
+      >
+        <span class="twisty" class:open>▸</span>
+        {#if project.pinned}<span class="pin">●</span>{/if}
+        <span class="text" class:missing={!launchable}>{project.name}</span>
+        {#if hasTab}<span class="live" title="Open in a tab"></span>{/if}
+        <span class="count">{project.sessions.length}</span>
+      </button>
+    {/if}
 
     <button
       class="open"
@@ -72,6 +97,9 @@
           {session}
           projectPath={project.path}
           active={activeKey === `session:${session.id}`}
+          renaming={renaming === `s:${session.id}`}
+          onRename={(name) => onRenameSession(session, name)}
+          onRenameCancel={onRenameCancel}
           onOpen={(s) => onOpenSession(project, s)}
           onMenu={(e, s) => onSessionMenu(e, project, s)}
         />
@@ -98,6 +126,19 @@
   }
   .row.active {
     background: #1f6feb22;
+  }
+  .row.has-tab {
+    box-shadow: inset 2px 0 0 #3fb950;
+  }
+  .row.has-tab .text {
+    color: #e6edf3;
+  }
+  .live {
+    flex-shrink: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #3fb950;
   }
   .disclosure {
     display: flex;

@@ -119,7 +119,12 @@ export async function refresh(force = false) {
 }
 
 export async function saveSettings(next: Settings) {
+  const prev = appState.settings;
   appState.settings = next;
+  // Our own writes never come back as settings://updated, so apply them here.
+  if (prev?.ui.zoom !== next.ui.zoom || JSON.stringify(prev?.terminal) !== JSON.stringify(next.terminal)) {
+    applySettings(next);
+  }
   try {
     await settingsSet(next);
   } catch (e) {

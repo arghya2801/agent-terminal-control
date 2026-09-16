@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchChord, type ChordEvent } from './keymap';
+import { isNativePaste, matchChord, type ChordEvent } from './keymap';
 
 const press = (key: string, mods: Partial<ChordEvent> = {}): ChordEvent => ({
   key,
@@ -121,5 +121,21 @@ describe('matchChord', () => {
     // The window listener passes real events; callers constructing their own may not.
     const { type: _omitted, ...noType } = ctrlShift('B');
     expect(matchChord(noType)).toBe('toggleSidebar');
+  });
+});
+
+describe('isNativePaste', () => {
+  const ev = (o: Partial<ChordEvent> = {}): ChordEvent => ({
+    key: 'v', ctrlKey: true, shiftKey: false, type: 'keydown', ...o,
+  });
+  it('claims plain Ctrl+V only under bracketed paste', () => {
+    expect(isNativePaste(ev(), true)).toBe(true);
+    expect(isNativePaste(ev(), false)).toBe(false);
+  });
+  it('leaves other keys and modifiers alone', () => {
+    expect(isNativePaste(ev({ shiftKey: true }), true)).toBe(false);
+    expect(isNativePaste(ev({ altKey: true }), true)).toBe(false);
+    expect(isNativePaste(ev({ key: 'c' }), true)).toBe(false);
+    expect(isNativePaste(ev({ type: 'keyup' }), true)).toBe(false);
   });
 });
