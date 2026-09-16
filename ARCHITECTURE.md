@@ -57,6 +57,7 @@ graph LR
 | `index/session.rs` | Reads the head of one `.jsonl` transcript into `SessionMeta`. |
 | `index/project.rs` | Groups sessions into projects, applies pinning and sort order. |
 | `index/cache.rs` | Avoids re-parsing transcripts that only grew. |
+| `index/cost.rs` | Token use and API list-price cost from every transcript, subagents included, deduplicated per response. |
 | `index/watcher.rs` | Watches `~/.claude/projects`, filtered and debounced. |
 | `index/mod.rs` | Ties the above together: scan, cache, and "did the rendered result actually change". |
 | `settings/model.rs` | The settings struct. Every field defaults. |
@@ -74,9 +75,14 @@ graph LR
 | `terminal/cycle.ts` | Pure. Wrap-around index for tab cycling. |
 | `terminal/theme.ts` | Colours and font fallbacks. |
 | `terminal/FindBar.svelte` | Search UI over the active terminal. |
+| `settings/SettingsPanel.svelte` | Settings form. Save writes `settings.json`. |
+| `usage/UsagePanel.svelte` | Plan limits (the `/usage` endpoint, via Rust) and spend per project over a date range. |
 | `lib/ipc.ts` | Typed wrappers for every Rust command. One place for command names. |
 | `lib/stores.svelte.ts` | Index and settings state, zoom, sidebar toggle. |
-| `lib/keymap.ts` | Pure. Decides whether a keystroke belongs to the app or the shell. |
+| `lib/keymap.ts` | Pure. Decides whether a keystroke belongs to the app or the shell, and when Ctrl+V should run a native paste. |
+| `lib/osc52.ts` | Pure. Decodes OSC 52 clipboard writes, which is how Claude Code copies a selection. |
+| `lib/costs.ts` | Pure. Buckets hourly cost rows into local days and projects. |
+| `lib/Page.svelte`, `lib/InlineRename.svelte` | Full-pane overlay shell, and the inline rename box used by tabs and the sidebar. |
 | `lib/zoom.ts`, `lib/pinned.ts`, `lib/expansion.ts`, `lib/format.ts` | Pure helpers, each unit tested. |
 | `sidebar/*.svelte` | Project tree, session rows, right-click menu. |
 | `tabs/TabBar.svelte` | Tab strip. |

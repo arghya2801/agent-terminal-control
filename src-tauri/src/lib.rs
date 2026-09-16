@@ -43,6 +43,8 @@ pub fn run() {
             commands::open_in_explorer,
             commands::open_settings_file,
             commands::open_devtools,
+            commands::usage_costs,
+            commands::claude_usage,
         ])
         .setup(|app| {
             start_watcher(app.handle());

@@ -14,6 +14,8 @@ param(
     # Matched on process name, not window title: "ATC" as a title substring would
     # also match "Watch", "Patch" or "Dispatch" and capture the wrong window.
     [string]$ProcessName = "atc",
+    # Picks one window when two ATC instances are running (e.g. release and dev).
+    [int]$ProcessId = 0,
     [switch]$Foreground   # fall back to a screen grab (needed if PrintWindow comes back blank)
 )
 $ErrorActionPreference = 'Stop'
@@ -32,7 +34,7 @@ public class Win32 {
 }
 "@
 
-$proc = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
+$proc = $(if ($ProcessId) { Get-Process -Id $ProcessId -ErrorAction SilentlyContinue } else { Get-Process -Name $ProcessName -ErrorAction SilentlyContinue }) |
     Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
 if (-not $proc) { throw "no window for process '$ProcessName'. Is the app running?" }
 $h = $proc.MainWindowHandle

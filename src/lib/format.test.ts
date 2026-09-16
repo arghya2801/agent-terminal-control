@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatMatches, relativeTime, shortenPath } from './format';
+import { formatMatches, relativeTime, shortenPath, usableTitle } from './format';
 
 const NOW = 1_700_000_000_000;
 const MIN = 60_000;
@@ -64,5 +64,16 @@ describe('formatMatches', () => {
   it('falls back to the bare count while the index is unsettled', () => {
     // The addon reports -1 past its highlight limit.
     expect(formatMatches(-1, 1200, 'e')).toBe('1200');
+  });
+});
+
+describe('usableTitle', () => {
+  it('drops empty titles and executable paths', () => {
+    expect(usableTitle('  ')).toBeNull();
+    expect(usableTitle(String.raw`C:\Program Files\PowerShell\7\pwsh.exe`)).toBeNull();
+    expect(usableTitle(String.raw`C:\WINDOWS\system32\cmd.EXE`)).toBeNull();
+  });
+  it('keeps real titles', () => {
+    expect(usableTitle('✳ Fix copy in Claude Code')).toBe('✳ Fix copy in Claude Code');
   });
 });

@@ -5,6 +5,7 @@ use tauri::ipc::Channel;
 use tauri::State;
 
 use crate::error::AppResult;
+use crate::index::cost::CostRow;
 use crate::index::IndexSnapshot;
 use crate::pty::session::{PtyEvent, SpawnOpts, StatsSnapshot};
 use crate::settings::Settings;
@@ -74,6 +75,72 @@ pub fn settings_set(settings: Settings, state: State<'_, AppState>) -> AppResult
     // Settings can repoint the projects directory, so the next scan must report.
     state.index.invalidate();
     Ok(())
+}
+
+// --- usage ---------------------------------------------------------------
+
+/// Token use and list-price cost across every transcript. Slow on first call (reads
+/// every file), cached per file after that, so it runs off the main thread.
+#[tauri::command]
+pub async fn usage_costs(app: tauri::AppHandle) -> AppResult<Vec<CostRow>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri::Manager;
+        let state = app.state::<AppState>();
+        let root = state.settings.get().claude_projects_dir();
+        state.costs.rows(&root)
+    })
+    .await
+    .map_err(|e| crate::error::AppError::Message(e.to_string()))
+}
+
+/// Plan limits, as Claude Code's `/usage` shows them. Uses the OAuth token Claude Code
+/// stores; the token never crosses to the frontend.
+#[tauri::command]
+pub async fn claude_usage() -> AppResult<serde_json::Value> {
+    tauri::async_runtime::spawn_blocking(fetch_claude_usage)
+        .await
+        .map_err(|e| crate::error::AppError::Message(e.to_string()))?
+}
+
+fn fetch_claude_usage() -> AppResult<serde_json::Value> {
+    use crate::error::AppError::Message;
+    let home = std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))
+        .ok_or_else(|| Message("no home directory".into()))?;
+    let creds_path = std::path::Path::new(&home)
+        .join(".claude")
+        .join(".credentials.json");
+    let text = std::fs::read_to_string(&creds_path)
+        .map_err(|_| Message("not signed in: run `claude` and log in first".into()))?;
+    let creds: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| Message(format!("credentials unreadable: {e}")))?;
+    let oauth = &creds["claudeAiOauth"];
+    let token = oauth["accessToken"]
+        .as_str()
+        .ok_or_else(|| Message("no Claude subscription login found".into()))?;
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    if oauth["expiresAt"].as_u64().is_some_and(|exp| exp <= now_ms) {
+        return Err(Message(
+            "login token expired: run `claude` once to refresh it".into(),
+        ));
+    }
+
+    let mut resp = ureq::get("https://api.anthropic.com/api/oauth/usage")
+        .header("Authorization", &format!("Bearer {token}"))
+        .header("anthropic-beta", "oauth-2025-04-20")
+        .call()
+        .map_err(|e| Message(format!("usage request failed: {e}")))?;
+    let mut body: serde_json::Value = resp
+        .body_mut()
+        .read_json()
+        .map_err(|e| Message(format!("usage response unreadable: {e}")))?;
+    if let Some(obj) = body.as_object_mut() {
+        obj.insert("subscriptionType".into(), oauth["subscriptionType"].clone());
+    }
+    Ok(body)
 }
 
 // --- misc ------------------------------------------------------------------

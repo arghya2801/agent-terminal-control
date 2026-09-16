@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use crate::index::cost::CostIndex;
 use crate::index::watcher::SessionWatcher;
 use crate::index::Index;
 use crate::pty::registry::PtyRegistry;
@@ -13,6 +14,7 @@ pub struct AppState {
     pub ptys: PtyRegistry,
     pub settings: SettingsStore,
     pub index: Index,
+    pub costs: CostIndex,
     /// The filesystem watcher stops on `Drop`, so it lives here for the life of the app
     /// rather than being dropped at the end of setup.
     pub watcher: Mutex<Option<SessionWatcher>>,
@@ -26,6 +28,7 @@ impl AppState {
             ptys: PtyRegistry::new(),
             settings: SettingsStore::new(settings),
             index: Index::new(cache_path),
+            costs: CostIndex::default(),
             watcher: Mutex::new(None),
             settings_watcher: Mutex::new(None),
         }

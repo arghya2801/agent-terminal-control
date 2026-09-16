@@ -14,13 +14,36 @@
 
   let {
     activeKey,
+    openProjectKeys,
     onOpenProject,
     onOpenSession,
+    onNewShell,
+    onNewClaude,
   }: {
     activeKey: TabKey | null;
+    openProjectKeys: Set<string>;
     onOpenProject: (p: Project) => void;
     onOpenSession: (p: Project, s: SessionMeta) => void;
+    onNewShell: (p: Project) => void;
+    onNewClaude: (p: Project) => void;
   } = $props();
+
+  /** `p:<project key>` or `s:<session id>` while its name is being edited. */
+  let renaming = $state<string | null>(null);
+
+  /** Store `name` under `id` in one of the rename maps; empty removes the entry. */
+  async function saveName(field: 'names' | 'sessionNames', id: string, name: string) {
+    renaming = null;
+    if (!appState.settings) return;
+    const map = { ...appState.settings.projects[field] };
+    if (name) map[id] = name;
+    else delete map[id];
+    await saveSettings({
+      ...appState.settings,
+      projects: { ...appState.settings.projects, [field]: map },
+    });
+    await refresh();
+  }
 
   let refreshing = $state(false);
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
@@ -50,6 +73,9 @@
       x: e.clientX,
       y: e.clientY,
       items: [
+        { label: 'Open Claude here', disabled: !path || !p.exists, run: () => onNewClaude(p) },
+        { label: 'Open terminal here', disabled: !path || !p.exists, run: () => onNewShell(p) },
+        { label: 'Rename…', disabled: !path, run: () => (renaming = `p:${p.key}`) },
         {
           label: 'Open in Explorer',
           disabled: !path || !p.exists,
@@ -72,6 +98,7 @@
       x: e.clientX,
       y: e.clientY,
       items: [
+        { label: 'Rename…', run: () => (renaming = `s:${s.id}`) },
         { label: 'Copy session id', run: () => void copy(s.id) },
         {
           label: 'Copy resume command',
@@ -140,6 +167,11 @@
           {project}
           {limit}
           {activeKey}
+          open={openProjectKeys.has(project.key)}
+          {renaming}
+          onRenameProject={(p, name) => p.path && void saveName('names', p.path, name)}
+          onRenameSession={(s, name) => void saveName('sessionNames', s.id, name)}
+          onRenameCancel={() => (renaming = null)}
           {onOpenProject}
           {onOpenSession}
           onProjectMenu={projectMenu}

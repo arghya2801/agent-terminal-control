@@ -36,3 +36,13 @@ export function formatMatches(index: number, count: number, query: string): stri
   if (index < 0) return `${count}`;
   return `${index + 1}/${count}`;
 }
+
+/**
+ * A title set by the program in a tab, or null when it says nothing useful. ConPTY sets
+ * the title to the shell's executable path at startup, which is noise.
+ */
+export function usableTitle(title: string): string | null {
+  const t = title.trim();
+  if (!t || /\.exe$/i.test(t)) return null;
+  return t;
+}

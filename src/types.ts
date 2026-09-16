@@ -26,14 +26,18 @@ export interface StatsSnapshot {
  * Identity for tab reuse. A project tab and a session tab for the same directory are
  * deliberately distinct.
  */
-export type TabKey = `project:${string}` | `session:${string}` | `plain:${string}`;
+export type TabKey =
+  | `project:${string}`
+  | `session:${string}`
+  | `plain:${string}`
+  | `claude:${string}`;
 
 export interface Dims {
   cols: number;
   rows: number;
 }
 
-export type LabelSource = 'aiTitle' | 'slug' | 'firstMessage' | 'uuid';
+export type LabelSource = 'custom' | 'aiTitle' | 'slug' | 'firstMessage' | 'uuid';
 
 export interface SessionMeta {
   id: string;
@@ -68,6 +72,10 @@ export interface Settings {
   projects: {
     claudeProjectsDir: string | null;
     pinned: { path: string; displayName: string | null; order: number }[];
+    /** User-chosen project names, by project path. */
+    names: Record<string, string>;
+    /** User-chosen session labels, by session uuid. */
+    sessionNames: Record<string, string>;
   };
   ui: {
     sidebarWidth: number;
@@ -83,4 +91,20 @@ export interface TerminalSettings {
   fontFamily: string;
   fontSize: number;
   scrollback: number;
+}
+
+/** Mirrors `CostRow` in src-tauri/src/index/cost.rs. */
+export interface CostRow {
+  /** UTC hour, `YYYY-MM-DDTHH`. */
+  hour: string;
+  /** Empty when the transcript recorded no working directory. */
+  projectKey: string;
+  projectPath: string | null;
+  model: string;
+  input: number;
+  output: number;
+  cacheWrite: number;
+  cacheRead: number;
+  costUsd: number;
+  unpriced: boolean;
 }

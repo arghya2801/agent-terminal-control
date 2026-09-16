@@ -19,7 +19,9 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 
 import { Channel, ptyAck, ptyKill, ptyResize, ptySpawn, ptyWrite } from '../lib/ipc';
-import { matchChord, type Action } from '../lib/keymap';
+import { isNativePaste, matchChord, type Action } from '../lib/keymap';
+import { decodeOsc52 } from '../lib/osc52';
+import { usableTitle } from '../lib/format';
 import { cycleIndex } from './cycle';
 import type { Dims, PtyEvent, SpawnOpts, TabKey, TerminalSettings } from '../types';
 import {
@@ -44,6 +46,12 @@ const RESIZE_DEBOUNCE_MS = 50;
 export interface Tab {
   key: TabKey;
   title: string;
+  /** Set by the running program through OSC 0/2, e.g. Claude Code's session name. */
+  autoTitle: string | null;
+  /** Set by the user; wins over everything else. */
+  customTitle: string | null;
+  /** Canonical key of the sidebar project this tab belongs to, if any. */
+  projectKey: string | null;
   term: Terminal;
   fit: FitAddon;
   search: SearchAddon;
@@ -119,6 +127,7 @@ export async function openTab(
   key: TabKey,
   title: string,
   opts: Omit<SpawnOpts, 'cols' | 'rows'>,
+  projectKey: string | null = null,
 ): Promise<Tab> {
   const existing = tabs.get(key);
   if (existing) {
@@ -156,6 +165,9 @@ export async function openTab(
   // does not stop DOM propagation, so without stopPropagation the window listener runs
   // the same chord a second time -- which cancels out every toggle.
   term.attachCustomKeyEventHandler((e) => {
+    // Let the browser run its native paste, which xterm turns into a bracketed paste.
+    // Otherwise Ctrl+V goes out as ^V, which Claude Code only reads as "paste an image".
+    if (isNativePaste(e, term.modes.bracketedPasteMode)) return false;
     const action = matchChord(e);
     if (!action) return true;
     e.preventDefault();
@@ -166,9 +178,31 @@ export async function openTab(
 
   term.open(container);
 
+  // Claude Code copies a selection by emitting OSC 52 (and, on Windows, by also spawning
+  // a slow powershell Set-Clipboard that can time out). xterm ignores OSC 52 unless
+  // handled, which made copies arrive late or not at all.
+  term.parser.registerOscHandler(52, (data) => {
+    const text = decodeOsc52(data);
+    if (text !== null) void writeClipboard(text);
+    return true;
+  });
+
+  // Image-only clipboard: the native paste has no text, so forward ^V and let Claude
+  // Code read the image itself.
+  term.textarea?.addEventListener('paste', (e) => {
+    const cd = e.clipboardData;
+    if (!cd || cd.getData('text/plain') || !term.modes.bracketedPasteMode) return;
+    if (cd.files.length > 0 || [...cd.types].includes('Files')) {
+      if (tab.ptyId) void ptyWrite(tab.ptyId, '\x16');
+    }
+  });
+
   const tab: Tab = {
     key,
     title,
+    autoTitle: null,
+    customTitle: null,
+    projectKey,
     term,
     fit,
     search,
@@ -180,6 +214,11 @@ export async function openTab(
     unacked: 0,
   };
   tabs.set(key, tab);
+
+  term.onTitleChange((t) => {
+    tab.autoTitle = usableTitle(t);
+    notify();
+  });
 
   // Must be visible and laid out before measuring: FitAddon reads zero from a hidden
   // container, and measuring in the insertion frame yields the pre-layout size. Either
@@ -371,6 +410,27 @@ export async function closeTab(key: TabKey) {
 }
 
 /** True when the tab has a live process, i.e. closing it would kill something. */
+/** What the tab bar shows: the user's name, else the program's, else the default. */
+export function displayTitle(tab: Tab): string {
+  return tab.customTitle ?? tab.autoTitle ?? tab.title;
+}
+
+/** An empty name clears the override. */
+export function renameTab(key: TabKey, name: string) {
+  const tab = tabs.get(key);
+  if (!tab) return;
+  tab.customTitle = name.trim() || null;
+  notify();
+}
+
+async function writeClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    console.warn('OSC 52 clipboard write failed', e);
+  }
+}
+
 export function isBusy(key: TabKey): boolean {
   const tab = tabs.get(key);
   return !!tab && !!tab.ptyId && !tab.exited;

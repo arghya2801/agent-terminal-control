@@ -1,11 +1,15 @@
 <script lang="ts">
   import { relativeTime } from '../lib/format';
+  import InlineRename from '../lib/InlineRename.svelte';
   import type { SessionMeta } from '../types';
 
   let {
     session,
     projectPath,
     active = false,
+    renaming = false,
+    onRename,
+    onRenameCancel,
     onOpen,
     onMenu,
   }: {
@@ -13,6 +17,9 @@
     /** Null when the project has no trusted path; resume is then disabled. */
     projectPath: string | null;
     active?: boolean;
+    renaming?: boolean;
+    onRename: (name: string) => void;
+    onRenameCancel: () => void;
     onOpen: (session: SessionMeta) => void;
     onMenu: (e: MouseEvent, session: SessionMeta) => void;
   } = $props();
@@ -23,6 +30,11 @@
   const age = $derived(relativeTime(session.mtimeMs));
 </script>
 
+{#if renaming}
+  <div class="session">
+    <InlineRename value={session.label} onDone={onRename} onCancel={onRenameCancel} />
+  </div>
+{:else}
 <button
   class="session"
   class:active
@@ -44,6 +56,7 @@
     <span class="age">{age}</span>
   </span>
 </button>
+{/if}
 
 <style>
   .session {

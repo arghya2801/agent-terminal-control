@@ -33,3 +33,8 @@ assets/preview/
 
 # Development log: local notes, not part of the published project.
 SESSION.md
+
+# Demo recording script, kept local.
+scripts/demo.ps1
+# `npm run play` resolves its config dir from src-tauri, so the playground lands here too.
+src-tauri/playground/
