@@ -35,11 +35,34 @@
   import { openDevtools } from './lib/ipc';
   import { zoomLabel } from './lib/zoom';
   import type { Project, SessionMeta, TabKey } from './types';
+  import type { SessionMark } from './sidebar/SessionNode.svelte';
 
   let wrapper: HTMLDivElement;
   let tabs = $state<{ key: TabKey; title: string; exited: boolean }[]>([]);
   let activeKey = $state<TabKey | null>(null);
   let openProjectKeys = $state<Set<string>>(new Set());
+  let tabSessions = $state<
+    { key: TabKey; projectKey: string | null; activity: SessionMark; claudeName: string | null }[]
+  >([]);
+
+  /**
+   * Which sessions have a tab, and what Claude is doing in each. A resumed tab knows its
+   * session from its key; one started with "Open Claude here" is matched by the name
+   * Claude puts in its title, which is the same name the sidebar shows.
+   */
+  const sessionMarks = $derived.by(() => {
+    const marks = new Map<string, SessionMark>();
+    for (const t of tabSessions) {
+      if (t.key.startsWith('session:')) {
+        marks.set(t.key.slice('session:'.length), t.activity);
+      } else if (t.key.startsWith('claude:') && t.claudeName) {
+        const project = appState.index.projects.find((p) => p.key === t.projectKey);
+        const s = project?.sessions.find((x) => x.label === t.claudeName);
+        if (s) marks.set(s.id, t.activity);
+      }
+    }
+    return marks;
+  });
   let showDebug = $state(false);
   let showFind = $state(false);
   let page = $state<'settings' | 'usage' | null>(null);
@@ -98,6 +121,14 @@
     if (nextActive !== activeKey) page = null;
     activeKey = nextActive;
     openProjectKeys = new Set(all.flatMap((t) => (t.projectKey ? [t.projectKey] : [])));
+    tabSessions = all
+      .filter((t) => !t.exited)
+      .map((t) => ({
+        key: t.key,
+        projectKey: t.projectKey,
+        activity: t.activity ?? 'open',
+        claudeName: t.claudeName,
+      }));
   }
 
   async function guard(fn: () => Promise<unknown>) {
@@ -367,6 +398,7 @@
       <Sidebar
         {activeKey}
         {openProjectKeys}
+        {sessionMarks}
         onOpenProject={openProject}
         onOpenSession={openSession}
         onNewShell={newShellIn}

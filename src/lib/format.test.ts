@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatMatches, relativeTime, shortenPath, usableTitle } from './format';
+import { claudeTitle, formatMatches, relativeTime, shortenPath, usableTitle } from './format';
 
 const NOW = 1_700_000_000_000;
 const MIN = 60_000;
@@ -75,5 +75,26 @@ describe('usableTitle', () => {
   });
   it('keeps real titles', () => {
     expect(usableTitle('✳ Fix copy in Claude Code')).toBe('✳ Fix copy in Claude Code');
+  });
+});
+
+describe('claudeTitle', () => {
+  it('reads an idle session and its name', () => {
+    expect(claudeTitle('✳ atc-issue-backlog')).toEqual({ activity: 'idle', name: 'atc-issue-backlog' });
+  });
+
+  it('reads both working frames', () => {
+    expect(claudeTitle('◐ fix the build')?.activity).toBe('working');
+    expect(claudeTitle('◑ fix the build')).toEqual({ activity: 'working', name: 'fix the build' });
+  });
+
+  it('treats an older braille spinner as working', () => {
+    expect(claudeTitle('⠐ Claude Code')?.activity).toBe('working');
+  });
+
+  it('ignores titles Claude did not set', () => {
+    expect(claudeTitle(String.raw`C:\Program Files\PowerShell\7\pwsh.exe`)).toBeNull();
+    expect(claudeTitle('vim notes.txt')).toBeNull();
+    expect(claudeTitle('✳')).toBeNull();
   });
 });
