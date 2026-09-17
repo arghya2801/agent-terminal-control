@@ -37,7 +37,7 @@ export interface Dims {
   rows: number;
 }
 
-export type LabelSource = 'custom' | 'aiTitle' | 'slug' | 'firstMessage' | 'uuid';
+export type LabelSource = 'custom' | 'agentName' | 'aiTitle' | 'slug' | 'firstMessage' | 'uuid';
 
 export interface SessionMeta {
   id: string;
