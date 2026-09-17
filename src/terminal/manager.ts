@@ -409,7 +409,6 @@ export async function closeTab(key: TabKey) {
   notify();
 }
 
-/** True when the tab has a live process, i.e. closing it would kill something. */
 /** What the tab bar shows: the user's name, else the program's, else the default. */
 export function displayTitle(tab: Tab): string {
   return tab.customTitle ?? tab.autoTitle ?? tab.title;
@@ -431,6 +430,7 @@ async function writeClipboard(text: string) {
   }
 }
 
+/** True when the tab has a live process, i.e. closing it would kill something. */
 export function isBusy(key: TabKey): boolean {
   const tab = tabs.get(key);
   return !!tab && !!tab.ptyId && !tab.exited;
