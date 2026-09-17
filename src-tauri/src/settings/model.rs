@@ -68,6 +68,8 @@ pub struct UiSettings {
     /// Windows notification when a Claude session in a background tab finishes or rings
     /// the bell while the window is not focused.
     pub notifications: bool,
+    /// Reopen the tabs that were open when ATC last closed.
+    pub restore_tabs: bool,
 }
 
 impl Default for UiSettings {
@@ -78,6 +80,7 @@ impl Default for UiSettings {
             sessions_per_project: 15,
             zoom: 1.0,
             notifications: true,
+            restore_tabs: true,
         }
     }
 }

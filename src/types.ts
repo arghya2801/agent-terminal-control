@@ -83,6 +83,7 @@ export interface Settings {
     sessionsPerProject: number;
     zoom: number;
     notifications: boolean;
+    restoreTabs: boolean;
   };
   terminal: TerminalSettings;
   claude: { command: string; resumeArgs: string[] };

@@ -81,6 +81,11 @@
       <input id="spp" type="number" min="1" max="500" bind:value={draft.ui.sessionsPerProject} />
       <label for="sw">Sidebar width (px)</label>
       <input id="sw" type="number" min="160" max="800" step="10" bind:value={draft.ui.sidebarWidth} />
+      <label for="rt">Restore tabs</label>
+      <label class="check">
+        <input id="rt" type="checkbox" bind:checked={draft.ui.restoreTabs} />
+        <span class="muted">Reopen the tabs from last time on launch; Claude sessions resume</span>
+      </label>
       <label for="nt">Notifications</label>
       <label class="check">
         <input id="nt" type="checkbox" bind:checked={draft.ui.notifications} />

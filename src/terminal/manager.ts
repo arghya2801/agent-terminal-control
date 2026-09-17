@@ -58,6 +58,8 @@ export interface Tab {
   attention: boolean;
   /** Canonical key of the sidebar project this tab belongs to, if any. */
   projectKey: string | null;
+  /** Directory the shell started in; null for the default. Kept to reopen the tab. */
+  cwd: string | null;
   term: Terminal;
   fit: FitAddon;
   search: SearchAddon;
@@ -232,6 +234,7 @@ export async function openTab(
     claudeName: null,
     attention: false,
     projectKey,
+    cwd: opts.cwd ?? null,
     term,
     fit,
     search,

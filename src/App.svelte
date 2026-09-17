@@ -36,9 +36,13 @@
     onChord,
     openTab,
     refit,
+    renameTab,
+    activate,
     type AttentionReason,
+    type Tab,
   } from './terminal/manager';
   import { matchChord, type Action } from './lib/keymap';
+  import { parseSavedTabs, type SavedTab } from './lib/restore';
   import { openDevtools } from './lib/ipc';
   import { zoomLabel } from './lib/zoom';
   import type { Project, SessionMeta, TabKey } from './types';
@@ -60,16 +64,82 @@
   const sessionMarks = $derived.by(() => {
     const marks = new Map<string, SessionMark>();
     for (const t of tabSessions) {
-      if (t.key.startsWith('session:')) {
-        marks.set(t.key.slice('session:'.length), t.activity);
-      } else if (t.key.startsWith('claude:') && t.claudeName) {
-        const project = appState.index.projects.find((p) => p.key === t.projectKey);
-        const s = project?.sessions.find((x) => x.label === t.claudeName);
-        if (s) marks.set(s.id, t.activity);
-      }
+      const id = sessionIdOf(t);
+      if (id) marks.set(id, t.activity);
     }
     return marks;
   });
+
+  function sessionIdOf(t: { key: TabKey; projectKey: string | null; claudeName: string | null }) {
+    if (t.key.startsWith('session:')) return t.key.slice('session:'.length);
+    if (!t.key.startsWith('claude:') || !t.claudeName) return null;
+    const project = appState.index.projects.find((p) => p.key === t.projectKey);
+    return project?.sessions.find((x) => x.label === t.claudeName)?.id ?? null;
+  }
+
+  // --- restore tabs on launch
+  const TABS_KEY = 'atc.tabs';
+  /** Until startup has reopened the saved tabs, saving would overwrite them. */
+  let restoring = true;
+
+  function saveTabs(all: Tab[]) {
+    if (restoring) return;
+    // Exited tabs are kept: they are still in the tab bar, and on quit every shell exits
+    // just before the window goes, which must not wipe what gets restored.
+    const tabs = all.map((t): SavedTab => {
+      const common = { projectKey: t.projectKey, customTitle: t.customTitle };
+      const sessionId = sessionIdOf(t);
+      if (sessionId && t.cwd) return { kind: 'session', sessionId, cwd: t.cwd, ...common };
+      return { kind: 'shell', cwd: t.cwd, project: t.key.startsWith('project:'), ...common };
+    });
+    try {
+      const active = all.findIndex((t) => t.key === activeKey);
+      localStorage.setItem(TABS_KEY, JSON.stringify({ tabs, active }));
+    } catch {
+      // Storage unavailable: tabs just are not restored next time.
+    }
+  }
+
+  /** Reopen last session's tabs. False when there was nothing to reopen. */
+  async function restoreTabs(): Promise<boolean> {
+    if (appState.settings?.ui.restoreTabs === false) return false;
+    let saved;
+    try {
+      saved = parseSavedTabs(localStorage.getItem(TABS_KEY));
+    } catch {
+      saved = null;
+    }
+    if (!saved) return false;
+
+    const keys: TabKey[] = [];
+    for (const t of saved.tabs) {
+      let key: TabKey;
+      if (t.kind === 'session') {
+        key = `session:${t.sessionId}`;
+        const label = appState.index.projects
+          .flatMap((p) => p.sessions)
+          .find((s) => s.id === t.sessionId)?.label;
+        const command = resumeCommand(t.sessionId);
+        await guard(() =>
+          openTab(key, label ?? 'claude', { cwd: t.cwd, initialCommand: command }, t.projectKey),
+        );
+      } else if (t.project && t.projectKey) {
+        key = `project:${t.projectKey}`;
+        const name = appState.index.projects.find((p) => p.key === t.projectKey)?.name ?? 'pwsh';
+        await guard(() => openTab(key, name, { cwd: t.cwd }, t.projectKey));
+      } else {
+        // Fresh plain keys, so the counter cannot collide with a restored tab.
+        counter += 1;
+        key = `plain:${counter}`;
+        await guard(() => openTab(key, `pwsh ${counter}`, { cwd: t.cwd }, t.projectKey));
+      }
+      if (t.customTitle) renameTab(key, t.customTitle);
+      keys.push(key);
+    }
+    const focus = keys[saved.active];
+    if (focus) activate(focus);
+    return listTabs().length > 0;
+  }
   let showDebug = $state(false);
   let showFind = $state(false);
   let page = $state<'settings' | 'usage' | null>(null);
@@ -133,6 +203,7 @@
     if (nextActive !== activeKey) page = null;
     activeKey = nextActive;
     openProjectKeys = new Set(all.flatMap((t) => (t.projectKey ? [t.projectKey] : [])));
+    saveTabs(all);
     tabSessions = all
       .filter((t) => !t.exited)
       .map((t) => ({
@@ -183,13 +254,17 @@
     // would be wrong, so such rows are disabled rather than guessed at.
     const cwd = s.cwd ?? p.path;
     if (!cwd) return;
-    const claude = appState.settings?.claude;
-    const command = claude
-      ? [claude.command, ...claude.resumeArgs.map((a) => a.replace('{session}', s.id))].join(' ')
-      : `claude --resume ${s.id}`;
+    const command = resumeCommand(s.id);
     return guard(() =>
       openTab(`session:${s.id}`, s.label, { cwd, initialCommand: command }, p.key),
     );
+  }
+
+  function resumeCommand(id: string): string {
+    const claude = appState.settings?.claude;
+    return claude
+      ? [claude.command, ...claude.resumeArgs.map((a) => a.replace('{session}', id))].join(' ')
+      : `claude --resume ${id}`;
   }
 
   /**
@@ -322,7 +397,10 @@
     // Spawning before that lands starts the PTY at the wrong width.
     void (async () => {
       await initStores();
-      await newTab();
+      const restored = await restoreTabs();
+      restoring = false;
+      if (!restored) await newTab();
+      sync();
     })();
 
     // Covers focus being anywhere outside the terminal -- the sidebar, a button.
