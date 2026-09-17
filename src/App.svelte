@@ -6,6 +6,7 @@
   import FindBar from './terminal/FindBar.svelte';
   import SettingsPanel from './settings/SettingsPanel.svelte';
   import UsagePanel from './usage/UsagePanel.svelte';
+  import ConfirmDialog from './lib/ConfirmDialog.svelte';
   import {
     adjustZoom,
     appState,
@@ -18,8 +19,10 @@
     closeTab,
     cycleTab,
     displayTitle,
+    focusActiveTerminal,
     getActiveKey,
     getTab,
+    isBusy,
     listTabs,
     mount as mountTerminals,
     onChange,
@@ -40,6 +43,8 @@
   let showFind = $state(false);
   let page = $state<'settings' | 'usage' | null>(null);
   let renamingTab = $state<TabKey | null>(null);
+  /** A busy tab waiting on the close confirmation. */
+  let closing = $state<{ key: TabKey; title: string; what: string } | null>(null);
 
   function togglePage(p: 'settings' | 'usage') {
     page = page === p ? null : p;
@@ -109,6 +114,28 @@
     );
   }
 
+  /**
+   * Every close goes through here, button or chord. A tab at a bare prompt closes at
+   * once; one with a live process asks first, naming what would be stopped.
+   */
+  function requestClose(key: TabKey) {
+    const tab = getTab(key);
+    if (!tab) return;
+    if (!isBusy(key)) {
+      void closeTab(key);
+      return;
+    }
+    const claude = key.startsWith('session:') || key.startsWith('claude:');
+    closing = { key, title: displayTitle(tab), what: claude ? 'Claude session' : 'shell' };
+  }
+
+  function finishClose(confirmed: boolean) {
+    const c = closing;
+    closing = null;
+    if (c && confirmed) void closeTab(c.key);
+    else focusActiveTerminal();
+  }
+
   /** The sidebar project the focused tab belongs to, if it has one. */
   function activeProject(): Project | undefined {
     const key = activeKey ? getTab(activeKey)?.projectKey : null;
@@ -129,7 +156,7 @@
         showDebug = !showDebug;
         break;
       case 'closeTab':
-        if (activeKey) void closeTab(activeKey);
+        if (activeKey) requestClose(activeKey);
         break;
       case 'nextTab':
         cycleTab(1);
@@ -293,7 +320,7 @@
   </aside>
 
   <section class="main">
-    <TabBar {tabs} {activeKey} onNew={newTab} bind:renaming={renamingTab} />
+    <TabBar {tabs} {activeKey} onNew={newTab} onClose={requestClose} bind:renaming={renamingTab} />
     <div class="panes" bind:this={wrapper}></div>
     {#if page === 'settings'}
       <SettingsPanel onClose={() => (page = null)} />
@@ -305,6 +332,15 @@
     {/if}
     {#if showDebug}
       <DebugOverlay {activeKey} />
+    {/if}
+    {#if closing}
+      <ConfirmDialog
+        confirmLabel="Close tab"
+        onConfirm={() => finishClose(true)}
+        onCancel={() => finishClose(false)}
+      >
+        Close <strong>{closing.title}</strong>? The {closing.what} running in it will be stopped.
+      </ConfirmDialog>
     {/if}
     {#if error}
       <div class="error">
