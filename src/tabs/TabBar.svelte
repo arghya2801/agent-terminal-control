@@ -1,12 +1,14 @@
 <script lang="ts">
-  import { activate, closeTab, focusActiveTerminal, isBusy, renameTab } from '../terminal/manager';
+  import { activate, focusActiveTerminal, renameTab } from '../terminal/manager';
   import InlineRename from '../lib/InlineRename.svelte';
   import type { TabKey } from '../types';
 
-  let { tabs, activeKey, onNew, renaming = $bindable(null) }: {
+  let { tabs, activeKey, onNew, onClose, renaming = $bindable(null) }: {
     tabs: { key: TabKey; title: string; exited: boolean }[];
     activeKey: TabKey | null;
     onNew: () => void;
+    /** Asks first when something is still running in the tab. */
+    onClose: (key: TabKey) => void;
     /** The tab whose name is being edited; the app sets it from the rename chord. */
     renaming?: TabKey | null;
   } = $props();
@@ -17,12 +19,9 @@
     focusActiveTerminal();
   }
 
-  async function close(e: MouseEvent, key: TabKey) {
+  function close(e: MouseEvent, key: TabKey) {
     e.stopPropagation();
-    // Closing a tab sitting at a bare prompt is free; killing a live claude session
-    // is not, so only that case asks.
-    if (isBusy(key) && !confirm('A process is still running in this tab. Close it?')) return;
-    await closeTab(key);
+    onClose(key);
   }
 </script>
 
