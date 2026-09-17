@@ -65,6 +65,9 @@ pub struct UiSettings {
     /// Whole-application zoom. Stored as a plain factor; the frontend snaps it to its
     /// own ladder, so a hand-edited value in between still behaves.
     pub zoom: f64,
+    /// Windows notification when a Claude session in a background tab finishes or rings
+    /// the bell while the window is not focused.
+    pub notifications: bool,
 }
 
 impl Default for UiSettings {
@@ -74,6 +77,7 @@ impl Default for UiSettings {
             sidebar_open: true,
             sessions_per_project: 15,
             zoom: 1.0,
+            notifications: true,
         }
     }
 }
@@ -209,6 +213,7 @@ mod tests {
         assert_eq!(s.terminal.scrollback, 10_000);
         assert!(s.terminal.font_family.contains("FiraCode"));
         assert_eq!(s.ui.zoom, 1.0);
+        assert!(s.ui.notifications, "notifications default on for existing files");
     }
 
     #[test]
