@@ -229,7 +229,14 @@ fn aggregate<'a>(usages: impl Iterator<Item = &'a Usage>) -> Vec<CostRow> {
     }
 
     let mut out: Vec<CostRow> = rows.into_values().collect();
-    out.sort_by(|a, b| a.hour.cmp(&b.hour).then(a.project_key.cmp(&b.project_key)));
+    // Model breaks ties: rows come out of a HashMap, so without it two models in one
+    // hour and project swap places between calls.
+    out.sort_by(|a, b| {
+        a.hour
+            .cmp(&b.hour)
+            .then(a.project_key.cmp(&b.project_key))
+            .then(a.model.cmp(&b.model))
+    });
     out
 }
 
