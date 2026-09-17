@@ -3,13 +3,13 @@
   import InlineRename from '../lib/InlineRename.svelte';
   import type { TabKey } from '../types';
 
-  let { tabs, activeKey, onNew }: {
+  let { tabs, activeKey, onNew, renaming = $bindable(null) }: {
     tabs: { key: TabKey; title: string; exited: boolean }[];
     activeKey: TabKey | null;
     onNew: () => void;
+    /** The tab whose name is being edited; the app sets it from the rename chord. */
+    renaming?: TabKey | null;
   } = $props();
-
-  let renaming = $state<TabKey | null>(null);
 
   function finishRename(key: TabKey, name?: string) {
     if (name !== undefined) renameTab(key, name);
@@ -43,7 +43,7 @@
       class:exited={tab.exited}
       onclick={() => activate(tab.key)}
       ondblclick={() => (renaming = tab.key)}
-      title="{tab.title} (double-click to rename)"
+      title="{tab.title} (double-click or Ctrl+Shift+R to rename)"
     >
       <span class="label">{tab.title}</span>
       <span class="close" role="button" tabindex="-1"

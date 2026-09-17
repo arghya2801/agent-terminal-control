@@ -21,7 +21,12 @@ export type Action =
   | 'find'
   | 'zoomIn'
   | 'zoomOut'
-  | 'zoomReset';
+  | 'zoomReset'
+  | 'openClaudeHere'
+  | 'openShellHere'
+  | 'renameTab'
+  | 'openSettings'
+  | 'openUsage';
 
 /** The subset of KeyboardEvent this needs, so tests require no DOM. */
 export interface ChordEvent {
@@ -62,6 +67,14 @@ const BINDINGS: Binding[] = [
   { key: '-', ctrl: true, shift: false, action: 'zoomOut' },
   { key: 'subtract', ctrl: true, shift: false, action: 'zoomOut' },
   { key: '0', ctrl: true, shift: false, action: 'zoomReset' },
+  // Launch actions for the active tab's project, and the app's pages. Ctrl+Shift+C/V
+  // are left alone: terminals use them for copy and paste.
+  { key: 'l', ctrl: true, shift: true, action: 'openClaudeHere' },
+  { key: 'n', ctrl: true, shift: true, action: 'openShellHere' },
+  { key: 'r', ctrl: true, shift: true, action: 'renameTab' },
+  { key: 'u', ctrl: true, shift: true, action: 'openUsage' },
+  // Ctrl+Comma is the settings chord in most editors; the shell and Claude Code ignore it.
+  { key: ',', ctrl: true, shift: false, action: 'openSettings' },
 ];
 
 export function matchChord(e: ChordEvent): Action | null {

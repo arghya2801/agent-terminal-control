@@ -22,6 +22,26 @@ describe('matchChord', () => {
     expect(matchChord(ctrlShift('I'))).toBe('toggleDevtools');
   });
 
+  it('claims the launch and page chords', () => {
+    expect(matchChord(ctrlShift('L'))).toBe('openClaudeHere');
+    expect(matchChord(ctrlShift('N'))).toBe('openShellHere');
+    expect(matchChord(ctrlShift('R'))).toBe('renameTab');
+    expect(matchChord(ctrlShift('U'))).toBe('openUsage');
+    expect(matchChord(press(',', { ctrlKey: true }))).toBe('openSettings');
+  });
+
+  it('leaves terminal copy and paste alone', () => {
+    expect(matchChord(ctrlShift('C'))).toBeNull();
+    expect(matchChord(ctrlShift('V'))).toBeNull();
+  });
+
+  it('does not take plain Ctrl+U, Ctrl+N or Ctrl+R from the shell', () => {
+    // Ctrl+U kills the line, Ctrl+R searches history, Ctrl+N is next-history.
+    for (const k of ['u', 'n', 'r', 'l']) {
+      expect(matchChord(press(k, { ctrlKey: true }))).toBeNull();
+    }
+  });
+
   describe('tab cycling', () => {
     it('cycles forward and back', () => {
       expect(matchChord(press('Tab', { ctrlKey: true }))).toBe('nextTab');
