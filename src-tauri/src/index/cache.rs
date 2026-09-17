@@ -18,7 +18,8 @@ use super::session::{LabelSource, SessionMeta};
 ///
 /// 2: `ai-title` below the first user turn is no longer skipped (labels were falling
 ///    back to the uuid for real transcripts).
-pub const SCHEMA_VERSION: u32 = 2;
+/// 3: the session's `agent-name` is preferred, read from the end of the file.
+pub const SCHEMA_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Entry {
@@ -101,8 +102,16 @@ impl SessionCache {
         if let Some(hit) = self.entries.get_mut(&key) {
             if entry_still_valid(hit, size) {
                 self.hits += 1;
-                // The head is unchanged, but the file did grow: keep mtime current so
-                // ordering by recency stays right.
+                // The head is unchanged, but Claude renames the session as it goes and
+                // writes the new name near the end, so a grown file re-reads its tail.
+                // A tail with no name keeps the label rather than downgrading it.
+                if size != hit.size {
+                    if let Some(name) = super::session::current_agent_label(path) {
+                        hit.label = name;
+                        hit.label_source = LabelSource::AgentName;
+                    }
+                }
+                // Keep mtime current so ordering by recency stays right.
                 if hit.mtime_ms != mtime_ms || hit.size != size {
                     hit.mtime_ms = mtime_ms;
                     hit.size = size;
@@ -255,6 +264,38 @@ mod tests {
             second.mtime_ms >= first.mtime_ms,
             "recency must stay current"
         );
+    }
+
+    #[test]
+    fn a_rename_appended_to_a_growing_file_updates_the_cached_label() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.jsonl");
+        std::fs::write(
+            &p, "head
+",
+        )
+        .unwrap();
+
+        let mut cache = SessionCache::default();
+        cache.get_or_parse(&p, |path| {
+            meta_for(path, "Old name", LabelSource::AgentName)
+        });
+
+        std::fs::write(
+            &p,
+            "head\n{\"type\":\"agent-name\",\"agentName\":\"new-name\"}\n",
+        )
+        .unwrap();
+        let calls = Counter::new();
+        let s = cache
+            .get_or_parse(&p, |path| {
+                calls.0.fetch_add(1, Ordering::Relaxed);
+                meta_for(path, "unused", LabelSource::AiTitle)
+            })
+            .unwrap();
+        assert_eq!(calls.count(), 0, "the head is still not re-parsed");
+        assert_eq!(s.label, "new-name");
+        assert_eq!(s.label_source, LabelSource::AgentName);
     }
 
     #[test]

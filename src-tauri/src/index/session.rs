@@ -1,14 +1,15 @@
 //! Reading session metadata out of Claude Code's JSONL transcripts.
 //!
-//! Only the head is read: transcripts reach several megabytes, and everything the
-//! sidebar needs sits near the top.
+//! Mostly the head is read: transcripts reach several megabytes, and nearly everything
+//! the sidebar needs sits near the top. The exception is the session's current name,
+//! which Claude Code rewrites as it goes, so that is read from the last few KB.
 //!
 //! The directory name is never decoded. `~/.claude/projects/<mangled>` collapses
 //! separators and underscores alike -- `D:\Coding\game_tracker_app` becomes
 //! `D--Coding-game-tracker-app` -- so the `cwd` field inside the file is authoritative.
 
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -18,6 +19,10 @@ use serde_json::Value;
 /// in real data — so a small line budget silently loses labels.
 const MAX_LINES: usize = 300;
 const MAX_BYTES: u64 = 512 * 1024;
+/// How much of the end of a transcript is searched for the latest `agent-name`. Claude
+/// Code rewrites that record every turn, so the current one sits within a few tens of KB
+/// of the end in real data.
+const TAIL_BYTES: u64 = 64 * 1024;
 /// Shorter than this and a first message is not a useful label. One real session's first
 /// message is literally ".".
 const MIN_LABEL_LEN: usize = 3;
@@ -28,6 +33,8 @@ const MAX_LABEL_LEN: usize = 72;
 pub enum LabelSource {
     /// Renamed by the user in ATC.
     Custom,
+    /// The name Claude Code gives the session, and shows in its terminal title.
+    AgentName,
     AiTitle,
     Slug,
     FirstMessage,
@@ -55,6 +62,7 @@ struct Head {
     cwd: Option<PathBuf>,
     git_branch: Option<String>,
     slug: Option<String>,
+    agent_name: Option<String>,
     ai_title: Option<String>,
     first_message: Option<String>,
 }
@@ -80,7 +88,12 @@ pub fn session_files(project_dir: &Path) -> Vec<PathBuf> {
 pub fn read_session(path: &Path) -> Option<SessionMeta> {
     let meta = std::fs::metadata(path).ok()?;
     let id = path.file_stem()?.to_string_lossy().into_owned();
-    let head = parse_head(path).unwrap_or_default();
+    let mut head = parse_head(path).unwrap_or_default();
+    // The head only holds the first name, often not even that: the name changes as the
+    // session goes on, and the current one is near the end.
+    if let Some(name) = tail_agent_name(path) {
+        head.agent_name = Some(name);
+    }
     let (label, label_source) = pick_label(&head, &id);
 
     Some(SessionMeta {
@@ -119,6 +132,11 @@ fn parse_head(path: &Path) -> Option<Head> {
         };
 
         match v.get("type").and_then(Value::as_str) {
+            Some("agent-name") => {
+                if head.agent_name.is_none() {
+                    head.agent_name = non_empty(v.get("agentName").and_then(Value::as_str));
+                }
+            }
             Some("ai-title") => {
                 if head.ai_title.is_none() {
                     head.ai_title = non_empty(v.get("aiTitle").and_then(Value::as_str));
@@ -144,6 +162,37 @@ fn parse_head(path: &Path) -> Option<Head> {
         }
     }
     Some(head)
+}
+
+/// The last `agent-name` in the final `TAIL_BYTES` of a transcript, if any.
+fn tail_agent_name(path: &Path) -> Option<String> {
+    let mut file = File::open(path).ok()?;
+    let len = file.metadata().ok()?.len();
+    let start = len.saturating_sub(TAIL_BYTES);
+    file.seek(SeekFrom::Start(start)).ok()?;
+    let mut buf = Vec::with_capacity((len - start) as usize);
+    file.take(TAIL_BYTES).read_to_end(&mut buf).ok()?;
+    // Starting mid-file lands inside a line; drop that fragment.
+    let text = String::from_utf8_lossy(&buf);
+    let text = if start > 0 {
+        text.split_once('\n').map_or("", |(_, rest)| rest)
+    } else {
+        &text
+    };
+    // Newest first, so only the last name is parsed.
+    text.lines()
+        .rev()
+        .filter(|l| l.contains("\"agent-name\""))
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .filter(|v| v.get("type").and_then(Value::as_str) == Some("agent-name"))
+        .find_map(|v| non_empty(v.get("agentName").and_then(Value::as_str)))
+}
+
+/// The current agent name as a finished label, for a cached entry whose file grew.
+pub fn current_agent_label(path: &Path) -> Option<String> {
+    tail_agent_name(path)
+        .map(|n| tidy(&n))
+        .filter(|s| usable(s))
 }
 
 fn absorb_common(head: &mut Head, v: &Value) {
@@ -216,10 +265,13 @@ fn extract_text(content: Option<&Value>) -> Option<String> {
     }
 }
 
-/// `aiTitle` is readable prose written for the session; `slug` is partly random and only
-/// present in newer transcripts; the first message is a decent fallback; the uuid is the
-/// floor.
+/// `agentName` is what Claude Code calls the session now; `aiTitle` is a summary of the
+/// first prompt; `slug` is partly random and only present in newer transcripts; the first
+/// message is a decent fallback; the uuid is the floor.
 fn pick_label(head: &Head, id: &str) -> (String, LabelSource) {
+    if let Some(n) = head.agent_name.as_deref().map(tidy).filter(|s| usable(s)) {
+        return (n, LabelSource::AgentName);
+    }
     if let Some(t) = head.ai_title.as_deref().map(tidy).filter(|s| usable(s)) {
         return (t, LabelSource::AiTitle);
     }
@@ -404,6 +456,59 @@ mod tests {
         let s = read(game_tracker(), "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa");
         assert!(s.mtime_ms > 0);
         assert!(s.size > 0);
+    }
+
+    fn agent_name(name: &str) -> String {
+        format!(r#"{{"type":"agent-name","agentName":"{name}","sessionId":"x"}}"#)
+    }
+
+    /// About 1KB of a record the parser ignores, newline included.
+    fn filler_line() -> String {
+        format!(
+            "{{\"type\":\"progress\",\"data\":\"{}\"}}\n",
+            "x".repeat(1000)
+        )
+    }
+
+    #[test]
+    fn the_latest_agent_name_wins_even_far_past_the_head_budget() {
+        // Real shape: an ai-title early, a first name past the 512KB head, then a rename
+        // near the end. The sidebar must show what Claude calls the session now.
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.jsonl");
+        let filler = filler_line();
+        let body = [
+            r#"{"type":"user","cwd":"D:/p","message":{"content":"hi there"}}"#.to_string(),
+            r#"{"type":"ai-title","aiTitle":"Summary of the first prompt"}"#.to_string(),
+            filler.repeat(600),
+            agent_name("first-name"),
+            filler.repeat(10),
+            agent_name("renamed-later"),
+            filler.repeat(5),
+        ]
+        .join("\n");
+        std::fs::write(&p, body).unwrap();
+
+        let s = read_session(&p).unwrap();
+        assert_eq!(s.label, "renamed-later");
+        assert_eq!(s.label_source, LabelSource::AgentName);
+        assert_eq!(current_agent_label(&p).as_deref(), Some("renamed-later"));
+    }
+
+    #[test]
+    fn an_agent_name_in_the_head_is_used_when_the_tail_has_none() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.jsonl");
+        let body = format!(
+            "{}\n{}",
+            agent_name("early-name"),
+            filler_line().repeat(100)
+        );
+        std::fs::write(&p, body).unwrap();
+
+        let s = read_session(&p).unwrap();
+        assert_eq!(s.label, "early-name");
+        assert_eq!(current_agent_label(&p), None, "tail holds no name");
     }
 
     #[test]
