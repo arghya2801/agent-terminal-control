@@ -28,6 +28,7 @@ pub fn run() {
         .join("session-index.v1.json");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .manage(AppState::new(settings, cache_path))
         .invoke_handler(tauri::generate_handler![
             commands::pty_spawn,
