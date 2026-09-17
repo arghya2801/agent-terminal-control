@@ -4,11 +4,13 @@
   import { isExpanded, toggleExpanded } from '../lib/stores.svelte';
   import { shortenPath } from '../lib/format';
   import type { Project, SessionMeta, TabKey } from '../types';
+  import type { SessionMark } from './SessionNode.svelte';
 
   let {
     project,
     limit,
     forceOpen = false,
+    sessionMarks,
     activeKey,
     open: hasTab,
     renaming,
@@ -24,6 +26,7 @@
     limit: number;
     /** Expanded regardless of the user's toggle, e.g. while a search is showing results. */
     forceOpen?: boolean;
+    sessionMarks: Map<string, SessionMark>;
     activeKey: TabKey | null;
     /** A tab is open somewhere for this project. */
     open: boolean;
@@ -100,6 +103,7 @@
           {session}
           projectPath={project.path}
           active={activeKey === `session:${session.id}`}
+          mark={sessionMarks.get(session.id) ?? null}
           renaming={renaming === `s:${session.id}`}
           onRename={(name) => onRenameSession(session, name)}
           onRenameCancel={onRenameCancel}

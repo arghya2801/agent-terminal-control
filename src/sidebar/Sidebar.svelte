@@ -13,10 +13,12 @@
     toggleAllProjects,
   } from '../lib/stores.svelte';
   import type { Project, SessionMeta, TabKey } from '../types';
+  import type { SessionMark } from './SessionNode.svelte';
 
   let {
     activeKey,
     openProjectKeys,
+    sessionMarks,
     onOpenProject,
     onOpenSession,
     onNewShell,
@@ -24,6 +26,8 @@
   }: {
     activeKey: TabKey | null;
     openProjectKeys: Set<string>;
+    /** Sessions with a live tab, by id. */
+    sessionMarks: Map<string, SessionMark>;
     onOpenProject: (p: Project) => void;
     onOpenSession: (p: Project, s: SessionMeta) => void;
     onNewShell: (p: Project) => void;
@@ -196,6 +200,7 @@
           {project}
           {limit}
           forceOpen={searching}
+          {sessionMarks}
           {activeKey}
           open={openProjectKeys.has(project.key)}
           {renaming}

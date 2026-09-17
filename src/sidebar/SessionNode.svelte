@@ -1,3 +1,8 @@
+<script lang="ts" module>
+  /** A session with a live tab: what Claude is doing, or just "open" before it says. */
+  export type SessionMark = 'working' | 'idle' | 'open';
+</script>
+
 <script lang="ts">
   import { relativeTime } from '../lib/format';
   import InlineRename from '../lib/InlineRename.svelte';
@@ -7,6 +12,7 @@
     session,
     projectPath,
     active = false,
+    mark = null,
     renaming = false,
     onRename,
     onRenameCancel,
@@ -17,6 +23,7 @@
     /** Null when the project has no trusted path; resume is then disabled. */
     projectPath: string | null;
     active?: boolean;
+    mark?: SessionMark | null;
     renaming?: boolean;
     onRename: (name: string) => void;
     onRenameCancel: () => void;
@@ -46,6 +53,12 @@
     ? `Resume ${session.label}\n${session.id}`
     : 'This session did not record a working directory, so it cannot be resumed'}
 >
+  {#if mark}
+    <span
+      class="mark {mark}"
+      title={mark === 'working' ? 'Claude is working' : mark === 'idle' ? 'Claude is waiting for you' : 'Open in a tab'}
+    ></span>
+  {/if}
   <span class="label">{session.label}</span>
   <span class="meta">
     {#if session.gitBranch}
@@ -60,6 +73,7 @@
 
 <style>
   .session {
+    position: relative;
     display: flex;
     width: 100%;
     align-items: baseline;
@@ -92,6 +106,31 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  /* In the row's left indent, so the label does not shift when a tab opens. */
+  .mark {
+    position: absolute;
+    top: 50%;
+    left: 27px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    transform: translateY(-50%);
+  }
+  .mark.open {
+    box-shadow: inset 0 0 0 1px #6e7681;
+  }
+  .mark.idle {
+    background: #3fb950;
+  }
+  .mark.working {
+    background: #f0883e;
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.35;
+    }
   }
   .meta {
     display: flex;
