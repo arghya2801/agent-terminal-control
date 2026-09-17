@@ -4,7 +4,7 @@
   import type { TabKey } from '../types';
 
   let { tabs, activeKey, onNew, onClose, renaming = $bindable(null) }: {
-    tabs: { key: TabKey; title: string; exited: boolean }[];
+    tabs: { key: TabKey; title: string; exited: boolean; attention: boolean }[];
     activeKey: TabKey | null;
     onNew: () => void;
     /** Asks first when something is still running in the tab. */
@@ -44,6 +44,7 @@
       ondblclick={() => (renaming = tab.key)}
       title="{tab.title} (double-click or Ctrl+Shift+R to rename)"
     >
+      {#if tab.attention}<span class="attention" title="Needs your attention"></span>{/if}
       <span class="label">{tab.title}</span>
       <span class="close" role="button" tabindex="-1"
         onclick={(e) => close(e, tab.key)}
@@ -85,6 +86,14 @@
   .tab.active { background: var(--bg); color: #e6edf3; }
   .tab.exited .label { text-decoration: line-through; opacity: 0.6; }
   .label { overflow: hidden; text-overflow: ellipsis; }
+  .attention {
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    margin-right: -2px;
+    border-radius: 50%;
+    background: #539bf5;
+  }
   .close {
     padding: 0 4px;
     border-radius: 4px;
