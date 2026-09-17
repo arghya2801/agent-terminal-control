@@ -54,6 +54,8 @@ export interface Tab {
   activity: Activity | null;
   /** The session name Claude shows in its title, used to find the sidebar row. */
   claudeName: string | null;
+  /** Something happened in this tab while it was in the background; cleared on focus. */
+  attention: boolean;
   /** Canonical key of the sidebar project this tab belongs to, if any. */
   projectKey: string | null;
   term: Terminal;
@@ -85,6 +87,26 @@ type Listener = () => void;
 const listeners = new Set<Listener>();
 type ChordListener = (action: Action) => void;
 const chordListeners = new Set<ChordListener>();
+export type AttentionReason = 'finished' | 'bell';
+type AttentionListener = (tab: Tab, reason: AttentionReason) => void;
+const attentionListeners = new Set<AttentionListener>();
+
+/**
+ * Notified when Claude finishes a turn, or a program rings the bell, in a tab the user
+ * is not looking at: a background tab, or any tab while the window is unfocused.
+ */
+export function onAttention(fn: AttentionListener): () => void {
+  attentionListeners.add(fn);
+  return () => attentionListeners.delete(fn);
+}
+
+function flagAttention(tab: Tab, reason: AttentionReason) {
+  const background = tab.key !== activeKey;
+  if (!background && document.hasFocus()) return;
+  // The focused tab needs no badge; it only needs the notification.
+  if (background) tab.attention = true;
+  for (const l of attentionListeners) l(tab, reason);
+}
 
 /** Svelte subscribes here; the manager never imports Svelte. */
 export function onChange(fn: Listener): () => void {
@@ -208,6 +230,7 @@ export async function openTab(
     customTitle: null,
     activity: null,
     claudeName: null,
+    attention: false,
     projectKey,
     term,
     fit,
@@ -221,10 +244,17 @@ export async function openTab(
   };
   tabs.set(key, tab);
 
+  term.onBell(() => {
+    flagAttention(tab, 'bell');
+    notify();
+  });
+
   term.onTitleChange((t) => {
     tab.autoTitle = usableTitle(t);
     const claude = claudeTitle(t);
+    const was = tab.activity;
     tab.activity = claude?.activity ?? null;
+    if (was === 'working' && tab.activity === 'idle') flagAttention(tab, 'finished');
     tab.claudeName = claude?.name ?? null;
     notify();
   });
@@ -362,6 +392,7 @@ export function focusActiveTerminal(): void {
 export function activate(key: TabKey) {
   if (!tabs.has(key)) return;
   activeKey = key;
+  tabs.get(key)!.attention = false;
 
   for (const t of tabs.values()) {
     Object.assign(t.container.style, paneStyle(t.key === key));
