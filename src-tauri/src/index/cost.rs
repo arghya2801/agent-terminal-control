@@ -16,6 +16,8 @@ use serde_json::Value;
 #[derive(Debug, Clone)]
 struct Usage {
     id: String,
+    /// Session uuid from the transcript; the file stem when a line omits it.
+    session: String,
     /// UTC hour, `YYYY-MM-DDTHH`. The frontend buckets it into local days.
     hour: String,
     cwd: Option<String>,
@@ -33,6 +35,8 @@ struct Usage {
 #[serde(rename_all = "camelCase")]
 pub struct CostRow {
     pub hour: String,
+    /// Session uuid, so spend can be broken down within a project.
+    pub session_id: String,
     /// Canonical project key; empty when the transcript recorded no cwd.
     pub project_key: String,
     pub project_path: Option<PathBuf>,
@@ -82,7 +86,7 @@ fn cost_of(u: &Usage) -> Option<f64> {
     Some(if u.fast { base * 2.0 } else { base })
 }
 
-fn parse_line(line: &str) -> Option<Usage> {
+fn parse_line(line: &str, session: &str) -> Option<Usage> {
     // Cheap reject before a full JSON parse; most lines carry no usage.
     if !line.contains("\"usage\"") {
         return None;
@@ -119,6 +123,11 @@ fn parse_line(line: &str) -> Option<Usage> {
         .to_string();
     Some(Usage {
         id,
+        session: v
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .unwrap_or(session)
+            .to_string(),
         hour,
         cwd: v.get("cwd").and_then(Value::as_str).map(str::to_string),
         model: model.to_string(),
@@ -134,6 +143,12 @@ fn parse_line(line: &str) -> Option<Usage> {
 /// Parse complete lines from byte `offset` on, appending to `out`. Returns the offset
 /// just past the last complete line: a line still being written is left for next time.
 fn parse_from(path: &Path, offset: u64, out: &mut Vec<Usage>) -> u64 {
+    // Subagent transcripts live at <session uuid>/subagents/<agent>.jsonl, so their own
+    // stem is not the session; the fallback only matters for lines with no sessionId.
+    let stem = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let Ok(mut file) = std::fs::File::open(path) else {
         return offset;
     };
@@ -148,7 +163,7 @@ fn parse_from(path: &Path, offset: u64, out: &mut Vec<Usage>) -> u64 {
         match reader.read_until(b'\n', &mut buf) {
             Ok(n) if n > 0 && buf.ends_with(b"\n") => {
                 pos += n as u64;
-                if let Some(u) = parse_line(&String::from_utf8_lossy(&buf)) {
+                if let Some(u) = parse_line(&String::from_utf8_lossy(&buf), &stem) {
                     out.push(u);
                 }
             }
@@ -156,7 +171,7 @@ fn parse_from(path: &Path, offset: u64, out: &mut Vec<Usage>) -> u64 {
             // process. Count it if it parses, but read it again next time; the
             // duplicate is removed in `aggregate` like any repeated response.
             Ok(n) if n > 0 => {
-                if let Some(u) = parse_line(&String::from_utf8_lossy(&buf)) {
+                if let Some(u) = parse_line(&String::from_utf8_lossy(&buf), &stem) {
                     out.push(u);
                 }
                 return pos;
@@ -239,7 +254,7 @@ impl CostIndex {
 fn aggregate<'a>(usages: impl Iterator<Item = &'a Usage>) -> Vec<CostRow> {
     let mut seen = HashSet::new();
     let mut resolved: HashMap<String, (String, PathBuf)> = HashMap::new();
-    let mut rows: HashMap<(String, String, String), CostRow> = HashMap::new();
+    let mut rows: HashMap<(String, String, String, String), CostRow> = HashMap::new();
 
     for u in usages {
         if !seen.insert(u.id.as_str()) {
@@ -256,9 +271,15 @@ fn aggregate<'a>(usages: impl Iterator<Item = &'a Usage>) -> Vec<CostRow> {
             None => (String::new(), None),
         };
         let row = rows
-            .entry((u.hour.clone(), key.clone(), u.model.clone()))
+            .entry((
+                u.hour.clone(),
+                key.clone(),
+                u.model.clone(),
+                u.session.clone(),
+            ))
             .or_insert_with(|| CostRow {
                 hour: u.hour.clone(),
+                session_id: u.session.clone(),
                 project_key: key,
                 project_path: path,
                 model: u.model.clone(),
@@ -282,6 +303,7 @@ fn aggregate<'a>(usages: impl Iterator<Item = &'a Usage>) -> Vec<CostRow> {
             .cmp(&b.hour)
             .then(a.project_key.cmp(&b.project_key))
             .then(a.model.cmp(&b.model))
+            .then(a.session_id.cmp(&b.session_id))
     });
     out
 }
@@ -298,7 +320,7 @@ mod tests {
 
     #[test]
     fn prices_every_token_kind() {
-        let u = parse_line(&line("m", "r", "claude-opus-5", "D:/x", "")).unwrap();
+        let u = parse_line(&line("m", "r", "claude-opus-5", "D:/x", ""), "s").unwrap();
         // 5 input + 25 output + 6.25 5m write + 10 1h write + 0.5 read
         assert!((cost_of(&u).unwrap() - 46.75).abs() < 1e-9);
         assert_eq!(u.hour, "2026-09-11T17");
@@ -306,13 +328,10 @@ mod tests {
 
     #[test]
     fn fast_mode_doubles() {
-        let u = parse_line(&line(
-            "m",
-            "r",
-            "claude-opus-5",
-            "D:/x",
-            r#","speed":"fast""#,
-        ))
+        let u = parse_line(
+            &line("m", "r", "claude-opus-5", "D:/x", r#","speed":"fast""#),
+            "s",
+        )
         .unwrap();
         assert!((cost_of(&u).unwrap() - 93.5).abs() < 1e-9);
     }
@@ -419,8 +438,44 @@ mod tests {
     }
 
     #[test]
+    fn rows_carry_the_session_and_split_by_it() {
+        let d = tempfile::tempdir().unwrap();
+        let proj = d.path().join("proj");
+        std::fs::create_dir_all(&proj).unwrap();
+        // No sessionId on the line: the file stem stands in.
+        std::fs::write(
+            proj.join("aaa.jsonl"),
+            format!(
+                "{}
+",
+                line("m1", "r1", "claude-opus-5", "D:/x", "")
+            ),
+        )
+        .unwrap();
+        // An explicit sessionId wins over the stem.
+        let with_id = line("m2", "r2", "claude-opus-5", "D:/x", "").replace(
+            r#""type":"assistant""#,
+            r#""type":"assistant","sessionId":"real-uuid""#,
+        );
+        std::fs::write(
+            proj.join("bbb.jsonl"),
+            format!(
+                "{with_id}
+"
+            ),
+        )
+        .unwrap();
+
+        let rows = CostIndex::default().rows(d.path());
+        let mut ids: Vec<&str> = rows.iter().map(|r| r.session_id.as_str()).collect();
+        ids.sort();
+        assert_eq!(ids, ["aaa", "real-uuid"], "{rows:?}");
+        assert_eq!(rows.len(), 2, "same hour and model must not merge sessions");
+    }
+
+    #[test]
     fn unknown_models_are_flagged_not_priced() {
-        let u = parse_line(&line("m", "r", "mystery", "D:/x", "")).unwrap();
+        let u = parse_line(&line("m", "r", "mystery", "D:/x", ""), "s").unwrap();
         let rows = aggregate([u].iter());
         assert!(rows[0].unpriced);
         assert_eq!(rows[0].cost_usd, 0.0);
