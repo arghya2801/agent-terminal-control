@@ -425,15 +425,29 @@ mod tests {
 
     #[test]
     fn the_byte_budget_actually_bounds_the_read() {
-        // The headless fixture is larger than MAX_BYTES; parsing must still terminate
-        // quickly rather than walking the whole file.
-        let p = fixtures()
-            .join("D--Coding-headless")
-            .join("99999999-7777-4777-8777-999999999999.jsonl");
-        assert!(std::fs::metadata(&p).unwrap().len() > MAX_BYTES);
-        let start = std::time::Instant::now();
+        // Asserted by content rather than wall-clock time, which failed under load: a
+        // cwd placed past MAX_BYTES must never be seen. Few, long lines so the line
+        // budget is not what stops the read.
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.jsonl");
+        let big = format!(
+            "{{\"type\":\"progress\",\"data\":\"{}\"}}\n",
+            "x".repeat(4096)
+        );
+        let lines = (MAX_BYTES as usize / big.len()) + 2;
+        assert!(
+            lines < MAX_LINES,
+            "the byte budget must be the limit under test"
+        );
+        let body = format!(
+            "{}{}\n",
+            big.repeat(lines),
+            r#"{"type":"user","cwd":"D:/beyond/the/budget","message":{"content":"late"}}"#
+        );
+        std::fs::write(&p, body).unwrap();
+
         let s = read_session(&p).unwrap();
-        assert!(start.elapsed() < std::time::Duration::from_millis(500));
+        assert_eq!(s.cwd, None, "a line past MAX_BYTES was parsed");
         assert!(
             s.size > MAX_BYTES,
             "size is reported from metadata, not the read"
