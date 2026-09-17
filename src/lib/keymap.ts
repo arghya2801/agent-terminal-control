@@ -26,7 +26,8 @@ export type Action =
   | 'openShellHere'
   | 'renameTab'
   | 'openSettings'
-  | 'openUsage';
+  | 'openUsage'
+  | 'focusSearch';
 
 /** The subset of KeyboardEvent this needs, so tests require no DOM. */
 export interface ChordEvent {
@@ -73,6 +74,7 @@ const BINDINGS: Binding[] = [
   { key: 'n', ctrl: true, shift: true, action: 'openShellHere' },
   { key: 'r', ctrl: true, shift: true, action: 'renameTab' },
   { key: 'u', ctrl: true, shift: true, action: 'openUsage' },
+  { key: 'p', ctrl: true, shift: true, action: 'focusSearch' },
   // Ctrl+Comma is the settings chord in most editors; the shell and Claude Code ignore it.
   { key: ',', ctrl: true, shift: false, action: 'openSettings' },
 ];

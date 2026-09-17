@@ -171,6 +171,14 @@
     else focusActiveTerminal();
   }
 
+  async function focusSearch() {
+    if (!sidebarOpen()) await toggleSidebar();
+    await tick();
+    const input = document.getElementById('sidebar-search') as HTMLInputElement | null;
+    input?.focus();
+    input?.select();
+  }
+
   /** The sidebar project the focused tab belongs to, if it has one. */
   function activeProject(): Project | undefined {
     const key = activeKey ? getTab(activeKey)?.projectKey : null;
@@ -237,6 +245,9 @@
         break;
       case 'openUsage':
         togglePage('usage');
+        break;
+      case 'focusSearch':
+        void focusSearch();
         break;
     }
   }

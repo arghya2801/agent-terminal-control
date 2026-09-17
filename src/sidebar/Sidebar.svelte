@@ -2,6 +2,8 @@
   import ProjectNode from './ProjectNode.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import { openInExplorer } from '../lib/ipc';
+  import { filterProjects } from '../lib/filter';
+  import { focusActiveTerminal } from '../terminal/manager';
   import { isPinned, togglePinned } from '../lib/pinned';
   import {
     anyProjectExpanded,
@@ -113,7 +115,18 @@
     };
   }
 
-  const limit = $derived(appState.settings?.ui.sessionsPerProject ?? 15);
+  let query = $state('');
+  const searching = $derived(query.trim() !== '');
+  const shown = $derived(filterProjects(appState.index.projects, query));
+  // While searching every match is shown: a hit hidden behind "show more" is no hit.
+  const limit = $derived(searching ? Infinity : (appState.settings?.ui.sessionsPerProject ?? 15));
+
+  function onSearchKey(e: KeyboardEvent) {
+    if (e.key !== 'Escape') return;
+    // A second Esc on an empty box goes back to the terminal.
+    if (query) query = '';
+    else focusActiveTerminal();
+  }
   // Re-read on every index change so the label tracks projects appearing or vanishing.
   const anyOpen = $derived.by(() => {
     void appState.indexRevision;
@@ -152,6 +165,20 @@
     </div>
   </header>
 
+  <div class="search">
+    <input
+      id="sidebar-search"
+      type="search"
+      placeholder="Filter projects and sessions"
+      title="Filter by project, path, session name or branch (Ctrl+Shift+P)"
+      aria-label="Filter projects and sessions"
+      spellcheck="false"
+      autocomplete="off"
+      bind:value={query}
+      onkeydown={onSearchKey}
+    />
+  </div>
+
   <div class="list">
     {#if appState.loading}
       <div class="hint">scanning…</div>
@@ -161,11 +188,14 @@
       <div class="hint">
         No Claude sessions found yet. Run <code>claude</code> in a project and it will appear here.
       </div>
+    {:else if shown.length === 0}
+      <div class="hint">Nothing matches “{query.trim()}”.</div>
     {:else}
-      {#each appState.index.projects as project (project.key)}
+      {#each shown as project (project.key)}
         <ProjectNode
           {project}
           {limit}
+          forceOpen={searching}
           {activeKey}
           open={openProjectKeys.has(project.key)}
           {renaming}
@@ -234,6 +264,25 @@
     to {
       transform: rotate(360deg);
     }
+  }
+  .search {
+    padding: 0 8px 8px;
+  }
+  .search input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 8px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    background: #0d1117;
+    color: #e6edf3;
+    font: inherit;
+    font-size: 12px;
+    color-scheme: dark;
+  }
+  .search input:focus {
+    border-color: #539bf5;
+    outline: none;
   }
   .list {
     flex: 1;
