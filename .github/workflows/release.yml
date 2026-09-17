@@ -1,0 +1,62 @@
+# Builds the Windows artefacts for a version tag and attaches them to a draft release.
+#
+# Releases were built by hand, which also meant a running atc.exe locking target/release.
+# Push a tag (`git tag v0.1.2 && git push origin v0.1.2`), then edit and publish the draft
+# this leaves behind.
+#
+# The binaries are unsigned, exactly as the hand-built ones were: no certificate is
+# available, so SmartScreen warns on first run either way.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  # Lets the build be exercised without publishing anything.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Matches rust-version in src-tauri/Cargo.toml.
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # A release that fails its own tests is not worth publishing.
+      - run: npm run test
+
+      - run: npm run tauri build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: atc-windows
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*-setup.exe
+            src-tauri/target/release/atc.exe
+          if-no-files-found: error
+
+      - name: Draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*-setup.exe
+            src-tauri/target/release/atc.exe
