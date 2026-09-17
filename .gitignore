@@ -8,6 +8,8 @@ coverage/
 # --- rust / tauri ---
 src-tauri/target/
 src-tauri/gen/
+# Side-by-side release builds (a running atc.exe locks target/release).
+src-tauri/target-*/
 
 # --- env ---
 .env
