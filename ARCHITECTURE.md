@@ -45,7 +45,7 @@ graph LR
 | File | Responsibility |
 |---|---|
 | `main.rs` | Entry point. Calls `lib::run()`. |
-| `lib.rs` | Builds the Tauri app, registers commands, starts both watchers, disables WebView2's browser accelerator keys. |
+| `lib.rs` | Builds the Tauri app, registers commands and the notification and dialog plugins, starts both watchers, disables WebView2's browser accelerator keys. |
 | `commands.rs` | Every `#[tauri::command]`. Thin delegation only, so the whole IPC surface is readable in one screen. |
 | `state.rs` | `AppState`: the PTY registry, settings store, index, and both watchers. Watchers live here because they stop when dropped. |
 | `error.rs` | `AppError`, serialised to a string for the frontend. |
@@ -54,10 +54,10 @@ graph LR
 | `pty/session.rs` | One live shell: spawn, three threads, resize, teardown, cursor-position watchdog. |
 | `pty/pump.rs` | Pure. UTF-8 across read boundaries, and chunking output to fit Tauri's IPC threshold. |
 | `pty/registry.rs` | All live PTYs by id. `kill_all()` on exit. |
-| `index/session.rs` | Reads the head of one `.jsonl` transcript into `SessionMeta`. |
+| `index/session.rs` | Reads one `.jsonl` transcript into `SessionMeta`: the head for cwd and branch, the last 64KB for the name Claude currently gives the session. |
 | `index/project.rs` | Groups sessions into projects, applies pinning and sort order. |
-| `index/cache.rs` | Avoids re-parsing transcripts that only grew. |
-| `index/cost.rs` | Token use and API list-price cost from every transcript, subagents included, deduplicated per response. |
+| `index/cache.rs` | Avoids re-parsing transcripts that only grew, re-reading just the tail so a rename still lands. |
+| `index/cost.rs` | Token use and API list-price cost from every transcript, subagents included, deduplicated per response, per hour, project, model and session. Resumes from the last parsed offset. |
 | `index/watcher.rs` | Watches `~/.claude/projects`, filtered and debounced. |
 | `index/mod.rs` | Ties the above together: scan, cache, and "did the rendered result actually change". |
 | `settings/model.rs` | The settings struct. Every field defaults. |
@@ -76,14 +76,17 @@ graph LR
 | `terminal/theme.ts` | Colours and font fallbacks. |
 | `terminal/FindBar.svelte` | Search UI over the active terminal. |
 | `settings/SettingsPanel.svelte` | Settings form. Save writes `settings.json`. |
-| `usage/UsagePanel.svelte` | Plan limits (the `/usage` endpoint, via Rust) and spend per project over a date range. |
+| `usage/UsagePanel.svelte` | Plan limits (the `/usage` endpoint, via Rust, polled while open) and spend by project, session or model over a date range, with CSV export. |
 | `lib/ipc.ts` | Typed wrappers for every Rust command. One place for command names. |
 | `lib/stores.svelte.ts` | Index and settings state, zoom, sidebar toggle. |
 | `lib/keymap.ts` | Pure. Decides whether a keystroke belongs to the app or the shell, and when Ctrl+V should run a native paste. |
 | `lib/osc52.ts` | Pure. Decodes OSC 52 clipboard writes, which is how Claude Code copies a selection. |
-| `lib/costs.ts` | Pure. Buckets hourly cost rows into local days and projects. |
+| `lib/costs.ts` | Pure. Buckets hourly cost rows into local days, projects, sessions and models, and writes the CSV. |
+| `lib/filter.ts` | Pure. Sidebar search over projects and sessions. |
+| `lib/restore.ts` | Pure. Parses the saved tab list, defensively: it comes from browser storage. |
+| `lib/ConfirmDialog.svelte` | Modal yes/no, used before closing a tab with something running. |
 | `lib/Page.svelte`, `lib/InlineRename.svelte` | Full-pane overlay shell, and the inline rename box used by tabs and the sidebar. |
-| `lib/zoom.ts`, `lib/pinned.ts`, `lib/expansion.ts`, `lib/format.ts` | Pure helpers, each unit tested. |
+| `lib/zoom.ts`, `lib/pinned.ts`, `lib/expansion.ts`, `lib/format.ts` | Pure helpers, each unit tested. `format.ts` also reads Claude's working/idle state out of its terminal title. |
 | `sidebar/*.svelte` | Project tree, session rows, right-click menu. |
 | `tabs/TabBar.svelte` | Tab strip. |
 | `debug/DebugOverlay.svelte` | PTY throughput readout, `Ctrl+Shift+D`. |
@@ -97,7 +100,8 @@ graph LR
 2. `AppState` is built with the PTY registry, settings, and index.
 3. Both watchers start; WebView2's accelerator keys are disabled.
 4. The frontend calls `initStores()`, which fetches settings and the first index snapshot, then applies zoom and terminal options.
-5. `App.svelte` opens one plain shell tab.
+5. `App.svelte` reopens the tabs saved in browser storage, resuming Claude sessions, or
+   opens one plain shell tab when there is nothing to restore.
 
 ### Clicking a session
 
@@ -173,7 +177,8 @@ would loop.
 
 Commands: `pty_spawn`, `pty_write`, `pty_resize`, `pty_ack`, `pty_kill`, `pty_stats`,
 `index_snapshot`, `index_refresh`, `settings_get`, `settings_set`, `open_settings_file`,
-`open_in_explorer`, `open_devtools`.
+`open_in_explorer`, `open_devtools`, `usage_costs`, `claude_usage`, `write_text_file`,
+`scratch_dir`.
 
 Events: `index://updated`, `settings://updated`.
 
@@ -193,6 +198,11 @@ Each of these cost a debugging session to find. They are commented where they li
   cache stores parser output, so a fix is invisible until the cache is discarded.
 - **Project identity comes from `cwd` inside the transcript**, never from the directory
   name under `~/.claude/projects`, which cannot represent underscores.
+- **A session's current name is at the *end* of its transcript.** Claude rewrites the
+  `agent-name` record as the session goes on, and the first one is often past the head
+  budget, so the label comes from the tail.
+- **Saving tabs must keep exited ones.** On quit every shell exits just before the window
+  closes, so dropping them would wipe what gets restored.
 - **Watch the directory, not the file, for `settings.json`.** Editors save by renaming a
   temp file over the target, which destroys a watched inode.
 
@@ -202,7 +212,7 @@ Each of these cost a debugging session to find. They are commented where they li
   `pty_smoke.rs` and `pty_pipeline.rs` drive real shells through a real ConPTY —
   `Channel::new` takes a plain callback, so the production path runs with no window.
 - Frontend tests cover the pure modules only: keymap, zoom, pinning, expansion,
-  formatting, pane geometry, tab cycling.
+  formatting, pane geometry, tab cycling, sidebar filtering, tab restore, costs and CSV.
 - `fixtures/claude-projects/` is a synthetic `~/.claude/projects`, each file encoding one
   parser edge case. `fixtures_contract.rs` asserts those cases still exist, so a
   regenerated corpus cannot quietly stop testing anything.

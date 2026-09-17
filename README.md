@@ -71,26 +71,37 @@ Build output lands in `src-tauri/target/release/`, with the installers under
 
 **Sidebar**
 - Projects derived from `~/.claude/projects`, resolved to their real paths
-- Sessions listed newest first, labelled by Claude's own session title, falling back to
-  the session slug, the first message, then the session id
+- Sessions listed newest first, labelled by the name Claude gives the session, falling
+  back to its title, the session slug, the first message, then the session id
+- Filter box: matches project name, path, session name and branch
 - Git branch shown per session; non-default branches highlighted
 - Relative timestamps
 - Live refresh — sessions appear as they are created, without a restart
 - Pinned projects sort first
-- Right-click a project: open in Explorer, copy path, pin/unpin
-- Right-click a session: copy session id, copy resume command, open in Explorer
+- A dot on every session with an open tab: pulsing while Claude works, green when it is
+  waiting for you, blue when it finished in a background tab
+- Right-click a project: open Claude or a terminal here, rename, open in Explorer, copy
+  path, pin/unpin
+- Right-click a session: rename, copy session id, copy resume command, open in Explorer
+- Drag the sidebar's edge to resize it; double-click to reset
 
 **Terminal**
-- Tabs, each a separate `pwsh` process
+- Tabs, each a separate `pwsh` process, reopened on the next launch
 - Clicking a project or session reuses its existing tab rather than opening a second
-- Closing a tab with a running process asks first
+- Closing a tab with a running process asks first, naming what would be stopped
+- Windows notification when a background session finishes while ATC is not focused
+- Ask Claude outside any project, in a scratch directory
 - Search across scrollback with match counts
 - Whole-application zoom, persisted
 - Sessions with no recorded working directory are shown but not launchable
 
+**Usage**
+- Plan limits as `/usage` shows them, refreshed while the page is open
+- Spend at API list prices per day, project, model and session, with CSV export
+
 **Configuration**
-- `settings.json` is applied live; edits take effect without a restart
-- No settings UI
+- Settings page in the app, and `settings.json` applied live; edits take effect without
+  a restart
 
 ## Keyboard shortcuts
 
@@ -109,6 +120,13 @@ untouched.
 | `Ctrl+Shift+F` | Find in terminal |
 | `Ctrl+=` / `Ctrl+-` | Zoom in / out |
 | `Ctrl+0` | Reset zoom |
+| `Ctrl+Shift+P` | Filter projects and sessions |
+| `Ctrl+Shift+L` | Open Claude in this tab's project |
+| `Ctrl+Shift+N` | Open a terminal in this tab's project |
+| `Ctrl+Shift+A` | Ask Claude, outside any project |
+| `Ctrl+Shift+R` | Rename this tab |
+| `Ctrl+Shift+U` | Usage and spend |
+| `Ctrl+,` | Settings |
 | `Ctrl+Shift+D` | PTY statistics overlay |
 | `Ctrl+Shift+I` | Developer tools (debug builds only) |
 
@@ -131,7 +149,9 @@ rail opens it. Every field is optional; missing ones take their default.
     "sidebarWidth": 260,
     "sidebarOpen": true,
     "sessionsPerProject": 15,           // before "show all"
-    "zoom": 1.0
+    "zoom": 1.0,
+    "notifications": true,              // notify when a background session needs you
+    "restoreTabs": true                 // reopen last session's tabs on launch
   },
   "terminal": {
     "fontFamily": "\"FiraCode Nerd Font Mono\", Consolas, monospace",
@@ -140,7 +160,8 @@ rail opens it. Every field is optional; missing ones take their default.
   },
   "claude": {
     "command": "claude",
-    "resumeArgs": ["--resume", "{session}"]   // {session} is the session id
+    "resumeArgs": ["--resume", "{session}"],  // {session} is the session id
+    "scratchDir": null                        // null = <config dir>\\scratch
   }
 }
 ```
@@ -151,8 +172,7 @@ A malformed file is ignored rather than overwritten; the app keeps its current s
 
 - Command palette
 - Theme configuration (font family, size and scrollback are configurable; colours are not)
-- Renaming sessions
-- Restoring tabs between launches
+- Split panes
 - Shells other than PowerShell
 - Anything other than Windows
 
