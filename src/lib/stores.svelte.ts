@@ -16,7 +16,7 @@ import {
   type Collapsed,
 } from './expansion';
 import { normalizeZoom, stepZoom } from './zoom';
-import { applyTerminalSettings } from '../terminal/manager';
+import { applyTerminalSettings, refit } from '../terminal/manager';
 import type { IndexSnapshot, Settings } from '../types';
 
 const EVENT_INDEX_UPDATED = 'index://updated';
@@ -81,7 +81,6 @@ async function applyZoom(value: number) {
   }
   // Zoom changes the cell size, so the terminal must be re-measured or the shell keeps
   // wrapping at the old column count.
-  const { refit } = await import('../terminal/manager');
   refit();
 }
 
