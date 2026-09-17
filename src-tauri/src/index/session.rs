@@ -179,12 +179,13 @@ fn tail_agent_name(path: &Path) -> Option<String> {
     } else {
         &text
     };
+    // Newest first, so only the last name is parsed.
     text.lines()
+        .rev()
         .filter(|l| l.contains("\"agent-name\""))
         .filter_map(|l| serde_json::from_str::<Value>(l).ok())
         .filter(|v| v.get("type").and_then(Value::as_str) == Some("agent-name"))
-        .filter_map(|v| non_empty(v.get("agentName").and_then(Value::as_str)))
-        .last()
+        .find_map(|v| non_empty(v.get("agentName").and_then(Value::as_str)))
 }
 
 /// The current agent name as a finished label, for a cached entry whose file grew.
