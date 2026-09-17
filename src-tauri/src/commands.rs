@@ -187,6 +187,14 @@ fn open_with_shell_handler(path: &std::path::Path) -> AppResult<()> {
     Ok(())
 }
 
+/// The directory "Ask Claude" runs in, created on first use so the shell can start there.
+#[tauri::command]
+pub fn scratch_dir(state: State<'_, AppState>) -> AppResult<String> {
+    let dir = state.settings.get().scratch_dir();
+    std::fs::create_dir_all(&dir).map_err(crate::error::AppError::Io)?;
+    Ok(dir.to_string_lossy().into_owned())
+}
+
 /// Write text to a path the user chose in the save dialog. Only used by the Usage
 /// page's CSV export; the fs plugin is deliberately not enabled.
 #[tauri::command]

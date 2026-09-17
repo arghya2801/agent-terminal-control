@@ -43,7 +43,7 @@
   } from './terminal/manager';
   import { matchChord, type Action } from './lib/keymap';
   import { parseSavedTabs, type SavedTab } from './lib/restore';
-  import { openDevtools } from './lib/ipc';
+  import { openDevtools, scratchDir } from './lib/ipc';
   import { zoomLabel } from './lib/zoom';
   import type { Project, SessionMeta, TabKey } from './types';
   import type { SessionMark } from './sidebar/SessionNode.svelte';
@@ -249,6 +249,20 @@
     );
   }
 
+  /**
+   * Claude in a scratch directory, for questions that belong to no project: a branch
+   * comparison, a curl against some server. Keeps such sessions out of real projects.
+   */
+  function askClaude() {
+    counter += 1;
+    const n = counter;
+    const command = appState.settings?.claude.command || 'claude';
+    return guard(async () => {
+      const cwd = await scratchDir();
+      await openTab(`claude:${n}`, 'Ask Claude', { cwd, initialCommand: command });
+    });
+  }
+
   function openSession(p: Project, s: SessionMeta) {
     // Resume needs a real directory. A path reconstructed from the lossy folder name
     // would be wrong, so such rows are disabled rather than guessed at.
@@ -383,6 +397,9 @@
       case 'focusSearch':
         void focusSearch();
         break;
+      case 'askClaude':
+        void askClaude();
+        break;
     }
   }
 
@@ -450,6 +467,14 @@
       aria-label="New shell"
     >
       +
+    </button>
+    <button
+      class="rail-btn"
+      onclick={() => askClaude()}
+      title="Ask Claude, outside any project (Ctrl+Shift+A)"
+      aria-label="Ask Claude"
+    >
+      ✳
     </button>
     <button
       class="rail-btn"

@@ -86,7 +86,7 @@ export interface Settings {
     restoreTabs: boolean;
   };
   terminal: TerminalSettings;
-  claude: { command: string; resumeArgs: string[] };
+  claude: { command: string; resumeArgs: string[]; scratchDir: string | null };
 }
 
 export interface TerminalSettings {

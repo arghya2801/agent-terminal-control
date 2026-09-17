@@ -41,7 +41,12 @@
         fontSize: clamp(draft.terminal.fontSize, 6, 48, 13),
         scrollback: clamp(draft.terminal.scrollback, 0, 1_000_000, 10_000),
       },
-      claude: { command: draft.claude.command.trim() || 'claude', resumeArgs: splitArgs(resumeArgs) },
+      claude: {
+        ...draft.claude,
+        command: draft.claude.command.trim() || 'claude',
+        resumeArgs: splitArgs(resumeArgs),
+        scratchDir: draft.claude.scratchDir?.trim() || null,
+      },
       projects: {
         ...draft.projects,
         claudeProjectsDir: draft.projects.claudeProjectsDir?.trim() || null,
@@ -113,6 +118,17 @@
       <div>
         <input id="ra" class="wide" bind:value={resumeArgs} />
         <div class="muted hint"><code>{'{session}'}</code> becomes the session id</div>
+      </div>
+      <label for="sd">Ask Claude directory</label>
+      <div>
+        <input
+          id="sd"
+          class="wide"
+          placeholder="the scratch folder in ATC's config directory"
+          value={draft.claude.scratchDir ?? ''}
+          oninput={(e) => draft && (draft.claude.scratchDir = e.currentTarget.value)}
+        />
+        <div class="muted hint">Where the ✳ button runs Claude, for questions with no project</div>
       </div>
       <label for="pd">Projects directory</label>
       <div>

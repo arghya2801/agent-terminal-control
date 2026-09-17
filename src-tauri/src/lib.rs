@@ -45,6 +45,7 @@ pub fn run() {
             commands::open_in_explorer,
             commands::open_settings_file,
             commands::write_text_file,
+            commands::scratch_dir,
             commands::open_devtools,
             commands::usage_costs,
             commands::claude_usage,

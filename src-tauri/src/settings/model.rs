@@ -112,6 +112,9 @@ pub struct ClaudeSettings {
     pub command: String,
     /// `{session}` is replaced with the session uuid.
     pub resume_args: Vec<String>,
+    /// Where "Ask Claude" runs, for questions that belong to no project. `None` means
+    /// `<config dir>/scratch`.
+    pub scratch_dir: Option<String>,
 }
 
 impl Default for ClaudeSettings {
@@ -119,6 +122,7 @@ impl Default for ClaudeSettings {
         Self {
             command: "claude".into(),
             resume_args: vec!["--resume".into(), "{session}".into()],
+            scratch_dir: None,
         }
     }
 }
@@ -139,6 +143,20 @@ impl ClaudeSettings {
 impl Settings {
     pub fn claude_projects_dir(&self) -> PathBuf {
         crate::paths::claude_projects_dir(self.projects.claude_projects_dir.as_deref())
+    }
+
+    /// The scratch directory, from settings or the default under the config directory.
+    pub fn scratch_dir(&self) -> PathBuf {
+        match self
+            .claude
+            .scratch_dir
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            Some(dir) => PathBuf::from(dir),
+            None => crate::settings::config_dir().join("scratch"),
+        }
     }
 }
 
@@ -195,12 +213,12 @@ mod tests {
     #[test]
     fn resume_command_honours_a_customised_invocation() {
         let c = ClaudeSettings {
-            command: "claude".into(),
             resume_args: vec![
                 "--resume".into(),
                 "{session}".into(),
                 "--fork-session".into(),
             ],
+            ..ClaudeSettings::default()
         };
         assert_eq!(
             c.resume_command("xyz"),
@@ -228,6 +246,26 @@ mod tests {
         assert_eq!(s.ui.zoom, 1.25);
         let text = serde_json::to_string(&s).unwrap();
         assert!(text.contains("\"zoom\":1.25"), "{text}");
+    }
+
+    #[test]
+    fn the_scratch_directory_defaults_under_the_config_directory() {
+        let s = Settings::default();
+        assert!(s.claude.scratch_dir.is_none());
+        assert!(
+            s.scratch_dir().ends_with("scratch"),
+            "{:?}",
+            s.scratch_dir()
+        );
+
+        let s = Settings {
+            claude: ClaudeSettings {
+                scratch_dir: Some("  ".into()),
+                ..ClaudeSettings::default()
+            },
+            ..Settings::default()
+        };
+        assert!(s.scratch_dir().ends_with("scratch"), "blank means default");
     }
 
     #[test]
