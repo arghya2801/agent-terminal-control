@@ -19,6 +19,7 @@
     cycleTab,
     displayTitle,
     getActiveKey,
+    getTab,
     listTabs,
     mount as mountTerminals,
     onChange,
@@ -38,6 +39,7 @@
   let showDebug = $state(false);
   let showFind = $state(false);
   let page = $state<'settings' | 'usage' | null>(null);
+  let renamingTab = $state<TabKey | null>(null);
 
   function togglePage(p: 'settings' | 'usage') {
     page = page === p ? null : p;
@@ -107,6 +109,12 @@
     );
   }
 
+  /** The sidebar project the focused tab belongs to, if it has one. */
+  function activeProject(): Project | undefined {
+    const key = activeKey ? getTab(activeKey)?.projectKey : null;
+    return key ? appState.index.projects.find((p) => p.key === key) : undefined;
+  }
+
   // One implementation of every chord, so a shortcut behaves identically whether focus
   // is in the terminal or the sidebar.
   function runAction(action: Action) {
@@ -145,6 +153,28 @@
         break;
       case 'zoomReset':
         void adjustZoom(0);
+        break;
+      case 'openClaudeHere': {
+        const p = activeProject();
+        if (p) void newClaudeIn(p);
+        else error = 'This tab is not in a project, so there is nowhere to open Claude.';
+        break;
+      }
+      case 'openShellHere': {
+        const p = activeProject();
+        if (p) void newShellIn(p);
+        else error = 'This tab is not in a project, so there is nowhere to open a terminal.';
+        break;
+      }
+      case 'renameTab':
+        page = null;
+        renamingTab = activeKey;
+        break;
+      case 'openSettings':
+        togglePage('settings');
+        break;
+      case 'openUsage':
+        togglePage('usage');
         break;
     }
   }
@@ -213,7 +243,7 @@
       class="rail-btn"
       class:on={page === 'usage'}
       onclick={() => togglePage('usage')}
-      title="Usage and spend"
+      title="Usage and spend (Ctrl+Shift+U)"
       aria-label="Usage and spend"
     >
       $
@@ -233,7 +263,7 @@
       class="rail-btn small"
       class:on={page === 'settings'}
       onclick={() => togglePage('settings')}
-      title="Settings"
+      title="Settings (Ctrl+,)"
       aria-label="Settings"
     >
       ⚙
@@ -263,7 +293,7 @@
   </aside>
 
   <section class="main">
-    <TabBar {tabs} {activeKey} onNew={newTab} />
+    <TabBar {tabs} {activeKey} onNew={newTab} bind:renaming={renamingTab} />
     <div class="panes" bind:this={wrapper}></div>
     {#if page === 'settings'}
       <SettingsPanel onClose={() => (page = null)} />
