@@ -8,6 +8,11 @@
   import UsagePanel from './usage/UsagePanel.svelte';
   import ConfirmDialog from './lib/ConfirmDialog.svelte';
   import {
+    isPermissionGranted,
+    requestPermission,
+    sendNotification,
+  } from '@tauri-apps/plugin-notification';
+  import {
     adjustZoom,
     appState,
     currentZoom,
@@ -26,10 +31,12 @@
     isBusy,
     listTabs,
     mount as mountTerminals,
+    onAttention,
     onChange,
     onChord,
     openTab,
     refit,
+    type AttentionReason,
   } from './terminal/manager';
   import { matchChord, type Action } from './lib/keymap';
   import { openDevtools } from './lib/ipc';
@@ -38,7 +45,7 @@
   import type { SessionMark } from './sidebar/SessionNode.svelte';
 
   let wrapper: HTMLDivElement;
-  let tabs = $state<{ key: TabKey; title: string; exited: boolean }[]>([]);
+  let tabs = $state<{ key: TabKey; title: string; exited: boolean; attention: boolean }[]>([]);
   let activeKey = $state<TabKey | null>(null);
   let openProjectKeys = $state<Set<string>>(new Set());
   let tabSessions = $state<
@@ -115,7 +122,12 @@
 
   function sync() {
     const all = listTabs();
-    tabs = all.map((t) => ({ key: t.key, title: displayTitle(t), exited: t.exited }));
+    tabs = all.map((t) => ({
+      key: t.key,
+      title: displayTitle(t),
+      exited: t.exited,
+      attention: t.attention,
+    }));
     const nextActive = getActiveKey();
     // Picking a tab means the user wants the terminal, not the page covering it.
     if (nextActive !== activeKey) page = null;
@@ -126,7 +138,7 @@
       .map((t) => ({
         key: t.key,
         projectKey: t.projectKey,
-        activity: t.activity ?? 'open',
+        activity: t.attention ? 'attention' : (t.activity ?? 'open'),
         claudeName: t.claudeName,
       }));
   }
@@ -210,6 +222,22 @@
     input?.select();
   }
 
+  /** Windows notification for a background tab, only while ATC itself is not focused. */
+  async function notifyAttention(title: string, reason: AttentionReason) {
+    if (document.hasFocus() || appState.settings?.ui.notifications === false) return;
+    try {
+      let granted = await isPermissionGranted();
+      if (!granted) granted = (await requestPermission()) === 'granted';
+      if (!granted) return;
+      sendNotification({
+        title,
+        body: reason === 'finished' ? 'Claude finished and is waiting for you.' : 'Needs your attention.',
+      });
+    } catch (e) {
+      console.warn('notification failed', e);
+    }
+  }
+
   /** The sidebar project the focused tab belongs to, if it has one. */
   function activeProject(): Project | undefined {
     const key = activeKey ? getTab(activeKey)?.projectKey : null;
@@ -288,6 +316,7 @@
     // Chords pressed while the terminal has focus arrive here, already consumed by
     // xterm's interceptor so they never reach the shell.
     const offChord = onChord(runAction);
+    const offAttention = onAttention((t, reason) => void notifyAttention(displayTitle(t), reason));
     mountTerminals(wrapper);
     // Settings decide whether the sidebar is open, and so how wide the pane is.
     // Spawning before that lands starts the PTY at the wrong width.
@@ -309,6 +338,7 @@
     return () => {
       off();
       offChord();
+      offAttention();
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', refit);
     };

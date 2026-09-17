@@ -1,6 +1,6 @@
 <script lang="ts" module>
   /** A session with a live tab: what Claude is doing, or just "open" before it says. */
-  export type SessionMark = 'working' | 'idle' | 'open';
+  export type SessionMark = 'working' | 'idle' | 'open' | 'attention';
 </script>
 
 <script lang="ts">
@@ -56,7 +56,12 @@
   {#if mark}
     <span
       class="mark {mark}"
-      title={mark === 'working' ? 'Claude is working' : mark === 'idle' ? 'Claude is waiting for you' : 'Open in a tab'}
+      title={{
+        working: 'Claude is working',
+        idle: 'Claude is waiting for you',
+        attention: 'Finished in the background: needs your attention',
+        open: 'Open in a tab',
+      }[mark]}
     ></span>
   {/if}
   <span class="label">{session.label}</span>
@@ -122,6 +127,10 @@
   }
   .mark.idle {
     background: #3fb950;
+  }
+  .mark.attention {
+    background: #539bf5;
+    box-shadow: 0 0 0 2px #539bf544;
   }
   .mark.working {
     background: #f0883e;

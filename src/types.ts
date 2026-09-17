@@ -82,6 +82,7 @@ export interface Settings {
     sidebarOpen: boolean;
     sessionsPerProject: number;
     zoom: number;
+    notifications: boolean;
   };
   terminal: TerminalSettings;
   claude: { command: string; resumeArgs: string[] };

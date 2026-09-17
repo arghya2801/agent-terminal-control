@@ -81,6 +81,11 @@
       <input id="spp" type="number" min="1" max="500" bind:value={draft.ui.sessionsPerProject} />
       <label for="sw">Sidebar width (px)</label>
       <input id="sw" type="number" min="160" max="800" step="10" bind:value={draft.ui.sidebarWidth} />
+      <label for="nt">Notifications</label>
+      <label class="check">
+        <input id="nt" type="checkbox" bind:checked={draft.ui.notifications} />
+        <span class="muted">Notify when a background Claude session finishes or needs input while ATC is not focused</span>
+      </label>
     </div>
 
     <h2>Terminal</h2>
@@ -160,6 +165,11 @@
   }
   input[type='number'] {
     width: 90px;
+  }
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
   .wide {
     width: 100%;
