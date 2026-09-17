@@ -21,7 +21,7 @@ import '@xterm/xterm/css/xterm.css';
 import { Channel, ptyAck, ptyKill, ptyResize, ptySpawn, ptyWrite } from '../lib/ipc';
 import { isNativePaste, matchChord, type Action } from '../lib/keymap';
 import { decodeOsc52 } from '../lib/osc52';
-import { usableTitle } from '../lib/format';
+import { claudeTitle, usableTitle, type Activity } from '../lib/format';
 import { cycleIndex } from './cycle';
 import type { Dims, PtyEvent, SpawnOpts, TabKey, TerminalSettings } from '../types';
 import {
@@ -50,6 +50,10 @@ export interface Tab {
   autoTitle: string | null;
   /** Set by the user; wins over everything else. */
   customTitle: string | null;
+  /** Claude Code's state, read from its title; null when Claude is not running. */
+  activity: Activity | null;
+  /** The session name Claude shows in its title, used to find the sidebar row. */
+  claudeName: string | null;
   /** Canonical key of the sidebar project this tab belongs to, if any. */
   projectKey: string | null;
   term: Terminal;
@@ -202,6 +206,8 @@ export async function openTab(
     title,
     autoTitle: null,
     customTitle: null,
+    activity: null,
+    claudeName: null,
     projectKey,
     term,
     fit,
@@ -217,6 +223,9 @@ export async function openTab(
 
   term.onTitleChange((t) => {
     tab.autoTitle = usableTitle(t);
+    const claude = claudeTitle(t);
+    tab.activity = claude?.activity ?? null;
+    tab.claudeName = claude?.name ?? null;
     notify();
   });
 
