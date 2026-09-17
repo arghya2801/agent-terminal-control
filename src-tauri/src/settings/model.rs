@@ -213,7 +213,10 @@ mod tests {
         assert_eq!(s.terminal.scrollback, 10_000);
         assert!(s.terminal.font_family.contains("FiraCode"));
         assert_eq!(s.ui.zoom, 1.0);
-        assert!(s.ui.notifications, "notifications default on for existing files");
+        assert!(
+            s.ui.notifications,
+            "notifications default on for existing files"
+        );
     }
 
     #[test]
