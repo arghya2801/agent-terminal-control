@@ -6,6 +6,7 @@ import {
   localDay,
   owningProject,
   summarize,
+  toCsv,
 } from './costs';
 import type { CostRow } from '../types';
 
@@ -19,6 +20,7 @@ const row = (o: Partial<CostRow>): CostRow => ({
   cacheWrite: 1,
   cacheRead: 1,
   costUsd: 1,
+  sessionId: 's1',
   unpriced: false,
   ...o,
 });
@@ -97,5 +99,60 @@ describe('formatting', () => {
   });
   it('localDay pads', () => {
     expect(localDay(new Date(2026, 0, 5))).toBe('2026-01-05');
+  });
+});
+
+describe('byModel and sessionsByProject', () => {
+  const rows = [
+    row({ model: 'claude-opus-5', sessionId: 's1', costUsd: 3 }),
+    row({ model: 'claude-sonnet-5', sessionId: 's1', costUsd: 1 }),
+    row({ model: 'claude-opus-5', sessionId: 's2', costUsd: 2 }),
+    row({ projectKey: 'd:/b', projectPath: 'D:/b', model: 'claude-opus-5', sessionId: 's3', costUsd: 5 }),
+  ];
+  const s = summarize(rows, '2026-09-01', '2026-09-30', name);
+
+  it('totals each model, dearest first', () => {
+    expect(s.byModel).toEqual([
+      { key: 'claude-opus-5', cost: 10, tokens: 12 },
+      { key: 'claude-sonnet-5', cost: 1, tokens: 4 },
+    ]);
+  });
+
+  it('breaks a project down by session, dearest first', () => {
+    expect(s.sessionsByProject.get('d:/a')?.map((x) => [x.key, x.cost])).toEqual([
+      ['s1', 4],
+      ['s2', 2],
+    ]);
+    expect(s.sessionsByProject.get('d:/b')?.map((x) => x.key)).toEqual(['s3']);
+  });
+
+  it('leaves out rows outside the range', () => {
+    const outside = summarize([...rows, row({ hour: '2020-01-01T00', costUsd: 99 })], '2026-09-01', '2026-09-30', name);
+    expect(outside.total).toBe(11);
+  });
+});
+
+describe('toCsv', () => {
+  it('writes a header and one quoted line per row in range', () => {
+    const csv = toCsv(
+      [row({ costUsd: 1.5, sessionId: 'sess-1' }), row({ hour: '2020-01-01T00' })],
+      '2026-09-01',
+      '2026-09-30',
+      () => ({ key: 'd:/a', name: 'a, with comma' }),
+    );
+    const lines = csv.trimEnd().split('\n');
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toBe(
+      '"day","hour_utc","project","path","model","session","input","output","cache_write","cache_read","cost_usd"',
+    );
+    expect(lines[1]).toContain('"a, with comma"');
+    expect(lines[1]).toContain('"sess-1"');
+    expect(lines[1]).toContain('"1.500000"');
+    expect(csv.endsWith('\n')).toBe(true);
+  });
+
+  it('escapes quotes in a name', () => {
+    const csv = toCsv([row({})], '2026-09-01', '2026-09-30', () => ({ key: 'k', name: 'say "hi"' }));
+    expect(csv).toContain('"say ""hi"""');
   });
 });

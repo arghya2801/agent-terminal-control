@@ -9,10 +9,20 @@ export interface ProjectSpend {
   tokens: number;
 }
 
+/** One model, or one session inside a project. */
+export interface Spend {
+  key: string;
+  cost: number;
+  tokens: number;
+}
+
 export interface SpendSummary {
   total: number;
   tokens: number;
   byProject: ProjectSpend[];
+  byModel: Spend[];
+  /** Sessions of each project, by project key, most expensive first. */
+  sessionsByProject: Map<string, Spend[]>;
   /** Every day in the range, oldest first, including days with no spend. */
   byDay: { day: string; cost: number }[];
   unpricedModels: string[];
@@ -61,6 +71,8 @@ export function summarize(
   projectOf: (key: string, path: string | null) => { key: string; name: string },
 ): SpendSummary {
   const projects = new Map<string, ProjectSpend>();
+  const models = new Map<string, Spend>();
+  const sessions = new Map<string, Map<string, Spend>>();
   const days = new Map<string, number>();
   const unpriced = new Set<string>();
   let total = 0;
@@ -82,15 +94,72 @@ export function summarize(
     }
     p.cost += r.costUsd;
     p.tokens += t;
+    add(models, r.model, r.costUsd, t);
+    let inProject = sessions.get(owner.key);
+    if (!inProject) {
+      inProject = new Map();
+      sessions.set(owner.key, inProject);
+    }
+    add(inProject, r.sessionId, r.costUsd, t);
   }
 
   return {
     total,
     tokens,
     byProject: [...projects.values()].sort((a, b) => b.cost - a.cost),
+    byModel: dearestFirst(models),
+    sessionsByProject: new Map([...sessions].map(([k, v]) => [k, dearestFirst(v)])),
     byDay: daysBetween(from, to).map((day) => ({ day, cost: days.get(day) ?? 0 })),
     unpricedModels: [...unpriced].sort(),
   };
+}
+
+function add(into: Map<string, Spend>, key: string, cost: number, tokens: number) {
+  const s = into.get(key) ?? { key, cost: 0, tokens: 0 };
+  s.cost += cost;
+  s.tokens += tokens;
+  into.set(key, s);
+}
+
+function dearestFirst(m: Map<string, Spend>): Spend[] {
+  return [...m.values()].sort((a, b) => b.cost - a.cost || a.key.localeCompare(b.key));
+}
+
+/**
+ * The rows behind the table, as CSV: one line per hour, project, model and session.
+ * Quotes every field, because project names and paths can contain commas.
+ */
+export function toCsv(
+  rows: CostRow[],
+  from: string,
+  to: string,
+  projectOf: (key: string, path: string | null) => { key: string; name: string },
+): string {
+  const q = (v: string | number) => `"${String(v).replaceAll('"', '""')}"`;
+  const header = ['day', 'hour_utc', 'project', 'path', 'model', 'session', 'input', 'output', 'cache_write', 'cache_read', 'cost_usd'];
+  const lines = [header.map(q).join(',')];
+  for (const r of rows) {
+    const day = hourToLocalDay(r.hour);
+    if (day < from || day > to) continue;
+    lines.push(
+      [
+        day,
+        r.hour,
+        projectOf(r.projectKey, r.projectPath).name,
+        r.projectPath ?? '',
+        r.model,
+        r.sessionId,
+        r.input,
+        r.output,
+        r.cacheWrite,
+        r.cacheRead,
+        r.costUsd.toFixed(6),
+      ]
+        .map(q)
+        .join(','),
+    );
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 export function formatUsd(n: number): string {
