@@ -46,3 +46,16 @@ export function usableTitle(title: string): string | null {
   if (!t || /\.exe$/i.test(t)) return null;
   return t;
 }
+
+export type Activity = 'working' | 'idle';
+
+/**
+ * What Claude Code's terminal title says about the session. It prefixes the title with
+ * `✳` when idle and alternates `◐`/`◑` while working; older builds spun braille dots.
+ * Returns the state and the bare session name, or null for a title Claude did not set.
+ */
+export function claudeTitle(title: string): { activity: Activity; name: string } | null {
+  const m = /^\s*([\u2733\u25D0\u25D1\u2800-\u28FF])\s+(.*)$/u.exec(title);
+  if (!m) return null;
+  return { activity: m[1] === '\u2733' ? 'idle' : 'working', name: m[2].trim() };
+}
