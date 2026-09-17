@@ -5,7 +5,7 @@
 //! transcripts (`<uuid>/subagents/*.jsonl`) are included: those tokens are billed too.
 
 use std::collections::{HashMap, HashSet};
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -131,15 +131,39 @@ fn parse_line(line: &str) -> Option<Usage> {
     })
 }
 
-fn parse_file(path: &Path) -> Vec<Usage> {
-    let Ok(file) = std::fs::File::open(path) else {
-        return Vec::new();
+/// Parse complete lines from byte `offset` on, appending to `out`. Returns the offset
+/// just past the last complete line: a line still being written is left for next time.
+fn parse_from(path: &Path, offset: u64, out: &mut Vec<Usage>) -> u64 {
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return offset;
     };
-    BufReader::new(file)
-        .lines()
-        .map_while(Result::ok)
-        .filter_map(|l| parse_line(&l))
-        .collect()
+    if file.seek(SeekFrom::Start(offset)).is_err() {
+        return offset;
+    }
+    let mut reader = BufReader::new(file);
+    let mut pos = offset;
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        match reader.read_until(b'\n', &mut buf) {
+            Ok(n) if n > 0 && buf.ends_with(b"\n") => {
+                pos += n as u64;
+                if let Some(u) = parse_line(&String::from_utf8_lossy(&buf)) {
+                    out.push(u);
+                }
+            }
+            // A final line with no newline is either mid-write or left by a killed
+            // process. Count it if it parses, but read it again next time; the
+            // duplicate is removed in `aggregate` like any repeated response.
+            Ok(n) if n > 0 => {
+                if let Some(u) = parse_line(&String::from_utf8_lossy(&buf)) {
+                    out.push(u);
+                }
+                return pos;
+            }
+            _ => return pos,
+        }
+    }
 }
 
 /// Every `*.jsonl` under `root`, at any depth, so subagent transcripts count.
@@ -159,12 +183,18 @@ fn all_transcripts(root: &Path, out: &mut Vec<PathBuf>) {
 
 type Stamp = (u64, Option<std::time::SystemTime>);
 
-/// Parsed usage per file, reused while a file's size and mtime are unchanged.
-// ponytail: a changed file is re-read whole; resume from the old length if live
-// transcripts get large enough for that to show.
+/// Parsed usage for one transcript, and how far into it parsing got.
+struct Parsed {
+    stamp: Stamp,
+    offset: u64,
+    usages: Vec<Usage>,
+}
+
+/// Parsed usage per file. Transcripts are append-only, so a file that grew is parsed
+/// only from where the last scan stopped; a shrink or same-size rewrite reads it again.
 #[derive(Default)]
 pub struct CostIndex {
-    files: Mutex<HashMap<PathBuf, (Stamp, Vec<Usage>)>>,
+    files: Mutex<HashMap<PathBuf, Parsed>>,
 }
 
 impl CostIndex {
@@ -180,13 +210,29 @@ impl CostIndex {
                 continue;
             };
             let stamp = (meta.len(), meta.modified().ok());
-            if files.get(p).is_some_and(|(s, _)| *s == stamp) {
-                continue;
+            match files.get_mut(p) {
+                Some(f) if f.stamp == stamp => {}
+                Some(f) if stamp.0 > f.stamp.0 => {
+                    f.offset = parse_from(p, f.offset, &mut f.usages);
+                    f.stamp = stamp;
+                }
+                _ => {
+                    let mut usages = Vec::new();
+                    let offset = parse_from(p, 0, &mut usages);
+                    files.insert(
+                        p.clone(),
+                        Parsed {
+                            stamp,
+                            offset,
+                            usages,
+                        },
+                    );
+                }
             }
-            files.insert(p.clone(), (stamp, parse_file(p)));
         }
 
-        aggregate(files.values().flat_map(|(_, u)| u.iter()))
+        // Duplicates across resumed reads are removed here, same as within one file.
+        aggregate(files.values().flat_map(|f| f.usages.iter()))
     }
 }
 
@@ -311,6 +357,65 @@ mod tests {
 
         // A second call with nothing changed returns the same result from the cache.
         assert_eq!(idx.rows(root), rows);
+    }
+
+    fn total_input(rows: &[CostRow]) -> u64 {
+        rows.iter().map(|r| r.input).sum()
+    }
+
+    #[test]
+    fn a_grown_transcript_is_parsed_only_from_where_the_last_scan_stopped() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.jsonl");
+        let first = line("m1", "r1", "claude-opus-5", "D:/x", "");
+        std::fs::write(&p, format!("{first}\n")).unwrap();
+
+        let idx = CostIndex::default();
+        assert_eq!(total_input(&idx.rows(d.path())), 1_000_000);
+
+        // Blank out the first line in place while appending a second. A resumed read
+        // never looks at the start again, so m1 still counts; a full re-read would drop
+        // it.
+        let second = line("m2", "r2", "claude-opus-5", "D:/x", "");
+        std::fs::write(&p, format!("{}\n{second}\n", " ".repeat(first.len()))).unwrap();
+        assert_eq!(total_input(&idx.rows(d.path())), 2_000_000);
+    }
+
+    #[test]
+    fn a_line_still_being_written_is_counted_once_when_it_completes() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.jsonl");
+        let a = line("m1", "r1", "claude-opus-5", "D:/x", "");
+        let b = line("m2", "r2", "claude-opus-5", "D:/x", "");
+        let (b_head, b_tail) = b.split_at(b.len() / 2);
+
+        std::fs::write(&p, format!("{a}\n{b_head}")).unwrap();
+        let idx = CostIndex::default();
+        assert_eq!(total_input(&idx.rows(d.path())), 1_000_000);
+
+        std::fs::write(&p, format!("{a}\n{b_head}{b_tail}")).unwrap();
+        assert_eq!(
+            total_input(&idx.rows(d.path())),
+            2_000_000,
+            "a complete final line without a newline still counts"
+        );
+
+        std::fs::write(&p, format!("{a}\n{b}\n")).unwrap();
+        assert_eq!(total_input(&idx.rows(d.path())), 2_000_000, "counted twice");
+    }
+
+    #[test]
+    fn a_shrunken_transcript_is_read_again_from_the_start() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.jsonl");
+        let a = line("m1", "r1", "claude-opus-5", "D:/x", "");
+        let b = line("m2", "r2", "claude-opus-5", "D:/x", "");
+        std::fs::write(&p, format!("{a}\n{b}\n")).unwrap();
+        let idx = CostIndex::default();
+        assert_eq!(total_input(&idx.rows(d.path())), 2_000_000);
+
+        std::fs::write(&p, format!("{b}\n")).unwrap();
+        assert_eq!(total_input(&idx.rows(d.path())), 1_000_000);
     }
 
     #[test]
