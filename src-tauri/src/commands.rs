@@ -128,7 +128,12 @@ fn fetch_claude_usage() -> AppResult<serde_json::Value> {
         ));
     }
 
-    let mut resp = ureq::get("https://api.anthropic.com/api/oauth/usage")
+    let tls = ureq::tls::TlsConfig::builder()
+        .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+        .build();
+    let agent = ureq::Agent::new_with_config(ureq::Agent::config_builder().tls_config(tls).build());
+    let mut resp = agent
+        .get("https://api.anthropic.com/api/oauth/usage")
         .header("Authorization", &format!("Bearer {token}"))
         .header("anthropic-beta", "oauth-2025-04-20")
         .call()
