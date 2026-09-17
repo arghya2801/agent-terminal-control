@@ -1,7 +1,7 @@
 {
   "name": "atc",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "ATC - Agent Terminal Control. A project and session sidebar wrapped around a real terminal, for driving coding agents.",
   "scripts": {
