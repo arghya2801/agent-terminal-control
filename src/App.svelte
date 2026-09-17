@@ -12,6 +12,7 @@
     appState,
     currentZoom,
     initStores,
+    saveSettings,
     sidebarOpen,
     toggleSidebar,
   } from './lib/stores.svelte';
@@ -53,7 +54,41 @@
   let counter = 0;
 
   const open = $derived(sidebarOpen());
-  const width = $derived(appState.settings?.ui.sidebarWidth ?? 260);
+  // Same limits as the settings page.
+  const SIDEBAR_MIN = 160;
+  const SIDEBAR_MAX = 800;
+  const SIDEBAR_DEFAULT = 260;
+  /** Live width while the edge is being dragged; saved once, when the drag ends. */
+  let dragWidth = $state<number | null>(null);
+  const width = $derived(dragWidth ?? appState.settings?.ui.sidebarWidth ?? SIDEBAR_DEFAULT);
+
+  function saveSidebarWidth(w: number) {
+    if (!appState.settings || appState.settings.ui.sidebarWidth === w) return;
+    void saveSettings({ ...appState.settings, ui: { ...appState.settings.ui, sidebarWidth: w } });
+  }
+
+  function startResize(e: PointerEvent) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const handle = e.currentTarget as HTMLElement;
+    handle.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startWidth = width;
+    const move = (ev: PointerEvent) => {
+      const w = Math.round(startWidth + ev.clientX - startX);
+      dragWidth = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w));
+    };
+    const end = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', end);
+      handle.removeEventListener('pointercancel', end);
+      if (dragWidth !== null) saveSidebarWidth(dragWidth);
+      dragWidth = null;
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+  }
 
   function sync() {
     const all = listTabs();
@@ -308,6 +343,16 @@
 
   <aside class="panel">
     {#if open}
+      <div
+        class="resize"
+        class:dragging={dragWidth !== null}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        title="Drag to resize, double-click to reset"
+        onpointerdown={startResize}
+        ondblclick={() => saveSidebarWidth(SIDEBAR_DEFAULT)}
+      ></div>
       <Sidebar
         {activeKey}
         {openProjectKeys}
@@ -397,7 +442,21 @@
     flex: 1;
   }
   .panel {
+    position: relative;
     overflow: hidden;
+  }
+  .resize {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    width: 5px;
+    cursor: col-resize;
+  }
+  .resize:hover,
+  .resize.dragging {
+    background: #539bf566;
   }
   .main {
     position: relative;
