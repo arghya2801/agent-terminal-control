@@ -5,6 +5,7 @@
   import { appState } from '../lib/stores.svelte';
   import { formatTokens, formatUsd, localDay, owningProject, summarize } from '../lib/costs';
   import { planLimits, weeklyBreakdown } from '../lib/plan';
+  import { relativeTime } from '../lib/format';
   import type { CostRow } from '../types';
 
   let { onClose }: { onClose: () => void } = $props();
@@ -13,14 +14,22 @@
   let plan = $state<Record<string, unknown> | null>(null);
   let planError = $state<string | null>(null);
   let planLoading = $state(false);
+  let planUpdatedAt = $state(0);
+  /** Ticks so "updated 3m ago" stays current while the page sits open. */
+  let now = $state(Date.now());
+  /** Limits move slowly, and the endpoint rate-limits, so poll gently. */
+  const PLAN_REFRESH_MS = 90_000;
 
   const limits = $derived(plan ? planLimits(plan) : []);
   const breakdown = $derived(plan ? weeklyBreakdown(plan) : []);
 
   async function loadPlan() {
+    if (planLoading) return;
     planLoading = true;
     try {
       plan = await claudeUsage();
+      planUpdatedAt = Date.now();
+      now = planUpdatedAt;
       planError = null;
     } catch (e) {
       planError = String(e);
@@ -64,9 +73,41 @@
     }
   }
 
-  function preset(days: number | null) {
+  // The chosen range is remembered per machine. A preset is stored as itself, so "7 days"
+  // still means the last 7 days tomorrow.
+  const RANGE_KEY = 'atc.usage.range';
+  type SavedRange = { preset: number | null } | { from: string; to: string };
+
+  function remember(r: SavedRange) {
+    try {
+      localStorage.setItem(RANGE_KEY, JSON.stringify(r));
+    } catch {
+      // Storage unavailable: the range just is not remembered.
+    }
+  }
+
+  function applyPreset(days: number | null) {
     to = today;
     from = days === null ? '2000-01-01' : localDay(new Date(Date.now() - (days - 1) * 86_400_000));
+  }
+
+  function preset(days: number | null) {
+    applyPreset(days);
+    remember({ preset: days });
+  }
+
+  function restoreRange() {
+    try {
+      const r = JSON.parse(localStorage.getItem(RANGE_KEY) ?? 'null') as SavedRange | null;
+      if (!r) return;
+      if ('preset' in r) applyPreset(r.preset);
+      else if (r.from && r.to) {
+        from = r.from;
+        to = r.to;
+      }
+    } catch {
+      // Missing or unreadable: keep the default range.
+    }
   }
 
   function projectOf(key: string, path: string | null): { key: string; name: string } {
@@ -89,8 +130,15 @@
   const maxDay = $derived(Math.max(0, ...chartDays.map((d) => d.cost)));
 
   onMount(() => {
+    restoreRange();
     void loadPlan();
     void loadCosts();
+    const poll = setInterval(() => void loadPlan(), PLAN_REFRESH_MS);
+    const tick = setInterval(() => (now = Date.now()), 30_000);
+    return () => {
+      clearInterval(poll);
+      clearInterval(tick);
+    };
   });
 </script>
 
@@ -99,7 +147,7 @@
     Plan limits
     {#if typeof plan?.subscriptionType === 'string'}<span class="tag">{plan.subscriptionType}</span>{/if}
   </h2>
-  {#if planError}
+  {#if planError && !plan}
     <p class="err">{planError}</p>
   {:else if !plan}
     <p class="muted">loading…</p>
@@ -125,10 +173,20 @@
         This week by product: {breakdown.map((b) => `${b.name} ${b.percent}%`).join(' · ')}
       </p>
     {/if}
+    {#if planError}
+      <!-- A failed background refresh keeps the last good numbers on screen. -->
+      <p class="err">Refresh failed: {planError}</p>
+    {/if}
   {/if}
-  <button class="btn" onclick={loadPlan} disabled={planLoading}>
-    {planLoading ? 'Refreshing…' : 'Refresh'}
-  </button>
+  <div class="refresh">
+    <button class="btn" onclick={loadPlan} disabled={planLoading}>
+      {planLoading ? 'Refreshing…' : 'Refresh'}
+    </button>
+    {#if planUpdatedAt}
+      {@const ago = relativeTime(planUpdatedAt, now)}
+      <span class="muted">Updated {ago === 'now' ? 'just now' : `${ago} ago`}</span>
+    {/if}
+  </div>
 
   <h2>Spend at API prices</h2>
   <p class="muted">
@@ -137,8 +195,8 @@
   </p>
 
   <div class="range">
-    <label>From <input type="date" bind:value={from} max={today} /></label>
-    <label>To <input type="date" bind:value={to} max={today} /></label>
+    <label>From <input type="date" bind:value={from} max={today} onchange={() => remember({ from, to })} /></label>
+    <label>To <input type="date" bind:value={to} max={today} onchange={() => remember({ from, to })} /></label>
     <button class="btn" onclick={() => preset(1)}>Today</button>
     <button class="btn" onclick={() => preset(7)}>7 days</button>
     <button class="btn" onclick={() => preset(30)}>30 days</button>
@@ -242,6 +300,11 @@
   }
   .fill.hot {
     background: #f0883e;
+  }
+  .refresh {
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
   .range {
     display: flex;
