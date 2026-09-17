@@ -55,6 +55,11 @@ export function openDevtools(): Promise<void> {
   return invoke('open_devtools');
 }
 
+/** Writes text to a path the user picked in the save dialog. */
+export function writeTextFile(path: string, contents: string): Promise<void> {
+  return invoke('write_text_file', { path, contents });
+}
+
 /** Opens settings.json in the user's default editor, creating it if needed. */
 export function openSettingsFile(): Promise<void> {
   return invoke('open_settings_file');

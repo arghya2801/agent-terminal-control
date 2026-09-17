@@ -29,6 +29,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState::new(settings, cache_path))
         .invoke_handler(tauri::generate_handler![
             commands::pty_spawn,
@@ -43,6 +44,7 @@ pub fn run() {
             commands::settings_set,
             commands::open_in_explorer,
             commands::open_settings_file,
+            commands::write_text_file,
             commands::open_devtools,
             commands::usage_costs,
             commands::claude_usage,

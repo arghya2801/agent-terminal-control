@@ -187,6 +187,13 @@ fn open_with_shell_handler(path: &std::path::Path) -> AppResult<()> {
     Ok(())
 }
 
+/// Write text to a path the user chose in the save dialog. Only used by the Usage
+/// page's CSV export; the fs plugin is deliberately not enabled.
+#[tauri::command]
+pub fn write_text_file(path: String, contents: String) -> AppResult<()> {
+    std::fs::write(&path, contents).map_err(crate::error::AppError::Io)
+}
+
 #[tauri::command]
 pub fn open_in_explorer(path: String) -> AppResult<()> {
     let p = std::path::Path::new(&path);

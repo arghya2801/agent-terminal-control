@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Page from '../lib/Page.svelte';
-  import { claudeUsage, usageCosts } from '../lib/ipc';
+  import { save } from '@tauri-apps/plugin-dialog';
+  import { claudeUsage, usageCosts, writeTextFile } from '../lib/ipc';
   import { appState } from '../lib/stores.svelte';
-  import { formatTokens, formatUsd, localDay, owningProject, summarize } from '../lib/costs';
+  import { formatTokens, formatUsd, localDay, owningProject, summarize, toCsv } from '../lib/costs';
   import { planLimits, weeklyBreakdown } from '../lib/plan';
   import { relativeTime } from '../lib/format';
   import type { CostRow } from '../types';
@@ -119,6 +120,41 @@
     return { key, name: path?.split(/[\\/]/).filter(Boolean).pop() ?? key };
   }
 
+  let groupBy = $state<'project' | 'model'>('project');
+  /** Project keys whose sessions are shown. */
+  let expanded = $state<Set<string>>(new Set());
+
+  function toggleProject(key: string) {
+    const next = new Set(expanded);
+    if (!next.delete(key)) next.add(key);
+    expanded = next;
+  }
+
+  /** Session label from the sidebar index, falling back to a short id. */
+  function sessionName(id: string): string {
+    for (const p of appState.index.projects) {
+      const s = p.sessions.find((x) => x.id === id);
+      if (s) return s.label;
+    }
+    return id.slice(0, 8);
+  }
+
+  let exportError = $state<string | null>(null);
+
+  async function exportCsv() {
+    try {
+      const path = await save({
+        defaultPath: `atc-spend-${from}-to-${to}.csv`,
+        filters: [{ name: 'CSV', extensions: ['csv'] }],
+      });
+      if (!path) return;
+      await writeTextFile(path, toCsv(rows, from <= to ? from : to, from <= to ? to : from, projectOf));
+      exportError = null;
+    } catch (e) {
+      exportError = String(e);
+    }
+  }
+
   const summary = $derived(
     summarize(rows, from <= to ? from : to, from <= to ? to : from, projectOf),
   );
@@ -204,7 +240,9 @@
     <button class="btn" onclick={loadCosts} disabled={costLoading}>
       {costLoading ? 'Scanning…' : 'Rescan'}
     </button>
+    <button class="btn" onclick={exportCsv} disabled={rows.length === 0}>Export CSV</button>
   </div>
+  {#if exportError}<p class="err">{exportError}</p>{/if}
 
   {#if costError}
     <p class="err">{costError}</p>
@@ -229,25 +267,70 @@
       </div>
     {/if}
 
+    <div class="group">
+      <button class="btn" class:primary={groupBy === 'project'} onclick={() => (groupBy = 'project')}>
+        By project
+      </button>
+      <button class="btn" class:primary={groupBy === 'model'} onclick={() => (groupBy = 'model')}>
+        By model
+      </button>
+    </div>
+
     <table>
       <thead>
-        <tr><th>Project</th><th class="num">Tokens</th><th class="num">Cost</th><th class="share"></th></tr>
+        <tr>
+          <th>{groupBy === 'project' ? 'Project' : 'Model'}</th>
+          <th class="num">Tokens</th><th class="num">Cost</th><th class="share"></th>
+        </tr>
       </thead>
       <tbody>
-        {#each summary.byProject as p (p.key)}
-          <tr>
-            <td>{p.name}</td>
-            <td class="num">{formatTokens(p.tokens)}</td>
-            <td class="num">{formatUsd(p.cost)}</td>
-            <td class="share">
-              <div class="meter small">
-                <div class="fill" style="width: {summary.total ? (p.cost / summary.total) * 100 : 0}%"></div>
-              </div>
-            </td>
-          </tr>
+        {#if groupBy === 'model'}
+          {#each summary.byModel as m (m.key)}
+            <tr>
+              <td>{m.key}</td>
+              <td class="num">{formatTokens(m.tokens)}</td>
+              <td class="num">{formatUsd(m.cost)}</td>
+              <td class="share">
+                <div class="meter small">
+                  <div class="fill" style="width: {summary.total ? (m.cost / summary.total) * 100 : 0}%"></div>
+                </div>
+              </td>
+            </tr>
+          {:else}
+            <tr><td colspan="4" class="muted">No usage in this range.</td></tr>
+          {/each}
         {:else}
-          <tr><td colspan="4" class="muted">No usage in this range.</td></tr>
-        {/each}
+          {#each summary.byProject as p (p.key)}
+            {@const sessions = summary.sessionsByProject.get(p.key) ?? []}
+            <tr>
+              <td>
+                <button class="expand" onclick={() => toggleProject(p.key)} aria-expanded={expanded.has(p.key)}>
+                  <span class="twisty" class:open={expanded.has(p.key)}>▸</span>{p.name}
+                  <span class="muted">{sessions.length} session{sessions.length === 1 ? '' : 's'}</span>
+                </button>
+              </td>
+              <td class="num">{formatTokens(p.tokens)}</td>
+              <td class="num">{formatUsd(p.cost)}</td>
+              <td class="share">
+                <div class="meter small">
+                  <div class="fill" style="width: {summary.total ? (p.cost / summary.total) * 100 : 0}%"></div>
+                </div>
+              </td>
+            </tr>
+            {#if expanded.has(p.key)}
+              {#each sessions as s (s.key)}
+                <tr class="session">
+                  <td title={s.key}>{sessionName(s.key)}</td>
+                  <td class="num">{formatTokens(s.tokens)}</td>
+                  <td class="num">{formatUsd(s.cost)}</td>
+                  <td class="share"></td>
+                </tr>
+              {/each}
+            {/if}
+          {:else}
+            <tr><td colspan="4" class="muted">No usage in this range.</td></tr>
+          {/each}
+        {/if}
       </tbody>
     </table>
 
@@ -371,6 +454,35 @@
     padding: 6px 8px;
     border-bottom: 1px solid #161b22;
     color: #c9d1d9;
+  }
+  .group {
+    display: flex;
+    gap: 6px;
+    margin: 14px 0 8px;
+  }
+  .expand {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .twisty {
+    display: inline-block;
+    color: #6e7681;
+    font-size: 9px;
+    transition: transform 0.12s;
+  }
+  .twisty.open {
+    transform: rotate(90deg);
+  }
+  tr.session td:first-child {
+    padding-left: 26px;
+    color: #8b949e;
   }
   .num {
     text-align: right;

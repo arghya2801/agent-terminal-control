@@ -99,6 +99,8 @@ export interface TerminalSettings {
 export interface CostRow {
   /** UTC hour, `YYYY-MM-DDTHH`. */
   hour: string;
+  /** Session uuid, for the per-session breakdown. */
+  sessionId: string;
   /** Empty when the transcript recorded no working directory. */
   projectKey: string;
   projectPath: string | null;

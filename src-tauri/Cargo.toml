@@ -36,6 +36,9 @@ ureq = { version = "3", features = ["json", "platform-verifier"] }
 # Windows notification when a background Claude session finishes or needs input
 tauri-plugin-notification = "2"
 
+# save dialog for the Usage page's CSV export
+tauri-plugin-dialog = "2"
+
 # WebView2 swallows Chromium's accelerator keys (Ctrl+Shift+B, Ctrl+Tab, Ctrl+R...)
 # before they reach the page. Turning that off needs the raw COM interface. Versions are
 # pinned to what tauri already resolves so no duplicate crates appear in the tree.
