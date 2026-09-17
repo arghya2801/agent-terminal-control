@@ -8,6 +8,7 @@
   let {
     project,
     limit,
+    forceOpen = false,
     activeKey,
     open: hasTab,
     renaming,
@@ -21,6 +22,8 @@
   }: {
     project: Project;
     limit: number;
+    /** Expanded regardless of the user's toggle, e.g. while a search is showing results. */
+    forceOpen?: boolean;
     activeKey: TabKey | null;
     /** A tab is open somewhere for this project. */
     open: boolean;
@@ -36,7 +39,7 @@
 
   let showAll = $state(false);
 
-  const open = $derived(isExpanded(project.key));
+  const open = $derived(forceOpen || isExpanded(project.key));
   const visible = $derived(showAll ? project.sessions : project.sessions.slice(0, limit));
   const hidden = $derived(project.sessions.length - visible.length);
   const launchable = $derived(project.path !== null && project.exists);
