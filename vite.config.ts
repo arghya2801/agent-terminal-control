@@ -6,6 +6,11 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 export default defineConfig({
   plugins: [svelte()],
   clearScreen: false,
+  build: {
+    // The bundle is loaded from disk by the webview, never over a network, so one
+    // ~600 kB chunk (mostly xterm and its WebGL addon) costs nothing to split out.
+    chunkSizeWarningLimit: 1000,
+  },
   server: {
     port: 1420,
     strictPort: true,
