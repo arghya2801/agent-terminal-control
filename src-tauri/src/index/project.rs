@@ -106,6 +106,12 @@ pub fn build(sessions: Vec<SessionMeta>, settings: &Settings) -> IndexSnapshot {
         order_of.insert(r.key, pin.order);
     }
 
+    // The scratch directory is a bare folder under the config directory, so its own
+    // name says nothing useful. A rename below still wins.
+    if let Some(p) = by_key.get_mut(&paths::resolve(settings.scratch_dir()).key) {
+        p.name = "Scratch".to_string();
+    }
+
     // Renames are keyed by path as the user saw it; resolve so any spelling matches.
     for (path, name) in &settings.projects.names {
         let name = name.trim();
@@ -333,6 +339,32 @@ mod tests {
         assert!(!snap.projects[0].exists);
         // It still appears, so old sessions remain reachable in the UI.
         assert_eq!(snap.projects[0].sessions.len(), 1);
+    }
+
+    #[test]
+    fn the_scratch_directory_is_shown_as_scratch() {
+        let d = tempfile::tempdir().unwrap();
+        let scratch = d.path().join("scratch");
+        std::fs::create_dir_all(&scratch).unwrap();
+        let mut settings = Settings::default();
+        settings.claude.scratch_dir = Some(scratch.to_string_lossy().into_owned());
+
+        let snap = build(
+            vec![sess("a", Some(&scratch.to_string_lossy()), 1)],
+            &settings,
+        );
+        assert_eq!(snap.projects[0].name, "Scratch");
+
+        // An explicit rename still wins over the built-in name.
+        settings.projects.names.insert(
+            scratch.to_string_lossy().into_owned(),
+            "Questions".to_string(),
+        );
+        let snap = build(
+            vec![sess("a", Some(&scratch.to_string_lossy()), 1)],
+            &settings,
+        );
+        assert_eq!(snap.projects[0].name, "Questions");
     }
 
     #[test]

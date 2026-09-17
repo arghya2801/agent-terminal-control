@@ -28,6 +28,7 @@ describe('matchChord', () => {
     expect(matchChord(ctrlShift('R'))).toBe('renameTab');
     expect(matchChord(ctrlShift('U'))).toBe('openUsage');
     expect(matchChord(ctrlShift('P'))).toBe('focusSearch');
+    expect(matchChord(ctrlShift('A'))).toBe('askClaude');
     expect(matchChord(press(',', { ctrlKey: true }))).toBe('openSettings');
   });
 
@@ -38,7 +39,7 @@ describe('matchChord', () => {
 
   it('does not take plain Ctrl+U, Ctrl+N or Ctrl+R from the shell', () => {
     // Ctrl+U kills the line, Ctrl+R searches history, Ctrl+N is next-history.
-    for (const k of ['u', 'n', 'r', 'l', 'p']) {
+    for (const k of ['u', 'n', 'r', 'l', 'p', 'a']) {
       expect(matchChord(press(k, { ctrlKey: true }))).toBeNull();
     }
   });

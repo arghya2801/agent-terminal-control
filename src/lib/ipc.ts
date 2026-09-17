@@ -55,6 +55,11 @@ export function openDevtools(): Promise<void> {
   return invoke('open_devtools');
 }
 
+/** The directory "Ask Claude" runs in, created if missing. */
+export function scratchDir(): Promise<string> {
+  return invoke<string>('scratch_dir');
+}
+
 /** Writes text to a path the user picked in the save dialog. */
 export function writeTextFile(path: string, contents: string): Promise<void> {
   return invoke('write_text_file', { path, contents });
