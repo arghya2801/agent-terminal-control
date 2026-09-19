@@ -16,7 +16,17 @@ use std::time::{Duration, Instant};
 use atc_lib::pty::shell::resolve_shell;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 
-const TIMEOUT: Duration = Duration::from_secs(30);
+/// Generous on purpose: `wait_for` returns the moment its marker lands, so only a real
+/// failure waits this long. See #51.
+const TIMEOUT: Duration = Duration::from_secs(120);
+
+/// These tests spawn real shells in parallel and none of them is about startup time, so
+/// keep the user's PowerShell profile out of it. Same reasoning as `pty_pipeline.rs`.
+fn test_shell() -> atc_lib::pty::shell::ShellInfo {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| std::env::set_var(atc_lib::pty::shell::NO_PROFILE_ENV, "1"));
+    resolve_shell(None).expect("a shell must be resolvable on this machine")
+}
 
 type SharedWriter = Arc<Mutex<Box<dyn Write + Send>>>;
 
@@ -75,7 +85,7 @@ fn wait_for(
 
 #[test]
 fn spawns_a_real_shell_and_round_trips_a_command() {
-    let shell = resolve_shell(None).expect("a shell must be resolvable on this machine");
+    let shell = test_shell();
 
     let pair = native_pty_system()
         .openpty(PtySize {
@@ -123,7 +133,7 @@ fn spawns_a_real_shell_and_round_trips_a_command() {
 
 #[test]
 fn resize_is_accepted_on_a_live_pty() {
-    let shell = resolve_shell(None).expect("a shell must be resolvable");
+    let shell = test_shell();
 
     let pair = native_pty_system()
         .openpty(PtySize {
@@ -166,7 +176,7 @@ fn output_is_clean_text_not_garbage() {
     // Direct check on wezterm #6783: 0.9.0 was reported returning garbage on Windows.
     // The sentence is concatenated by the shell, so the full string can only appear as
     // executed output -- never as an echo of what we typed.
-    let shell = resolve_shell(None).expect("a shell must be resolvable");
+    let shell = test_shell();
     let pair = native_pty_system()
         .openpty(PtySize {
             rows: 24,
