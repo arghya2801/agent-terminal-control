@@ -12,7 +12,11 @@ use atc_lib::pty::registry::PtyRegistry;
 use atc_lib::pty::session::{PtyEvent, SpawnOpts};
 use tauri::ipc::Channel;
 
-const TIMEOUT: Duration = Duration::from_secs(30);
+/// Generous on purpose. `wait_until` polls every 50ms and returns the moment its marker
+/// lands, so a passing test costs nothing extra; only a genuine failure waits this long.
+/// The old 30s was close enough to real spawn times under load to fail as a wall-clock
+/// race while the pipeline was working fine. See #51.
+const TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(Default)]
 struct Collected {
@@ -67,7 +71,17 @@ fn wait_until<F: Fn() -> bool>(cond: F, timeout: Duration) -> bool {
     false
 }
 
+/// Cargo runs the tests in this file in parallel, each spawning a real shell. Loading
+/// the user's PowerShell profile ten times at once is the slowest part of that and has
+/// nothing to do with what is under test, so take it out of the picture. Set once: every
+/// test reaches its shell through `opts`.
+fn no_profile_shells() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| std::env::set_var(atc_lib::pty::shell::NO_PROFILE_ENV, "1"));
+}
+
 fn opts(initial: Option<&str>) -> SpawnOpts {
+    no_profile_shells();
     SpawnOpts {
         cwd: Some(env!("CARGO_MANIFEST_DIR").to_string()),
         cols: 120,
