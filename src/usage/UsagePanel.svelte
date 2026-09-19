@@ -24,11 +24,38 @@
   const limits = $derived(plan ? planLimits(plan) : []);
   const breakdown = $derived(plan ? weeklyBreakdown(plan) : []);
 
+  // How many limit rows to reserve space for before the response lands. How many an
+  // account has varies (session, week, and per-model weeks), so remember the last count
+  // rather than guess it every time; the default only matters on the very first load.
+  const ROWS_KEY = 'atc.usage.limitRows';
+  let skeletonRows = $state(readRows());
+
+  function readRows(): number {
+    try {
+      const n = Number(localStorage.getItem(ROWS_KEY));
+      if (Number.isInteger(n) && n > 0 && n <= 6) return n;
+    } catch {
+      // Storage unavailable: fall through to the default.
+    }
+    return 3;
+  }
+
+  function rememberRows(n: number) {
+    if (n <= 0 || n === skeletonRows) return;
+    skeletonRows = n;
+    try {
+      localStorage.setItem(ROWS_KEY, String(n));
+    } catch {
+      // Storage unavailable: next launch reserves the default instead.
+    }
+  }
+
   async function loadPlan() {
     if (planLoading) return;
     planLoading = true;
     try {
       plan = await claudeUsage();
+      rememberRows(limits.length);
       planUpdatedAt = Date.now();
       now = planUpdatedAt;
       planError = null;
@@ -186,7 +213,20 @@
   {#if planError && !plan}
     <p class="err">{planError}</p>
   {:else if !plan}
-    <p class="muted">loading…</p>
+    <!-- Same markup as the real rows, so the space reserved is the space they take and
+         nothing below moves when they arrive. -->
+    <div class="limits" aria-busy="true" aria-label="Loading plan limits">
+      {#each { length: skeletonRows } as _, i (i)}
+        <div class="limit">
+          <div class="limit-head">
+            <span class="ghost" style="width: 11ch"></span>
+            <span class="ghost" style="width: 7ch"></span>
+          </div>
+          <div class="meter"></div>
+          <div class="muted"><span class="ghost" style="width: 18ch"></span></div>
+        </div>
+      {/each}
+    </div>
   {:else if limits.length === 0}
     <p class="muted">No limits reported for this account.</p>
   {:else}
@@ -354,6 +394,25 @@
     display: grid;
     gap: 14px;
     margin-bottom: 12px;
+  }
+  /* Placeholder for a line of text that has not arrived, sized to the line it replaces. */
+  .ghost {
+    display: inline-block;
+    height: 1em;
+    vertical-align: -0.15em;
+    border-radius: 3px;
+    background: #21262d;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.45;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ghost {
+      animation: none;
+    }
   }
   .limit-head {
     display: flex;
