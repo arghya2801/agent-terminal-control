@@ -46,6 +46,7 @@
   import { parseSavedTabs, type SavedTab } from './lib/restore';
   import { openDevtools, scratchDir } from './lib/ipc';
   import { projectKey } from './lib/paths';
+  import { resolveSessions, type TabRef } from './lib/sessions';
   import { zoomLabel } from './lib/zoom';
   import type { Project, SessionMeta, TabKey } from './types';
   import type { SessionMark } from './sidebar/SessionNode.svelte';
@@ -54,47 +55,28 @@
   let tabs = $state<{ key: TabKey; title: string; exited: boolean; attention: boolean }[]>([]);
   let activeKey = $state<TabKey | null>(null);
   let openProjectKeys = $state<Set<string>>(new Set());
-  let tabSessions = $state<
-    {
-      key: TabKey;
-      projectKey: string | null;
-      activity: SessionMark;
-      claudeName: string | null;
-      exited: boolean;
-    }[]
-  >([]);
+  let tabSessions = $state<(TabRef & { activity: SessionMark; exited: boolean })[]>([]);
 
-  /**
-   * Which sessions have a tab, and what Claude is doing in each. A resumed tab knows its
-   * session from its key; one started with "Open Claude here" is matched by the name
-   * Claude puts in its title, which is the same name the sidebar shows.
-   */
+  /** Which sidebar session each tab is showing. See `resolveSessions` for how. */
+  const tabToSession = $derived(resolveSessions(tabSessions, appState.index.projects));
+
+  /** Which sessions have a tab, and what Claude is doing in each. */
   const sessionMarks = $derived.by(() => {
     const marks = new Map<string, SessionMark>();
     for (const t of tabSessions) {
       if (t.exited) continue;
-      const id = sessionIdOf(t);
+      const id = tabToSession.get(t.key);
       if (id) marks.set(id, t.activity);
     }
     return marks;
   });
 
-  /**
-   * The sidebar row to highlight. Resolved through `sessionIdOf` rather than compared
-   * against the tab key: a tab started with "Open Claude here" or the scratch pad is
-   * keyed `claude:n` and only knows its session by name, so keying off the tab alone
-   * left the row you were looking at unhighlighted.
-   */
-  const activeSessionId = $derived.by(() => {
-    const tab = tabSessions.find((t) => t.key === activeKey);
-    return tab ? sessionIdOf(tab) : null;
-  });
+  /** The sidebar row to highlight: the session the focused tab is showing. */
+  const activeSessionId = $derived(activeKey ? (tabToSession.get(activeKey) ?? null) : null);
 
-  function sessionIdOf(t: { key: TabKey; projectKey: string | null; claudeName: string | null }) {
-    if (t.key.startsWith('session:')) return t.key.slice('session:'.length);
-    if (!t.key.startsWith('claude:') || !t.claudeName) return null;
-    const project = appState.index.projects.find((p) => p.key === t.projectKey);
-    return project?.sessions.find((x) => x.label === t.claudeName)?.id ?? null;
+  /** The session a tab is showing, for deciding how to restore it. */
+  function sessionIdOf(t: Tab): string | null {
+    return tabToSession.get(t.key) ?? null;
   }
 
   // --- restore tabs on launch
@@ -224,14 +206,18 @@
     if (nextActive !== activeKey) page = null;
     activeKey = nextActive;
     openProjectKeys = new Set(all.flatMap((t) => (t.projectKey ? [t.projectKey] : [])));
-    saveTabs(all);
+    // Before saveTabs: it asks which session each tab is showing, and that answer is
+    // derived from this list. Saving first would persist the previous tick's answer.
     tabSessions = all.map((t) => ({
       key: t.key,
       projectKey: t.projectKey,
-      activity: t.attention ? 'attention' : (t.activity ?? 'open'),
+      cwd: t.cwd,
       claudeName: t.claudeName,
+      startedAt: t.startedAt,
+      activity: t.attention ? 'attention' : (t.activity ?? 'open'),
       exited: t.exited,
     }));
+    saveTabs(all);
   }
 
   async function guard(fn: () => Promise<unknown>) {

@@ -61,6 +61,8 @@ export interface Tab {
   attention: boolean;
   /** Canonical key of the sidebar project this tab belongs to, if any. */
   projectKey: string | null;
+  /** When the tab was opened. Identifies which session Claude went on to create. */
+  startedAt: number;
   /** Directory the shell started in; null for the default. Kept to reopen the tab. */
   cwd: string | null;
   term: Terminal;
@@ -240,6 +242,7 @@ export async function openTab(
     claudeName: null,
     attention: false,
     projectKey,
+    startedAt: Date.now(),
     cwd: opts.cwd ?? null,
     term,
     fit,
