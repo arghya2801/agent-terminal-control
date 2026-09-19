@@ -44,6 +44,7 @@
   import { matchChord, type Action } from './lib/keymap';
   import { parseSavedTabs, type SavedTab } from './lib/restore';
   import { openDevtools, scratchDir } from './lib/ipc';
+  import { projectKey } from './lib/paths';
   import { zoomLabel } from './lib/zoom';
   import type { Project, SessionMeta, TabKey } from './types';
   import type { SessionMark } from './sidebar/SessionNode.svelte';
@@ -53,7 +54,13 @@
   let activeKey = $state<TabKey | null>(null);
   let openProjectKeys = $state<Set<string>>(new Set());
   let tabSessions = $state<
-    { key: TabKey; projectKey: string | null; activity: SessionMark; claudeName: string | null }[]
+    {
+      key: TabKey;
+      projectKey: string | null;
+      activity: SessionMark;
+      claudeName: string | null;
+      exited: boolean;
+    }[]
   >([]);
 
   /**
@@ -64,10 +71,22 @@
   const sessionMarks = $derived.by(() => {
     const marks = new Map<string, SessionMark>();
     for (const t of tabSessions) {
+      if (t.exited) continue;
       const id = sessionIdOf(t);
       if (id) marks.set(id, t.activity);
     }
     return marks;
+  });
+
+  /**
+   * The sidebar row to highlight. Resolved through `sessionIdOf` rather than compared
+   * against the tab key: a tab started with "Open Claude here" or the scratch pad is
+   * keyed `claude:n` and only knows its session by name, so keying off the tab alone
+   * left the row you were looking at unhighlighted.
+   */
+  const activeSessionId = $derived.by(() => {
+    const tab = tabSessions.find((t) => t.key === activeKey);
+    return tab ? sessionIdOf(tab) : null;
   });
 
   function sessionIdOf(t: { key: TabKey; projectKey: string | null; claudeName: string | null }) {
@@ -204,14 +223,13 @@
     activeKey = nextActive;
     openProjectKeys = new Set(all.flatMap((t) => (t.projectKey ? [t.projectKey] : [])));
     saveTabs(all);
-    tabSessions = all
-      .filter((t) => !t.exited)
-      .map((t) => ({
-        key: t.key,
-        projectKey: t.projectKey,
-        activity: t.attention ? 'attention' : (t.activity ?? 'open'),
-        claudeName: t.claudeName,
-      }));
+    tabSessions = all.map((t) => ({
+      key: t.key,
+      projectKey: t.projectKey,
+      activity: t.attention ? 'attention' : (t.activity ?? 'open'),
+      claudeName: t.claudeName,
+      exited: t.exited,
+    }));
   }
 
   async function guard(fn: () => Promise<unknown>) {
@@ -259,7 +277,10 @@
     const command = appState.settings?.claude.command || 'claude';
     return guard(async () => {
       const cwd = await scratchDir();
-      await openTab(`claude:${n}`, 'Ask Claude', { cwd, initialCommand: command });
+      // The scratch directory is a real project to Claude, so name it here too. Without a
+      // project key its session cannot be matched to a sidebar row at all: no activity
+      // dot, no highlight.
+      await openTab(`claude:${n}`, 'Ask Claude', { cwd, initialCommand: command }, projectKey(cwd));
     });
   }
 
@@ -530,6 +551,7 @@
       ></div>
       <Sidebar
         {activeKey}
+        {activeSessionId}
         {openProjectKeys}
         {sessionMarks}
         onOpenProject={openProject}
