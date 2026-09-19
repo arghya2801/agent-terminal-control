@@ -84,6 +84,8 @@ export interface Settings {
     zoom: number;
     notifications: boolean;
     restoreTabs: boolean;
+    /** Sessions from a subfolder appear under the project containing it. */
+    groupSubfolders: boolean;
   };
   terminal: TerminalSettings;
   claude: { command: string; resumeArgs: string[]; scratchDir: string | null };
