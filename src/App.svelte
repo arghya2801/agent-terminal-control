@@ -6,6 +6,7 @@
   import FindBar from './terminal/FindBar.svelte';
   import SettingsPanel from './settings/SettingsPanel.svelte';
   import UsagePanel from './usage/UsagePanel.svelte';
+  import ShortcutsPanel from './settings/ShortcutsPanel.svelte';
   import ConfirmDialog from './lib/ConfirmDialog.svelte';
   import {
     isPermissionGranted,
@@ -142,12 +143,13 @@
   }
   let showDebug = $state(false);
   let showFind = $state(false);
-  let page = $state<'settings' | 'usage' | null>(null);
+  type PageName = 'settings' | 'usage' | 'shortcuts';
+  let page = $state<PageName | null>(null);
   let renamingTab = $state<TabKey | null>(null);
   /** A busy tab waiting on the close confirmation. */
   let closing = $state<{ key: TabKey; title: string; what: string } | null>(null);
 
-  function togglePage(p: 'settings' | 'usage') {
+  function togglePage(p: PageName) {
     page = page === p ? null : p;
   }
   let error = $state<string | null>(null);
@@ -394,6 +396,9 @@
       case 'openUsage':
         togglePage('usage');
         break;
+      case 'showShortcuts':
+        togglePage('shortcuts');
+        break;
       case 'focusSearch':
         void focusSearch();
         break;
@@ -498,6 +503,15 @@
     {/if}
     <button
       class="rail-btn small"
+      class:on={page === 'shortcuts'}
+      onclick={() => togglePage('shortcuts')}
+      title="Keyboard shortcuts (Ctrl+Shift+?)"
+      aria-label="Keyboard shortcuts"
+    >
+      ?
+    </button>
+    <button
+      class="rail-btn small"
       class:on={page === 'settings'}
       onclick={() => togglePage('settings')}
       title="Settings (Ctrl+,)"
@@ -547,6 +561,8 @@
       <SettingsPanel onClose={() => (page = null)} />
     {:else if page === 'usage'}
       <UsagePanel onClose={() => (page = null)} />
+    {:else if page === 'shortcuts'}
+      <ShortcutsPanel onClose={() => (page = null)} />
     {/if}
     {#if showFind}
       <FindBar onClose={() => (showFind = false)} />

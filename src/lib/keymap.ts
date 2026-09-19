@@ -28,7 +28,8 @@ export type Action =
   | 'openSettings'
   | 'openUsage'
   | 'focusSearch'
-  | 'askClaude';
+  | 'askClaude'
+  | 'showShortcuts';
 
 /** The subset of KeyboardEvent this needs, so tests require no DOM. */
 export interface ChordEvent {
@@ -79,7 +80,84 @@ const BINDINGS: Binding[] = [
   { key: 'a', ctrl: true, shift: true, action: 'askClaude' },
   // Ctrl+Comma is the settings chord in most editors; the shell and Claude Code ignore it.
   { key: ',', ctrl: true, shift: false, action: 'openSettings' },
+  // `?` is what the key reports with Shift held on a US layout; `/` covers layouts where
+  // it does not. Plain F1 is left alone: PSReadLine binds it to command help.
+  { key: '?', ctrl: true, shift: true, action: 'showShortcuts' },
+  { key: '/', ctrl: true, shift: true, action: 'showShortcuts' },
 ];
+
+/**
+ * What each action is called, and where it sits in the shortcut list. Keyed by `Action`,
+ * so a new binding without a description here is a type error rather than a chord the
+ * help page silently omits.
+ */
+const DESCRIPTIONS: Record<Action, { group: Group; label: string }> = {
+  newTab: { group: 'Tabs', label: 'New shell tab' },
+  closeTab: { group: 'Tabs', label: 'Close tab' },
+  nextTab: { group: 'Tabs', label: 'Next tab' },
+  prevTab: { group: 'Tabs', label: 'Previous tab' },
+  renameTab: { group: 'Tabs', label: 'Rename tab' },
+  openClaudeHere: { group: 'Launch', label: 'Open Claude in this tab’s project' },
+  openShellHere: { group: 'Launch', label: 'Open a shell in this tab’s project' },
+  askClaude: { group: 'Launch', label: 'Ask Claude (scratch directory)' },
+  toggleSidebar: { group: 'View', label: 'Show or hide the sidebar' },
+  focusSearch: { group: 'View', label: 'Search projects and sessions' },
+  find: { group: 'View', label: 'Find in the terminal' },
+  zoomIn: { group: 'View', label: 'Zoom in' },
+  zoomOut: { group: 'View', label: 'Zoom out' },
+  zoomReset: { group: 'View', label: 'Reset zoom' },
+  openSettings: { group: 'Pages', label: 'Settings' },
+  openUsage: { group: 'Pages', label: 'Usage' },
+  showShortcuts: { group: 'Pages', label: 'This list' },
+  toggleDebug: { group: 'Debug', label: 'Debug overlay' },
+  toggleDevtools: { group: 'Debug', label: 'WebView devtools' },
+};
+
+export type Group = 'Tabs' | 'Launch' | 'View' | 'Pages' | 'Debug';
+const GROUP_ORDER: Group[] = ['Tabs', 'Launch', 'View', 'Pages', 'Debug'];
+
+/** How a key reads on a keycap, where that differs from what the event reports. */
+const KEY_LABELS: Record<string, string> = {
+  tab: 'Tab',
+  add: 'Numpad +',
+  subtract: 'Numpad −',
+  ',': 'Comma',
+};
+
+export function chordLabel(b: { key: string; ctrl: boolean; shift: boolean }): string {
+  const parts = [];
+  if (b.ctrl) parts.push('Ctrl');
+  if (b.shift) parts.push('Shift');
+  parts.push(KEY_LABELS[b.key] ?? b.key.toUpperCase());
+  return parts.join('+');
+}
+
+export interface ShortcutGroup {
+  group: Group;
+  rows: { action: Action; label: string; chords: string[] }[];
+}
+
+/**
+ * The bindings as the help page shows them: grouped, in a fixed order, with the chords
+ * for one action collapsed onto its row. Derived from `BINDINGS`, so the page cannot
+ * drift from what the app actually does.
+ */
+export function shortcutGroups(): ShortcutGroup[] {
+  const byAction = new Map<Action, string[]>();
+  for (const b of BINDINGS) {
+    const chords = byAction.get(b.action) ?? [];
+    chords.push(chordLabel(b));
+    byAction.set(b.action, chords);
+  }
+  return GROUP_ORDER.flatMap((group) => {
+    const rows = [...byAction].flatMap(([action, chords]) =>
+      DESCRIPTIONS[action].group === group
+        ? [{ action, label: DESCRIPTIONS[action].label, chords }]
+        : [],
+    );
+    return rows.length > 0 ? [{ group, rows }] : [];
+  });
+}
 
 export function matchChord(e: ChordEvent): Action | null {
   if (e.type !== undefined && e.type !== 'keydown') return null;
