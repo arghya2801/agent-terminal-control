@@ -94,7 +94,7 @@
     padding: 4px 10px 4px 40px;
     border: none;
     background: transparent;
-    color: #8b949e;
+    color: var(--fg-dim);
     font: inherit;
     font-size: 12px;
     text-align: left;
@@ -103,18 +103,18 @@
   .sub {
     padding: 0 4px;
     border-radius: 4px;
-    background: #21262d;
-    color: #6e7681;
+    background: var(--bg-surface);
+    color: var(--fg-faint);
     font-size: 11px;
   }
   .session:hover:not(.disabled) {
-    background: #1c2027;
-    color: #c9d1d9;
+    background: var(--bg-hover);
+    color: var(--fg);
   }
   .session.active {
-    background: #1f6feb22;
-    color: #cdd9e5;
-    box-shadow: inset 2px 0 0 #539bf5;
+    background: color-mix(in srgb, var(--accent-strong) 16%, transparent);
+    color: var(--fg-bright);
+    box-shadow: inset 2px 0 0 var(--accent);
   }
   .session.disabled {
     opacity: 0.4;
@@ -136,17 +136,17 @@
     transform: translateY(-50%);
   }
   .mark.open {
-    box-shadow: inset 0 0 0 1px #6e7681;
+    box-shadow: inset 0 0 0 1px var(--fg-faint);
   }
   .mark.idle {
-    background: #3fb950;
+    background: var(--ok);
   }
   .mark.attention {
-    background: #539bf5;
-    box-shadow: 0 0 0 2px #539bf544;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 27%, transparent);
   }
   .mark.working {
-    background: #f0883e;
+    background: var(--warn);
     animation: pulse 1.2s ease-in-out infinite;
   }
   @keyframes pulse {
@@ -164,16 +164,16 @@
   .branch {
     max-width: 70px;
     overflow: hidden;
-    color: #b083f0;
+    color: var(--info);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   /* `main` is the unremarkable case: shown so a bare row is never ambiguous, but
      muted so the eye only stops on branches that are not the default. */
   .branch.default {
-    color: #6e7681;
+    color: var(--fg-faint);
   }
   .age {
-    color: #6e7681;
+    color: var(--fg-faint);
   }
 </style>

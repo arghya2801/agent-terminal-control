@@ -1,10 +1,31 @@
+/*
+ * These are the fallback palette only: `applyPalette` overwrites every one of them on
+ * startup from the chosen theme. They are kept so the first paint, before settings have
+ * been read, is the app's own dark theme rather than unstyled white.
+ */
 :root {
   --bg: #0b0d10;
   --fg: #d6dae0;
   --bg-chrome: #14171c;
+  --bg-surface: #21262d;
+  --bg-hover: #1c2027;
   --border: #232830;
+  --fg-bright: #e6edf3;
+  --fg-dim: #8b949e;
+  --fg-faint: #6e7681;
+  --accent: #539bf5;
+  --accent-strong: #1f6feb;
+  --on-accent: #0b0d10;
+  --danger: #f47067;
+  --danger-strong: #e5534b;
+  --warn: #daaa3f;
+  --ok: #3fb950;
+  --info: #b083f0;
+  --selection: #2a3b52;
   font-family: 'Segoe UI', system-ui, sans-serif;
   font-size: 13px;
+  /* Set from the theme's background by `applyPalette`; inherited, so native controls
+     (date pickers, number spinners, scrollbars) follow a light theme too. */
   color-scheme: dark;
 }
 

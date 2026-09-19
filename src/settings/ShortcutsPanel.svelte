@@ -41,7 +41,7 @@
   }
   th {
     padding: 5px 0;
-    color: #c9d1d9;
+    color: var(--fg);
     font-size: 13px;
     font-weight: 400;
     text-align: left;
@@ -53,17 +53,17 @@
   }
   kbd {
     padding: 2px 7px;
-    border: 1px solid #30363d;
+    border: 1px solid var(--border);
     border-bottom-width: 2px;
     border-radius: 5px;
-    background: #21262d;
-    color: #c9d1d9;
+    background: var(--bg-surface);
+    color: var(--fg);
     font-family: inherit;
     font-size: 12px;
   }
   .or {
     margin: 0 6px;
-    color: #6e7681;
+    color: var(--fg-faint);
     font-size: 11px;
   }
 </style>

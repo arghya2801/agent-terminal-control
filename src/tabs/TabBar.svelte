@@ -76,14 +76,14 @@
     border: none;
     border-radius: 6px 6px 0 0;
     background: transparent;
-    color: #8b949e;
+    color: var(--fg-dim);
     font: inherit;
     font-size: 12px;
     cursor: pointer;
     white-space: nowrap;
   }
-  .tab:hover { background: #1c2027; color: #c9d1d9; }
-  .tab.active { background: var(--bg); color: #e6edf3; }
+  .tab:hover { background: var(--bg-hover); color: var(--fg); }
+  .tab.active { background: var(--bg); color: var(--fg-bright); }
   .tab.exited .label { text-decoration: line-through; opacity: 0.6; }
   .label { overflow: hidden; text-overflow: ellipsis; }
   .attention {
@@ -92,7 +92,7 @@
     height: 7px;
     margin-right: -2px;
     border-radius: 50%;
-    background: #539bf5;
+    background: var(--accent);
   }
   .close {
     padding: 0 4px;
@@ -101,14 +101,14 @@
     font-size: 14px;
     line-height: 1;
   }
-  .close:hover { background: #30363d; opacity: 1; }
+  .close:hover { background: var(--border); opacity: 1; }
   .new {
     padding: 0 10px;
     border: none;
     background: transparent;
-    color: #8b949e;
+    color: var(--fg-dim);
     font-size: 16px;
     cursor: pointer;
   }
-  .new:hover { color: #e6edf3; }
+  .new:hover { color: var(--fg-bright); }
 </style>

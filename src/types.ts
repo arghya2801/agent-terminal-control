@@ -84,6 +84,8 @@ export interface Settings {
     zoom: number;
     notifications: boolean;
     restoreTabs: boolean;
+    /** Theme name, matched case-insensitively against the installed themes. */
+    theme: string;
     /** Sessions from a subfolder appear under the project containing it. */
     groupSubfolders: boolean;
   };

@@ -195,6 +195,124 @@ pub fn scratch_dir(state: State<'_, AppState>) -> AppResult<String> {
     Ok(dir.to_string_lossy().into_owned())
 }
 
+/// A theme file found in the config directory's `themes/` folder.
+#[derive(serde::Serialize)]
+pub struct UserTheme {
+    /// File name without the extension, used as the theme's name when the file omits one.
+    pub stem: String,
+    /// The file's contents, parsed only as far as "it is JSON". The frontend owns the
+    /// palette shape, and a file this does not understand must not break the list.
+    pub palette: serde_json::Value,
+}
+
+/// Themes the user dropped in `<config dir>/themes`. A missing folder is not an error:
+/// it is the normal case, and the app ships presets of its own.
+#[tauri::command]
+pub fn list_themes() -> AppResult<Vec<UserTheme>> {
+    Ok(read_theme_dir(
+        &crate::settings::config_dir().join("themes"),
+    ))
+}
+
+fn read_theme_dir(dir: &std::path::Path) -> Vec<UserTheme> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("json"))
+        {
+            continue;
+        }
+        // One unreadable or malformed file skips itself rather than hiding the rest.
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(palette) = serde_json::from_str::<serde_json::Value>(&text) else {
+            continue;
+        };
+        out.push(UserTheme {
+            stem: path
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            palette,
+        });
+    }
+    // Sorted so the settings list does not reshuffle between launches: directory order is
+    // not guaranteed.
+    out.sort_by(|a, b| a.stem.cmp(&b.stem));
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_theme_dir;
+
+    fn tmp() -> tempfile::TempDir {
+        tempfile::tempdir().expect("temp dir")
+    }
+
+    #[test]
+    fn a_missing_themes_folder_is_empty_not_an_error() {
+        let d = tmp();
+        assert!(read_theme_dir(&d.path().join("themes")).is_empty());
+    }
+
+    #[test]
+    fn reads_json_files_and_skips_everything_else() {
+        let d = tmp();
+        // Note the extra hashes: the hex colour contains `"#`, which would end a
+        // single-hash raw string.
+        std::fs::write(d.path().join("nord.json"), r##"{"background":"#2e3440"}"##).unwrap();
+        std::fs::write(d.path().join("notes.txt"), "not a theme").unwrap();
+        std::fs::create_dir(d.path().join("sub")).unwrap();
+
+        let themes = read_theme_dir(d.path());
+
+        assert_eq!(themes.len(), 1);
+        assert_eq!(themes[0].stem, "nord");
+        assert_eq!(themes[0].palette["background"], "#2e3440");
+    }
+
+    #[test]
+    fn one_malformed_file_does_not_hide_the_others() {
+        // A typo in a hand-written theme must cost that theme, not the whole list.
+        let d = tmp();
+        std::fs::write(d.path().join("broken.json"), "{ not json").unwrap();
+        std::fs::write(d.path().join("good.json"), r#"{"name":"Good"}"#).unwrap();
+
+        let themes = read_theme_dir(d.path());
+
+        assert_eq!(themes.len(), 1);
+        assert_eq!(themes[0].stem, "good");
+    }
+
+    #[test]
+    fn the_extension_match_ignores_case() {
+        let d = tmp();
+        std::fs::write(d.path().join("Shout.JSON"), "{}").unwrap();
+        assert_eq!(read_theme_dir(d.path()).len(), 1);
+    }
+
+    #[test]
+    fn the_order_is_stable_rather_than_whatever_the_directory_says() {
+        let d = tmp();
+        for name in ["c.json", "a.json", "b.json"] {
+            std::fs::write(d.path().join(name), "{}").unwrap();
+        }
+        let stems: Vec<_> = read_theme_dir(d.path())
+            .into_iter()
+            .map(|t| t.stem)
+            .collect();
+        assert_eq!(stems, ["a", "b", "c"]);
+    }
+}
+
 /// Write text to a path the user chose in the save dialog. Only used by the Usage
 /// page's CSV export; the fs plugin is deliberately not enabled.
 #[tauri::command]

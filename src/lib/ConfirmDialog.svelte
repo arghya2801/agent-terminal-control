@@ -64,18 +64,18 @@
   .dialog {
     width: min(420px, calc(100vw - 32px));
     padding: 18px 20px 16px;
-    border: 1px solid #30363d;
+    border: 1px solid var(--border);
     border-radius: 10px;
-    background: #161b22;
+    background: var(--bg-chrome);
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
   }
   .message {
-    color: #c9d1d9;
+    color: var(--fg);
     font-size: 13px;
     line-height: 1.5;
   }
   .message :global(strong) {
-    color: #e6edf3;
+    color: var(--fg-bright);
   }
   .actions {
     display: flex;
@@ -85,26 +85,26 @@
   }
   button {
     padding: 5px 12px;
-    border: 1px solid #30363d;
+    border: 1px solid var(--border);
     border-radius: 6px;
-    background: #21262d;
-    color: #c9d1d9;
+    background: var(--bg-surface);
+    color: var(--fg);
     font: inherit;
     font-size: 12px;
     cursor: pointer;
   }
   button:hover {
-    border-color: #539bf5;
+    border-color: var(--accent);
   }
   .confirm {
-    border-color: #da3633;
-    background: #da3633;
-    color: #fff;
+    border-color: var(--danger-strong);
+    background: var(--danger-strong);
+    color: var(--on-accent);
   }
   .confirm:hover,
   .confirm:focus-visible {
-    border-color: #f85149;
-    background: #f85149;
+    border-color: var(--danger);
+    background: var(--danger);
     outline: none;
   }
   kbd {

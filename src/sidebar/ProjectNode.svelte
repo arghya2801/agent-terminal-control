@@ -132,23 +132,23 @@
     padding-right: 6px;
   }
   .row:hover {
-    background: #161b22;
+    background: var(--bg-chrome);
   }
   .row.active {
-    background: #1f6feb22;
+    background: color-mix(in srgb, var(--accent-strong) 16%, transparent);
   }
   .row.has-tab {
-    box-shadow: inset 2px 0 0 #3fb950;
+    box-shadow: inset 2px 0 0 var(--ok);
   }
   .row.has-tab .text {
-    color: #e6edf3;
+    color: var(--fg-bright);
   }
   .live {
     flex-shrink: 0;
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #3fb950;
+    background: var(--ok);
   }
   .disclosure {
     display: flex;
@@ -159,7 +159,7 @@
     padding: 7px 4px 7px 8px;
     border: none;
     background: transparent;
-    color: #c9d1d9;
+    color: var(--fg);
     font: inherit;
     font-size: 12px;
     font-weight: 500;
@@ -169,12 +169,12 @@
   .twisty {
     flex-shrink: 0;
     width: 10px;
-    color: #8b949e;
+    color: var(--fg-dim);
     font-size: 11px;
     transition: transform 120ms ease;
   }
   .disclosure:hover .twisty {
-    color: #539bf5;
+    color: var(--accent);
   }
   .twisty.open {
     transform: rotate(90deg);
@@ -185,20 +185,20 @@
     white-space: nowrap;
   }
   .text.missing {
-    color: #6e7681;
+    color: var(--fg-faint);
     text-decoration: line-through;
   }
   .pin {
     flex-shrink: 0;
-    color: #539bf5;
+    color: var(--accent);
     font-size: 8px;
   }
   .count {
     flex-shrink: 0;
     padding: 0 5px;
     border-radius: 8px;
-    background: #21262d;
-    color: #6e7681;
+    background: var(--bg-surface);
+    color: var(--fg-faint);
     font-size: 9px;
     line-height: 14px;
   }
@@ -208,7 +208,7 @@
     border: none;
     border-radius: 4px;
     background: transparent;
-    color: #6e7681;
+    color: var(--fg-faint);
     font-family: ui-monospace, monospace;
     font-size: 10px;
     cursor: pointer;
@@ -218,8 +218,8 @@
     opacity: 1;
   }
   .open:hover:not(:disabled) {
-    background: #30363d;
-    color: #539bf5;
+    background: var(--border);
+    color: var(--accent);
   }
   .open:disabled {
     cursor: default;
@@ -231,7 +231,7 @@
     padding: 3px 10px 6px 40px;
     border: none;
     background: transparent;
-    color: #6e7681;
+    color: var(--fg-faint);
     font: inherit;
     font-size: 11px;
     text-align: left;
@@ -240,6 +240,6 @@
     cursor: pointer;
   }
   .more:hover {
-    color: #539bf5;
+    color: var(--accent);
   }
 </style>

@@ -75,6 +75,11 @@ export function usageCosts(): Promise<CostRow[]> {
   return invoke<CostRow[]>('usage_costs');
 }
 
+/** Theme files in the config directory's `themes/` folder, unvalidated. */
+export function listThemes(): Promise<{ stem: string; palette: unknown }[]> {
+  return invoke<{ stem: string; palette: unknown }[]>('list_themes');
+}
+
 /** Plan limits as `/usage` shows them. Shape belongs to the API, so kept loose. */
 export function claudeUsage(): Promise<Record<string, unknown>> {
   return invoke<Record<string, unknown>>('claude_usage');

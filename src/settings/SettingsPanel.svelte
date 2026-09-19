@@ -1,7 +1,8 @@
 <script lang="ts">
   import Page from '../lib/Page.svelte';
   import { openSettingsFile } from '../lib/ipc';
-  import { appState, refresh, saveSettings } from '../lib/stores.svelte';
+  import { appState, refresh, saveSettings, themeState } from '../lib/stores.svelte';
+  import { cssVariables } from '../lib/theme';
   import type { Settings } from '../types';
 
   let { onClose }: { onClose: () => void } = $props();
@@ -22,6 +23,25 @@
 
   function splitArgs(s: string): string[] {
     return s.split(/\s+/).filter(Boolean);
+  }
+
+  /**
+   * The theme applies as soon as it is picked, without waiting for Save: choosing colours
+   * blind is no choice at all. Saving is still what makes it stick, and Cancel restores
+   * what was there.
+   */
+  function previewTheme(name: string) {
+    if (!draft || !appState.settings) return;
+    draft.ui.theme = name;
+    void saveSettings({ ...appState.settings, ui: { ...appState.settings.ui, theme: name } });
+  }
+
+  /** Three swatches per theme: the chrome, the accent and the foreground. */
+  function swatches(name: string) {
+    const t = themeState.themes.find((x) => x.name === name);
+    if (!t) return [];
+    const v = cssVariables(t);
+    return [t.background, v['--accent'], t.foreground];
   }
 
   const clamp = (n: number, lo: number, hi: number, fallback: number) =>
@@ -113,6 +133,23 @@
       <input id="sb" type="number" min="0" step="1000" bind:value={draft.terminal.scrollback} />
       <label for="zm">Zoom</label>
       <input id="zm" type="number" min="0.5" max="3" step="0.1" bind:value={draft.ui.zoom} />
+      <label for="th">Theme</label>
+      <div>
+        <select id="th" value={draft.ui.theme} onchange={(e) => previewTheme(e.currentTarget.value)}>
+          {#each themeState.themes as t (t.name)}
+            <option value={t.name}>{t.name}</option>
+          {/each}
+        </select>
+        <span class="swatches" aria-hidden="true">
+          {#each swatches(draft.ui.theme) as colour (colour)}
+            <span class="swatch" style="background: {colour}"></span>
+          {/each}
+        </span>
+        <div class="muted hint">
+          Applied as you pick it. Drop more theme files in <code>themes/</code> beside
+          <code>settings.json</code>: any Windows Terminal or VS Code terminal palette works.
+        </div>
+      </div>
     </div>
 
     <h2>Claude</h2>
@@ -186,7 +223,7 @@
     gap: 10px 16px;
   }
   label {
-    color: #c9d1d9;
+    color: var(--fg);
     font-size: 12px;
   }
   input[type='number'] {
@@ -206,10 +243,31 @@
     margin-top: 3px;
     font-size: 11px;
   }
+  select {
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--fg-bright);
+    font: inherit;
+    font-size: 12px;
+  }
+  .swatches {
+    display: inline-flex;
+    margin-left: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    vertical-align: -3px;
+  }
+  .swatch {
+    width: 14px;
+    height: 14px;
+  }
   code {
     padding: 0 3px;
     border-radius: 3px;
-    background: #161b22;
+    background: var(--bg-chrome);
   }
   .rename-row {
     display: grid;
