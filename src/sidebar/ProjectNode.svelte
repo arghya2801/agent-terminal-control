@@ -12,6 +12,7 @@
     forceOpen = false,
     sessionMarks,
     activeKey,
+    activeSessionId,
     open: hasTab,
     renaming,
     onRenameProject,
@@ -28,6 +29,8 @@
     forceOpen?: boolean;
     sessionMarks: Map<string, SessionMark>;
     activeKey: TabKey | null;
+    /** Session whose tab is focused, already resolved from the tab. */
+    activeSessionId: string | null;
     /** A tab is open somewhere for this project. */
     open: boolean;
     renaming: string | null;
@@ -102,7 +105,7 @@
         <SessionNode
           {session}
           projectPath={project.path}
-          active={activeKey === `session:${session.id}`}
+          active={session.id === activeSessionId}
           mark={sessionMarks.get(session.id) ?? null}
           renaming={renaming === `s:${session.id}`}
           onRename={(name) => onRenameSession(session, name)}

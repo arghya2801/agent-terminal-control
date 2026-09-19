@@ -7,16 +7,12 @@
  * spelled differently by the sidebar and by a hand-edited file.
  */
 
+import { samePath } from './paths';
+
 export interface PinnedProject {
   path: string;
   displayName: string | null;
   order: number;
-}
-
-/** Mirrors the canonical key rule in `src-tauri/src/paths.rs`. */
-function samePath(a: string, b: string): boolean {
-  const norm = (p: string) => p.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
-  return norm(a) === norm(b);
 }
 
 export function isPinned(list: PinnedProject[], path: string): boolean {

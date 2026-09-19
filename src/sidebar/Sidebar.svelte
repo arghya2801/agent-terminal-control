@@ -17,6 +17,7 @@
 
   let {
     activeKey,
+    activeSessionId,
     openProjectKeys,
     sessionMarks,
     onOpenProject,
@@ -25,6 +26,7 @@
     onNewClaude,
   }: {
     activeKey: TabKey | null;
+    activeSessionId: string | null;
     openProjectKeys: Set<string>;
     /** Sessions with a live tab, by id. */
     sessionMarks: Map<string, SessionMark>;
@@ -202,6 +204,7 @@
           forceOpen={searching}
           {sessionMarks}
           {activeKey}
+          {activeSessionId}
           open={openProjectKeys.has(project.key)}
           {renaming}
           onRenameProject={(p, name) => p.path && void saveName('names', p.path, name)}
