@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isNativePaste, matchChord, type ChordEvent } from './keymap';
+import { chordLabel, isNativePaste, matchChord, shortcutGroups, type ChordEvent } from './keymap';
 
 const press = (key: string, mods: Partial<ChordEvent> = {}): ChordEvent => ({
   key,
@@ -159,5 +159,43 @@ describe('isNativePaste', () => {
     expect(isNativePaste(ev({ altKey: true }), true)).toBe(false);
     expect(isNativePaste(ev({ key: 'c' }), true)).toBe(false);
     expect(isNativePaste(ev({ type: 'keyup' }), true)).toBe(false);
+  });
+});
+
+describe('the shortcut help list', () => {
+  it('claims Ctrl+Shift+? and the / it shares a key with', () => {
+    expect(matchChord(ctrlShift('?'))).toBe('showShortcuts');
+    expect(matchChord(ctrlShift('/'))).toBe('showShortcuts');
+    // F1 stays with the shell: PSReadLine binds it to command help.
+    expect(matchChord(press('F1'))).toBeNull();
+  });
+
+  it('lists each action once, with at least one chord', () => {
+    // Completeness is the type system's job: DESCRIPTIONS is keyed by `Action`, so a new
+    // binding without a description will not compile. This covers the rest.
+    const rows = shortcutGroups().flatMap((g) => g.rows);
+    const actions = rows.map((r) => r.action);
+    expect(new Set(actions).size).toBe(actions.length);
+    expect(actions).toContain('showShortcuts');
+    for (const r of rows) expect(r.chords.length).toBeGreaterThan(0);
+  });
+
+  it('collapses the chords for one action onto its row', () => {
+    const zoomIn = shortcutGroups()
+      .flatMap((g) => g.rows)
+      .find((r) => r.action === 'zoomIn');
+    expect(zoomIn?.chords).toEqual(['Ctrl+=', 'Ctrl+Shift++', 'Ctrl+Numpad +']);
+  });
+
+  it('names keys the way they read on a keycap', () => {
+    expect(chordLabel({ key: 'b', ctrl: true, shift: true })).toBe('Ctrl+Shift+B');
+    expect(chordLabel({ key: 'tab', ctrl: true, shift: false })).toBe('Ctrl+Tab');
+    expect(chordLabel({ key: ',', ctrl: true, shift: false })).toBe('Ctrl+Comma');
+    expect(chordLabel({ key: 'subtract', ctrl: true, shift: false })).toBe('Ctrl+Numpad −');
+  });
+
+  it('groups in a fixed order and drops nothing', () => {
+    const groups = shortcutGroups();
+    expect(groups.map((g) => g.group)).toEqual(['Tabs', 'Launch', 'View', 'Pages', 'Debug']);
   });
 });
