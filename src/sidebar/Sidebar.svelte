@@ -3,6 +3,7 @@
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import { openInExplorer } from '../lib/ipc';
   import { filterProjects } from '../lib/filter';
+  import { groupSubfolders } from '../lib/group';
   import { focusActiveTerminal } from '../terminal/manager';
   import { isPinned, togglePinned } from '../lib/pinned';
   import {
@@ -121,7 +122,14 @@
 
   let query = $state('');
   const searching = $derived(query.trim() !== '');
-  const shown = $derived(filterProjects(appState.index.projects, query));
+  // Grouped before filtering, so a query matching a parent's name keeps the sessions it
+  // has adopted.
+  const grouped = $derived(
+    appState.settings?.ui.groupSubfolders
+      ? groupSubfolders(appState.index.projects)
+      : appState.index.projects,
+  );
+  const shown = $derived(filterProjects(grouped, query));
   // While searching every match is shown: a hit hidden behind "show more" is no hit.
   const limit = $derived(searching ? Infinity : (appState.settings?.ui.sessionsPerProject ?? 15));
 
