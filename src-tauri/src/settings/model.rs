@@ -70,6 +70,9 @@ pub struct UiSettings {
     pub notifications: bool,
     /// Reopen the tabs that were open when ATC last closed.
     pub restore_tabs: bool,
+    /// Name of the theme to use, as the theme file spells it. Unknown names fall back to
+    /// the default, so a removed theme file is not a broken app.
+    pub theme: String,
 }
 
 impl Default for UiSettings {
@@ -81,6 +84,7 @@ impl Default for UiSettings {
             zoom: 1.0,
             notifications: true,
             restore_tabs: true,
+            theme: "ATC Dark".into(),
         }
     }
 }

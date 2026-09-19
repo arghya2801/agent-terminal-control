@@ -16,7 +16,9 @@ import {
   type Collapsed,
 } from './expansion';
 import { normalizeZoom, stepZoom } from './zoom';
-import { applyTerminalSettings, refit } from '../terminal/manager';
+import { applyTerminalSettings, applyTheme, refit } from '../terminal/manager';
+import { applyPalette, type Palette } from './theme';
+import { findTheme, loadThemes } from './themes';
 import type { IndexSnapshot, Settings } from '../types';
 
 const EVENT_INDEX_UPDATED = 'index://updated';
@@ -41,6 +43,20 @@ export const appState = $state({
  *  cheap to redo, and stale expansion after the list shifts is more annoying than
  *  useful. */
 const collapsed = $state<Collapsed>({});
+
+/** Installed themes, for the settings page's list. Loaded once, on startup. */
+export const themeState = $state({ themes: [] as Palette[] });
+
+/**
+ * Put the named theme on the document and into every terminal. Falls back to the default
+ * when the name is unknown, so deleting a theme file leaves a working app rather than an
+ * unstyled one.
+ */
+function applyThemeByName(name: string) {
+  const palette = findTheme(themeState.themes, name);
+  applyPalette(palette, document.documentElement);
+  applyTheme(palette);
+}
 
 export function isExpanded(key: string): boolean {
   return isExpandedIn(collapsed, key);
@@ -68,6 +84,7 @@ function applySnapshot(snap: IndexSnapshot) {
 /** Push settings into the parts of the app that are not reactive. */
 function applySettings(s: Settings) {
   applyTerminalSettings(s.terminal);
+  applyThemeByName(s.ui.theme);
   void applyZoom(s.ui.zoom);
 }
 
@@ -86,6 +103,8 @@ async function applyZoom(value: number) {
 
 export async function initStores() {
   try {
+    // Before settings are applied: the theme named there has to be findable.
+    themeState.themes = await loadThemes();
     appState.settings = await settingsGet();
     applySettings(appState.settings);
     applySnapshot(await indexSnapshot());
@@ -121,7 +140,11 @@ export async function saveSettings(next: Settings) {
   const prev = appState.settings;
   appState.settings = next;
   // Our own writes never come back as settings://updated, so apply them here.
-  if (prev?.ui.zoom !== next.ui.zoom || JSON.stringify(prev?.terminal) !== JSON.stringify(next.terminal)) {
+  if (
+    prev?.ui.zoom !== next.ui.zoom ||
+    prev?.ui.theme !== next.ui.theme ||
+    JSON.stringify(prev?.terminal) !== JSON.stringify(next.terminal)
+  ) {
     applySettings(next);
   }
   try {

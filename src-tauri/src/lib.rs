@@ -49,6 +49,7 @@ pub fn run() {
             commands::open_devtools,
             commands::usage_costs,
             commands::claude_usage,
+            commands::list_themes,
         ])
         .setup(|app| {
             start_watcher(app.handle());

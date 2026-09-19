@@ -89,19 +89,19 @@
     width: 200px;
     border: none;
     background: transparent;
-    color: #e6edf3;
+    color: var(--fg-bright);
     font: inherit;
     font-size: 12px;
     outline: none;
   }
   .count {
     min-width: 48px;
-    color: #6e7681;
+    color: var(--fg-faint);
     font-size: 11px;
     text-align: right;
   }
   .count.none {
-    color: #e5534b;
+    color: var(--danger-strong);
   }
   button {
     width: 22px;
@@ -109,13 +109,13 @@
     border: none;
     border-radius: 4px;
     background: transparent;
-    color: #8b949e;
+    color: var(--fg-dim);
     font-size: 12px;
     line-height: 1;
     cursor: pointer;
   }
   button:hover {
-    background: #30363d;
-    color: #e6edf3;
+    background: var(--border);
+    color: var(--fg-bright);
   }
 </style>

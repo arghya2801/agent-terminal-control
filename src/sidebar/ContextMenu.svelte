@@ -81,7 +81,7 @@
     padding: 4px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: #161b22;
+    background: var(--bg-chrome);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
   }
   .item {
@@ -91,18 +91,18 @@
     border: none;
     border-radius: 5px;
     background: transparent;
-    color: #c9d1d9;
+    color: var(--fg);
     font: inherit;
     font-size: 12px;
     text-align: left;
     cursor: pointer;
   }
   .item:hover:not(.disabled) {
-    background: #1f6feb33;
-    color: #e6edf3;
+    background: color-mix(in srgb, var(--accent-strong) 20%, transparent);
+    color: var(--fg-bright);
   }
   .item.disabled {
-    color: #545d68;
+    color: var(--fg-faint);
     cursor: default;
   }
 </style>

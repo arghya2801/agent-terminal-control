@@ -45,11 +45,11 @@
     min-width: 0;
     flex: 1;
     padding: 1px 4px;
-    border: 1px solid #539bf5;
+    border: 1px solid var(--accent);
     border-radius: 4px;
     outline: none;
-    background: #0d1117;
-    color: #e6edf3;
+    background: var(--bg);
+    color: var(--fg-bright);
     font: inherit;
     font-size: 12px;
   }

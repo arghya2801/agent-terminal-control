@@ -593,17 +593,17 @@
     border: none;
     border-radius: 6px;
     background: transparent;
-    color: #6e7681;
+    color: var(--fg-faint);
     font-size: 14px;
     line-height: 1;
     cursor: pointer;
   }
   .rail-btn:hover {
-    background: #1c2027;
-    color: #c9d1d9;
+    background: var(--bg-hover);
+    color: var(--fg);
   }
   .rail-btn.on {
-    color: #539bf5;
+    color: var(--accent);
   }
   .rail-btn.small {
     font-size: 12px;
@@ -611,7 +611,7 @@
   .rail-btn.zoom {
     width: auto;
     padding: 0 4px;
-    color: #539bf5;
+    color: var(--accent);
     font-size: 10px;
   }
   .spacer {
@@ -632,7 +632,7 @@
   }
   .resize:hover,
   .resize.dragging {
-    background: #539bf566;
+    background: color-mix(in srgb, var(--accent) 40%, transparent);
   }
   .main {
     position: relative;
@@ -657,10 +657,10 @@
     align-items: center;
     gap: 10px;
     padding: 8px 12px;
-    border: 1px solid #e5534b;
+    border: 1px solid var(--danger-strong);
     border-radius: 8px;
     background: rgba(35, 15, 15, 0.95);
-    color: #f47067;
+    color: var(--danger);
     font-size: 12px;
   }
   .error button {

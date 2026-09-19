@@ -74,11 +74,11 @@
     background: rgba(13, 17, 23, 0.92);
     font-family: ui-monospace, Consolas, monospace;
     font-size: 11px;
-    color: #8b949e;
+    color: var(--fg-dim);
     pointer-events: none;
   }
-  .title { margin-bottom: 6px; color: #539bf5; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .title { margin-bottom: 6px; color: var(--accent); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
   .row { display: flex; justify-content: space-between; gap: 16px; line-height: 1.6; }
-  .row b { color: #c9d1d9; font-weight: 500; }
-  .row.warn b { color: #daaa3f; }
+  .row b { color: var(--fg); font-weight: 500; }
+  .row.warn b { color: var(--warn); }
 </style>

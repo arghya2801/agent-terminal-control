@@ -11,7 +11,7 @@
  *   silently kills the oldest beyond that.
  */
 
-import { Terminal } from '@xterm/xterm';
+import { Terminal, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
@@ -21,6 +21,7 @@ import '@xterm/xterm/css/xterm.css';
 import { Channel, ptyAck, ptyKill, ptyResize, ptySpawn, ptyWrite } from '../lib/ipc';
 import { isNativePaste, matchChord, type Action } from '../lib/keymap';
 import { decodeOsc52 } from '../lib/osc52';
+import type { Palette } from '../lib/theme';
 import { claudeTitle, usableTitle, type Activity } from '../lib/format';
 import { cycleIndex } from './cycle';
 import type { Dims, PtyEvent, SpawnOpts, TabKey, TerminalSettings } from '../types';
@@ -35,7 +36,9 @@ import {
   defaultFontFamily,
   defaultFontSize,
   defaultScrollback,
+  defaultPalette,
   defaultTheme,
+  xtermTheme,
   searchDecorations,
 } from './theme';
 
@@ -84,6 +87,9 @@ let termOptions = {
   fontSize: defaultFontSize,
   scrollback: defaultScrollback,
 };
+/** Latest palette, so a tab opened after a theme change is born with the right colours. */
+let termTheme: ITheme = defaultTheme;
+let termPalette: Palette = defaultPalette;
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -172,7 +178,7 @@ export async function openTab(
   const term = new Terminal({
     fontFamily: termOptions.fontFamily,
     fontSize: termOptions.fontSize,
-    theme: defaultTheme,
+    theme: termTheme,
     scrollback: termOptions.scrollback,
     cursorBlink: true,
     cursorStyle: 'bar',
@@ -341,6 +347,16 @@ export function applyTerminalSettings(s: TerminalSettings) {
   refit();
 }
 
+/**
+ * Recolour every open tab. Only colours change, so unlike a font change this needs no
+ * refit: the cell size is the same.
+ */
+export function applyTheme(p: Palette) {
+  termPalette = p;
+  termTheme = xtermTheme(p);
+  for (const t of tabs.values()) t.term.options.theme = termTheme;
+}
+
 // --- find ------------------------------------------------------------------
 
 export interface FindResult {
@@ -377,7 +393,7 @@ export function findInActiveTab(query: string, direction: 1 | -1 = 1): void {
     for (const l of findListeners) l({ index: -1, count: 0 });
     return;
   }
-  const opts = { decorations: searchDecorations };
+  const opts = { decorations: searchDecorations(termPalette) };
   if (direction === 1) tab.search.findNext(query, opts);
   else tab.search.findPrevious(query, opts);
 }

@@ -84,6 +84,8 @@ export interface Settings {
     zoom: number;
     notifications: boolean;
     restoreTabs: boolean;
+    /** Theme name, matched case-insensitively against the installed themes. */
+    theme: string;
   };
   terminal: TerminalSettings;
   claude: { command: string; resumeArgs: string[]; scratchDir: string | null };
