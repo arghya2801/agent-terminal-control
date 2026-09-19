@@ -5,6 +5,7 @@
 
 <script lang="ts">
   import { relativeTime } from '../lib/format';
+  import { subfolderLabel } from '../lib/group';
   import InlineRename from '../lib/InlineRename.svelte';
   import type { SessionMeta } from '../types';
 
@@ -35,6 +36,10 @@
   // would be a path reconstructed from the lossy directory name.
   const launchable = $derived(projectPath !== null);
   const age = $derived(relativeTime(session.mtimeMs));
+  // Only ever non-empty while subfolder grouping is on: without it a session's directory
+  // is its project's. Two sessions adopted from different subfolders can share a name, so
+  // the row has to say which one it is.
+  const subfolder = $derived(subfolderLabel(projectPath, session.cwd));
 </script>
 
 {#if renaming}
@@ -66,6 +71,7 @@
   {/if}
   <span class="label">{session.label}</span>
   <span class="meta">
+    {#if subfolder}<span class="sub" title="Started in {subfolder}">{subfolder}</span>{/if}
     {#if session.gitBranch}
       <span class="branch" class:default={session.gitBranch === 'main'}>
         {session.gitBranch}
@@ -93,6 +99,13 @@
     font-size: 12px;
     text-align: left;
     cursor: pointer;
+  }
+  .sub {
+    padding: 0 4px;
+    border-radius: 4px;
+    background: var(--bg-surface);
+    color: var(--fg-faint);
+    font-size: 11px;
   }
   .session:hover:not(.disabled) {
     background: var(--bg-hover);

@@ -5,6 +5,16 @@
   import { claudeUsage, usageCosts, writeTextFile } from '../lib/ipc';
   import { appState } from '../lib/stores.svelte';
   import { formatTokens, formatUsd, localDay, owningProject, summarize, toCsv } from '../lib/costs';
+  import {
+    clampDays,
+    isActive,
+    MAX_DAYS,
+    MIN_DAYS,
+    parseSaved,
+    presetDates,
+    type Dates,
+    type Selection,
+  } from '../lib/range';
   import { planLimits, weeklyBreakdown } from '../lib/plan';
   import { relativeTime } from '../lib/format';
   import type { CostRow } from '../types';
@@ -24,11 +34,38 @@
   const limits = $derived(plan ? planLimits(plan) : []);
   const breakdown = $derived(plan ? weeklyBreakdown(plan) : []);
 
+  // How many limit rows to reserve space for before the response lands. How many an
+  // account has varies (session, week, and per-model weeks), so remember the last count
+  // rather than guess it every time; the default only matters on the very first load.
+  const ROWS_KEY = 'atc.usage.limitRows';
+  let skeletonRows = $state(readRows());
+
+  function readRows(): number {
+    try {
+      const n = Number(localStorage.getItem(ROWS_KEY));
+      if (Number.isInteger(n) && n > 0 && n <= 6) return n;
+    } catch {
+      // Storage unavailable: fall through to the default.
+    }
+    return 3;
+  }
+
+  function rememberRows(n: number) {
+    if (n <= 0 || n === skeletonRows) return;
+    skeletonRows = n;
+    try {
+      localStorage.setItem(ROWS_KEY, String(n));
+    } catch {
+      // Storage unavailable: next launch reserves the default instead.
+    }
+  }
+
   async function loadPlan() {
     if (planLoading) return;
     planLoading = true;
     try {
       plan = await claudeUsage();
+      rememberRows(limits.length);
       planUpdatedAt = Date.now();
       now = planUpdatedAt;
       planError = null;
@@ -59,8 +96,9 @@
   let costError = $state<string | null>(null);
   let costLoading = $state(false);
   const today = localDay(new Date());
-  let from = $state(localDay(new Date(Date.now() - 29 * 86_400_000)));
-  let to = $state(today);
+  const initial = presetDates(30);
+  let from = $state(initial.from);
+  let to = $state(initial.to);
 
   async function loadCosts() {
     costLoading = true;
@@ -74,41 +112,61 @@
     }
   }
 
-  // The chosen range is remembered per machine. A preset is stored as itself, so "7 days"
-  // still means the last 7 days tomorrow.
+  // The chosen range is remembered per machine, along with the last range picked by hand
+  // so switching to a preset and back does not lose it.
   const RANGE_KEY = 'atc.usage.range';
-  type SavedRange = { preset: number | null } | { from: string; to: string };
 
-  function remember(r: SavedRange) {
+  let selection = $state<Selection>({ kind: 'preset', days: 30 });
+  let custom = $state<Dates | null>(null);
+  /** What the "last N days" box holds; applied on Enter or on leaving the box. */
+  let spanDays = $state(30);
+
+  function saveRange() {
     try {
-      localStorage.setItem(RANGE_KEY, JSON.stringify(r));
+      localStorage.setItem(RANGE_KEY, JSON.stringify({ selection, custom }));
     } catch {
       // Storage unavailable: the range just is not remembered.
     }
   }
 
-  function applyPreset(days: number | null) {
-    to = today;
-    from = days === null ? '2000-01-01' : localDay(new Date(Date.now() - (days - 1) * 86_400_000));
+  function preset(days: number | null) {
+    selection = { kind: 'preset', days };
+    ({ from, to } = presetDates(days));
+    if (days !== null) spanDays = days;
+    saveRange();
   }
 
-  function preset(days: number | null) {
-    applyPreset(days);
-    remember({ preset: days });
+  /** The date inputs. Editing either is what makes a range "custom". */
+  function pickedByHand() {
+    selection = { kind: 'custom' };
+    custom = { from, to };
+    saveRange();
+  }
+
+  function useCustom() {
+    if (!custom) return;
+    selection = { kind: 'custom' };
+    ({ from, to } = custom);
+    saveRange();
+  }
+
+  function applySpan(raw: number) {
+    const days = clampDays(raw);
+    spanDays = days;
+    preset(days);
   }
 
   function restoreRange() {
+    let saved = null;
     try {
-      const r = JSON.parse(localStorage.getItem(RANGE_KEY) ?? 'null') as SavedRange | null;
-      if (!r) return;
-      if ('preset' in r) applyPreset(r.preset);
-      else if (r.from && r.to) {
-        from = r.from;
-        to = r.to;
-      }
+      saved = parseSaved(localStorage.getItem(RANGE_KEY));
     } catch {
-      // Missing or unreadable: keep the default range.
+      // Storage unavailable: keep the default range.
     }
+    if (!saved) return;
+    custom = saved.custom;
+    if (saved.selection.kind === 'custom') useCustom();
+    else preset(saved.selection.days);
   }
 
   function projectOf(key: string, path: string | null): { key: string; name: string } {
@@ -186,7 +244,20 @@
   {#if planError && !plan}
     <p class="err">{planError}</p>
   {:else if !plan}
-    <p class="muted">loading…</p>
+    <!-- Same markup as the real rows, so the space reserved is the space they take and
+         nothing below moves when they arrive. -->
+    <div class="limits" aria-busy="true" aria-label="Loading plan limits">
+      {#each { length: skeletonRows } as _, i (i)}
+        <div class="limit">
+          <div class="limit-head">
+            <span class="ghost" style="width: 11ch"></span>
+            <span class="ghost" style="width: 7ch"></span>
+          </div>
+          <div class="meter"></div>
+          <div class="muted"><span class="ghost" style="width: 18ch"></span></div>
+        </div>
+      {/each}
+    </div>
   {:else if limits.length === 0}
     <p class="muted">No limits reported for this account.</p>
   {:else}
@@ -231,12 +302,36 @@
   </p>
 
   <div class="range">
-    <label>From <input type="date" bind:value={from} max={today} onchange={() => remember({ from, to })} /></label>
-    <label>To <input type="date" bind:value={to} max={today} onchange={() => remember({ from, to })} /></label>
-    <button class="btn" onclick={() => preset(1)}>Today</button>
-    <button class="btn" onclick={() => preset(7)}>7 days</button>
-    <button class="btn" onclick={() => preset(30)}>30 days</button>
-    <button class="btn" onclick={() => preset(null)}>All time</button>
+    <label>From <input type="date" bind:value={from} max={today} onchange={pickedByHand} /></label>
+    <label>To <input type="date" bind:value={to} max={today} onchange={pickedByHand} /></label>
+    <button class="btn" class:on={isActive(selection, 1)} onclick={() => preset(1)}>Today</button>
+    <button class="btn" class:on={isActive(selection, 7)} onclick={() => preset(7)}>7 days</button>
+    <button class="btn" class:on={isActive(selection, 30)} onclick={() => preset(30)}>30 days</button>
+    <button class="btn" class:on={isActive(selection, null)} onclick={() => preset(null)}>
+      All time
+    </button>
+    <label>
+      Last
+      <input
+        class="span"
+        type="number"
+        min={MIN_DAYS}
+        max={MAX_DAYS}
+        bind:value={spanDays}
+        onchange={() => applySpan(spanDays)}
+        aria-label="Last N days"
+      />
+      days
+    </label>
+    <button
+      class="btn"
+      class:on={selection.kind === 'custom'}
+      onclick={useCustom}
+      disabled={!custom}
+      title={custom ? `${custom.from} to ${custom.to}` : 'Pick a From and To date first'}
+    >
+      Custom
+    </button>
     <button class="btn" onclick={loadCosts} disabled={costLoading}>
       {costLoading ? 'Scanning…' : 'Rescan'}
     </button>
@@ -355,6 +450,25 @@
     gap: 14px;
     margin-bottom: 12px;
   }
+  /* Placeholder for a line of text that has not arrived, sized to the line it replaces. */
+  .ghost {
+    display: inline-block;
+    height: 1em;
+    vertical-align: -0.15em;
+    border-radius: 3px;
+    background: var(--bg-surface);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.45;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ghost {
+      animation: none;
+    }
+  }
   .limit-head {
     display: flex;
     justify-content: space-between;
@@ -388,6 +502,13 @@
     display: flex;
     align-items: center;
     gap: 10px;
+  }
+  .range .span {
+    width: 4.5em;
+  }
+  .range :global(button.btn.on) {
+    border-color: var(--accent);
+    color: var(--fg-bright);
   }
   .range {
     display: flex;

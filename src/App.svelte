@@ -6,6 +6,7 @@
   import FindBar from './terminal/FindBar.svelte';
   import SettingsPanel from './settings/SettingsPanel.svelte';
   import UsagePanel from './usage/UsagePanel.svelte';
+  import ShortcutsPanel from './settings/ShortcutsPanel.svelte';
   import ConfirmDialog from './lib/ConfirmDialog.svelte';
   import {
     isPermissionGranted,
@@ -44,6 +45,7 @@
   import { matchChord, type Action } from './lib/keymap';
   import { parseSavedTabs, type SavedTab } from './lib/restore';
   import { openDevtools, scratchDir } from './lib/ipc';
+  import { projectKey } from './lib/paths';
   import { zoomLabel } from './lib/zoom';
   import type { Project, SessionMeta, TabKey } from './types';
   import type { SessionMark } from './sidebar/SessionNode.svelte';
@@ -53,7 +55,13 @@
   let activeKey = $state<TabKey | null>(null);
   let openProjectKeys = $state<Set<string>>(new Set());
   let tabSessions = $state<
-    { key: TabKey; projectKey: string | null; activity: SessionMark; claudeName: string | null }[]
+    {
+      key: TabKey;
+      projectKey: string | null;
+      activity: SessionMark;
+      claudeName: string | null;
+      exited: boolean;
+    }[]
   >([]);
 
   /**
@@ -64,10 +72,22 @@
   const sessionMarks = $derived.by(() => {
     const marks = new Map<string, SessionMark>();
     for (const t of tabSessions) {
+      if (t.exited) continue;
       const id = sessionIdOf(t);
       if (id) marks.set(id, t.activity);
     }
     return marks;
+  });
+
+  /**
+   * The sidebar row to highlight. Resolved through `sessionIdOf` rather than compared
+   * against the tab key: a tab started with "Open Claude here" or the scratch pad is
+   * keyed `claude:n` and only knows its session by name, so keying off the tab alone
+   * left the row you were looking at unhighlighted.
+   */
+  const activeSessionId = $derived.by(() => {
+    const tab = tabSessions.find((t) => t.key === activeKey);
+    return tab ? sessionIdOf(tab) : null;
   });
 
   function sessionIdOf(t: { key: TabKey; projectKey: string | null; claudeName: string | null }) {
@@ -142,12 +162,13 @@
   }
   let showDebug = $state(false);
   let showFind = $state(false);
-  let page = $state<'settings' | 'usage' | null>(null);
+  type PageName = 'settings' | 'usage' | 'shortcuts';
+  let page = $state<PageName | null>(null);
   let renamingTab = $state<TabKey | null>(null);
   /** A busy tab waiting on the close confirmation. */
   let closing = $state<{ key: TabKey; title: string; what: string } | null>(null);
 
-  function togglePage(p: 'settings' | 'usage') {
+  function togglePage(p: PageName) {
     page = page === p ? null : p;
   }
   let error = $state<string | null>(null);
@@ -204,14 +225,13 @@
     activeKey = nextActive;
     openProjectKeys = new Set(all.flatMap((t) => (t.projectKey ? [t.projectKey] : [])));
     saveTabs(all);
-    tabSessions = all
-      .filter((t) => !t.exited)
-      .map((t) => ({
-        key: t.key,
-        projectKey: t.projectKey,
-        activity: t.attention ? 'attention' : (t.activity ?? 'open'),
-        claudeName: t.claudeName,
-      }));
+    tabSessions = all.map((t) => ({
+      key: t.key,
+      projectKey: t.projectKey,
+      activity: t.attention ? 'attention' : (t.activity ?? 'open'),
+      claudeName: t.claudeName,
+      exited: t.exited,
+    }));
   }
 
   async function guard(fn: () => Promise<unknown>) {
@@ -259,7 +279,10 @@
     const command = appState.settings?.claude.command || 'claude';
     return guard(async () => {
       const cwd = await scratchDir();
-      await openTab(`claude:${n}`, 'Ask Claude', { cwd, initialCommand: command });
+      // The scratch directory is a real project to Claude, so name it here too. Without a
+      // project key its session cannot be matched to a sidebar row at all: no activity
+      // dot, no highlight.
+      await openTab(`claude:${n}`, 'Ask Claude', { cwd, initialCommand: command }, projectKey(cwd));
     });
   }
 
@@ -394,6 +417,9 @@
       case 'openUsage':
         togglePage('usage');
         break;
+      case 'showShortcuts':
+        togglePage('shortcuts');
+        break;
       case 'focusSearch':
         void focusSearch();
         break;
@@ -498,6 +524,15 @@
     {/if}
     <button
       class="rail-btn small"
+      class:on={page === 'shortcuts'}
+      onclick={() => togglePage('shortcuts')}
+      title="Keyboard shortcuts (Ctrl+Shift+?)"
+      aria-label="Keyboard shortcuts"
+    >
+      ?
+    </button>
+    <button
+      class="rail-btn small"
       class:on={page === 'settings'}
       onclick={() => togglePage('settings')}
       title="Settings (Ctrl+,)"
@@ -530,6 +565,7 @@
       ></div>
       <Sidebar
         {activeKey}
+        {activeSessionId}
         {openProjectKeys}
         {sessionMarks}
         onOpenProject={openProject}
@@ -547,6 +583,8 @@
       <SettingsPanel onClose={() => (page = null)} />
     {:else if page === 'usage'}
       <UsagePanel onClose={() => (page = null)} />
+    {:else if page === 'shortcuts'}
+      <ShortcutsPanel onClose={() => (page = null)} />
     {/if}
     {#if showFind}
       <FindBar onClose={() => (showFind = false)} />

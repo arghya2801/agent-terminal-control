@@ -111,6 +111,11 @@
         <input id="rt" type="checkbox" bind:checked={draft.ui.restoreTabs} />
         <span class="muted">Reopen the tabs from last time on launch; Claude sessions resume</span>
       </label>
+      <label for="gs">Group subfolders</label>
+      <label class="check">
+        <input id="gs" type="checkbox" bind:checked={draft.ui.groupSubfolders} />
+        <span class="muted">Show sessions started in a subfolder under the project containing it; they still resume in their own directory</span>
+      </label>
       <label for="nt">Notifications</label>
       <label class="check">
         <input id="nt" type="checkbox" bind:checked={draft.ui.notifications} />

@@ -86,6 +86,8 @@ export interface Settings {
     restoreTabs: boolean;
     /** Theme name, matched case-insensitively against the installed themes. */
     theme: string;
+    /** Sessions from a subfolder appear under the project containing it. */
+    groupSubfolders: boolean;
   };
   terminal: TerminalSettings;
   claude: { command: string; resumeArgs: string[]; scratchDir: string | null };

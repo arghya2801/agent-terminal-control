@@ -123,10 +123,26 @@ fn file_stem_lower(p: &Path) -> String {
         .unwrap_or_default()
 }
 
+/// Set to `1` to add `-NoProfile`. For tests: loading the user's real profile (a prompt
+/// like oh-my-posh) costs a large fraction of a second per shell, and the PTY pipeline
+/// does not care what the profile does. Not a setting, so a user's shell is never
+/// silently stripped of their profile.
+pub const NO_PROFILE_ENV: &str = "ATC_SHELL_NO_PROFILE";
+
+fn no_profile() -> bool {
+    std::env::var(NO_PROFILE_ENV).is_ok_and(|v| v == "1")
+}
+
 fn default_args(p: &Path) -> Vec<String> {
     match file_stem_lower(p).as_str() {
         // Skip the startup banner; it is noise above every prompt.
-        "pwsh" | "powershell" => vec!["-NoLogo".into()],
+        "pwsh" | "powershell" => {
+            let mut args = vec!["-NoLogo".to_string()];
+            if no_profile() {
+                args.push("-NoProfile".into());
+            }
+            args
+        }
         _ => Vec::new(),
     }
 }
@@ -144,6 +160,10 @@ fn friendly_label(p: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    /// Serialises the tests that change the process environment.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn resolves_a_default_shell_to_an_absolute_existing_path() {
@@ -173,7 +193,37 @@ mod tests {
                 stem == "pwsh" || stem == "powershell",
                 "expected a PowerShell, got {stem}"
             );
-            assert_eq!(shell.args, vec!["-NoLogo".to_string()]);
+            // The env var is process-wide and other tests in this binary may have set
+            // it, so assert on the banner flag rather than the whole list.
+            assert!(
+                shell.args.contains(&"-NoLogo".to_string()),
+                "{:?}",
+                shell.args
+            );
+        }
+    }
+
+    #[test]
+    fn the_no_profile_env_var_adds_the_flag_only_when_set_to_one() {
+        // Guarded by a lock: these tests share one process, and PowerShell loading a
+        // profile is the slowest, most machine-specific part of spawning a shell.
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let before = std::env::var(NO_PROFILE_ENV).ok();
+
+        std::env::remove_var(NO_PROFILE_ENV);
+        assert!(!default_args(Path::new("pwsh.exe")).contains(&"-NoProfile".to_string()));
+
+        std::env::set_var(NO_PROFILE_ENV, "0");
+        assert!(!default_args(Path::new("pwsh.exe")).contains(&"-NoProfile".to_string()));
+
+        std::env::set_var(NO_PROFILE_ENV, "1");
+        assert!(default_args(Path::new("pwsh.exe")).contains(&"-NoProfile".to_string()));
+        // Only shells that understand the flag get it.
+        assert!(default_args(Path::new("cmd.exe")).is_empty());
+
+        match before {
+            Some(v) => std::env::set_var(NO_PROFILE_ENV, v),
+            None => std::env::remove_var(NO_PROFILE_ENV),
         }
     }
 
