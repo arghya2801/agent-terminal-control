@@ -7,6 +7,7 @@ const T0 = 1_000_000;
 function session(id: string, over: Partial<SessionMeta> = {}): SessionMeta {
   return {
     id,
+    provider: 'claude',
     file: `${id}.jsonl`,
     cwd: 'D:\\Coding\\app',
     gitBranch: null,

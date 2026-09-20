@@ -19,10 +19,12 @@ use super::session::{LabelSource, SessionMeta};
 /// 2: `ai-title` below the first user turn is no longer skipped (labels were falling
 ///    back to the uuid for real transcripts).
 /// 3: the session's `agent-name` is preferred, read from the end of the file.
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Entry {
+    id: String,
+    provider: crate::agent::AgentProvider,
     mtime_ms: u64,
     size: u64,
     cwd: Option<PathBuf>,
@@ -100,12 +102,12 @@ impl SessionCache {
 
         let key = cache_key(path);
         if let Some(hit) = self.entries.get_mut(&key) {
-            if entry_still_valid(hit, size) {
+            if entry_still_valid(hit, size) && (size != hit.size || hit.mtime_ms == mtime_ms) {
                 self.hits += 1;
                 // The head is unchanged, but Claude renames the session as it goes and
                 // writes the new name near the end, so a grown file re-reads its tail.
                 // A tail with no name keeps the label rather than downgrading it.
-                if size != hit.size {
+                if size != hit.size && hit.provider == crate::agent::AgentProvider::Claude {
                     if let Some(name) = super::session::current_agent_label(path) {
                         hit.label = name;
                         hit.label_source = LabelSource::AgentName;
@@ -118,7 +120,8 @@ impl SessionCache {
                     self.dirty = true;
                 }
                 return Some(SessionMeta {
-                    id: path.file_stem()?.to_string_lossy().into_owned(),
+                    id: hit.id.clone(),
+                    provider: hit.provider,
                     file: path.to_path_buf(),
                     cwd: hit.cwd.clone(),
                     git_branch: hit.git_branch.clone(),
@@ -134,6 +137,8 @@ impl SessionCache {
         self.entries.insert(
             key,
             Entry {
+                id: parsed.id.clone(),
+                provider: parsed.provider,
                 mtime_ms: parsed.mtime_ms,
                 size: parsed.size,
                 cwd: parsed.cwd.clone(),
@@ -186,6 +191,7 @@ mod tests {
     fn meta_for(path: &Path, label: &str, src: LabelSource) -> Option<SessionMeta> {
         let m = std::fs::metadata(path).ok()?;
         Some(SessionMeta {
+            provider: crate::agent::AgentProvider::Claude,
             id: path.file_stem()?.to_string_lossy().into_owned(),
             file: path.to_path_buf(),
             cwd: Some(PathBuf::from(r"D:\Coding\p")),

@@ -111,6 +111,10 @@ fn hash_snapshot(snap: &IndexSnapshot) -> u64 {
         p.sessions.len().hash(&mut h);
         for s in &p.sessions {
             s.id.hash(&mut h);
+            s.provider.hash(&mut h);
+            s.mtime_ms.hash(&mut h);
+            s.cwd.hash(&mut h);
+            std::mem::discriminant(&s.label_source).hash(&mut h);
             s.label.hash(&mut h);
             s.git_branch.hash(&mut h);
         }

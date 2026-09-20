@@ -91,7 +91,7 @@
     const tabs = all.map((t): SavedTab => {
       const common = { projectKey: t.projectKey, customTitle: t.customTitle };
       const sessionId = sessionIdOf(t);
-      if (sessionId && t.cwd) return { kind: 'session', sessionId, cwd: t.cwd, ...common };
+      if (sessionId && t.cwd) return { kind: 'session', provider: 'claude', sessionId, cwd: t.cwd, ...common };
       return { kind: 'shell', cwd: t.cwd, project: t.key.startsWith('project:'), ...common };
     });
     try {
@@ -125,7 +125,7 @@
         await guard(() =>
           openTab(key, label ?? 'claude', { cwd: t.cwd, initialCommand: command }, t.projectKey),
         );
-      } else if (t.project && t.projectKey) {
+      } else if (t.kind === 'shell' && t.project && t.projectKey) {
         key = `project:${t.projectKey}`;
         const name = appState.index.projects.find((p) => p.key === t.projectKey)?.name ?? 'pwsh';
         await guard(() => openTab(key, name, { cwd: t.cwd }, t.projectKey));

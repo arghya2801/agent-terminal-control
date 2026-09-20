@@ -1,3 +1,5 @@
+export type AgentProvider = 'claude' | 'codex';
+
 /** Mirrors the Rust types in src-tauri/src/pty. Keep the two in sync by hand. */
 
 /** Output and lifecycle share one ordered stream — see PtyEvent in session.rs. */
@@ -30,7 +32,8 @@ export type TabKey =
   | `project:${string}`
   | `session:${string}`
   | `plain:${string}`
-  | `claude:${string}`;
+  | `claude:${string}`
+  | `agent:${AgentProvider}:${string}`;
 
 export interface Dims {
   cols: number;
@@ -40,6 +43,7 @@ export interface Dims {
 export type LabelSource = 'custom' | 'agentName' | 'aiTitle' | 'slug' | 'firstMessage' | 'uuid';
 
 export interface SessionMeta {
+  provider: AgentProvider;
   id: string;
   file: string;
   /** Authoritative cwd from the transcript. Null when the head budget found none. */

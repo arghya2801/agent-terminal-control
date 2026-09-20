@@ -4,7 +4,7 @@ import { parseSavedTabs, type SavedTabs } from './restore';
 const saved: SavedTabs = {
   tabs: [
     { kind: 'shell', cwd: null, projectKey: null, project: false, customTitle: null },
-    { kind: 'session', sessionId: 'abc', cwd: 'D:\p', projectKey: 'd:\p', customTitle: 'mine' },
+    { kind: 'session', provider: 'claude', sessionId: 'abc', cwd: 'D:\p', projectKey: 'd:\p', customTitle: 'mine' },
     { kind: 'shell', cwd: 'D:\p', projectKey: 'd:\p', project: true, customTitle: null },
   ],
   active: 1,

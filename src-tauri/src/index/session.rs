@@ -44,6 +44,7 @@ pub enum LabelSource {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionMeta {
+    pub provider: crate::agent::AgentProvider,
     /// Session uuid — the file stem, and what `claude --resume` takes.
     pub id: String,
     pub file: PathBuf,
@@ -97,6 +98,7 @@ pub fn read_session(path: &Path) -> Option<SessionMeta> {
     let (label, label_source) = pick_label(&head, &id);
 
     Some(SessionMeta {
+        provider: crate::agent::AgentProvider::Claude,
         id,
         file: path.to_path_buf(),
         cwd: head.cwd,
