@@ -70,7 +70,7 @@ Build output lands in `src-tauri/target/release/`, with the installers under
 ## Capabilities
 
 **Sidebar**
-- Projects derived from `~/.claude/projects`, resolved to their real paths
+- Projects derived from Claude and Codex transcripts, resolved to their real paths
 - Sessions listed newest first, labelled by the name Claude gives the session, falling
   back to its title, the session slug, the first message, then the session id
 - Filter box: matches project name, path, session name and branch
@@ -80,7 +80,7 @@ Build output lands in `src-tauri/target/release/`, with the installers under
 - Pinned projects sort first
 - A dot on every session with an open tab: pulsing while Claude works, green when it is
   waiting for you, blue when it finished in a background tab
-- Right-click a project: open Claude or a terminal here, rename, open in Explorer, copy
+- Right-click a project: open Claude, Codex, or a shell, rename, open in Explorer, copy
   path, pin/unpin
 - Right-click a session: rename, copy session id, copy resume command, open in Explorer
 - Drag the sidebar's edge to resize it; double-click to reset
@@ -90,14 +90,14 @@ Build output lands in `src-tauri/target/release/`, with the installers under
 - Clicking a project or session reuses its existing tab rather than opening a second
 - Closing a tab with a running process asks first, naming what would be stopped
 - Windows notification when a background session finishes while ATC is not focused
-- Ask Claude outside any project, in a scratch directory
+- Ask either agent outside any project, in the shared scratch directory
 - Search across scrollback with match counts
 - Whole-application zoom, persisted
 - Sessions with no recorded working directory are shown but not launchable
 
 **Usage**
-- Plan limits as `/usage` shows them, refreshed while the page is open
-- Spend at API list prices per day, project, model and session, with CSV export
+- Independent Claude and Codex plan limits, refreshed while the page is open
+- Local tokens by provider, project, model and session, with CSV export. Claude API-price estimates; Codex cost unavailable.
 
 **Configuration**
 - Settings page in the app, and `settings.json` applied live; edits take effect without

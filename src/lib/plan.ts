@@ -83,9 +83,10 @@ export function codexLimits(plan: Record<string, unknown>): PlanLimit[] {
     return ['primary', 'secondary'].flatMap(kind => {
       const w = bucket[kind];
       if (!isObj(w) || typeof w.usedPercent !== 'number' || !Number.isFinite(w.usedPercent)) return [];
-      const duration = typeof w.windowDurationMins === 'number' ? `${w.windowDurationMins} minutes` : 'duration unavailable';
+      const duration = typeof w.windowDurationMins === 'number' && Number.isFinite(w.windowDurationMins) && w.windowDurationMins > 0 ? `${w.windowDurationMins} minutes` : 'duration unavailable';
+      const reset = typeof w.resetsAt === 'number' ? new Date(w.resetsAt * 1000) : null;
       return [{ key: `${id}:${kind}`, label: `${typeof bucket.limitName === 'string' ? bucket.limitName : id} · ${duration}`,
-        percent: clampPct(w.usedPercent), resetsAt: typeof w.resetsAt === 'number' && Number.isFinite(w.resetsAt) ? new Date(w.resetsAt * 1000).toISOString() : null }];
+        percent: clampPct(w.usedPercent), resetsAt: reset && Number.isFinite(reset.getTime()) ? reset.toISOString() : null }];
     });
   });
 }

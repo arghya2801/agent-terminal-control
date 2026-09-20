@@ -59,4 +59,7 @@ it('uses Codex window durations and reset times, preferring the multi-bucket res
   } })).toEqual([{key:'codex:primary',label:'codex · 15 minutes',percent:25,resetsAt:'2024-11-07T02:40:00.000Z'}]);
   expect(codexLimits({rateLimits:null})).toEqual([]);
   expect(codexLimits({rateLimits:{primary:{usedPercent:4}}})[0].label).toContain('duration unavailable');
+  const malformed = codexLimits({rateLimits:{primary:{usedPercent:4, windowDurationMins:Infinity, resetsAt:1e30}}})[0];
+  expect(malformed.label).toContain('duration unavailable');
+  expect(malformed.resetsAt).toBeNull();
 });

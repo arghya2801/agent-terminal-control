@@ -209,7 +209,8 @@
       const s = p.sessions.find((x) => sessionKey(x) === id);
       if (s) return `${providerName(s.provider)} · ${s.label}`;
     }
-    return id.slice(0, 8);
+    const provider = id.startsWith('codex:') ? 'codex' : 'claude';
+    return `${providerName(provider)} · ${id.slice(id.indexOf(':') + 1, id.indexOf(':') + 9)}`;
   }
 
   let exportError = $state<string | null>(null);
@@ -377,7 +378,7 @@
     <p class="muted">Reading transcripts. The first scan can take a few seconds.</p>
   {:else}
     <div class="total">
-      <span class="big">{monetary({ cost: summary.total, partial: summary.partial, unavailable: summary.unavailable })}</span>
+      <span class="big">{monetary({ cost: summary.total, partial: summary.partial, unavailable: summary.unavailable || provider === 'codex' })}</span>
       <span class="muted">{formatTokens(summary.tokens)} tokens</span>
     </div>
 
@@ -414,7 +415,7 @@
         {#if groupBy === 'model'}
           {#each summary.byModel as m (m.key)}
             <tr>
-              <td>{m.key}</td>
+              <td>{m.key.startsWith('codex:') ? 'Codex' : 'Claude'} · {m.key.slice(m.key.indexOf(':') + 1)}</td>
               <td class="num">{formatTokens(m.tokens)}</td>
               <td class="num">{monetary(m)}</td>
               <td class="share">

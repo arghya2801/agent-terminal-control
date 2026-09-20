@@ -12,7 +12,7 @@
   let draft = $state<Settings | null>(
     appState.settings ? structuredClone($state.snapshot(appState.settings)) : null,
   );
-  let resumeArgs = $state(appState.settings?.claude.resumeArgs.join(' ') ?? '');
+  let resumeArgs = $state(appState.settings?.claude.resumeArgs.join('\n') ?? '');
   let saved = $state(false);
 
   const dirty = $derived(
@@ -23,7 +23,7 @@
   );
 
   function splitArgs(s: string): string[] {
-    return s.split(/\s+/).filter(Boolean);
+    return s.split('\n').filter((arg) => arg.trim().length > 0);
   }
 
   /**
@@ -77,7 +77,7 @@
     // Renames and the projects directory only show up after a rescan.
     await refresh();
     draft = structuredClone(next);
-    resumeArgs = next.claude.resumeArgs.join(' ');
+    resumeArgs = next.claude.resumeArgs.join('\n');
     saved = true;
     setTimeout(() => (saved = false), 1500);
   }
@@ -168,9 +168,9 @@
     <div class="grid">
       <label for="cc">Command</label>
       <input id="cc" bind:value={draft.claude.command} />
-      <label for="ra">Resume arguments</label>
+      <label for="ra">Resume arguments, one per line</label>
       <div>
-        <input id="ra" class="wide" bind:value={resumeArgs} />
+        <textarea id="ra" class="wide" bind:value={resumeArgs}></textarea>
         <div class="muted hint"><code>{'{session}'}</code> becomes the session id</div>
       </div>
       <label for="sd">Scratch directory</label>
