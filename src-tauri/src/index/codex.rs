@@ -8,7 +8,7 @@ use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 pub fn home(override_dir: Option<&str>) -> PathBuf {
-    override_dir
+    let path = override_dir
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
@@ -24,7 +24,12 @@ pub fn home(override_dir: Option<&str>) -> PathBuf {
                     .unwrap_or_default(),
             )
             .join(".codex")
-        })
+        });
+    if path.is_absolute() {
+        path
+    } else {
+        std::env::current_dir().unwrap_or_default().join(path)
+    }
 }
 
 pub fn files(root: &Path) -> Vec<PathBuf> {
@@ -145,7 +150,7 @@ impl Reader {
                 }
                 _ => None,
             };
-            if let Some(activity) = activity {
+            if let Some(activity) = activity.filter(|a| s.activity.as_deref() != Some(*a)) {
                 s.activity = Some(activity.into());
                 s.activity_sequence += 1;
             }

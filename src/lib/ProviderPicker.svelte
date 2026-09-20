@@ -4,16 +4,21 @@
   import ProviderIcon from './ProviderIcon.svelte';
   let { onPick, onCancel }: { onPick: (provider: AgentProvider) => void; onCancel: () => void } = $props();
   let dialog: HTMLDialogElement;
-  onMount(() => dialog.showModal());
+  onMount(() => {
+    dialog.showModal();
+    return () => dialog.close();
+  });
+  function cancel() { dialog.close(); onCancel(); }
+  function choose(provider: AgentProvider) { dialog.close(); onPick(provider); }
 </script>
 
-<dialog bind:this={dialog} oncancel={(e) => { e.preventDefault(); onCancel(); }} aria-labelledby="provider-title">
+<dialog bind:this={dialog} oncancel={(e) => { e.preventDefault(); cancel(); }} aria-labelledby="provider-title">
   <h2 id="provider-title">Choose an agent</h2>
   <div class="choices">
-    <button onclick={() => onPick('claude')}><ProviderIcon provider="claude" /> Claude</button>
-    <button onclick={() => onPick('codex')}><ProviderIcon provider="codex" /> Codex</button>
+    <button onclick={() => choose('claude')}><ProviderIcon provider="claude" /> Claude</button>
+    <button onclick={() => choose('codex')}><ProviderIcon provider="codex" /> Codex</button>
   </div>
-  <button class="cancel" onclick={onCancel}>Cancel</button>
+  <button class="cancel" onclick={cancel}>Cancel</button>
 </dialog>
 
 <style>

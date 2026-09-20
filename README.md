@@ -1,9 +1,9 @@
 # ATC — Agent Terminal Control
 
-A Windows terminal with a sidebar listing your Claude Code projects and sessions.
+A Windows terminal with one project tree for Claude Code and Codex sessions.
 Clicking a project opens a shell there; clicking a session resumes that conversation.
 
-ATC does not modify Claude Code or wrap it. It decides what gets launched and where.
+Both CLIs run in ATC's existing PowerShell and ConPTY terminals. Each CLI manages its own authentication, models, permissions, and configuration.
 
 ## Why
 
@@ -20,7 +20,7 @@ imitates a shell. Claude Code's TUI, PSReadLine, colours and Ctrl+C all behave n
 - Windows 10 later (ConPTY)
 - WebView2 runtime (preinstalled on Windows 11)
 - PowerShell 7 (`pwsh`), falling back to Windows PowerShell
-- Claude Code, for the session features
+- Claude Code or Codex CLI for the corresponding agent features. Either can be absent without disabling shells or the other provider.
 
 ## Install
 
@@ -121,9 +121,9 @@ untouched.
 | `Ctrl+=` / `Ctrl+-` | Zoom in / out |
 | `Ctrl+0` | Reset zoom |
 | `Ctrl+Shift+P` | Filter projects and sessions |
-| `Ctrl+Shift+L` | Open Claude in this tab's project |
+| `Ctrl+Shift+L` | Choose Claude or Codex in this tab's project |
 | `Ctrl+Shift+N` | Open a terminal in this tab's project |
-| `Ctrl+Shift+A` | Ask Claude, outside any project |
+| `Ctrl+Shift+A` | Choose an agent in the shared scratch directory |
 | `Ctrl+Shift+R` | Rename this tab |
 | `Ctrl+Shift+U` | Usage and spend |
 | `Ctrl+,` | Settings |
@@ -133,6 +133,32 @@ untouched.
 In the find bar: `Enter` next match, `Shift+Enter` previous, `Escape` close.
 
 ## Settings
+
+### Codex sessions and usage
+
+ATC discovers local Codex CLI, desktop, and editor conversations, including sessions started outside ATC. The sidebar mixes both providers by recency and shows a provider icon beside each session. Archived conversations and child agents are hidden from the sidebar. Sessions without a recorded working directory remain visible but cannot be resumed.
+
+Right-click a project for **Open in Claude** or **Open in Codex**. Generic agent shortcuts always ask which provider to use. Tab and Enter choose a provider; Escape cancels and returns focus to the terminal. The `+` button, `Ctrl+Shift+T`, and project shell buttons still open plain shells.
+
+Configure Codex in Settings or add this block to `settings.json`:
+
+```json
+"codex": {
+  "command": "codex",
+  "resumeArgs": ["resume", "{session}"],
+  "homeDir": null
+}
+```
+
+`command` is an executable name or path, not a shell expression. Arguments are separate values. ATC quotes PowerShell arguments, including paths containing spaces or apostrophes. The Codex home resolves from `codex.homeDir`, then `CODEX_HOME`, then `%USERPROFILE%\.codex`. Discovery, launches, copied resume commands, and limit requests use that same home.
+
+ATC names Codex sessions using your rename override, the latest name in `session_index.jsonl`, the first user message, then the native ID. Existing Claude names and saved tabs migrate automatically. Fresh agent tabs bind only when a new conversation can be identified unambiguously in the launch directory. Unbound tabs restore as fresh agent launches.
+
+The Usage page has independent Claude and Codex limit sections and an All/Claude/Codex filter. Codex limits come from the documented [`account/rateLimits/read` app-server API](https://developers.openai.com/codex/app-server). Window durations and reset times come from its response. ATC starts the subprocess on demand and stops it after each request or when the page closes. Refreshes run every 90 seconds while the page is open.
+
+Local token totals include linked child-agent usage. Cached input and reasoning are subsets, not extra tokens. Codex dollar costs are unavailable in this release. Mixed monetary estimates are marked partial; CSV leaves unavailable costs blank. Provider-qualified session and model identities prevent collisions between the two CLIs.
+
+This integration targets native Windows. It does not discover WSL or remote Codex histories or convert conversations between providers.
 
 `%APPDATA%\Agent Terminal Control\settings.json` — that is
 `C:\Users\<you>\AppData\Roaming\Agent Terminal Control\settings.json` — created on first
@@ -198,3 +224,8 @@ npm run play     # run against fixtures, leaving real data alone
 
 `scripts/` contains helpers for regenerating the icon and fixtures, capturing the window,
 and sending real keystrokes to the running app for testing shortcuts.
+
+
+### Isolated playground
+
+Run `npm run play` to copy synthetic Claude and Codex histories into `playground/config`. It creates sample project directories, points both discovery roots there, and sets `CODEX_HOME` and `CLAUDE_CONFIG_DIR` for launched CLIs. It does not load personal histories or copy credentials. New sessions and CLI state remain in this ignored directory. Fixtures cover current and older metadata, renames, desktop/editor sessions, missing cwd, child agents, and malformed or partial records.

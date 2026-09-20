@@ -273,7 +273,7 @@
   function finishPicker(provider?: AgentProvider) {
     const target = picker;
     picker = null;
-    if (!provider || !target) { focusActiveTerminal(); return; }
+    if (!provider || !target) { void tick().then(focusActiveTerminal); return; }
     if (target.project) { void newAgentIn(target.project, provider); return; }
     void guard(async () => {
       const cwd = await scratchDir();

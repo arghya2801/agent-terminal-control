@@ -47,12 +47,14 @@ impl Client {
             use std::os::windows::process::CommandExt;
             command.creation_flags(0x08000000);
         }
+        let mut slot = self.child.lock().expect("codex child");
         let mut child = command
             .spawn()
             .map_err(|e| format!("Codex `{exe}` app-server unavailable: {e}"))?;
         let stdout = child.stdout.take().ok_or("Codex stdout unavailable")?;
         let mut stdin = child.stdin.take().ok_or("Codex stdin unavailable")?;
-        *self.child.lock().expect("codex child") = Some(child);
+        *slot = Some(child);
+        drop(slot);
         let (tx, rx) = mpsc::sync_channel(64);
         let reader = std::thread::spawn(move || {
             for line in BufReader::new(stdout).lines().map_while(Result::ok) {
@@ -112,6 +114,22 @@ fn response(rx: &mpsc::Receiver<Value>, id: u64, timeout: Duration) -> Result<Va
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "requires ATC_TEST_CODEX pointing to the installed CLI"]
+    fn installed_codex_handles_an_isolated_signed_out_account_and_cleans_up() {
+        let home = tempfile::tempdir().unwrap();
+        let mut settings = crate::settings::Settings::default();
+        settings.codex.command = std::env::var("ATC_TEST_CODEX").expect("CLI path");
+        settings.codex.home_dir = Some(home.path().to_string_lossy().into_owned());
+        let client = Client::default();
+        let result = client.read(&settings);
+        assert!(client.child.lock().unwrap().is_none());
+        match result {
+            Ok(v) => assert!(v["rateLimits"].is_null(), "unexpected authenticated data"),
+            Err(e) => assert!(e.contains("Codex rate limits unavailable"), "{e}"),
+        }
+    }
     #[test]
     fn ignores_notifications_and_reports_errors_timeouts_and_empty_accounts() {
         let (tx, rx) = mpsc::channel();
