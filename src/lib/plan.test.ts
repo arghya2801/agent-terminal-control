@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { codexLimits, planLimits, weeklyBreakdown } from './plan';
+import { codexLimits, limitDuration, planLimits, weeklyBreakdown } from './plan';
 
 // Trimmed from a real response, codename fields included.
 const real = {
@@ -52,6 +52,17 @@ describe('weeklyBreakdown', () => {
   });
 });
 
+
+it('formats limit windows in days, hours, and minutes without assuming fixed windows', () => {
+  expect(limitDuration(10080)).toBe('7 days');
+  expect(limitDuration(10800)).toBe('7 days 12 hours');
+  expect(limitDuration(300)).toBe('5 hours');
+  expect(limitDuration(1501)).toBe('1 day 1 hour 1 minute');
+  expect(limitDuration(15)).toBe('15 minutes');
+  for (const value of [null, undefined, 0, -1, Infinity, NaN]) {
+    expect(limitDuration(value)).toBe('duration unavailable');
+  }
+});
 
 it('uses Codex window durations and reset times, preferring the multi-bucket response', () => {
   expect(codexLimits({ rateLimits: {primary: {usedPercent: 99}}, rateLimitsByLimitId: {

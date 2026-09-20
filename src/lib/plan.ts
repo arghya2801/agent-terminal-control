@@ -74,6 +74,17 @@ export function weeklyBreakdown(plan: Record<string, unknown>): { name: string; 
 }
 
 
+export function limitDuration(minutes: unknown): string {
+  if (typeof minutes !== 'number' || !Number.isFinite(minutes) || minutes <= 0) return 'duration unavailable';
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const remaining = minutes % 60;
+  return [[days, 'day'], [hours, 'hour'], [remaining, 'minute']]
+    .filter(([amount]) => Number(amount) > 0)
+    .map(([amount, unit]) => `${amount} ${unit}${amount === 1 ? '' : 's'}`)
+    .join(' ');
+}
+
 /** Codex reports its own window durations. Missing windows are unavailable. */
 export function codexLimits(plan: Record<string, unknown>): PlanLimit[] {
   const buckets = isObj(plan.rateLimitsByLimitId) && Object.keys(plan.rateLimitsByLimitId).length
@@ -83,7 +94,7 @@ export function codexLimits(plan: Record<string, unknown>): PlanLimit[] {
     return ['primary', 'secondary'].flatMap(kind => {
       const w = bucket[kind];
       if (!isObj(w) || typeof w.usedPercent !== 'number' || !Number.isFinite(w.usedPercent)) return [];
-      const duration = typeof w.windowDurationMins === 'number' && Number.isFinite(w.windowDurationMins) && w.windowDurationMins > 0 ? `${w.windowDurationMins} minutes` : 'duration unavailable';
+      const duration = limitDuration(w.windowDurationMins);
       const reset = typeof w.resetsAt === 'number' ? new Date(w.resetsAt * 1000) : null;
       return [{ key: `${id}:${kind}`, label: `${typeof bucket.limitName === 'string' ? bucket.limitName : id} · ${duration}`,
         percent: clampPct(w.usedPercent), resetsAt: reset && Number.isFinite(reset.getTime()) ? reset.toISOString() : null }];
