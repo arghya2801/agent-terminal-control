@@ -190,3 +190,15 @@ it('keeps Codex cost unavailable and combined estimates partial without merging 
   expect(csv).toContain('"10","120",""');
   expect(csv).not.toContain('0.000000');
 });
+
+it('includes priced Codex usage in project, model, session, daily totals and CSV', () => {
+  const codex = row({provider: 'codex', model: 'gpt-6-astra', costUsd: 4.05});
+  const result = summarize([codex, row({costUsd: 2})], '2026-09-01', '2026-09-30', name);
+  expect(result.total).toBe(6.05);
+  expect(result.partial).toBe(false);
+  expect(result.byProject[0].cost).toBe(6.05);
+  expect(result.byModel.find(m => m.key === 'codex:gpt-6-astra')?.cost).toBe(4.05);
+  expect(result.bySession.find(s => s.key === 'codex:s1')?.cost).toBe(4.05);
+  expect(result.byDay.reduce((n, d) => n + d.cost, 0)).toBe(6.05);
+  expect(toCsv([codex], '2026-09-01', '2026-09-30', name)).toContain('"4.050000"');
+});

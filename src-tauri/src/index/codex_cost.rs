@@ -6,6 +6,43 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+/// Standard, short-context USD/1M rates checked 2026-09-20:
+/// https://developers.openai.com/api/docs/pricing
+/// Older models: /api/docs/models/gpt-5.5, gpt-5.4, gpt-5.3-codex.
+/// Baseline API equivalents, not subscription charges. No tier, regional, or
+/// long-context adjustments: older cumulative records do not preserve these.
+fn estimate(row: &CostRow) -> Option<f64> {
+    let model = row.model.to_ascii_lowercase();
+    let rates = [
+        ("gpt-6-astra", (10.0, 1.0, Some(12.5), 50.0)),
+        ("gpt-5.6-sol", (4.0, 0.4, Some(5.0), 20.0)),
+        ("gpt-5.6-terra", (2.0, 0.2, Some(2.5), 12.0)),
+        ("gpt-5.6-luna", (0.2, 0.02, Some(0.25), 1.2)),
+        ("gpt-5.5", (5.0, 0.5, None, 30.0)),
+        ("gpt-5.4", (2.5, 0.25, None, 15.0)),
+        ("gpt-5.3-codex", (1.75, 0.175, None, 14.0)),
+    ];
+    let (_, (input, cached, write, output)) = rates.iter().find(|(name, _)| {
+        model == *name
+            || model
+                .strip_prefix(&format!("{name}-"))
+                .is_some_and(|suffix| chrono::NaiveDate::parse_from_str(suffix, "%Y-%m-%d").is_ok())
+    })?;
+    let write_cost = if row.cache_write == 0 {
+        0.0
+    } else {
+        row.cache_write as f64 * (*write)?
+    };
+    // Input/cache buckets are disjoint; reasoning is already included in output.
+    Some(
+        (row.input as f64 * input
+            + row.cache_read as f64 * cached
+            + write_cost
+            + row.output as f64 * output)
+            / 1_000_000.0,
+    )
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct Tokens {
     input: u64,
@@ -270,6 +307,10 @@ impl CodexCostIndex {
             row.total_tokens += usage.total;
         }
         let mut out: Vec<_> = rows.into_values().collect();
+        for row in &mut out {
+            row.cost_usd = estimate(row);
+            row.unpriced = row.cost_usd.is_none();
+        }
         out.sort_by(|a, b| {
             (&a.hour, &a.session_id, &a.model).cmp(&(&b.hour, &b.session_id, &b.model))
         });
@@ -282,6 +323,47 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::io::Write;
+    #[test]
+    fn estimates_cached_input_writes_and_output_without_double_counting_reasoning() {
+        let mut row = CostRow {
+            model: "gpt-6-astra".into(),
+            input: 100_000,
+            cache_read: 800_000,
+            cache_write: 100_000,
+            output: 20_000,
+            reasoning: 10_000,
+            ..Default::default()
+        };
+        assert!((estimate(&row).unwrap() - 4.05).abs() < 1e-10);
+        row.model = "gpt-6-astra-2026-09-01".into();
+        assert!((estimate(&row).unwrap() - 4.05).abs() < 1e-10);
+        for model in [
+            "codex-auto-review",
+            "gpt-6-astra-pro",
+            "gpt-5.4-mini",
+            "gpt-6-astra-invalid",
+        ] {
+            row.model = model.into();
+            assert_eq!(estimate(&row), None);
+        }
+    }
+
+    #[test]
+    fn prices_deduplicated_rows_and_preserves_unknown_models() {
+        let d = tempfile::tempdir().unwrap();
+        write(
+            &d.path().join("sessions/a.jsonl"),
+            &[
+                meta("root"),
+                event("turn_context", json!({"model":"gpt-6-astra"})),
+                structured("r1", 100, 20, tokens(100, 20)),
+                snapshot(100, 20),
+            ],
+        );
+        let rows = CodexCostIndex::default().rows(d.path());
+        assert!((rows[0].cost_usd.unwrap() - 0.00155).abs() < 1e-10);
+        assert!(!rows[0].unpriced);
+    }
     fn tokens(input: u64, output: u64) -> Value {
         json!({"input_tokens":input,"output_tokens":output,"cached_input_tokens":input/2,"reasoning_output_tokens":output/2,"total_tokens":input+output})
     }

@@ -97,7 +97,7 @@ Build output lands in `src-tauri/target/release/`, with the installers under
 
 **Usage**
 - Independent Claude and Codex plan limits, refreshed while the page is open
-- Local tokens by provider, project, model and session, with CSV export. Claude API-price estimates; Codex cost unavailable.
+- Local tokens by provider, project, model and session, with CSV export. Claude and Codex API-price estimates; unknown models remain unpriced.
 
 **Configuration**
 - Settings page in the app, and `settings.json` applied live; edits take effect without
@@ -156,7 +156,7 @@ ATC names Codex sessions using your rename override, the latest name in `session
 
 The Usage page has independent Claude and Codex limit sections and an All/Claude/Codex filter. Codex limits come from the documented [`account/rateLimits/read` app-server API](https://developers.openai.com/codex/app-server). Window durations and reset times come from its response. ATC starts the subprocess on demand and stops it after each request or when the page closes. Refreshes run every 90 seconds while the page is open.
 
-Local token totals include linked child-agent usage. Cached input and reasoning are subsets, not extra tokens. Codex dollar costs are unavailable in this release. Mixed monetary estimates are marked partial; CSV leaves unavailable costs blank. Provider-qualified session and model identities prevent collisions between the two CLIs.
+Local token totals include linked child-agent usage. Cached input and reasoning are subsets, not extra tokens. Codex costs use standard short-context API prices verified on 2026-09-20, with separate cached-input and cache-write rates. Reasoning tokens are already included in output cost. These are baseline API equivalents, excluding tier, regional, long-context, and tool surcharges, not subscription charges. Unknown models (including internal aliases) stay unpriced. Totals containing unpriced usage are marked partial; CSV leaves unavailable costs blank. Provider-qualified session and model identities prevent collisions between the two CLIs.
 
 This integration targets native Windows. It does not discover WSL or remote Codex histories or convert conversations between providers.
 
@@ -234,3 +234,5 @@ conversations, and its CLI homes start signed out. Playground tabs use separate 
 state from normal development tabs.
 
 Run `npm run play` to copy synthetic Claude and Codex histories into `playground/config`. It creates sample project directories, points both discovery roots there, and sets `CODEX_HOME` and `CLAUDE_CONFIG_DIR` for launched CLIs. It does not load personal histories or copy credentials. New sessions and CLI state remain in this ignored directory. Fixtures cover current and older metadata, renames, desktop/editor sessions, missing cwd, child agents, and malformed or partial records.
+
+Codex pricing sources: [OpenAI pricing](https://developers.openai.com/api/docs/pricing), [GPT-5.5](https://developers.openai.com/api/docs/models/gpt-5.5), [GPT-5.4](https://developers.openai.com/api/docs/models/gpt-5.4), and [GPT-5.3-Codex](https://developers.openai.com/api/docs/models/gpt-5.3-codex). The checked rates also apply to dated snapshots; unknown model variants are never matched by a broad prefix.

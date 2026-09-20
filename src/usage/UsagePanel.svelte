@@ -338,7 +338,7 @@
 
   <h2>Local usage</h2>
   <p class="muted">
-    Local tokens include linked child agents. Claude costs use API list-price estimates, not subscription charges. Codex dollar costs are unavailable.
+    Local tokens include linked child agents. Costs are API-equivalent estimates, not subscription charges. Codex uses standard short-context prices, including cached input; tier and long-context surcharges are excluded. Unknown model prices are unavailable.
   </p>
 
   <label>Provider <select bind:value={provider}><option value="all">All</option><option value="claude">Claude</option><option value="codex">Codex</option></select></label>
@@ -390,8 +390,8 @@
       <button class="btn" class:primary={metric === 'cost'} onclick={() => metric = 'cost'}>API cost estimates</button>
     </div>
     <div class="total">
-      <span class="big">{metric === 'tokens' ? `${formatTokens(summary.tokens)} tokens` : monetary({ cost: summary.total, partial: summary.partial, unavailable: summary.unavailable || provider === 'codex' })}</span>
-      <span class="muted">{metric === 'tokens' ? `${monetary({cost: summary.total, partial: summary.partial, unavailable: summary.unavailable || provider === 'codex'})} API cost estimate` : `${formatTokens(summary.tokens)} tokens`}</span>
+      <span class="big">{metric === 'tokens' ? `${formatTokens(summary.tokens)} tokens` : monetary({ cost: summary.total, partial: summary.partial, unavailable: summary.unavailable })}</span>
+      <span class="muted">{metric === 'tokens' ? `${monetary({cost: summary.total, partial: summary.partial, unavailable: summary.unavailable})} API cost estimate` : `${formatTokens(summary.tokens)} tokens`}</span>
     </div>
 
     {#if chartDays.length > 0}
