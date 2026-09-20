@@ -1,6 +1,6 @@
 <script lang="ts" module>
   /** A session with a live tab: what Claude is doing, or just "open" before it says. */
-  export type SessionMark = 'working' | 'idle' | 'open' | 'attention';
+  export type SessionMark = 'working' | 'idle' | 'interrupted' | 'open' | 'attention';
 </script>
 
 <script lang="ts">
@@ -66,6 +66,7 @@
       title={{
         working: `${providerName(session.provider)} is working`,
         idle: `${providerName(session.provider)} is waiting for you`,
+        interrupted: `${providerName(session.provider)} was interrupted`,
         attention: 'Finished in the background: needs your attention',
         open: 'Open in a tab',
       }[mark]}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  monetary,
   formatTokens,
   formatUsd,
   hourToLocalDay,
@@ -11,6 +12,9 @@ import {
 import type { CostRow } from '../types';
 
 const row = (o: Partial<CostRow>): CostRow => ({
+  provider: 'claude',
+  totalTokens: (o.input ?? 1) + (o.output ?? 1) + (o.cacheWrite ?? 1) + (o.cacheRead ?? 1),
+  reasoning: 0,
   hour: '2026-09-10T12',
   projectKey: 'd:/a',
   projectPath: 'D:/a',
@@ -113,17 +117,17 @@ describe('byModel and sessionsByProject', () => {
 
   it('totals each model, dearest first', () => {
     expect(s.byModel).toEqual([
-      { key: 'claude-opus-5', cost: 10, tokens: 12 },
-      { key: 'claude-sonnet-5', cost: 1, tokens: 4 },
+      { key: 'claude:claude-opus-5', cost: 10, tokens: 12 },
+      { key: 'claude:claude-sonnet-5', cost: 1, tokens: 4 },
     ]);
   });
 
   it('breaks a project down by session, dearest first', () => {
     expect(s.sessionsByProject.get('d:/a')?.map((x) => [x.key, x.cost])).toEqual([
-      ['s1', 4],
-      ['s2', 2],
+      ['claude:s1', 4],
+      ['claude:s2', 2],
     ]);
-    expect(s.sessionsByProject.get('d:/b')?.map((x) => x.key)).toEqual(['s3']);
+    expect(s.sessionsByProject.get('d:/b')?.map((x) => x.key)).toEqual(['claude:s3']);
   });
 
   it('leaves out rows outside the range', () => {
@@ -143,10 +147,10 @@ describe('toCsv', () => {
     const lines = csv.trimEnd().split('\n');
     expect(lines).toHaveLength(2);
     expect(lines[0]).toBe(
-      '"day","hour_utc","project","path","model","session","input","output","cache_write","cache_read","cost_usd"',
+      '"provider","day","hour_utc","project","path","model","session","input","output","cache_write","cache_read","reasoning","total_tokens","cost_usd"',
     );
     expect(lines[1]).toContain('"a, with comma"');
-    expect(lines[1]).toContain('"sess-1"');
+    expect(lines[1]).toContain('"claude:sess-1"');
     expect(lines[1]).toContain('"1.500000"');
     expect(csv.endsWith('\n')).toBe(true);
   });
@@ -155,4 +159,21 @@ describe('toCsv', () => {
     const csv = toCsv([row({})], '2026-09-01', '2026-09-30', () => ({ key: 'k', name: 'say "hi"' }));
     expect(csv).toContain('"say ""hi"""');
   });
+});
+
+
+it('keeps Codex cost unavailable and combined estimates partial without merging provider identities', () => {
+  const codex = row({ provider: 'codex', costUsd: null, model: 'shared', totalTokens: 120, input: 50, cacheRead: 50, output: 20, reasoning: 10 });
+  const claude = row({ model: 'shared', costUsd: 2 });
+  const combined = summarize([codex, claude], '2026-09-01', '2026-09-30', name);
+  expect(combined.tokens).toBe(124);
+  expect(combined.byModel.map(m => m.key)).toEqual(['claude:shared', 'codex:shared']);
+  expect(combined.sessionsByProject.get('d:/a')?.map(s => s.key)).toEqual(['claude:s1','codex:s1']);
+  expect(monetary(combined.byProject[0])).toBe('$2.00 (partial)');
+  const only = summarize([codex], '2026-09-01', '2026-09-30', name);
+  expect(monetary(only.byProject[0])).toBe('Unavailable');
+  const csv = toCsv([codex], '2026-09-01', '2026-09-30', name);
+  expect(csv).toContain('"codex:s1"');
+  expect(csv).toContain('"10","120",""');
+  expect(csv).not.toContain('0.000000');
 });

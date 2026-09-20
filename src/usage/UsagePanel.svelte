@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { sessionKey, providerName } from '../lib/agents';
   import Page from '../lib/Page.svelte';
   import { save } from '@tauri-apps/plugin-dialog';
-  import { claudeUsage, usageCosts, writeTextFile } from '../lib/ipc';
+  import { claudeUsage, codexUsage, codexUsageStop, usageCosts, writeTextFile } from '../lib/ipc';
   import { appState } from '../lib/stores.svelte';
-  import { formatTokens, formatUsd, localDay, owningProject, summarize, toCsv } from '../lib/costs';
+  import { formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv } from '../lib/costs';
   import {
     clampDays,
     isActive,
@@ -15,11 +16,23 @@
     type Dates,
     type Selection,
   } from '../lib/range';
-  import { planLimits, weeklyBreakdown } from '../lib/plan';
+  import { codexLimits, planLimits, weeklyBreakdown } from '../lib/plan';
   import { relativeTime } from '../lib/format';
-  import type { CostRow } from '../types';
+  import type { AgentProvider, CostRow } from '../types';
 
   let { onClose }: { onClose: () => void } = $props();
+
+  let codexPlan = $state<Record<string, unknown> | null>(null);
+  let codexError = $state<string | null>(null);
+  let codexLoading = $state(false);
+  const codexWindows = $derived(codexPlan ? codexLimits(codexPlan) : []);
+  async function loadCodex() {
+    if (codexLoading) return;
+    codexLoading = true;
+    try { codexPlan = await codexUsage(); codexError = null; }
+    catch (e) { codexError = String(e); }
+    finally { codexLoading = false; }
+  }
 
   // --- plan limits
   let plan = $state<Record<string, unknown> | null>(null);
@@ -93,6 +106,8 @@
 
   // --- spend
   let rows = $state<CostRow[]>([]);
+  let provider = $state<'all' | AgentProvider>('all');
+  const filteredRows = $derived(provider === 'all' ? rows : rows.filter(r => r.provider === provider));
   let costError = $state<string | null>(null);
   let costLoading = $state(false);
   const today = localDay(new Date());
@@ -191,8 +206,8 @@
   /** Session label from the sidebar index, falling back to a short id. */
   function sessionName(id: string): string {
     for (const p of appState.index.projects) {
-      const s = p.sessions.find((x) => x.id === id);
-      if (s) return s.label;
+      const s = p.sessions.find((x) => sessionKey(x) === id);
+      if (s) return `${providerName(s.provider)} · ${s.label}`;
     }
     return id.slice(0, 8);
   }
@@ -206,7 +221,7 @@
         filters: [{ name: 'CSV', extensions: ['csv'] }],
       });
       if (!path) return;
-      await writeTextFile(path, toCsv(rows, from <= to ? from : to, from <= to ? to : from, projectOf));
+      await writeTextFile(path, toCsv(filteredRows, from <= to ? from : to, from <= to ? to : from, projectOf));
       exportError = null;
     } catch (e) {
       exportError = String(e);
@@ -214,7 +229,7 @@
   }
 
   const summary = $derived(
-    summarize(rows, from <= to ? from : to, from <= to ? to : from, projectOf),
+    summarize(filteredRows, from <= to ? from : to, from <= to ? to : from, projectOf),
   );
   // Start the chart at the first day with spend, or "all time" draws years of empty bars.
   const chartDays = $derived.by(() => {
@@ -226,10 +241,12 @@
   onMount(() => {
     restoreRange();
     void loadPlan();
+    void loadCodex();
     void loadCosts();
-    const poll = setInterval(() => void loadPlan(), PLAN_REFRESH_MS);
+    const poll = setInterval(() => { void loadPlan(); void loadCodex(); void loadCosts(); }, PLAN_REFRESH_MS);
     const tick = setInterval(() => (now = Date.now()), 30_000);
     return () => {
+      void codexUsageStop();
       clearInterval(poll);
       clearInterval(tick);
     };
@@ -238,7 +255,7 @@
 
 <Page title="Usage" {onClose}>
   <h2>
-    Plan limits
+    Claude plan limits
     {#if typeof plan?.subscriptionType === 'string'}<span class="tag">{plan.subscriptionType}</span>{/if}
   </h2>
   {#if planError && !plan}
@@ -295,12 +312,27 @@
     {/if}
   </div>
 
-  <h2>Spend at API prices</h2>
+  <h2>Codex plan limits</h2>
+  {#if codexError}<p class="err">{codexError}</p>{/if}
+  {#if codexLoading && !codexPlan}<p class="muted">Loading Codex limits…</p>
+  {:else if codexPlan && codexWindows.length === 0}<p class="muted">No rate-limit data for this account.</p>{/if}
+  <div class="limits">
+    {#each codexWindows as l (l.key)}
+      <div class="limit">
+        <div class="limit-head"><span>{l.label}</span><span>{Math.round(l.percent)}% used</span></div>
+        <div class="meter"><div class="fill" style="width: {l.percent}%"></div></div>
+        <div class="muted">{l.resetsAt ? resetsIn(l.resetsAt) : 'Reset time unavailable'}</div>
+      </div>
+    {/each}
+  </div>
+  <button class="btn" onclick={loadCodex} disabled={codexLoading}>Refresh Codex limits</button>
+
+  <h2>Local usage</h2>
   <p class="muted">
-    What the tokens in your local Claude Code transcripts would cost at API list prices,
-    subagents included. On a subscription, this isn't what you pay.
+    Local tokens include linked child agents. Claude costs use API list-price estimates, not subscription charges. Codex dollar costs are unavailable.
   </p>
 
+  <label>Provider <select bind:value={provider}><option value="all">All</option><option value="claude">Claude</option><option value="codex">Codex</option></select></label>
   <div class="range">
     <label>From <input type="date" bind:value={from} max={today} onchange={pickedByHand} /></label>
     <label>To <input type="date" bind:value={to} max={today} onchange={pickedByHand} /></label>
@@ -345,7 +377,7 @@
     <p class="muted">Reading transcripts. The first scan can take a few seconds.</p>
   {:else}
     <div class="total">
-      <span class="big">{formatUsd(summary.total)}</span>
+      <span class="big">{monetary({ cost: summary.total, partial: summary.partial, unavailable: summary.unavailable })}</span>
       <span class="muted">{formatTokens(summary.tokens)} tokens</span>
     </div>
 
@@ -384,7 +416,7 @@
             <tr>
               <td>{m.key}</td>
               <td class="num">{formatTokens(m.tokens)}</td>
-              <td class="num">{formatUsd(m.cost)}</td>
+              <td class="num">{monetary(m)}</td>
               <td class="share">
                 <div class="meter small">
                   <div class="fill" style="width: {summary.total ? (m.cost / summary.total) * 100 : 0}%"></div>
@@ -405,7 +437,7 @@
                 </button>
               </td>
               <td class="num">{formatTokens(p.tokens)}</td>
-              <td class="num">{formatUsd(p.cost)}</td>
+              <td class="num">{monetary(p)}</td>
               <td class="share">
                 <div class="meter small">
                   <div class="fill" style="width: {summary.total ? (p.cost / summary.total) * 100 : 0}%"></div>
@@ -417,7 +449,7 @@
                 <tr class="session">
                   <td title={s.key}>{sessionName(s.key)}</td>
                   <td class="num">{formatTokens(s.tokens)}</td>
-                  <td class="num">{formatUsd(s.cost)}</td>
+                  <td class="num">{monetary(s)}</td>
                   <td class="share"></td>
                 </tr>
               {/each}
@@ -430,7 +462,7 @@
     </table>
 
     {#if summary.unpricedModels.length > 0}
-      <p class="muted">No price known for: {summary.unpricedModels.join(', ')} (counted as $0).</p>
+      <p class="muted">No price known for: {summary.unpricedModels.join(', ')} (excluded from the estimate).</p>
     {/if}
   {/if}
 </Page>

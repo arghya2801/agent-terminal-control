@@ -108,8 +108,10 @@ pub async fn usage_costs(app: tauri::AppHandle) -> AppResult<Vec<CostRow>> {
     tauri::async_runtime::spawn_blocking(move || {
         use tauri::Manager;
         let state = app.state::<AppState>();
-        let root = state.settings.get().claude_projects_dir();
-        state.costs.rows(&root)
+        let settings = state.settings.get();
+        let mut rows = state.costs.rows(&settings.claude_projects_dir());
+        rows.extend(state.codex_costs.rows(&settings.codex_home()));
+        rows
     })
     .await
     .map_err(|e| crate::error::AppError::Message(e.to_string()))
@@ -360,4 +362,23 @@ pub fn agent_command(
     state: State<'_, AppState>,
 ) -> String {
     crate::agent::command(&state.settings.get(), provider, session_id.as_deref())
+}
+
+#[tauri::command]
+pub async fn codex_usage(app: tauri::AppHandle) -> AppResult<serde_json::Value> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri::Manager;
+        let state = app.state::<AppState>();
+        state
+            .codex_limits
+            .read(&state.settings.get())
+            .map_err(crate::error::AppError::Message)
+    })
+    .await
+    .map_err(|e| crate::error::AppError::Message(e.to_string()))?
+}
+
+#[tauri::command]
+pub fn codex_usage_stop(state: State<'_, AppState>) {
+    state.codex_limits.stop();
 }

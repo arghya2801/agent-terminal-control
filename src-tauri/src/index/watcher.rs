@@ -109,6 +109,34 @@ mod tests {
     }
 
     #[test]
+    fn roots_created_later_and_reconfigured_roots_are_observed() {
+        use std::sync::mpsc;
+        let d = tempfile::tempdir().unwrap();
+        let claude = d.path().join("claude/projects");
+        let codex = d.path().join("codex");
+        let (tx, rx) = mpsc::channel();
+        let first = watch_roots(&claude, Some(&codex), move || {
+            let _ = tx.send(());
+        })
+        .unwrap();
+        std::fs::create_dir_all(codex.join("sessions/2026/09")).unwrap();
+        std::fs::write(codex.join("sessions/2026/09/new.jsonl"), "{}\n").unwrap();
+        rx.recv_timeout(Duration::from_secs(10))
+            .expect("new Codex root observed");
+        drop(first);
+        let next = d.path().join("other-codex");
+        let (tx, rx) = mpsc::channel();
+        let _second = watch_roots(&claude, Some(&next), move || {
+            let _ = tx.send(());
+        })
+        .unwrap();
+        std::fs::create_dir_all(&next).unwrap();
+        std::fs::write(next.join("session_index.jsonl"), "{}\n").unwrap();
+        rx.recv_timeout(Duration::from_secs(10))
+            .expect("new name index observed");
+    }
+
+    #[test]
     fn a_session_transcript_is_relevant() {
         assert!(is_relevant(
             &root(),

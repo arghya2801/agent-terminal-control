@@ -34,6 +34,9 @@ struct Usage {
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CostRow {
+    pub provider: crate::agent::AgentProvider,
+    pub total_tokens: u64,
+    pub reasoning: u64,
     pub hour: String,
     /// Session uuid, so spend can be broken down within a project.
     pub session_id: String,
@@ -45,7 +48,7 @@ pub struct CostRow {
     pub output: u64,
     pub cache_write: u64,
     pub cache_read: u64,
-    pub cost_usd: f64,
+    pub cost_usd: Option<f64>,
     /// No price is known for this model, so `cost_usd` is 0.
     pub unpriced: bool,
 }
@@ -278,6 +281,7 @@ fn aggregate<'a>(usages: impl Iterator<Item = &'a Usage>) -> Vec<CostRow> {
                 u.session.clone(),
             ))
             .or_insert_with(|| CostRow {
+                cost_usd: Some(0.0),
                 hour: u.hour.clone(),
                 session_id: u.session.clone(),
                 project_key: key,
@@ -285,12 +289,13 @@ fn aggregate<'a>(usages: impl Iterator<Item = &'a Usage>) -> Vec<CostRow> {
                 model: u.model.clone(),
                 ..Default::default()
             });
+        row.total_tokens += u.input + u.output + u.cache_write_5m + u.cache_write_1h + u.cache_read;
         row.input += u.input;
         row.output += u.output;
         row.cache_write += u.cache_write_5m + u.cache_write_1h;
         row.cache_read += u.cache_read;
         match cost_of(u) {
-            Some(c) => row.cost_usd += c,
+            Some(c) => *row.cost_usd.get_or_insert(0.0) += c,
             None => row.unpriced = true,
         }
     }
@@ -478,6 +483,6 @@ mod tests {
         let u = parse_line(&line("m", "r", "mystery", "D:/x", ""), "s").unwrap();
         let rows = aggregate([u].iter());
         assert!(rows[0].unpriced);
-        assert_eq!(rows[0].cost_usd, 0.0);
+        assert_eq!(rows[0].cost_usd, Some(0.0));
     }
 }

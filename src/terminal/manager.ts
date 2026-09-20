@@ -341,7 +341,7 @@ export function bindSessions(bindings: Map<TabKey, string>, sessions: SessionMet
     if (tab.codexSequence === sequence) continue;
     if (tab.codexSequence !== null && sequence > tab.codexSequence && session.activity === 'idle') flagAttention(tab, 'finished');
     tab.codexSequence = sequence;
-    tab.activity = session.activity === 'working' ? 'working' : session.activity === 'idle' ? 'idle' : null;
+    tab.activity = session.activity === 'working' ? 'working' : session.activity === 'idle' ? 'idle' : session.activity === 'interrupted' ? 'interrupted' : null;
     changed = true;
   }
   if (changed) notify();

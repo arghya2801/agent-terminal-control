@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod codex_limits;
 pub mod commands;
 pub mod error;
 pub mod index;
@@ -51,6 +52,8 @@ pub fn run() {
             commands::open_devtools,
             commands::usage_costs,
             commands::claude_usage,
+            commands::codex_usage,
+            commands::codex_usage_stop,
             commands::list_themes,
         ])
         .setup(|app| {
@@ -64,6 +67,7 @@ pub fn run() {
         .run(|app, event| {
             // Never leave orphaned pwsh/node/claude processes behind.
             if let tauri::RunEvent::ExitRequested { .. } = event {
+                app.state::<AppState>().codex_limits.stop();
                 app.state::<AppState>().ptys.kill_all();
             }
         });

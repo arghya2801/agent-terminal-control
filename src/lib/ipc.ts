@@ -88,3 +88,6 @@ export function claudeUsage(): Promise<Record<string, unknown>> {
 export function agentCommand(provider: AgentProvider, sessionId: string | null = null): Promise<string> {
   return invoke<string>('agent_command', { provider, sessionId });
 }
+
+export function codexUsage(): Promise<Record<string, unknown>> { return invoke('codex_usage'); }
+export function codexUsageStop(): Promise<void> { return invoke('codex_usage_stop'); }

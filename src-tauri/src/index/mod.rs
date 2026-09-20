@@ -2,6 +2,7 @@
 
 pub mod cache;
 pub mod codex;
+pub mod codex_cost;
 pub mod cost;
 pub mod project;
 pub mod session;
@@ -92,6 +93,10 @@ impl Index {
         }
         drop(cache);
 
+        // Reverts may leave several rollout filenames with the same stable thread ID.
+        sessions.sort_by_key(|s| std::cmp::Reverse(s.mtime_ms));
+        let mut identities = std::collections::HashSet::new();
+        sessions.retain(|s| identities.insert(s.provider.key(&s.id)));
         project::build(sessions, settings)
     }
 
@@ -123,6 +128,8 @@ fn hash_snapshot(snap: &IndexSnapshot) -> u64 {
     snap.projects.len().hash(&mut h);
     for p in &snap.projects {
         p.key.hash(&mut h);
+        p.path.hash(&mut h);
+        p.last_active_ms.hash(&mut h);
         p.name.hash(&mut h);
         p.pinned.hash(&mut h);
         p.exists.hash(&mut h);

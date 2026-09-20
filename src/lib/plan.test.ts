@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { planLimits, weeklyBreakdown } from './plan';
+import { codexLimits, planLimits, weeklyBreakdown } from './plan';
 
 // Trimmed from a real response, codename fields included.
 const real = {
@@ -50,4 +50,13 @@ describe('weeklyBreakdown', () => {
     ]);
     expect(weeklyBreakdown({})).toEqual([]);
   });
+});
+
+
+it('uses Codex window durations and reset times, preferring the multi-bucket response', () => {
+  expect(codexLimits({ rateLimits: {primary: {usedPercent: 99}}, rateLimitsByLimitId: {
+    codex: {primary: {usedPercent: 25, windowDurationMins: 15, resetsAt: 1730947200}, secondary: null},
+  } })).toEqual([{key:'codex:primary',label:'codex · 15 minutes',percent:25,resetsAt:'2024-11-07T02:40:00.000Z'}]);
+  expect(codexLimits({rateLimits:null})).toEqual([]);
+  expect(codexLimits({rateLimits:{primary:{usedPercent:4}}})[0].label).toContain('duration unavailable');
 });

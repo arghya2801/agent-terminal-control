@@ -72,3 +72,20 @@ export function weeklyBreakdown(plan: Record<string, unknown>): { name: string; 
       : [],
   );
 }
+
+
+/** Codex reports its own window durations. Missing windows are unavailable. */
+export function codexLimits(plan: Record<string, unknown>): PlanLimit[] {
+  const buckets = isObj(plan.rateLimitsByLimitId) && Object.keys(plan.rateLimitsByLimitId).length
+    ? Object.entries(plan.rateLimitsByLimitId) : [['codex', plan.rateLimits] as const];
+  return buckets.flatMap(([id, bucket]) => {
+    if (!isObj(bucket)) return [];
+    return ['primary', 'secondary'].flatMap(kind => {
+      const w = bucket[kind];
+      if (!isObj(w) || typeof w.usedPercent !== 'number' || !Number.isFinite(w.usedPercent)) return [];
+      const duration = typeof w.windowDurationMins === 'number' ? `${w.windowDurationMins} minutes` : 'duration unavailable';
+      return [{ key: `${id}:${kind}`, label: `${typeof bucket.limitName === 'string' ? bucket.limitName : id} · ${duration}`,
+        percent: clampPct(w.usedPercent), resetsAt: typeof w.resetsAt === 'number' && Number.isFinite(w.resetsAt) ? new Date(w.resetsAt * 1000).toISOString() : null }];
+    });
+  });
+}
