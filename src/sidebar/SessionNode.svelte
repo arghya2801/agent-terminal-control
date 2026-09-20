@@ -46,6 +46,7 @@
 
 {#if renaming}
   <div class="session">
+    <ProviderIcon provider={session.provider} />
     <InlineRename value={session.label} onDone={onRename} onCancel={onRenameCancel} />
   </div>
 {:else}
@@ -90,9 +91,9 @@
   .session {
     position: relative;
     display: flex;
+    box-sizing: border-box;
     width: 100%;
-    align-items: baseline;
-    justify-content: space-between;
+    align-items: center;
     gap: 8px;
     /* Indented well past the project row's text, or the tree reads as a flat list. */
     padding: 4px 10px 4px 40px;
@@ -125,6 +126,8 @@
     cursor: default;
   }
   .label {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
