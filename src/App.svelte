@@ -84,7 +84,7 @@
   }
 
   // --- restore tabs on launch
-  const TABS_KEY = 'atc.tabs';
+  const TABS_KEY = import.meta.env.VITE_ATC_PLAYGROUND === '1' ? 'atc.playground.tabs' : 'atc.tabs';
   /** Until startup has reopened the saved tabs, saving would overwrite them. */
   let restoring = true;
 

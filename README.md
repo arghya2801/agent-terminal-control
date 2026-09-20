@@ -228,4 +228,9 @@ and sending real keystrokes to the running app for testing shortcuts.
 
 ### Isolated playground
 
+For testing with your existing logins, histories, and theme, use `npm run tauri dev`.
+The playground is for synthetic discovery/UI tests: fixture IDs are not resumable CLI
+conversations, and its CLI homes start signed out. Playground tabs use separate saved
+state from normal development tabs.
+
 Run `npm run play` to copy synthetic Claude and Codex histories into `playground/config`. It creates sample project directories, points both discovery roots there, and sets `CODEX_HOME` and `CLAUDE_CONFIG_DIR` for launched CLIs. It does not load personal histories or copy credentials. New sessions and CLI state remain in this ignored directory. Fixtures cover current and older metadata, renames, desktop/editor sessions, missing cwd, child agents, and malformed or partial records.
