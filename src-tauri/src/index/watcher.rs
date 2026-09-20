@@ -36,28 +36,56 @@ pub fn is_relevant(root: &Path, path: &Path) -> bool {
 
 /// Start watching `root`, calling `on_change` after the debounce window whenever at least
 /// one relevant path changed.
-pub fn watch<F>(root: &Path, mut on_change: F) -> notify::Result<SessionWatcher>
+pub fn watch<F>(root: &Path, on_change: F) -> notify::Result<SessionWatcher>
 where
     F: FnMut() + Send + 'static,
 {
-    let watched = root.to_path_buf();
-    let for_filter = watched.clone();
+    watch_roots(root, None, on_change)
+}
+
+pub fn watch_roots<F>(
+    root: &Path,
+    codex_home: Option<&Path>,
+    mut on_change: F,
+) -> notify::Result<SessionWatcher>
+where
+    F: FnMut() + Send + 'static,
+{
+    let claude = root.to_path_buf();
+    let codex = codex_home.map(Path::to_path_buf);
+    let mut targets = vec![claude.clone()];
+    if let Some(home) = &codex {
+        targets.push(home.clone());
+    }
     let mut debouncer = new_debouncer(DEBOUNCE, None, move |res: DebounceEventResult| {
         let Ok(events) = res else { return };
-        // Coalesce: the whole batch is one question -- did anything relevant change?
-        if events
-            .iter()
-            .flat_map(|e| e.paths.iter())
-            .any(|p| is_relevant(&for_filter, p))
-        {
+        if events.iter().flat_map(|e| e.paths.iter()).any(|p| {
+            is_relevant(&claude, p)
+                || claude.starts_with(p)
+                || (p
+                    .strip_prefix(&claude)
+                    .is_ok_and(|r| r.components().count() == 1)
+                    && p.extension().is_none())
+                || codex.as_ref().is_some_and(|home| {
+                    home.starts_with(p)
+                        || p == &home.join("session_index.jsonl")
+                        || p.starts_with(home.join("sessions"))
+                })
+        }) {
             on_change();
         }
     })?;
-
-    // The directory may not exist yet on a fresh machine; watching then is not an error
-    // worth failing startup over.
-    if watched.is_dir() {
-        debouncer.watch(&watched, RecursiveMode::Recursive)?;
+    let mut watched = std::collections::HashSet::new();
+    for target in targets {
+        // Watch an existing ancestor so a root created after startup is observed too.
+        if let Some(parent) = target.ancestors().find(|p| p.is_dir()) {
+            if watched.insert(parent.to_path_buf()) {
+                // One inaccessible provider must not disable the other watcher.
+                if let Err(e) = debouncer.watch(parent, RecursiveMode::Recursive) {
+                    eprintln!("could not watch {}: {e}", parent.display());
+                }
+            }
+        }
     }
     Ok(debouncer)
 }

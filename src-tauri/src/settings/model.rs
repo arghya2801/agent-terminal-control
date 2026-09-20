@@ -19,6 +19,7 @@ pub struct Settings {
     pub ui: UiSettings,
     pub terminal: TerminalSettings,
     pub claude: ClaudeSettings,
+    pub codex: CodexSettings,
 }
 
 impl Default for Settings {
@@ -29,6 +30,7 @@ impl Default for Settings {
             ui: UiSettings::default(),
             terminal: TerminalSettings::default(),
             claude: ClaudeSettings::default(),
+            codex: CodexSettings::default(),
         }
     }
 }
@@ -149,8 +151,34 @@ impl ClaudeSettings {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct CodexSettings {
+    pub command: String,
+    pub resume_args: Vec<String>,
+    pub home_dir: Option<String>,
+}
+impl Default for CodexSettings {
+    fn default() -> Self {
+        Self {
+            command: "codex".into(),
+            resume_args: vec!["resume".into(), "{session}".into()],
+            home_dir: None,
+        }
+    }
+}
+
 impl Settings {
+    pub fn codex_home(&self) -> PathBuf {
+        if std::env::var("ATC_DEV").is_ok_and(|v| v == "1") {
+            return PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fixtures/codex");
+        }
+        crate::index::codex::home(self.codex.home_dir.as_deref())
+    }
     pub fn claude_projects_dir(&self) -> PathBuf {
+        if std::env::var("ATC_DEV").is_ok_and(|v| v == "1") {
+            return PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fixtures/claude-projects");
+        }
         crate::paths::claude_projects_dir(self.projects.claude_projects_dir.as_deref())
     }
 

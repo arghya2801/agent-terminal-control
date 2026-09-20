@@ -1,6 +1,7 @@
 //! Discovering projects and their Claude sessions.
 
 pub mod cache;
+pub mod codex;
 pub mod cost;
 pub mod project;
 pub mod session;
@@ -56,7 +57,11 @@ impl Index {
     /// Rescan and build a snapshot. `force` bypasses the cache entirely.
     pub fn scan(&self, settings: &Settings, force: bool) -> IndexSnapshot {
         let root = settings.claude_projects_dir();
-        let files = discover_session_files(&root);
+        let mut files = discover_session_files(&root);
+        let codex_home = settings.codex_home();
+        let codex_files = codex::files(&codex_home.join("sessions"));
+        let claude_files = files.clone();
+        files.extend(codex_files.iter().cloned());
 
         let mut cache = self.cache.lock().expect("index cache");
         if force {
@@ -64,11 +69,24 @@ impl Index {
         }
         cache.retain_existing(&files);
 
-        let sessions: Vec<SessionMeta> = files
+        let mut sessions: Vec<SessionMeta> = claude_files
             .iter()
             .filter_map(|f| cache.get_or_parse(f, session::read_session))
             .collect();
 
+        let names = codex::names(&codex_home.join("session_index.jsonl"));
+        sessions.extend(
+            codex_files
+                .iter()
+                .filter_map(|f| cache.codex(f))
+                .map(|mut s| {
+                    if let Some(name) = names.get(&s.id) {
+                        s.label = name.clone();
+                        s.label_source = session::LabelSource::AgentName;
+                    }
+                    s
+                }),
+        );
         if cache.is_dirty() {
             let _ = cache.save_to(&self.cache_path);
         }
@@ -112,6 +130,9 @@ fn hash_snapshot(snap: &IndexSnapshot) -> u64 {
         for s in &p.sessions {
             s.id.hash(&mut h);
             s.provider.hash(&mut h);
+            s.created_at_ms.hash(&mut h);
+            s.activity.hash(&mut h);
+            s.activity_sequence.hash(&mut h);
             s.mtime_ms.hash(&mut h);
             s.cwd.hash(&mut h);
             std::mem::discriminant(&s.label_source).hash(&mut h);
@@ -137,6 +158,12 @@ mod tests {
     fn fixture_settings() -> Settings {
         let mut s = Settings::default();
         s.projects.claude_projects_dir = Some(fixtures().to_string_lossy().into_owned());
+        s.codex.home_dir = Some(
+            fixtures()
+                .join("absent-codex")
+                .to_string_lossy()
+                .into_owned(),
+        );
         s
     }
 

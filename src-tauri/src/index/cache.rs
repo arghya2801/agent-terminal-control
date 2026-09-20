@@ -19,7 +19,7 @@ use super::session::{LabelSource, SessionMeta};
 /// 2: `ai-title` below the first user turn is no longer skipped (labels were falling
 ///    back to the uuid for real transcripts).
 /// 3: the session's `agent-name` is preferred, read from the end of the file.
-pub const SCHEMA_VERSION: u32 = 4;
+pub const SCHEMA_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Entry {
@@ -37,6 +37,7 @@ struct Entry {
 pub struct SessionCache {
     schema: u32,
     entries: HashMap<String, Entry>,
+    codex_entries: HashMap<String, super::codex::Reader>,
     #[serde(skip)]
     dirty: bool,
     #[serde(skip)]
@@ -48,6 +49,7 @@ impl Default for SessionCache {
         Self {
             schema: SCHEMA_VERSION,
             entries: HashMap::new(),
+            codex_entries: HashMap::new(),
             dirty: false,
             hits: 0,
         }
@@ -122,6 +124,9 @@ impl SessionCache {
                 return Some(SessionMeta {
                     id: hit.id.clone(),
                     provider: hit.provider,
+                    created_at_ms: None,
+                    activity: None,
+                    activity_sequence: 0,
                     file: path.to_path_buf(),
                     cwd: hit.cwd.clone(),
                     git_branch: hit.git_branch.clone(),
@@ -151,11 +156,31 @@ impl SessionCache {
         Some(parsed)
     }
 
+    pub fn codex(&mut self, path: &Path) -> Option<SessionMeta> {
+        let m = std::fs::metadata(path).ok()?;
+        let reader = self.codex_entries.entry(cache_key(path)).or_default();
+        if let Some(s) = &reader.meta {
+            if s.size == m.len() && s.mtime_ms == super::session::mtime_ms(&m) {
+                self.hits += 1;
+                return reader.session();
+            }
+            if m.len() <= s.size {
+                *reader = super::codex::Reader::default();
+            }
+        }
+        reader.update(path);
+        self.dirty = true;
+        reader.session()
+    }
+
     /// Forget entries for files that no longer exist, so the cache cannot grow forever.
     pub fn retain_existing(&mut self, live: &[PathBuf]) {
         let live: std::collections::HashSet<String> = live.iter().map(|p| cache_key(p)).collect();
         let before = self.entries.len();
         self.entries.retain(|k, _| live.contains(k));
+        let codex_before = self.codex_entries.len();
+        self.codex_entries.retain(|k, _| live.contains(k));
+        self.dirty |= codex_before != self.codex_entries.len();
         if self.entries.len() != before {
             self.dirty = true;
         }
@@ -192,6 +217,9 @@ mod tests {
         let m = std::fs::metadata(path).ok()?;
         Some(SessionMeta {
             provider: crate::agent::AgentProvider::Claude,
+            created_at_ms: None,
+            activity: None,
+            activity_sequence: 0,
             id: path.file_stem()?.to_string_lossy().into_owned(),
             file: path.to_path_buf(),
             cwd: Some(PathBuf::from(r"D:\Coding\p")),

@@ -186,6 +186,9 @@ mod tests {
     fn sess(id: &str, cwd: Option<&str>, mtime: u64) -> SessionMeta {
         SessionMeta {
             provider: crate::agent::AgentProvider::Claude,
+            created_at_ms: None,
+            activity: None,
+            activity_sequence: 0,
             id: id.into(),
             file: PathBuf::from(format!("{id}.jsonl")),
             cwd: cwd.map(PathBuf::from),
