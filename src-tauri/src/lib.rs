@@ -34,6 +34,7 @@ pub fn run() {
         .manage(AppState::new(settings, cache_path))
         .invoke_handler(tauri::generate_handler![
             commands::pty_spawn,
+            commands::agent_command,
             commands::pty_write,
             commands::pty_resize,
             commands::pty_ack,
@@ -123,6 +124,10 @@ fn start_settings_watcher(app: &tauri::AppHandle) {
                 }
                 state.settings.set(next.clone());
                 state.index.invalidate();
+                start_watcher(&handle);
+                if let Some(snap) = state.index.scan_if_changed(&state.settings.get(), false) {
+                    let _ = handle.emit(EVENT_INDEX_UPDATED, snap);
+                }
                 let _ = handle.emit(EVENT_SETTINGS_UPDATED, next);
             }
         }
@@ -139,12 +144,14 @@ fn start_settings_watcher(app: &tauri::AppHandle) {
     }
 }
 
-fn start_watcher(app: &tauri::AppHandle) {
+pub(crate) fn start_watcher(app: &tauri::AppHandle) {
     let state = app.state::<AppState>();
-    let root = state.settings.get().claude_projects_dir();
+    let settings = state.settings.get();
+    let root = settings.claude_projects_dir();
+    let codex_home = settings.codex_home();
 
     let handle = app.clone();
-    let watcher = index::watcher::watch(&root, move || {
+    let watcher = index::watcher::watch_roots(&root, Some(&codex_home), move || {
         let state = handle.state::<AppState>();
         // A live session appends constantly; only emit when the projection differs.
         if let Some(snap) = state.index.scan_if_changed(&state.settings.get(), false) {

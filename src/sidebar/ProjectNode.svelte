@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { sessionKey } from '../lib/agents';
   import SessionNode from './SessionNode.svelte';
   import InlineRename from '../lib/InlineRename.svelte';
   import { isExpanded, toggleExpanded } from '../lib/stores.svelte';
@@ -101,13 +102,13 @@
 
   {#if open}
     <div class="sessions">
-      {#each visible as session (session.id)}
+      {#each visible as session (sessionKey(session))}
         <SessionNode
           {session}
           projectPath={project.path}
-          active={session.id === activeSessionId}
-          mark={sessionMarks.get(session.id) ?? null}
-          renaming={renaming === `s:${session.id}`}
+          active={sessionKey(session) === activeSessionId}
+          mark={sessionMarks.get(sessionKey(session)) ?? null}
+          renaming={renaming === `s:${sessionKey(session)}`}
           onRename={(name) => onRenameSession(session, name)}
           onRenameCancel={onRenameCancel}
           onOpen={(s) => onOpenSession(project, s)}

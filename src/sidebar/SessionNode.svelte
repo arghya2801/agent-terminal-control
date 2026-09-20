@@ -4,6 +4,8 @@
 </script>
 
 <script lang="ts">
+  import ProviderIcon from '../lib/ProviderIcon.svelte';
+  import { providerName } from '../lib/agents';
   import { relativeTime } from '../lib/format';
   import { subfolderLabel } from '../lib/group';
   import InlineRename from '../lib/InlineRename.svelte';
@@ -62,13 +64,14 @@
     <span
       class="mark {mark}"
       title={{
-        working: 'Claude is working',
-        idle: 'Claude is waiting for you',
+        working: `${providerName(session.provider)} is working`,
+        idle: `${providerName(session.provider)} is waiting for you`,
         attention: 'Finished in the background: needs your attention',
         open: 'Open in a tab',
       }[mark]}
     ></span>
   {/if}
+  <ProviderIcon provider={session.provider} />
   <span class="label">{session.label}</span>
   <span class="meta">
     {#if subfolder}<span class="sub" title="Started in {subfolder}">{subfolder}</span>{/if}

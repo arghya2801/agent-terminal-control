@@ -19,6 +19,19 @@ pub fn pty_spawn(
     on_event: Channel<PtyEvent>,
     state: State<'_, AppState>,
 ) -> AppResult<String> {
+    if let Some(provider) = opts.provider {
+        let settings = state.settings.get();
+        let command = match provider {
+            crate::agent::AgentProvider::Claude => &settings.claude.command,
+            crate::agent::AgentProvider::Codex => &settings.codex.command,
+        };
+        crate::pty::shell::resolve_shell(Some(command)).map_err(|_| {
+            crate::error::AppError::Message(format!(
+                "{} launch failed: configured command `{command}` was not found",
+                provider.name()
+            ))
+        })?;
+    }
     Ok(state.ptys.spawn(opts, on_event)?)
 }
 
@@ -69,11 +82,20 @@ pub fn settings_get(state: State<'_, AppState>) -> AppResult<Settings> {
 }
 
 #[tauri::command]
-pub fn settings_set(settings: Settings, state: State<'_, AppState>) -> AppResult<()> {
+pub fn settings_set(
+    settings: Settings,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
     crate::settings::save(&settings).map_err(crate::error::AppError::Io)?;
     state.settings.set(settings);
     // Settings can repoint the projects directory, so the next scan must report.
     state.index.invalidate();
+    crate::start_watcher(&app);
+    use tauri::Emitter;
+    if let Some(snap) = state.index.scan_if_changed(&state.settings.get(), false) {
+        let _ = app.emit(crate::EVENT_INDEX_UPDATED, snap);
+    }
     Ok(())
 }
 
@@ -329,4 +351,13 @@ pub fn open_in_explorer(path: String) -> AppResult<()> {
         )));
     }
     open_with_shell_handler(p)
+}
+
+#[tauri::command]
+pub fn agent_command(
+    provider: crate::agent::AgentProvider,
+    session_id: Option<String>,
+    state: State<'_, AppState>,
+) -> String {
+    crate::agent::command(&state.settings.get(), provider, session_id.as_deref())
 }

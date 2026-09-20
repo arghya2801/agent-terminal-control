@@ -24,7 +24,7 @@ import { decodeOsc52 } from '../lib/osc52';
 import type { Palette } from '../lib/theme';
 import { claudeTitle, usableTitle, type Activity } from '../lib/format';
 import { cycleIndex } from './cycle';
-import type { Dims, PtyEvent, SpawnOpts, TabKey, TerminalSettings } from '../types';
+import type { AgentProvider, SessionMeta, Dims, PtyEvent, SpawnOpts, TabKey, TerminalSettings } from '../types';
 import {
   debounce,
   dimsChanged,
@@ -47,6 +47,10 @@ const ACK_BATCH = 64 * 1024;
 const RESIZE_DEBOUNCE_MS = 50;
 
 export interface Tab {
+  provider: AgentProvider | null;
+  boundSession: string | null;
+  existingSessions: string[];
+  codexSequence: number | null;
   key: TabKey;
   title: string;
   /** Set by the running program through OSC 0/2, e.g. Claude Code's session name. */
@@ -164,6 +168,8 @@ export async function openTab(
   title: string,
   opts: Omit<SpawnOpts, 'cols' | 'rows'>,
   projectKey: string | null = null,
+  provider: AgentProvider | null = null,
+  existingSessions: string[] = [],
 ): Promise<Tab> {
   const existing = tabs.get(key);
   if (existing) {
@@ -234,6 +240,8 @@ export async function openTab(
   });
 
   const tab: Tab = {
+    provider, boundSession: key.startsWith('session:') ? key.slice(8) : null,
+    existingSessions, codexSequence: null,
     key,
     title,
     autoTitle: null,
@@ -263,6 +271,7 @@ export async function openTab(
 
   term.onTitleChange((t) => {
     tab.autoTitle = usableTitle(t);
+    if (tab.provider === 'codex') { notify(); return; }
     const claude = claudeTitle(t);
     const was = tab.activity;
     tab.activity = claude?.activity ?? null;
@@ -314,9 +323,28 @@ export async function openTab(
     }
   };
 
-  tab.ptyId = await ptySpawn({ ...opts, cols: dims.cols, rows: dims.rows }, channel);
+  tab.ptyId = await ptySpawn({ ...opts, provider, cols: dims.cols, rows: dims.rows }, channel);
   notify();
   return tab;
+}
+
+/** Apply recorded Codex status. The first observed state is history, never a notification. */
+export function bindSessions(bindings: Map<TabKey, string>, sessions: SessionMeta[]) {
+  let changed = false;
+  for (const tab of tabs.values()) {
+    const id = bindings.get(tab.key);
+    if (id && !tab.boundSession) { tab.boundSession = id; changed = true; }
+    if (tab.provider !== 'codex' || !tab.boundSession || tab.exited) continue;
+    const session = sessions.find(s => `${s.provider}:${s.id}` === tab.boundSession);
+    if (!session) continue;
+    const sequence = session.activitySequence ?? 0;
+    if (tab.codexSequence === sequence) continue;
+    if (tab.codexSequence !== null && sequence > tab.codexSequence && session.activity === 'idle') flagAttention(tab, 'finished');
+    tab.codexSequence = sequence;
+    tab.activity = session.activity === 'working' ? 'working' : session.activity === 'idle' ? 'idle' : null;
+    changed = true;
+  }
+  if (changed) notify();
 }
 
 /**

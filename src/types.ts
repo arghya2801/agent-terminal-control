@@ -9,6 +9,7 @@ export type PtyEvent =
   | { t: 'e'; msg: string };
 
 export interface SpawnOpts {
+  provider?: AgentProvider | null;
   cwd?: string | null;
   cols: number;
   rows: number;
@@ -44,6 +45,9 @@ export type LabelSource = 'custom' | 'agentName' | 'aiTitle' | 'slug' | 'firstMe
 
 export interface SessionMeta {
   provider: AgentProvider;
+  createdAtMs?: number | null;
+  activity?: 'working' | 'idle' | 'interrupted' | null;
+  activitySequence?: number;
   id: string;
   file: string;
   /** Authoritative cwd from the transcript. Null when the head budget found none. */
@@ -94,6 +98,7 @@ export interface Settings {
     groupSubfolders: boolean;
   };
   terminal: TerminalSettings;
+  codex: { command: string; resumeArgs: string[]; homeDir: string | null };
   claude: { command: string; resumeArgs: string[]; scratchDir: string | null };
 }
 

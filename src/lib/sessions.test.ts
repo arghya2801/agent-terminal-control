@@ -46,7 +46,7 @@ describe('resolveSessions', () => {
   it('takes a resumed tab’s id straight from its key', () => {
     const p = project('D:\\Coding\\app', [session('aaa')]);
     const tabs = [{ ...claudeTab(), key: 'session:aaa' as TabKey }];
-    expect(resolveSessions(tabs, [p]).get('session:aaa' as TabKey)).toBe('aaa');
+    expect(resolveSessions(tabs, [p]).get('session:aaa' as TabKey)).toBe('claude:aaa');
   });
 
   it('claims the session written since the tab opened, with no name to go on', () => {
@@ -58,7 +58,7 @@ describe('resolveSessions', () => {
 
     const got = resolveSessions([claudeTab()], [p]);
 
-    expect(got.get('claude:1' as TabKey)).toBe('fresh');
+    expect(got.get('claude:1' as TabKey)).toBe('claude:fresh');
   });
 
   it('never claims a session that predates the tab', () => {
@@ -73,7 +73,7 @@ describe('resolveSessions', () => {
 
     const got = resolveSessions([claudeTab({ claudeName: 'my session' })], [p]);
 
-    expect(got.get('claude:1' as TabKey)).toBe('named');
+    expect(got.get('claude:1' as TabKey)).toBe('claude:named');
   });
 
   it('still resolves when the title name matches nothing in the sidebar', () => {
@@ -83,10 +83,10 @@ describe('resolveSessions', () => {
 
     const tab = claudeTab({ claudeName: 'ATC application feature requests and bugs' });
 
-    expect(resolveSessions([tab], [p]).get('claude:1' as TabKey)).toBe('x');
+    expect(resolveSessions([tab], [p]).get('claude:1' as TabKey)).toBe('claude:x');
   });
 
-  it('gives one session to one tab only', () => {
+  it('leaves multiple equally plausible launches unbound', () => {
     const a = session('a', { mtimeMs: T0 + 100 });
     const b = session('b', { mtimeMs: T0 + 200 });
     const p = project('D:\\Coding\\app', [a, b]);
@@ -97,7 +97,7 @@ describe('resolveSessions', () => {
     );
 
     const ids = [got.get('claude:1' as TabKey), got.get('claude:2' as TabKey)];
-    expect(new Set(ids).size).toBe(2);
+    expect(ids).toEqual([undefined, undefined]);
   });
 
   it('does not steal a session a resumed tab already owns', () => {
@@ -109,7 +109,7 @@ describe('resolveSessions', () => {
       [p],
     );
 
-    expect(got.get('session:shared' as TabKey)).toBe('shared');
+    expect(got.get('session:shared' as TabKey)).toBe('claude:shared');
     expect(got.has('claude:1' as TabKey)).toBe(false);
   });
 
@@ -120,7 +120,7 @@ describe('resolveSessions', () => {
 
     const tab = claudeTab({ projectKey: null, cwd: 'C:/scratch/' });
 
-    expect(resolveSessions([tab], [p]).get('claude:1' as TabKey)).toBe('scratch');
+    expect(resolveSessions([tab], [p]).get('claude:1' as TabKey)).toBe('claude:scratch');
   });
 
   it('does not claim a session from a sibling directory', () => {
@@ -129,14 +129,14 @@ describe('resolveSessions', () => {
     expect(resolveSessions([claudeTab()], [p]).has('claude:1' as TabKey)).toBe(false);
   });
 
-  it('falls back to the project when a transcript recorded no directory', () => {
+  it('does not guess when the launch directory is unknown', () => {
     const s = session('nodir', { cwd: null, mtimeMs: T0 + 10 });
     const p = project('D:\\Coding\\app', [s]);
     const tab = claudeTab({ cwd: null });
-    expect(resolveSessions([tab], [p]).get('claude:1' as TabKey)).toBe('nodir');
+    expect(resolveSessions([tab], [p]).get('claude:1' as TabKey)).toBeUndefined();
   });
 
-  it('gives the newer session to the newer tab', () => {
+  it('does not assign sessions when launch windows overlap', () => {
     const first = session('first', { mtimeMs: T0 + 100 });
     const second = session('second', { mtimeMs: T0 + 900 });
     const p = project('D:\\Coding\\app', [first, second]);
@@ -149,8 +149,8 @@ describe('resolveSessions', () => {
       [p],
     );
 
-    expect(got.get('claude:1' as TabKey)).toBe('first');
-    expect(got.get('claude:2' as TabKey)).toBe('second');
+    expect(got.size).toBe(0);
+
   });
 
   it('returns nothing for a plain shell tab', () => {
@@ -158,4 +158,21 @@ describe('resolveSessions', () => {
     const tabs = [{ ...claudeTab(), key: 'plain:1' as TabKey }];
     expect(resolveSessions(tabs, [p]).size).toBe(0);
   });
+});
+
+
+it('uses provider and Codex creation time, excluding old sessions with new writes', () => {
+  const p = project('D:\\Coding\\app', [
+    session('same', { provider: 'claude', mtimeMs: T0 + 100 }),
+    session('old', { provider: 'codex', createdAtMs: T0 - 100, mtimeMs: T0 + 100 }),
+    session('same', { provider: 'codex', createdAtMs: T0 + 100 }),
+  ]);
+  const tab = claudeTab({ key: 'agent:codex:1', provider: 'codex' });
+  expect(resolveSessions([tab], [p]).get(tab.key)).toBe('codex:same');
+  expect(resolveSessions([{ ...tab, boundSession: 'codex:same' }], []) .get(tab.key)).toBe('codex:same');
+});
+
+it('excludes conversations already present at launch even when they are updated', () => {
+  const p = project('D:\\Coding\\app', [session('old', { mtimeMs: T0 + 100 })]);
+  expect(resolveSessions([claudeTab({ existingSessions: ['claude:old'] })], [p]).size).toBe(0);
 });

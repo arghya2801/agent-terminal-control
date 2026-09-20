@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import ProviderPicker from './lib/ProviderPicker.svelte';
+  import { providerName, sessionKey } from './lib/agents';
   import TabBar from './tabs/TabBar.svelte';
   import DebugOverlay from './debug/DebugOverlay.svelte';
   import Sidebar from './sidebar/Sidebar.svelte';
@@ -23,6 +25,7 @@
     toggleSidebar,
   } from './lib/stores.svelte';
   import {
+    bindSessions,
     closeTab,
     cycleTab,
     displayTitle,
@@ -44,15 +47,15 @@
   } from './terminal/manager';
   import { matchChord, type Action } from './lib/keymap';
   import { parseSavedTabs, type SavedTab } from './lib/restore';
-  import { openDevtools, scratchDir } from './lib/ipc';
+  import { agentCommand, openDevtools, scratchDir } from './lib/ipc';
   import { projectKey } from './lib/paths';
   import { resolveSessions, type TabRef } from './lib/sessions';
   import { zoomLabel } from './lib/zoom';
-  import type { Project, SessionMeta, TabKey } from './types';
+  import type { AgentProvider, Project, SessionMeta, TabKey } from './types';
   import type { SessionMark } from './sidebar/SessionNode.svelte';
 
   let wrapper: HTMLDivElement;
-  let tabs = $state<{ key: TabKey; title: string; exited: boolean; attention: boolean }[]>([]);
+  let tabs = $state<{ key: TabKey; provider: AgentProvider | null; title: string; exited: boolean; attention: boolean }[]>([]);
   let activeKey = $state<TabKey | null>(null);
   let openProjectKeys = $state<Set<string>>(new Set());
   let tabSessions = $state<(TabRef & { activity: SessionMark; exited: boolean })[]>([]);
@@ -76,7 +79,8 @@
 
   /** The session a tab is showing, for deciding how to restore it. */
   function sessionIdOf(t: Tab): string | null {
-    return tabToSession.get(t.key) ?? null;
+    const key = t.boundSession ?? tabToSession.get(t.key);
+    return key ? key.slice(key.indexOf(':') + 1) : null;
   }
 
   // --- restore tabs on launch
@@ -91,7 +95,8 @@
     const tabs = all.map((t): SavedTab => {
       const common = { projectKey: t.projectKey, customTitle: t.customTitle };
       const sessionId = sessionIdOf(t);
-      if (sessionId && t.cwd) return { kind: 'session', provider: 'claude', sessionId, cwd: t.cwd, ...common };
+      if (sessionId && t.cwd) return { kind: 'session', provider: t.provider ?? 'claude', sessionId, cwd: t.cwd, ...common };
+      if (t.provider && t.cwd) return { kind: 'agent', provider: t.provider, cwd: t.cwd, ...common };
       return { kind: 'shell', cwd: t.cwd, project: t.key.startsWith('project:'), ...common };
     });
     try {
@@ -117,14 +122,18 @@
     for (const t of saved.tabs) {
       let key: TabKey;
       if (t.kind === 'session') {
-        key = `session:${t.sessionId}`;
+        key = `session:${t.provider}:${t.sessionId}`;
         const label = appState.index.projects
           .flatMap((p) => p.sessions)
-          .find((s) => s.id === t.sessionId)?.label;
-        const command = resumeCommand(t.sessionId);
+          .find((s) => s.id === t.sessionId && s.provider === t.provider)?.label;
+        const command = await agentCommand(t.provider, t.sessionId);
         await guard(() =>
-          openTab(key, label ?? 'claude', { cwd: t.cwd, initialCommand: command }, t.projectKey),
+          openTab(key, label ?? providerName(t.provider), { cwd: t.cwd, initialCommand: command }, t.projectKey, t.provider),
         );
+      } else if (t.kind === 'agent') {
+        counter += 1;
+        key = `agent:${t.provider}:${counter}`;
+        await guard(async () => openTab(key, providerName(t.provider), { cwd: t.cwd, initialCommand: await agentCommand(t.provider) }, t.projectKey, t.provider, knownSessions()));
       } else if (t.kind === 'shell' && t.project && t.projectKey) {
         key = `project:${t.projectKey}`;
         const name = appState.index.projects.find((p) => p.key === t.projectKey)?.name ?? 'pwsh';
@@ -197,6 +206,7 @@
     const all = listTabs();
     tabs = all.map((t) => ({
       key: t.key,
+      provider: t.provider,
       title: displayTitle(t),
       exited: t.exited,
       attention: t.attention,
@@ -210,9 +220,12 @@
     // derived from this list. Saving first would persist the previous tick's answer.
     tabSessions = all.map((t) => ({
       key: t.key,
+      provider: t.provider,
       projectKey: t.projectKey,
       cwd: t.cwd,
       claudeName: t.claudeName,
+      boundSession: t.boundSession,
+      existingSessions: t.existingSessions,
       startedAt: t.startedAt,
       activity: t.attention ? 'attention' : (t.activity ?? 'open'),
       exited: t.exited,
@@ -246,49 +259,39 @@
     return guard(() => openTab(`plain:${counter}`, p.name, { cwd: p.path }, p.key));
   }
 
-  function newClaudeIn(p: Project) {
+  function knownSessions(): string[] { return appState.index.projects.flatMap(p => p.sessions.map(sessionKey)); }
+
+  function newAgentIn(p: Project, provider: AgentProvider) {
     if (!p.path) return;
     counter += 1;
-    const command = appState.settings?.claude.command || 'claude';
-    return guard(() =>
-      openTab(`claude:${counter}`, p.name, { cwd: p.path, initialCommand: command }, p.key),
-    );
+    const key: TabKey = `agent:${provider}:${counter}`;
+    const existing = knownSessions();
+    return guard(async () => openTab(key, p.name, { cwd: p.path, initialCommand: await agentCommand(provider) }, p.key, provider, existing));
   }
 
-  /**
-   * Claude in a scratch directory, for questions that belong to no project: a branch
-   * comparison, a curl against some server. Keeps such sessions out of real projects.
-   */
-  function askClaude() {
-    counter += 1;
-    const n = counter;
-    const command = appState.settings?.claude.command || 'claude';
-    return guard(async () => {
+  let picker = $state<{ project: Project | null } | null>(null);
+  function finishPicker(provider?: AgentProvider) {
+    const target = picker;
+    picker = null;
+    if (!provider || !target) { focusActiveTerminal(); return; }
+    if (target.project) { void newAgentIn(target.project, provider); return; }
+    void guard(async () => {
       const cwd = await scratchDir();
-      // The scratch directory is a real project to Claude, so name it here too. Without a
-      // project key its session cannot be matched to a sidebar row at all: no activity
-      // dot, no highlight.
-      await openTab(`claude:${n}`, 'Ask Claude', { cwd, initialCommand: command }, projectKey(cwd));
+      await newAgentIn({ key: projectKey(cwd), path: cwd, name: `Ask ${providerName(provider)}`, pinned: false, exists: true, lastActiveMs: 0, sessions: [] }, provider);
     });
   }
 
   function openSession(p: Project, s: SessionMeta) {
-    // Resume needs a real directory. A path reconstructed from the lossy folder name
-    // would be wrong, so such rows are disabled rather than guessed at.
     const cwd = s.cwd ?? p.path;
     if (!cwd) return;
-    const command = resumeCommand(s.id);
-    return guard(() =>
-      openTab(`session:${s.id}`, s.label, { cwd, initialCommand: command }, p.key),
-    );
+    // A fresh launch already bound to this conversation is reused too.
+    const existing = listTabs().find(t => t.boundSession === sessionKey(s));
+    if (existing) { activate(existing.key); return; }
+    return guard(async () => openTab(`session:${sessionKey(s)}`, s.label,
+      { cwd, initialCommand: await agentCommand(s.provider, s.id) }, p.key, s.provider));
   }
 
-  function resumeCommand(id: string): string {
-    const claude = appState.settings?.claude;
-    return claude
-      ? [claude.command, ...claude.resumeArgs.map((a) => a.replace('{session}', id))].join(' ')
-      : `claude --resume ${id}`;
-  }
+  $effect(() => { bindSessions(tabToSession, appState.index.projects.flatMap(p => p.sessions)); });
 
   /**
    * Every close goes through here, button or chord. A tab at a bare prompt closes at
@@ -301,8 +304,7 @@
       void closeTab(key);
       return;
     }
-    const claude = key.startsWith('session:') || key.startsWith('claude:');
-    closing = { key, title: displayTitle(tab), what: claude ? 'Claude session' : 'shell' };
+    closing = { key, title: displayTitle(tab), what: tab.provider ? `${providerName(tab.provider)} session` : 'shell' };
   }
 
   function finishClose(confirmed: boolean) {
@@ -321,7 +323,7 @@
   }
 
   /** Windows notification for a background tab, only while ATC itself is not focused. */
-  async function notifyAttention(title: string, reason: AttentionReason) {
+  async function notifyAttention(title: string, provider: AgentProvider | null, reason: AttentionReason) {
     if (document.hasFocus() || appState.settings?.ui.notifications === false) return;
     try {
       let granted = await isPermissionGranted();
@@ -329,7 +331,7 @@
       if (!granted) return;
       sendNotification({
         title,
-        body: reason === 'finished' ? 'Claude finished and is waiting for you.' : 'Needs your attention.',
+        body: reason === 'finished' ? `${provider ? providerName(provider) : 'Agent'} finished and is waiting for you.` : 'Needs your attention.',
       });
     } catch (e) {
       console.warn('notification failed', e);
@@ -381,10 +383,10 @@
       case 'zoomReset':
         void adjustZoom(0);
         break;
-      case 'openClaudeHere': {
+      case 'openAgentHere': {
         const p = activeProject();
-        if (p) void newClaudeIn(p);
-        else error = 'This tab is not in a project, so there is nowhere to open Claude.';
+        if (p) picker = { project: p };
+        else error = 'This tab is not in a project, so there is nowhere to open an agent.';
         break;
       }
       case 'openShellHere': {
@@ -409,8 +411,8 @@
       case 'focusSearch':
         void focusSearch();
         break;
-      case 'askClaude':
-        void askClaude();
+      case 'askAgent':
+        picker = { project: null };
         break;
     }
   }
@@ -420,7 +422,7 @@
     // Chords pressed while the terminal has focus arrive here, already consumed by
     // xterm's interceptor so they never reach the shell.
     const offChord = onChord(runAction);
-    const offAttention = onAttention((t, reason) => void notifyAttention(displayTitle(t), reason));
+    const offAttention = onAttention((t, reason) => void notifyAttention(displayTitle(t), t.provider, reason));
     mountTerminals(wrapper);
     // Settings decide whether the sidebar is open, and so how wide the pane is.
     // Spawning before that lands starts the PTY at the wrong width.
@@ -434,6 +436,7 @@
 
     // Covers focus being anywhere outside the terminal -- the sidebar, a button.
     const onKey = (e: KeyboardEvent) => {
+      if (picker) return;
       const action = matchChord(e);
       if (!action) return;
       e.preventDefault();
@@ -482,9 +485,9 @@
     </button>
     <button
       class="rail-btn"
-      onclick={() => askClaude()}
-      title="Ask Claude, outside any project (Ctrl+Shift+A)"
-      aria-label="Ask Claude"
+      onclick={() => (picker = { project: null })}
+      title="Ask agent, outside any project (Ctrl+Shift+A)"
+      aria-label="Ask agent"
     >
       ✳
     </button>
@@ -557,7 +560,7 @@
         onOpenProject={openProject}
         onOpenSession={openSession}
         onNewShell={newShellIn}
-        onNewClaude={newClaudeIn}
+        onNewAgent={newAgentIn}
       />
     {/if}
   </aside>
@@ -578,6 +581,7 @@
     {#if showDebug}
       <DebugOverlay {activeKey} />
     {/if}
+    {#if picker}<ProviderPicker onPick={finishPicker} onCancel={() => finishPicker()} />{/if}
     {#if closing}
       <ConfirmDialog
         confirmLabel="Close tab"

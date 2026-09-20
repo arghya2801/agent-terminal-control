@@ -22,13 +22,13 @@ export type Action =
   | 'zoomIn'
   | 'zoomOut'
   | 'zoomReset'
-  | 'openClaudeHere'
+  | 'openAgentHere'
   | 'openShellHere'
   | 'renameTab'
   | 'openSettings'
   | 'openUsage'
   | 'focusSearch'
-  | 'askClaude'
+  | 'askAgent'
   | 'showShortcuts';
 
 /** The subset of KeyboardEvent this needs, so tests require no DOM. */
@@ -72,12 +72,12 @@ const BINDINGS: Binding[] = [
   { key: '0', ctrl: true, shift: false, action: 'zoomReset' },
   // Launch actions for the active tab's project, and the app's pages. Ctrl+Shift+C/V
   // are left alone: terminals use them for copy and paste.
-  { key: 'l', ctrl: true, shift: true, action: 'openClaudeHere' },
+  { key: 'l', ctrl: true, shift: true, action: 'openAgentHere' },
   { key: 'n', ctrl: true, shift: true, action: 'openShellHere' },
   { key: 'r', ctrl: true, shift: true, action: 'renameTab' },
   { key: 'u', ctrl: true, shift: true, action: 'openUsage' },
   { key: 'p', ctrl: true, shift: true, action: 'focusSearch' },
-  { key: 'a', ctrl: true, shift: true, action: 'askClaude' },
+  { key: 'a', ctrl: true, shift: true, action: 'askAgent' },
   // Ctrl+Comma is the settings chord in most editors; the shell and Claude Code ignore it.
   { key: ',', ctrl: true, shift: false, action: 'openSettings' },
   // `?` is what the key reports with Shift held on a US layout; `/` covers layouts where
@@ -97,9 +97,9 @@ const DESCRIPTIONS: Record<Action, { group: Group; label: string }> = {
   nextTab: { group: 'Tabs', label: 'Next tab' },
   prevTab: { group: 'Tabs', label: 'Previous tab' },
   renameTab: { group: 'Tabs', label: 'Rename tab' },
-  openClaudeHere: { group: 'Launch', label: 'Open Claude in this tab’s project' },
+  openAgentHere: { group: 'Launch', label: 'Open Claude in this tab’s project' },
   openShellHere: { group: 'Launch', label: 'Open a shell in this tab’s project' },
-  askClaude: { group: 'Launch', label: 'Ask Claude (scratch directory)' },
+  askAgent: { group: 'Launch', label: 'Ask agent (scratch directory)' },
   toggleSidebar: { group: 'View', label: 'Show or hide the sidebar' },
   focusSearch: { group: 'View', label: 'Search projects and sessions' },
   find: { group: 'View', label: 'Find in the terminal' },

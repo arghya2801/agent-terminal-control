@@ -59,18 +59,27 @@ where
     }
     let mut debouncer = new_debouncer(DEBOUNCE, None, move |res: DebounceEventResult| {
         let Ok(events) = res else { return };
-        if events.iter().flat_map(|e| e.paths.iter()).any(|p| {
-            is_relevant(&claude, p)
-                || claude.starts_with(p)
-                || (p
-                    .strip_prefix(&claude)
-                    .is_ok_and(|r| r.components().count() == 1)
-                    && p.extension().is_none())
-                || codex.as_ref().is_some_and(|home| {
-                    home.starts_with(p)
-                        || p == &home.join("session_index.jsonl")
-                        || p.starts_with(home.join("sessions"))
-                })
+        if events.iter().any(|e| {
+            e.paths.iter().any(|p| {
+                let directory_change = matches!(
+                    e.kind,
+                    notify::EventKind::Create(_)
+                        | notify::EventKind::Remove(_)
+                        | notify::EventKind::Modify(notify::event::ModifyKind::Name(_))
+                );
+                is_relevant(&claude, p)
+                    || (directory_change
+                        && (claude.starts_with(p)
+                            || (p
+                                .strip_prefix(&claude)
+                                .is_ok_and(|r| r.components().count() == 1)
+                                && p.extension().is_none())))
+                    || codex.as_ref().is_some_and(|home| {
+                        (directory_change && home.starts_with(p))
+                            || p == &home.join("session_index.jsonl")
+                            || p.starts_with(home.join("sessions"))
+                    })
+            })
         }) {
             on_change();
         }

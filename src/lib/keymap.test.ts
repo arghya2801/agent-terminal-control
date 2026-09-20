@@ -23,12 +23,12 @@ describe('matchChord', () => {
   });
 
   it('claims the launch and page chords', () => {
-    expect(matchChord(ctrlShift('L'))).toBe('openClaudeHere');
+    expect(matchChord(ctrlShift('L'))).toBe('openAgentHere');
     expect(matchChord(ctrlShift('N'))).toBe('openShellHere');
     expect(matchChord(ctrlShift('R'))).toBe('renameTab');
     expect(matchChord(ctrlShift('U'))).toBe('openUsage');
     expect(matchChord(ctrlShift('P'))).toBe('focusSearch');
-    expect(matchChord(ctrlShift('A'))).toBe('askClaude');
+    expect(matchChord(ctrlShift('A'))).toBe('askAgent');
     expect(matchChord(press(',', { ctrlKey: true }))).toBe('openSettings');
   });
 

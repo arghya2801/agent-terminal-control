@@ -1,7 +1,7 @@
 /** Typed wrappers over the Rust command surface. One place for every command name. */
 
 import { Channel, invoke } from '@tauri-apps/api/core';
-import type { CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot } from '../types';
+import type { AgentProvider, CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot } from '../types';
 
 export { Channel };
 
@@ -83,4 +83,8 @@ export function listThemes(): Promise<{ stem: string; palette: unknown }[]> {
 /** Plan limits as `/usage` shows them. Shape belongs to the API, so kept loose. */
 export function claudeUsage(): Promise<Record<string, unknown>> {
   return invoke<Record<string, unknown>>('claude_usage');
+}
+
+export function agentCommand(provider: AgentProvider, sessionId: string | null = null): Promise<string> {
+  return invoke<string>('agent_command', { provider, sessionId });
 }
