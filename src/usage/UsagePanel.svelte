@@ -193,7 +193,8 @@
     return { key, name: path?.split(/[\\/]/).filter(Boolean).pop() ?? key };
   }
 
-  let groupBy = $state<'project' | 'model'>('project');
+  let groupBy = $state<'project' | 'model' | 'session'>('project');
+  let metric = $state<'tokens' | 'cost'>('tokens');
   /** Project keys whose sessions are shown. */
   let expanded = $state<Set<string>>(new Set());
 
@@ -232,12 +233,16 @@
   const summary = $derived(
     summarize(filteredRows, from <= to ? from : to, from <= to ? to : from, projectOf),
   );
-  // Start the chart at the first day with spend, or "all time" draws years of empty bars.
+  const rankedProjects = $derived([...summary.byProject].sort((a, b) => b[metric] - a[metric]));
+  const rankedModels = $derived([...summary.byModel].sort((a, b) => b[metric] - a[metric]));
+  const rankedSessions = $derived([...summary.bySession].sort((a, b) => b[metric] - a[metric]));
+  const metricTotal = $derived(metric === 'tokens' ? summary.tokens : summary.total);
+  // Start at the first day with usage for the selected metric.
   const chartDays = $derived.by(() => {
-    const first = summary.byDay.findIndex((d) => d.cost > 0);
+    const first = summary.byDay.findIndex((d) => d[metric] > 0);
     return first < 0 ? [] : summary.byDay.slice(first);
   });
-  const maxDay = $derived(Math.max(0, ...chartDays.map((d) => d.cost)));
+  const maxDay = $derived(Math.max(0, ...chartDays.map((d) => d[metric])));
 
   onMount(() => {
     restoreRange();
@@ -320,12 +325,15 @@
   <div class="limits">
     {#each codexWindows as l (l.key)}
       <div class="limit">
-        <div class="limit-head"><span>{l.label}</span><span>{Math.round(l.percent)}% used</span></div>
+        <div class="limit-head"><span>{l.label}</span><span>{Math.round(100 - l.percent)}% remaining · {Math.round(l.percent)}% used</span></div>
         <div class="meter"><div class="fill" style="width: {l.percent}%"></div></div>
         <div class="muted">{l.resetsAt ? resetsIn(l.resetsAt) : 'Reset time unavailable'}</div>
       </div>
     {/each}
   </div>
+  {#if codexPlan && !codexWindows.some(l => l.key.startsWith('codex:') && l.windowMinutes === 300)}
+    <p class="muted">5-hour limit: not reported by Codex for this account. ATC cannot calculate it from local token counts.</p>
+  {/if}
   <button class="btn" onclick={loadCodex} disabled={codexLoading}>Refresh Codex limits</button>
 
   <h2>Local usage</h2>
@@ -377,16 +385,20 @@
   {:else if costLoading && rows.length === 0}
     <p class="muted">Reading transcripts. The first scan can take a few seconds.</p>
   {:else}
+    <div class="group" aria-label="Usage metric">
+      <button class="btn" class:primary={metric === 'tokens'} onclick={() => metric = 'tokens'}>Tokens</button>
+      <button class="btn" class:primary={metric === 'cost'} onclick={() => metric = 'cost'}>API cost estimates</button>
+    </div>
     <div class="total">
-      <span class="big">{monetary({ cost: summary.total, partial: summary.partial, unavailable: summary.unavailable || provider === 'codex' })}</span>
-      <span class="muted">{formatTokens(summary.tokens)} tokens</span>
+      <span class="big">{metric === 'tokens' ? `${formatTokens(summary.tokens)} tokens` : monetary({ cost: summary.total, partial: summary.partial, unavailable: summary.unavailable || provider === 'codex' })}</span>
+      <span class="muted">{metric === 'tokens' ? `${monetary({cost: summary.total, partial: summary.partial, unavailable: summary.unavailable || provider === 'codex'})} API cost estimate` : `${formatTokens(summary.tokens)} tokens`}</span>
     </div>
 
     {#if chartDays.length > 0}
-      <div class="chart" role="img" aria-label="Spend per day">
+      <div class="chart" role="img" aria-label={metric === 'tokens' ? 'Tokens per day' : 'Estimated cost per day'}>
         {#each chartDays as d (d.day)}
-          <div class="bar-col" title="{d.day}: {formatUsd(d.cost)}">
-            <div class="bar" style="height: {maxDay ? (d.cost / maxDay) * 100 : 0}%"></div>
+          <div class="bar-col" title="{d.day}: {metric === 'tokens' ? `${formatTokens(d.tokens)} tokens` : formatUsd(d.cost)}">
+            <div class="bar" style="height: {maxDay ? (d[metric] / maxDay) * 100 : 0}%"></div>
           </div>
         {/each}
       </div>
@@ -402,25 +414,37 @@
       <button class="btn" class:primary={groupBy === 'model'} onclick={() => (groupBy = 'model')}>
         By model
       </button>
+      <button class="btn" class:primary={groupBy === 'session'} onclick={() => groupBy = 'session'}>By session</button>
     </div>
 
     <table>
       <thead>
         <tr>
-          <th>{groupBy === 'project' ? 'Project' : 'Model'}</th>
-          <th class="num">Tokens</th><th class="num">Cost</th><th class="share"></th>
+          <th>{groupBy === 'project' ? 'Project' : groupBy === 'model' ? 'Model' : 'Session'}</th>
+          <th class="num">Tokens</th><th class="num">Cost</th><th class="share">{metric === 'tokens' ? 'Token share' : 'Cost share'}</th>
         </tr>
       </thead>
       <tbody>
-        {#if groupBy === 'model'}
-          {#each summary.byModel as m (m.key)}
+        {#if groupBy === 'session'}
+          {#each rankedSessions as s (s.key)}
+            <tr>
+              <td title={s.key}>{sessionName(s.key)}</td>
+              <td class="num">{formatTokens(s.tokens)}</td>
+              <td class="num">{monetary(s)}</td>
+              <td class="share"><div class="meter small"><div class="fill" style="width: {metricTotal ? s[metric] / metricTotal * 100 : 0}%"></div></div></td>
+            </tr>
+          {:else}
+            <tr><td colspan="4" class="muted">No usage in this range.</td></tr>
+          {/each}
+        {:else if groupBy === 'model'}
+          {#each rankedModels as m (m.key)}
             <tr>
               <td>{m.key.startsWith('codex:') ? 'Codex' : 'Claude'} · {m.key.slice(m.key.indexOf(':') + 1)}</td>
               <td class="num">{formatTokens(m.tokens)}</td>
               <td class="num">{monetary(m)}</td>
               <td class="share">
                 <div class="meter small">
-                  <div class="fill" style="width: {summary.total ? (m.cost / summary.total) * 100 : 0}%"></div>
+                  <div class="fill" style="width: {metricTotal ? (m[metric] / metricTotal) * 100 : 0}%"></div>
                 </div>
               </td>
             </tr>
@@ -428,8 +452,8 @@
             <tr><td colspan="4" class="muted">No usage in this range.</td></tr>
           {/each}
         {:else}
-          {#each summary.byProject as p (p.key)}
-            {@const sessions = summary.sessionsByProject.get(p.key) ?? []}
+          {#each rankedProjects as p (p.key)}
+            {@const sessions = [...(summary.sessionsByProject.get(p.key) ?? [])].sort((a, b) => b[metric] - a[metric])}
             <tr>
               <td>
                 <button class="expand" onclick={() => toggleProject(p.key)} aria-expanded={expanded.has(p.key)}>
@@ -441,7 +465,7 @@
               <td class="num">{monetary(p)}</td>
               <td class="share">
                 <div class="meter small">
-                  <div class="fill" style="width: {summary.total ? (p.cost / summary.total) * 100 : 0}%"></div>
+                  <div class="fill" style="width: {metricTotal ? (p[metric] / metricTotal) * 100 : 0}%"></div>
                 </div>
               </td>
             </tr>

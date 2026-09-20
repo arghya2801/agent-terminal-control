@@ -27,10 +27,11 @@ export interface SpendSummary {
   unavailable?: boolean;
   byProject: ProjectSpend[];
   byModel: Spend[];
+  bySession: Spend[];
   /** Sessions of each project, by project key, most expensive first. */
   sessionsByProject: Map<string, Spend[]>;
-  /** Every day in the range, oldest first, including days with no spend. */
-  byDay: { day: string; cost: number }[];
+  /** Days from the first recorded usage in the range, including gaps. */
+  byDay: { day: string; cost: number; tokens: number }[];
   unpricedModels: string[];
 }
 
@@ -78,8 +79,10 @@ export function summarize(
 ): SpendSummary {
   const projects = new Map<string, ProjectSpend>();
   const models = new Map<string, Spend>();
+  const allSessions = new Map<string, Spend>();
   const sessions = new Map<string, Map<string, Spend>>();
   const days = new Map<string, number>();
+  const dayTokens = new Map<string, number>();
   const unpriced = new Set<string>();
   let total = 0;
   let tokens = 0;
@@ -97,6 +100,7 @@ export function summarize(
     total += cost;
     tokens += t;
     days.set(day, (days.get(day) ?? 0) + cost);
+    dayTokens.set(day, (dayTokens.get(day) ?? 0) + t);
     if (r.unpriced) unpriced.add(r.model);
     const owner = projectOf(r.projectKey, r.projectPath);
     let p = projects.get(owner.key);
@@ -115,6 +119,7 @@ export function summarize(
       sessions.set(owner.key, inProject);
     }
     add(inProject, `${r.provider}:${r.sessionId}`, cost, t, unavailable);
+    add(allSessions, `${r.provider}:${r.sessionId}`, cost, t, unavailable);
   }
 
   return {
@@ -124,8 +129,9 @@ export function summarize(
     unavailable: partial && !priced,
     byProject: [...projects.values()].sort((a, b) => b.cost - a.cost),
     byModel: dearestFirst(models),
+    bySession: dearestFirst(allSessions),
     sessionsByProject: new Map([...sessions].map(([k, v]) => [k, dearestFirst(v)])),
-    byDay: daysBetween(from, to).map((day) => ({ day, cost: days.get(day) ?? 0 })),
+    byDay: days.size ? daysBetween([...days.keys()].sort()[0], to).map((day) => ({ day, cost: days.get(day) ?? 0, tokens: dayTokens.get(day) ?? 0 })) : [],
     unpricedModels: [...unpriced].sort(),
   };
 }

@@ -67,10 +67,21 @@ it('formats limit windows in days, hours, and minutes without assuming fixed win
 it('uses Codex window durations and reset times, preferring the multi-bucket response', () => {
   expect(codexLimits({ rateLimits: {primary: {usedPercent: 99}}, rateLimitsByLimitId: {
     codex: {primary: {usedPercent: 25, windowDurationMins: 15, resetsAt: 1730947200}, secondary: null},
-  } })).toEqual([{key:'codex:primary',label:'codex · 15 minutes',percent:25,resetsAt:'2024-11-07T02:40:00.000Z'}]);
+  } })).toEqual([{key:'codex:primary',label:'codex · 15 minutes',windowMinutes:15,percent:25,resetsAt:'2024-11-07T02:40:00.000Z'}]);
   expect(codexLimits({rateLimits:null})).toEqual([]);
   expect(codexLimits({rateLimits:{primary:{usedPercent:4}}})[0].label).toContain('duration unavailable');
   const malformed = codexLimits({rateLimits:{primary:{usedPercent:4, windowDurationMins:Infinity, resetsAt:1e30}}})[0];
   expect(malformed.label).toContain('duration unavailable');
   expect(malformed.resetsAt).toBeNull();
+});
+
+it('keeps both short and weekly Codex windows using their reported durations', () => {
+  const limits = codexLimits({rateLimits: {
+    primary: {usedPercent: 45, windowDurationMins: 10080},
+    secondary: {usedPercent: 20, windowDurationMins: 300},
+  }});
+  expect(limits.map(l => [l.windowMinutes, l.label, l.percent])).toEqual([
+    [10080, 'codex · 7 days', 45],
+    [300, 'codex · 5 hours', 20],
+  ]);
 });

@@ -10,6 +10,7 @@ export interface PlanLimit {
   label: string;
   percent: number;
   resetsAt: string | null;
+  windowMinutes?: number;
 }
 
 const KIND_LABELS: Record<string, string> = {
@@ -97,6 +98,7 @@ export function codexLimits(plan: Record<string, unknown>): PlanLimit[] {
       const duration = limitDuration(w.windowDurationMins);
       const reset = typeof w.resetsAt === 'number' ? new Date(w.resetsAt * 1000) : null;
       return [{ key: `${id}:${kind}`, label: `${typeof bucket.limitName === 'string' ? bucket.limitName : id} · ${duration}`,
+        windowMinutes: typeof w.windowDurationMins === 'number' ? w.windowDurationMins : undefined,
         percent: clampPct(w.usedPercent), resetsAt: reset && Number.isFinite(reset.getTime()) ? reset.toISOString() : null }];
     });
   });

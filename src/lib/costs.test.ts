@@ -44,6 +44,19 @@ describe('owningProject', () => {
 });
 
 describe('summarize', () => {
+  it('keeps Codex tokens visible by day and session when dollar cost is unavailable', () => {
+    const s = summarize([
+      row({provider: 'codex', sessionId: 'same', totalTokens: 100, costUsd: null}),
+      row({provider: 'codex', sessionId: 'same', totalTokens: 50, costUsd: null, projectKey: 'other'}),
+      row({provider: 'claude', sessionId: 'same', totalTokens: 10, costUsd: 1}),
+    ], '2026-09-01', '2026-09-30', name);
+    expect(s.byDay.reduce((n, d) => n + d.tokens, 0)).toBe(160);
+    expect(s.bySession.find(x => x.key === 'codex:same')).toMatchObject({tokens: 150, unavailable: true});
+    expect(s.bySession.find(x => x.key === 'claude:same')).toMatchObject({tokens: 10, cost: 1});
+    expect(s.bySession).toHaveLength(2);
+    const allTime = summarize([row({provider: 'codex', totalTokens: 100, costUsd: null})], '2000-01-01', '2026-09-30', name);
+    expect(allTime.byDay[0].tokens).toBe(100);
+  });
   it('merges rows that map to the same project', () => {
     const s = summarize(
       [row({ projectKey: 'sub1', costUsd: 2 }), row({ projectKey: 'sub2', costUsd: 3 })],
@@ -84,7 +97,7 @@ describe('summarize', () => {
     expect(s.total).toBe(1);
     expect(s.byDay).toHaveLength(1);
     const wide = summarize([inside], '2026-09-08', '2026-09-12', name);
-    expect(wide.byDay).toHaveLength(5);
+    expect(wide.byDay).toHaveLength(3);
     expect(wide.byDay.reduce((a, d) => a + d.cost, 0)).toBe(1);
   });
 
