@@ -221,9 +221,29 @@ impl CodexCostIndex {
             .flat_map(|f| f.records.iter().map(move |r| (f, r)))
             .collect();
         records.sort_by_key(|(_, r)| r.timestamp);
+        // Once a thread records response IDs, those records are authoritative.
+        // token_count snapshots can lag, reset on compaction, or arrive before their
+        // matching response; reconciling both as one counter inflates usage.
+        let mut structured_since: HashMap<&str, i64> = HashMap::new();
+        for (_, record) in &records {
+            if record.response.is_some() && record.usage.is_some() {
+                structured_since
+                    .entry(&record.thread)
+                    .or_insert(record.timestamp);
+            }
+        }
+        let mut structured_started = HashSet::new();
         let mut watermarks: HashMap<&str, Tokens> = HashMap::new();
         let mut snapshots = HashSet::new();
         for (f, record) in records {
+            if record.response.is_none()
+                && structured_since
+                    .get(record.thread.as_str())
+                    .is_some_and(|start| record.timestamp >= *start)
+            {
+                continue;
+            }
+
             if record.response.is_none() {
                 if let Some(total) = record.total {
                     if !snapshots.insert((
@@ -243,33 +263,43 @@ impl CodexCostIndex {
                 }
             }
             let previous = watermarks.entry(&record.thread).or_default();
-            let usage = match (record.total, record.usage) {
-                (Some(total), usage) => {
-                    // A lower cumulative total starts a new accounting epoch after a reset.
-                    let delta = if total.total < previous.total {
-                        total
-                    } else {
-                        total.subtract(*previous)
-                    };
-                    let count = usage
-                        .map(|u| {
-                            if delta.total == 0 {
-                                Tokens::default()
-                            } else if delta.total < u.total {
-                                delta
+            let usage = if let Some(usage) = record.usage {
+                let first = structured_started.insert(record.thread.as_str());
+                // An older snapshot may already include the first response from a CLI
+                // upgrade. Reconcile that boundary once, never subsequent snapshots.
+                let count = if first && previous.total > 0 {
+                    record
+                        .total
+                        .map(|total| {
+                            if total.total >= previous.total {
+                                let delta = total.subtract(*previous);
+                                if delta.total < usage.total {
+                                    delta
+                                } else {
+                                    usage
+                                }
                             } else {
-                                u
+                                usage
                             }
                         })
-                        .unwrap_or(delta);
-                    *previous = total;
-                    count
-                }
-                (None, Some(usage)) => {
-                    *previous = previous.add(usage);
+                        .unwrap_or(usage)
+                } else {
                     usage
-                }
-                _ => continue,
+                };
+                *previous = record.total.unwrap_or_else(|| previous.add(usage));
+                count
+            } else if let Some(total) = record.total {
+                // Legacy-only streams have no response identities. A decrease starts
+                // another cumulative epoch; repeated snapshots still produce zero.
+                let delta = if total.total < previous.total {
+                    total
+                } else {
+                    total.subtract(*previous)
+                };
+                *previous = total;
+                delta
+            } else {
+                continue;
             };
             if usage.total == 0 {
                 continue;
@@ -419,11 +449,11 @@ mod tests {
         let rows = index.rows(d.path());
         assert_eq!(rows.len(), 1);
         let row = &rows[0];
-        assert_eq!(row.total_tokens, 204);
-        assert_eq!(row.input, 85);
-        assert_eq!(row.cache_read, 85);
-        assert_eq!(row.output, 34);
-        assert_eq!(row.reasoning, 17);
+        assert_eq!(row.total_tokens, 180);
+        assert_eq!(row.input, 75);
+        assert_eq!(row.cache_read, 75);
+        assert_eq!(row.output, 30);
+        assert_eq!(row.reasoning, 15);
         assert_eq!(row.cost_usd, None);
         assert_eq!(row.model, "test-model");
         assert_eq!(index.rows(d.path()), rows);
@@ -434,7 +464,7 @@ mod tests {
         write!(file, "{{\"type\":").unwrap();
         assert_eq!(index.rows(d.path()), rows);
         writeln!(file,"\"event_msg\",\"timestamp\":\"2026-09-20T10:00:00Z\",\"payload\":{{\"type\":\"token_count\",\"info\":{{\"total_token_usage\":{}}}}}}}",tokens(30,6)).unwrap();
-        assert_eq!(index.rows(d.path())[0].total_tokens, 216);
+        assert_eq!(index.rows(d.path())[0].total_tokens, 180);
         write(&path, &[meta("root"), snapshot(10, 2)]);
         assert_eq!(index.rows(d.path())[0].total_tokens, 12);
     }
@@ -461,5 +491,63 @@ mod tests {
         assert!(rows.iter().all(|r| r.session_id == "root"
             && r.project_key == "d:\\app"
             && r.total_tokens == 120));
+    }
+
+    #[test]
+    fn lagging_snapshots_never_recount_structured_thread_totals() {
+        let d = tempfile::tempdir().unwrap();
+        let mut events = vec![
+            meta("root"),
+            event("turn_context", json!({"model":"gpt-6-astra"})),
+        ];
+        for n in 1..=100 {
+            events.push(snapshot((n - 1) * 100, (n - 1) * 20));
+            events.push(structured(
+                &format!("r{n}"),
+                100,
+                20,
+                tokens(n * 100, n * 20),
+            ));
+            events.push(snapshot((n - 1) * 100, (n - 1) * 20));
+        }
+        write(&d.path().join("sessions/root.jsonl"), &events);
+        let index = CodexCostIndex::default();
+        let rows = index.rows(d.path());
+        assert_eq!(rows[0].total_tokens, 12_000);
+        assert!((rows[0].cost_usd.unwrap() - 0.155).abs() < 1e-10);
+        assert_eq!(index.rows(d.path()), rows);
+    }
+
+    #[test]
+    fn legacy_only_snapshots_still_support_counter_resets() {
+        let d = tempfile::tempdir().unwrap();
+        write(
+            &d.path().join("sessions/root.jsonl"),
+            &[
+                meta("root"),
+                snapshot(100, 20),
+                snapshot(100, 20),
+                snapshot(150, 30),
+                snapshot(20, 4),
+                snapshot(20, 4),
+                snapshot(30, 6),
+            ],
+        );
+        assert_eq!(
+            CodexCostIndex::default().rows(d.path())[0].total_tokens,
+            216
+        );
+    }
+
+    #[test]
+    #[ignore = "read-only audit requires ATC_AUDIT_CODEX_HOME"]
+    fn audit_local_usage_totals() {
+        let home = std::env::var("ATC_AUDIT_CODEX_HOME").unwrap();
+        let rows = CodexCostIndex::default().rows(Path::new(&home));
+        let tokens: u64 = rows.iter().map(|r| r.total_tokens).sum();
+        let cost: f64 = rows.iter().filter_map(|r| r.cost_usd).sum();
+        println!(
+            "Deduplicated local Codex usage: {tokens} tokens, ${cost:.2} baseline API estimate"
+        );
     }
 }

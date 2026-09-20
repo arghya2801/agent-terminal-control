@@ -43,3 +43,7 @@ login. Resume command dispatch was checked with a synthetic ID, but successfully
 resuming an authenticated real conversation and displaying live account quotas were
 not verified. OS notification delivery was not separately verified; the underlying
 completion transition and attention indicator were checked.
+
+## Accounting correction
+
+An audit found that mixed Codex records could include a cumulative snapshot behind the latest structured response total. Treating that decrease as a reset repeatedly recounted prior tokens. Structured response records now take precedence, with legacy snapshots limited to the pre-upgrade period or legacy-only threads. A 100-response regression checks lagging snapshots, deduplication, token subsets, and the resulting price. A separate read-only audit summed unique response IDs in the reported real session and matched its recorded thread total exactly. Earlier billion-token totals and their dollar estimates were incorrect.
