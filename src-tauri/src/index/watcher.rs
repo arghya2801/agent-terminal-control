@@ -17,6 +17,10 @@ pub const DEBOUNCE: Duration = Duration::from_millis(400);
 /// this is owned by `AppState` rather than dropped at the end of setup.
 pub type SessionWatcher = Debouncer<notify::RecommendedWatcher, RecommendedCache>;
 
+fn watchable_root(target: &Path) -> Option<&Path> {
+    target.is_dir().then_some(target)
+}
+
 /// Whether a changed path could affect the sidebar.
 ///
 /// `root` is the projects directory. Only `root/<project>/<session>.jsonl` qualifies:
@@ -86,13 +90,14 @@ where
     })?;
     let mut watched = std::collections::HashSet::new();
     for target in targets {
-        // Watch an existing ancestor so a root created after startup is observed too.
-        if let Some(parent) = target.ancestors().find(|p| p.is_dir()) {
-            if watched.insert(parent.to_path_buf()) {
-                // One inaccessible provider must not disable the other watcher.
-                if let Err(e) = debouncer.watch(parent, RecursiveMode::Recursive) {
-                    eprintln!("could not watch {}: {e}", parent.display());
-                }
+        // Never fall back to an ancestor. A missing ~/.codex or ~/.claude/projects
+        // would otherwise turn this into a recursive watch of the whole user profile.
+        if let Some(root) =
+            watchable_root(&target).filter(|root| watched.insert(root.to_path_buf()))
+        {
+            // One inaccessible provider must not disable the other watcher.
+            if let Err(e) = debouncer.watch(root, RecursiveMode::Recursive) {
+                eprintln!("could not watch {}: {e}", root.display());
             }
         }
     }
@@ -109,31 +114,16 @@ mod tests {
     }
 
     #[test]
-    fn roots_created_later_and_reconfigured_roots_are_observed() {
-        use std::sync::mpsc;
+    fn missing_roots_do_not_expand_the_watch_to_their_existing_ancestor() {
         let d = tempfile::tempdir().unwrap();
         let claude = d.path().join("claude/projects");
         let codex = d.path().join("codex");
-        let (tx, rx) = mpsc::channel();
-        let first = watch_roots(&claude, Some(&codex), move || {
-            let _ = tx.send(());
-        })
-        .unwrap();
+        assert_eq!(watchable_root(&claude), None);
+        assert_eq!(watchable_root(&codex), None);
+        let _watcher = watch_roots(&claude, Some(&codex), || {}).unwrap();
         std::fs::create_dir_all(codex.join("sessions/2026/09")).unwrap();
         std::fs::write(codex.join("sessions/2026/09/new.jsonl"), "{}\n").unwrap();
-        rx.recv_timeout(Duration::from_secs(10))
-            .expect("new Codex root observed");
-        drop(first);
-        let next = d.path().join("other-codex");
-        let (tx, rx) = mpsc::channel();
-        let _second = watch_roots(&claude, Some(&next), move || {
-            let _ = tx.send(());
-        })
-        .unwrap();
-        std::fs::create_dir_all(&next).unwrap();
-        std::fs::write(next.join("session_index.jsonl"), "{}\n").unwrap();
-        rx.recv_timeout(Duration::from_secs(10))
-            .expect("new name index observed");
+        assert_eq!(watchable_root(d.path()), Some(d.path()));
     }
 
     #[test]

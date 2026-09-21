@@ -95,7 +95,8 @@ export function summarize(
     const t = r.totalTokens;
     const cost = r.costUsd ?? 0;
     const unavailable = r.costUsd === null;
-    partial ||= unavailable;
+    const rowPartial = unavailable || r.unpriced;
+    partial ||= rowPartial;
     priced ||= !unavailable;
     total += cost;
     tokens += t;
@@ -105,21 +106,21 @@ export function summarize(
     const owner = projectOf(r.projectKey, r.projectPath);
     let p = projects.get(owner.key);
     if (!p) {
-      p = { ...owner, cost: 0, tokens: 0, ...(unavailable ? { unavailable: true, partial: true } : {}) };
+      p = { ...owner, cost: 0, tokens: 0, ...(unavailable ? { unavailable: true } : {}), ...(rowPartial ? { partial: true } : {}) };
       projects.set(owner.key, p);
     }
     p.cost += cost;
     p.tokens += t;
-    if (unavailable) p.partial = true;
-    else if (p.unavailable) p.unavailable = false;
-    add(models, `${r.provider}:${r.model}`, cost, t, unavailable);
+    if (rowPartial) p.partial = true;
+    if (!unavailable && p.unavailable) p.unavailable = false;
+    add(models, `${r.provider}:${r.model}`, cost, t, rowPartial, unavailable);
     let inProject = sessions.get(owner.key);
     if (!inProject) {
       inProject = new Map();
       sessions.set(owner.key, inProject);
     }
-    add(inProject, `${r.provider}:${r.sessionId}`, cost, t, unavailable);
-    add(allSessions, `${r.provider}:${r.sessionId}`, cost, t, unavailable);
+    add(inProject, `${r.provider}:${r.sessionId}`, cost, t, rowPartial, unavailable);
+    add(allSessions, `${r.provider}:${r.sessionId}`, cost, t, rowPartial, unavailable);
   }
 
   return {
@@ -136,10 +137,10 @@ export function summarize(
   };
 }
 
-function add(into: Map<string, Spend>, key: string, cost: number, tokens: number, unavailable: boolean) {
-  const s = into.get(key) ?? { key, cost: 0, tokens: 0, ...(unavailable ? { unavailable: true, partial: true } : {}) };
-  if (unavailable) s.partial = true;
-  else if (s.unavailable) s.unavailable = false;
+function add(into: Map<string, Spend>, key: string, cost: number, tokens: number, partial: boolean, unavailable: boolean) {
+  const s = into.get(key) ?? { key, cost: 0, tokens: 0, ...(unavailable ? { unavailable: true } : {}), ...(partial ? { partial: true } : {}) };
+  if (partial) s.partial = true;
+  if (!unavailable && s.unavailable) s.unavailable = false;
   s.cost += cost;
   s.tokens += tokens;
   into.set(key, s);

@@ -57,6 +57,27 @@ describe('summarize', () => {
     const allTime = summarize([row({provider: 'codex', totalTokens: 100, costUsd: null})], '2000-01-01', '2026-09-30', name);
     expect(allTime.byDay[0].tokens).toBe(100);
   });
+  it('excludes an unpriced Claude row instead of treating it as a zero-dollar estimate', () => {
+    const s = summarize(
+      [row({ model: 'claude-unknown', costUsd: null, unpriced: true })],
+      '2026-09-01',
+      '2026-09-30',
+      name,
+    );
+    expect(s.total).toBe(0);
+    expect(s.unavailable).toBe(true);
+    expect(s.byModel[0]).toMatchObject({ unavailable: true, partial: true });
+  });
+  it('keeps the known subtotal for a partially priced Codex row', () => {
+    const s = summarize(
+      [row({ provider: 'codex', model: 'gpt-5.5', costUsd: 1.5, unpriced: true })],
+      '2026-09-01',
+      '2026-09-30',
+      name,
+    );
+    expect(s.total).toBe(1.5);
+    expect(monetary(s.byModel[0])).toBe('$1.50 (partial)');
+  });
   it('merges rows that map to the same project', () => {
     const s = summarize(
       [row({ projectKey: 'sub1', costUsd: 2 }), row({ projectKey: 'sub2', costUsd: 3 })],
@@ -102,7 +123,7 @@ describe('summarize', () => {
   });
 
   it('lists unpriced models', () => {
-    const s = summarize([row({ model: 'x', unpriced: true, costUsd: 0 })], '2026-01-01', '2026-12-31', name);
+    const s = summarize([row({ model: 'x', unpriced: true, costUsd: null })], '2026-01-01', '2026-12-31', name);
     expect(s.unpricedModels).toEqual(['x']);
   });
 });

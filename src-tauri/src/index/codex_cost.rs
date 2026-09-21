@@ -11,8 +11,8 @@ use std::sync::Mutex;
 /// Older models: /api/docs/models/gpt-5.5, gpt-5.4, gpt-5.3-codex.
 /// Baseline API equivalents, not subscription charges. No tier, regional, or
 /// long-context adjustments: older cumulative records do not preserve these.
-fn estimate(row: &CostRow) -> Option<f64> {
-    let model = row.model.to_ascii_lowercase();
+fn prices(model: &str) -> Option<(f64, f64, Option<f64>, f64)> {
+    let model = model.to_ascii_lowercase();
     let rates = [
         ("gpt-6-astra", (10.0, 1.0, Some(12.5), 50.0)),
         ("gpt-5.6-sol", (4.0, 0.4, Some(5.0), 20.0)),
@@ -22,17 +22,24 @@ fn estimate(row: &CostRow) -> Option<f64> {
         ("gpt-5.4", (2.5, 0.25, None, 15.0)),
         ("gpt-5.3-codex", (1.75, 0.175, None, 14.0)),
     ];
-    let (_, (input, cached, write, output)) = rates.iter().find(|(name, _)| {
-        model == *name
-            || model
-                .strip_prefix(&format!("{name}-"))
-                .is_some_and(|suffix| chrono::NaiveDate::parse_from_str(suffix, "%Y-%m-%d").is_ok())
-    })?;
-    let write_cost = if row.cache_write == 0 {
-        0.0
-    } else {
-        row.cache_write as f64 * (*write)?
-    };
+    rates
+        .iter()
+        .find(|(name, _)| {
+            model == *name
+                || model
+                    .strip_prefix(&format!("{name}-"))
+                    .is_some_and(|suffix| {
+                        chrono::NaiveDate::parse_from_str(suffix, "%Y-%m-%d").is_ok()
+                    })
+        })
+        .map(|(_, prices)| *prices)
+}
+
+fn estimate(row: &CostRow) -> Option<f64> {
+    let (input, cached, write, output) = prices(&row.model)?;
+    // Some older models have no published cache-write rate. Keep the known input and
+    // output portion instead of discarding the whole row; `unpriced` marks it partial.
+    let write_cost = row.cache_write as f64 * write.unwrap_or(0.0);
     // Input/cache buckets are disjoint; reasoning is already included in output.
     Some(
         (row.input as f64 * input
@@ -41,6 +48,10 @@ fn estimate(row: &CostRow) -> Option<f64> {
             + row.output as f64 * output)
             / 1_000_000.0,
     )
+}
+
+fn is_partially_unpriced(row: &CostRow) -> bool {
+    row.cache_write > 0 && prices(&row.model).is_some_and(|(_, _, write, _)| write.is_none())
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -115,7 +126,10 @@ impl Parsed {
         let kind = v["type"].as_str().unwrap_or("");
         let p = v.get("payload").unwrap_or(&v);
         if kind == "session_meta"
-            || (self.id.is_empty() && p["id"].is_string() && p["timestamp"].is_string())
+            || (self.id.is_empty()
+                && p["id"].is_string()
+                && p["timestamp"].is_string()
+                && p.get("role").is_none())
         {
             self.id = p["id"].as_str().unwrap_or("").into();
             self.cwd = p["cwd"].as_str().map(str::to_string);
@@ -193,7 +207,8 @@ impl CodexCostIndex {
         let mut paths = codex::files(&home.join("sessions"));
         paths.extend(codex::files(&home.join("archived_sessions")));
         let mut files = self.files.lock().expect("codex costs");
-        files.retain(|p, _| paths.contains(p));
+        let live: HashSet<_> = paths.iter().collect();
+        files.retain(|p, _| live.contains(p));
         for path in &paths {
             let Ok(meta) = std::fs::metadata(path) else {
                 continue;
@@ -213,6 +228,23 @@ impl CodexCostIndex {
             .values()
             .filter_map(|f| f.parent.as_ref().map(|p| (f.id.as_str(), p.as_str())))
             .collect();
+        // Reverts can leave duplicate rollout files for one thread. Select the newest
+        // deterministically so cwd attribution never depends on HashMap iteration.
+        let mut owner_files: HashMap<&str, &Parsed> = HashMap::new();
+        for path in &paths {
+            let Some(parsed) = files.get(path) else {
+                continue;
+            };
+            if parsed.id.is_empty() {
+                continue;
+            }
+            let replace = owner_files.get(parsed.id.as_str()).is_none_or(|current| {
+                (parsed.stamp.1, parsed.stamp.0) > (current.stamp.1, current.stamp.0)
+            });
+            if replace {
+                owner_files.insert(parsed.id.as_str(), parsed);
+            }
+        }
         let mut seen = HashSet::new();
         let mut rows: HashMap<(String, String, String), CostRow> = HashMap::new();
         let mut records: Vec<_> = paths
@@ -312,7 +344,7 @@ impl CodexCostIndex {
                 };
                 owner = parent;
             }
-            let owner_file = files.values().find(|p| p.id == owner).unwrap_or(f);
+            let owner_file = owner_files.get(owner).copied().unwrap_or(f);
             let resolved = owner_file.cwd.as_ref().map(crate::paths::resolve);
             let row = rows
                 .entry((record.hour.clone(), owner.into(), record.model.clone()))
@@ -339,7 +371,7 @@ impl CodexCostIndex {
         let mut out: Vec<_> = rows.into_values().collect();
         for row in &mut out {
             row.cost_usd = estimate(row);
-            row.unpriced = row.cost_usd.is_none();
+            row.unpriced = row.cost_usd.is_none() || is_partially_unpriced(row);
         }
         out.sort_by(|a, b| {
             (&a.hour, &a.session_id, &a.model).cmp(&(&b.hour, &b.session_id, &b.model))
@@ -367,6 +399,9 @@ mod tests {
         assert!((estimate(&row).unwrap() - 4.05).abs() < 1e-10);
         row.model = "gpt-6-astra-2026-09-01".into();
         assert!((estimate(&row).unwrap() - 4.05).abs() < 1e-10);
+        row.model = "gpt-5.5".into();
+        assert!((estimate(&row).unwrap() - 1.5).abs() < 1e-10);
+        assert!(is_partially_unpriced(&row));
         for model in [
             "codex-auto-review",
             "gpt-6-astra-pro",
@@ -376,6 +411,16 @@ mod tests {
             row.model = model.into();
             assert_eq!(estimate(&row), None);
         }
+    }
+
+    #[test]
+    fn legacy_metadata_does_not_take_an_id_from_a_role_record() {
+        let mut parsed = Parsed::default();
+        parsed.absorb(event(
+            "response_item",
+            json!({"id":"message-id","timestamp":"2026-09-20T10:00:00Z","role":"assistant"}),
+        ));
+        assert!(parsed.id.is_empty());
     }
 
     #[test]

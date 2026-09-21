@@ -331,7 +331,7 @@
       </div>
     {/each}
   </div>
-  {#if codexPlan && !codexWindows.some(l => l.key.startsWith('codex:') && l.windowMinutes === 300)}
+  {#if codexPlan && !codexWindows.some(l => l.windowMinutes === 300)}
     <p class="muted">5-hour limit: not reported by Codex for this account. ATC cannot calculate it from local token counts.</p>
   {/if}
   <button class="btn" onclick={loadCodex} disabled={codexLoading}>Refresh Codex limits</button>
@@ -487,7 +487,7 @@
     </table>
 
     {#if summary.unpricedModels.length > 0}
-      <p class="muted">No price known for: {summary.unpricedModels.join(', ')} (excluded from the estimate).</p>
+      <p class="muted">Pricing is incomplete for: {summary.unpricedModels.join(', ')} (unknown portions are excluded from the estimate).</p>
     {/if}
   {/if}
 </Page>

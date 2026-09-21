@@ -49,7 +49,7 @@ pub struct CostRow {
     pub cache_write: u64,
     pub cache_read: u64,
     pub cost_usd: Option<f64>,
-    /// No price is known for this model, so `cost_usd` is 0.
+    /// Some or all of this row has no known price, so the estimate is partial.
     pub unpriced: bool,
 }
 
@@ -301,6 +301,11 @@ fn aggregate<'a>(usages: impl Iterator<Item = &'a Usage>) -> Vec<CostRow> {
     }
 
     let mut out: Vec<CostRow> = rows.into_values().collect();
+    for row in &mut out {
+        if row.unpriced {
+            row.cost_usd = None;
+        }
+    }
     // Model breaks ties: rows come out of a HashMap, so without it two models in one
     // hour and project swap places between calls.
     out.sort_by(|a, b| {
@@ -483,6 +488,6 @@ mod tests {
         let u = parse_line(&line("m", "r", "mystery", "D:/x", ""), "s").unwrap();
         let rows = aggregate([u].iter());
         assert!(rows[0].unpriced);
-        assert_eq!(rows[0].cost_usd, Some(0.0));
+        assert_eq!(rows[0].cost_usd, None);
     }
 }

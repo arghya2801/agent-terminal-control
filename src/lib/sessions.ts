@@ -21,19 +21,22 @@ export function resolveSessions(tabs: TabRef[], projects: Project[]): Map<TabKey
     const id = tab.boundSession ?? (tab.key.startsWith('session:') ? qualifiedSession(tab.key.slice(8)) : null);
     if (id) { out.set(tab.key, id); claimed.add(id); }
   }
-  const sessions = projects.flatMap(p => p.sessions);
+  const sessions = projects.flatMap((project) => project.sessions.map((session) => ({ project, session })));
   const candidates = new Map<TabKey, string[]>();
   for (const tab of tabs) {
     const provider = tab.provider ?? (tab.key.startsWith('claude:') ? 'claude' : null);
-    if (!provider || out.has(tab.key) || !tab.cwd) continue;
-    let mine = sessions.filter(s => s.provider === provider && s.cwd && samePath(s.cwd, tab.cwd!) &&
+    if (!provider || out.has(tab.key) || (!tab.cwd && !tab.projectKey)) continue;
+    let mine = sessions.filter(({ project, session: s }) => s.provider === provider &&
+      (s.cwd && tab.cwd ? samePath(s.cwd, tab.cwd) : !s.cwd &&
+        ((tab.projectKey && project.key === tab.projectKey) ||
+          (tab.cwd && project.path && samePath(project.path, tab.cwd)))) &&
       !claimed.has(sessionKey(s)) && !tab.existingSessions?.includes(sessionKey(s)) &&
       (provider === 'codex' ? s.createdAtMs ?? 0 : s.mtimeMs) >= tab.startedAt);
     if (provider === 'claude' && tab.claudeName) {
-      const named = mine.filter(s => s.label === tab.claudeName);
+      const named = mine.filter(({ session }) => session.label === tab.claudeName);
       if (named.length === 1) mine = named;
     }
-    candidates.set(tab.key, mine.map(sessionKey));
+    candidates.set(tab.key, mine.map(({ session }) => sessionKey(session)));
   }
   for (const [key, ids] of candidates) {
     if (ids.length !== 1) continue;

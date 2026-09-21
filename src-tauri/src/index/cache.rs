@@ -168,8 +168,9 @@ impl SessionCache {
                 *reader = super::codex::Reader::default();
             }
         }
+        let before = reader.clone();
         reader.update(path);
-        self.dirty = true;
+        self.dirty |= *reader != before;
         reader.session()
     }
 
@@ -404,6 +405,20 @@ mod tests {
         let p = d.path().join("index.json");
         std::fs::write(&p, r#"{"schema":999,"entries":{"x":{}}}"#).unwrap();
         assert!(SessionCache::load_from(&p).is_empty());
+    }
+
+    #[test]
+    fn a_codex_file_without_metadata_does_not_dirty_the_cache_on_every_scan() {
+        let d = tempfile::tempdir().unwrap();
+        let transcript = d.path().join("empty.jsonl");
+        let cache_path = d.path().join("index.json");
+        std::fs::write(&transcript, "{}\n").unwrap();
+        let mut cache = SessionCache::default();
+        assert!(cache.codex(&transcript).is_none());
+        assert!(cache.is_dirty());
+        cache.save_to(&cache_path).unwrap();
+        assert!(cache.codex(&transcript).is_none());
+        assert!(!cache.is_dirty());
     }
 
     #[test]

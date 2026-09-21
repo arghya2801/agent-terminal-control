@@ -186,3 +186,18 @@ export function isNativePaste(e: ChordEvent, bracketedPaste: boolean): boolean {
     !e.metaKey
   );
 }
+
+/**
+ * Codex binds Shift+Enter to insert a newline, but xterm/WebView2 can collapse it to
+ * ordinary Enter. Ctrl+J is ATC's alternate spelling for the same action.
+ */
+export function codexNewlineInput(e: ChordEvent): string | null {
+  if (e.type !== undefined && e.type !== 'keydown') return null;
+  if (e.altKey || e.metaKey) return null;
+  const matches =
+    (e.key.toLowerCase() === 'j' && e.ctrlKey && !e.shiftKey) ||
+    (e.key === 'Enter' && !e.ctrlKey && e.shiftKey);
+  // Codex binds Ctrl+J, whose terminal representation is a single LF byte. Sending a
+  // modified-Enter CSI-u sequence is not equivalent and is ignored by some Codex builds.
+  return matches ? '\n' : null;
+}

@@ -82,7 +82,7 @@ pub fn read_from(path: &Path, offset: u64, mut consume: impl FnMut(Value)) -> u6
     }
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Reader {
     pub offset: u64,
     pub meta: Option<SessionMeta>,
@@ -92,8 +92,11 @@ pub struct Reader {
 
 impl Reader {
     pub fn update(&mut self, path: &Path) {
+        // Record the stamp before reading. If the file grows during the read, the next
+        // scan sees a mismatch and reads the new tail instead of treating it as cached.
+        let before = std::fs::metadata(path).ok();
         self.offset = read_from(path, self.offset, |v| self.absorb(path, &v));
-        if let (Some(s), Ok(m)) = (&mut self.meta, std::fs::metadata(path)) {
+        if let (Some(s), Some(m)) = (&mut self.meta, before) {
             s.size = m.len();
             s.mtime_ms = super::session::mtime_ms(&m);
         }

@@ -129,11 +129,18 @@ describe('resolveSessions', () => {
     expect(resolveSessions([claudeTab()], [p]).has('claude:1' as TabKey)).toBe(false);
   });
 
-  it('does not guess when the launch directory is unknown', () => {
+  it('uses the tab project when a session has no recorded cwd', () => {
     const s = session('nodir', { cwd: null, mtimeMs: T0 + 10 });
     const p = project('D:\\Coding\\app', [s]);
     const tab = claudeTab({ cwd: null });
-    expect(resolveSessions([tab], [p]).get('claude:1' as TabKey)).toBeUndefined();
+    expect(resolveSessions([tab], [p]).get('claude:1' as TabKey)).toBe('claude:nodir');
+  });
+
+  it('uses the project path when a session has no cwd or matching project key', () => {
+    const s = session('nodir', { cwd: null, mtimeMs: T0 + 10 });
+    const p = project('D:\\Coding\\app', [s]);
+    const tab = claudeTab({ projectKey: null, cwd: 'D:/Coding/app' });
+    expect(resolveSessions([tab], [p]).get('claude:1' as TabKey)).toBe('claude:nodir');
   });
 
   it('does not assign sessions when launch windows overlap', () => {

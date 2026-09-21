@@ -19,7 +19,7 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 
 import { Channel, ptyAck, ptyKill, ptyResize, ptySpawn, ptyWrite } from '../lib/ipc';
-import { isNativePaste, matchChord, type Action } from '../lib/keymap';
+import { codexNewlineInput, isNativePaste, matchChord, type Action } from '../lib/keymap';
 import { decodeOsc52 } from '../lib/osc52';
 import type { Palette } from '../lib/theme';
 import { claudeTitle, usableTitle, type Activity } from '../lib/format';
@@ -210,6 +210,18 @@ export async function openTab(
     // Let the browser run its native paste, which xterm turns into a bracketed paste.
     // Otherwise Ctrl+V goes out as ^V, which Claude Code only reads as "paste an image".
     if (isNativePaste(e, term.modes.bracketedPasteMode)) return false;
+    const codexNewline = tab.provider === 'codex' ? codexNewlineInput(e) : null;
+    if (codexNewline !== null) {
+      e.preventDefault();
+      e.stopPropagation();
+      // xterm 6.0 cannot negotiate Codex's Kitty keyboard protocol. Sending LF as a
+      // synthetic key through ConPTY is consequently decoded inconsistently on Windows
+      // and makes the composer redraw without keeping the newline. Codex enables
+      // bracketed paste, so insert the literal newline as text instead of forging a key.
+      if (term.modes.bracketedPasteMode) term.paste(codexNewline);
+      else if (tab.ptyId) void ptyWrite(tab.ptyId, codexNewline);
+      return false;
+    }
     const action = matchChord(e);
     if (!action) return true;
     e.preventDefault();

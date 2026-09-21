@@ -129,7 +129,6 @@ fn hash_snapshot(snap: &IndexSnapshot) -> u64 {
     for p in &snap.projects {
         p.key.hash(&mut h);
         p.path.hash(&mut h);
-        p.last_active_ms.hash(&mut h);
         p.name.hash(&mut h);
         p.pinned.hash(&mut h);
         p.exists.hash(&mut h);
@@ -140,7 +139,6 @@ fn hash_snapshot(snap: &IndexSnapshot) -> u64 {
             s.created_at_ms.hash(&mut h);
             s.activity.hash(&mut h);
             s.activity_sequence.hash(&mut h);
-            s.mtime_ms.hash(&mut h);
             s.cwd.hash(&mut h);
             std::mem::discriminant(&s.label_source).hash(&mut h);
             s.label.hash(&mut h);
@@ -234,6 +232,20 @@ mod tests {
         );
         assert!(idx.scan_if_changed(&s, false).is_none(), "nothing changed");
         assert!(idx.scan_if_changed(&s, false).is_none());
+    }
+
+    #[test]
+    fn activity_timestamps_do_not_change_the_rendered_projection_hash() {
+        let d = tempfile::tempdir().unwrap();
+        let mut snap = index(&d).scan(&fixture_settings(), false);
+        let before = hash_snapshot(&snap);
+        for project in &mut snap.projects {
+            project.last_active_ms += 1;
+            for session in &mut project.sessions {
+                session.mtime_ms += 1;
+            }
+        }
+        assert_eq!(hash_snapshot(&snap), before);
     }
 
     #[test]

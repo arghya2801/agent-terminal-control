@@ -13,17 +13,22 @@
     appState.settings ? structuredClone($state.snapshot(appState.settings)) : null,
   );
   let resumeArgs = $state(appState.settings?.claude.resumeArgs.join('\n') ?? '');
+  let codexResumeArgs = $state(appState.settings?.codex.resumeArgs.join('\n') ?? '');
   let saved = $state(false);
 
   const dirty = $derived(
     !!draft &&
       !!appState.settings &&
-      JSON.stringify({ ...draft, claude: { ...draft.claude, resumeArgs: splitArgs(resumeArgs) } }) !==
+      JSON.stringify({
+        ...draft,
+        codex: { ...draft.codex, resumeArgs: splitArgs(codexResumeArgs) },
+        claude: { ...draft.claude, resumeArgs: splitArgs(resumeArgs) },
+      }) !==
         JSON.stringify(appState.settings),
   );
 
   function splitArgs(s: string): string[] {
-    return s.split('\n').filter((arg) => arg.trim().length > 0);
+    return s.split('\n').map((arg) => arg.trim()).filter((arg) => arg.length > 0);
   }
 
   /**
@@ -62,6 +67,12 @@
         fontSize: clamp(draft.terminal.fontSize, 6, 48, 13),
         scrollback: clamp(draft.terminal.scrollback, 0, 1_000_000, 10_000),
       },
+      codex: {
+        ...draft.codex,
+        command: draft.codex.command.trim() || 'codex',
+        resumeArgs: splitArgs(codexResumeArgs),
+        homeDir: draft.codex.homeDir?.trim() || null,
+      },
       claude: {
         ...draft.claude,
         command: draft.claude.command.trim() || 'claude',
@@ -78,6 +89,7 @@
     await refresh();
     draft = structuredClone(next);
     resumeArgs = next.claude.resumeArgs.join('\n');
+    codexResumeArgs = next.codex.resumeArgs.join('\n');
     saved = true;
     setTimeout(() => (saved = false), 1500);
   }
@@ -90,10 +102,11 @@
   }
 
   function sessionLabel(id: string): string {
+    const shortId = id.slice(id.indexOf(':') + 1, id.indexOf(':') + 9);
     for (const p of appState.index.projects) {
-      if (p.sessions.some((s) => sessionKey(s) === id)) return `${p.name} · ${id.slice(0, 8)}`;
+      if (p.sessions.some((s) => sessionKey(s) === id)) return `${p.name} · ${shortId}`;
     }
-    return id.slice(0, 8);
+    return shortId;
   }
 </script>
 
@@ -158,7 +171,7 @@
       <label for="codex-command">Command</label>
       <input id="codex-command" class="wide" bind:value={draft.codex.command} />
       <label for="codex-resume">Resume arguments, one per line</label>
-      <textarea id="codex-resume" value={draft.codex.resumeArgs.join('\n')} oninput={(e) => { if (draft) draft.codex.resumeArgs = e.currentTarget.value.split('\n'); }}></textarea>
+      <textarea id="codex-resume" bind:value={codexResumeArgs}></textarea>
       <label for="codex-home">Codex home</label>
       <input id="codex-home" class="wide" placeholder="CODEX_HOME or ~/.codex" bind:value={draft.codex.homeDir} />
       <p class="muted">Codex manages authentication, models, permissions, and CLI configuration.</p>

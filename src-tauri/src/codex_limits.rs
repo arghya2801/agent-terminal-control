@@ -12,8 +12,12 @@ pub struct Client {
 }
 
 impl Client {
+    fn child(&self) -> std::sync::MutexGuard<'_, Option<Child>> {
+        self.child.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     pub fn stop(&self) {
-        if let Some(mut child) = self.child.lock().expect("codex child").take() {
+        if let Some(mut child) = self.child().take() {
             #[cfg(windows)]
             {
                 use std::os::windows::process::CommandExt;
@@ -31,7 +35,7 @@ impl Client {
     }
 
     pub fn read(&self, settings: &crate::settings::Settings) -> Result<Value, String> {
-        let _request = self.request.lock().map_err(|e| e.to_string())?;
+        let _request = self.request.lock().unwrap_or_else(|e| e.into_inner());
         let exe = &settings.codex.command;
         let resolved = crate::pty::shell::resolve_shell(Some(exe))
             .map_err(|e| format!("Codex `{exe}` app-server unavailable: {e}"))?;
@@ -47,12 +51,20 @@ impl Client {
             use std::os::windows::process::CommandExt;
             command.creation_flags(0x08000000);
         }
-        let mut slot = self.child.lock().expect("codex child");
+        let mut slot = self.child();
         let mut child = command
             .spawn()
             .map_err(|e| format!("Codex `{exe}` app-server unavailable: {e}"))?;
-        let stdout = child.stdout.take().ok_or("Codex stdout unavailable")?;
-        let mut stdin = child.stdin.take().ok_or("Codex stdin unavailable")?;
+        let Some(stdout) = child.stdout.take() else {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("Codex stdout unavailable".into());
+        };
+        let Some(mut stdin) = child.stdin.take() else {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("Codex stdin unavailable".into());
+        };
         *slot = Some(child);
         drop(slot);
         let (tx, rx) = mpsc::sync_channel(64);
