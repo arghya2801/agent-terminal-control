@@ -1,7 +1,7 @@
 # Builds the Windows artefacts for a version tag and attaches them to a draft release.
 #
 # Releases were built by hand, which also meant a running atc.exe locking target/release.
-# Push a tag (`git tag v0.1.2 && git push origin v0.1.2`), then edit and publish the draft
+# Push a tag (`git tag v0.2.0 && git push origin v0.2.0`), then edit and publish the draft
 # this leaves behind.
 #
 # The binaries are unsigned, exactly as the hand-built ones were: no certificate is
