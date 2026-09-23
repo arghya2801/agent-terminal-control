@@ -276,23 +276,6 @@ fn configure_terminal_environment(cmd: &mut CommandBuilder) {
     cmd.env("TERM", "xterm-256color");
 }
 
-#[cfg(test)]
-mod environment_tests {
-    use super::*;
-
-    #[test]
-    fn interactive_shell_does_not_inherit_no_color() {
-        let mut cmd = CommandBuilder::new("pwsh");
-        cmd.env("NO_COLOR", "1");
-        configure_terminal_environment(&mut cmd);
-        assert!(cmd.get_env("NO_COLOR").is_none());
-        assert_eq!(
-            cmd.get_env("TERM"),
-            Some(std::ffi::OsStr::new("xterm-256color"))
-        );
-    }
-}
-
 /// Blocks on the child and reports its exit through the pump queue.
 ///
 /// We cannot rely on the reader hitting EOF: we hold the master handle open for the
@@ -450,5 +433,22 @@ fn send_text(ch: &Channel<PtyEvent>, text: &str, stats: &PtyStats) {
         {
             break;
         }
+    }
+}
+
+#[cfg(test)]
+mod environment_tests {
+    use super::*;
+
+    #[test]
+    fn interactive_shell_does_not_inherit_no_color() {
+        let mut cmd = CommandBuilder::new("pwsh");
+        cmd.env("NO_COLOR", "1");
+        configure_terminal_environment(&mut cmd);
+        assert!(cmd.get_env("NO_COLOR").is_none());
+        assert_eq!(
+            cmd.get_env("TERM"),
+            Some(std::ffi::OsStr::new("xterm-256color"))
+        );
     }
 }
