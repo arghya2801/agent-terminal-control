@@ -143,7 +143,7 @@ describe('resolveSessions', () => {
     expect(resolveSessions([tab], [p]).get('claude:1' as TabKey)).toBe('claude:nodir');
   });
 
-  it('does not assign sessions when launch windows overlap', () => {
+  it('resolves overlapping launch windows when only one assignment fits', () => {
     const first = session('first', { mtimeMs: T0 + 100 });
     const second = session('second', { mtimeMs: T0 + 900 });
     const p = project('D:\\Coding\\app', [first, second]);
@@ -156,8 +156,13 @@ describe('resolveSessions', () => {
       [p],
     );
 
-    expect(got.size).toBe(0);
-
+    expect(got.get('claude:1' as TabKey)).toBe('claude:first');
+    expect(got.get('claude:2' as TabKey)).toBe('claude:second');
+  });
+  it('does not give one session to two simultaneous launches', () => {
+    const p = project('D:\\Coding\\app', [session('only', { mtimeMs: T0 + 100 })]);
+    const tabs = [claudeTab({ key: 'claude:1' as TabKey }), claudeTab({ key: 'claude:2' as TabKey })];
+    expect(resolveSessions(tabs, [p]).size).toBe(0);
   });
 
   it('returns nothing for a plain shell tab', () => {
@@ -177,6 +182,18 @@ it('uses provider and Codex creation time, excluding old sessions with new write
   const tab = claudeTab({ key: 'agent:codex:1', provider: 'codex' });
   expect(resolveSessions([tab], [p]).get(tab.key)).toBe('codex:same');
   expect(resolveSessions([{ ...tab, boundSession: 'codex:same' }], []) .get(tab.key)).toBe('codex:same');
+});
+
+it('pairs Codex tabs when both new conversations appear in one index update', () => {
+  const p = project('D:\\Coding\\app', [
+    session('first', { provider: 'codex', createdAtMs: T0 + 100 }),
+    session('second', { provider: 'codex', createdAtMs: T0 + 900 }),
+  ]);
+  const first = claudeTab({ key: 'agent:codex:1', provider: 'codex' });
+  const second = claudeTab({ key: 'agent:codex:2', provider: 'codex', startedAt: T0 + 500 });
+  const got = resolveSessions([first, second], [p]);
+  expect(got.get(first.key)).toBe('codex:first');
+  expect(got.get(second.key)).toBe('codex:second');
 });
 
 it('excludes conversations already present at launch even when they are updated', () => {

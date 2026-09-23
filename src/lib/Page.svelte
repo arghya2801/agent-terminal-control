@@ -102,7 +102,8 @@
     background: var(--accent-strong);
     color: var(--on-accent);
   }
-  .body :global(input) {
+  .body :global(input),
+  .body :global(select) {
     padding: 5px 8px;
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -111,8 +112,12 @@
     font: inherit;
     font-size: 12px;
   }
-  .body :global(input:focus) {
+  .body :global(input:focus),
+  .body :global(select:focus) {
     border-color: var(--accent);
     outline: none;
+  }
+  .body :global(select) {
+    cursor: pointer;
   }
 </style>

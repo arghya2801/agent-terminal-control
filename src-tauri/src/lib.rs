@@ -149,17 +149,43 @@ fn start_settings_watcher(app: &tauri::AppHandle) {
 }
 
 pub(crate) fn start_watcher(app: &tauri::AppHandle) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
     let state = app.state::<AppState>();
     let settings = state.settings.get();
     let root = settings.claude_projects_dir();
     let codex_home = settings.codex_home();
+    let watched = [
+        index::watcher::watch_point(&root).map(|(path, _)| path),
+        index::watcher::watch_point(&codex_home).map(|(path, _)| path),
+    ];
+    let rearming = Arc::new(AtomicBool::new(false));
 
     let handle = app.clone();
+    let watched_root = root.clone();
+    let watched_codex = codex_home.clone();
     let watcher = index::watcher::watch_roots(&root, Some(&codex_home), move || {
         let state = handle.state::<AppState>();
         // A live session appends constantly; only emit when the projection differs.
         if let Some(snap) = state.index.scan_if_changed(&state.settings.get(), false) {
             let _ = handle.emit(EVENT_INDEX_UPDATED, snap);
+        }
+        let current = [
+            index::watcher::watch_point(&watched_root).map(|(path, _)| path),
+            index::watcher::watch_point(&watched_codex).map(|(path, _)| path),
+        ];
+        if current != watched && !rearming.swap(true, Ordering::AcqRel) {
+            // Replacing the current watcher on its callback thread could join itself.
+            let handle = handle.clone();
+            std::thread::spawn(move || {
+                start_watcher(&handle);
+                // Catch files written between the first scan and the new watch.
+                let state = handle.state::<AppState>();
+                if let Some(snap) = state.index.scan_if_changed(&state.settings.get(), false) {
+                    let _ = handle.emit(EVENT_INDEX_UPDATED, snap);
+                }
+            });
         }
     });
 

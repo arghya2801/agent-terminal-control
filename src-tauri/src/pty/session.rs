@@ -163,7 +163,7 @@ impl PtySession {
                 cmd.cwd(dunce::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()));
             }
         }
-        cmd.env("TERM", "xterm-256color");
+        configure_terminal_environment(&mut cmd);
 
         let child = pty
             .slave
@@ -266,6 +266,30 @@ impl PtySession {
             *paused = false;
             cv.notify_all();
         }
+    }
+}
+
+fn configure_terminal_environment(cmd: &mut CommandBuilder) {
+    // The process that launched ATC may set NO_COLOR=1 for its own logs. Do not
+    // pass that into interactive shells, where it disables Claude, Codex and prompt colours.
+    cmd.env_remove("NO_COLOR");
+    cmd.env("TERM", "xterm-256color");
+}
+
+#[cfg(test)]
+mod environment_tests {
+    use super::*;
+
+    #[test]
+    fn interactive_shell_does_not_inherit_no_color() {
+        let mut cmd = CommandBuilder::new("pwsh");
+        cmd.env("NO_COLOR", "1");
+        configure_terminal_environment(&mut cmd);
+        assert!(cmd.get_env("NO_COLOR").is_none());
+        assert_eq!(
+            cmd.get_env("TERM"),
+            Some(std::ffi::OsStr::new("xterm-256color"))
+        );
     }
 }
 

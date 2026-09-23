@@ -5,7 +5,7 @@
 //! hard and debounced, and the rendered projection is compared rather than the events
 //! themselves — see `Index::scan_if_changed`.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use notify::RecursiveMode;
@@ -17,8 +17,21 @@ pub const DEBOUNCE: Duration = Duration::from_millis(400);
 /// this is owned by `AppState` rather than dropped at the end of setup.
 pub type SessionWatcher = Debouncer<notify::RecommendedWatcher, RecommendedCache>;
 
-fn watchable_root(target: &Path) -> Option<&Path> {
-    target.is_dir().then_some(target)
+/// Watch a missing root's closest existing parent without recursively scanning it.
+/// Each newly created path component lets the caller move the watch closer.
+pub fn watch_point(target: &Path) -> Option<(PathBuf, RecursiveMode)> {
+    let mut path = target;
+    loop {
+        if path.is_dir() {
+            let mode = if path == target {
+                RecursiveMode::Recursive
+            } else {
+                RecursiveMode::NonRecursive
+            };
+            return Some((path.to_path_buf(), mode));
+        }
+        path = path.parent()?;
+    }
 }
 
 /// Whether a changed path could affect the sidebar.
@@ -88,17 +101,20 @@ where
             on_change();
         }
     })?;
-    let mut watched = std::collections::HashSet::new();
+    let mut watched = std::collections::HashMap::new();
     for target in targets {
-        // Never fall back to an ancestor. A missing ~/.codex or ~/.claude/projects
-        // would otherwise turn this into a recursive watch of the whole user profile.
-        if let Some(root) =
-            watchable_root(&target).filter(|root| watched.insert(root.to_path_buf()))
-        {
-            // One inaccessible provider must not disable the other watcher.
-            if let Err(e) = debouncer.watch(root, RecursiveMode::Recursive) {
-                eprintln!("could not watch {}: {e}", root.display());
+        if let Some((path, mode)) = watch_point(&target) {
+            if matches!(mode, RecursiveMode::Recursive) {
+                watched.insert(path, RecursiveMode::Recursive);
+            } else {
+                watched.entry(path).or_insert(RecursiveMode::NonRecursive);
             }
+        }
+    }
+    for (path, mode) in watched {
+        // One inaccessible provider must not disable the other watcher.
+        if let Err(e) = debouncer.watch(&path, mode) {
+            eprintln!("could not watch {}: {e}", path.display());
         }
     }
     Ok(debouncer)
@@ -114,16 +130,40 @@ mod tests {
     }
 
     #[test]
-    fn missing_roots_do_not_expand_the_watch_to_their_existing_ancestor() {
+    fn missing_roots_watch_only_the_nearest_existing_parent() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
         let d = tempfile::tempdir().unwrap();
         let claude = d.path().join("claude/projects");
         let codex = d.path().join("codex");
-        assert_eq!(watchable_root(&claude), None);
-        assert_eq!(watchable_root(&codex), None);
-        let _watcher = watch_roots(&claude, Some(&codex), || {}).unwrap();
-        std::fs::create_dir_all(codex.join("sessions/2026/09")).unwrap();
-        std::fs::write(codex.join("sessions/2026/09/new.jsonl"), "{}\n").unwrap();
-        assert_eq!(watchable_root(d.path()), Some(d.path()));
+        assert_eq!(watch_point(&claude).unwrap().0, d.path());
+        assert!(matches!(
+            watch_point(&codex).unwrap().1,
+            RecursiveMode::NonRecursive
+        ));
+        let hits = Arc::new(AtomicUsize::new(0));
+        let seen = Arc::clone(&hits);
+        let _watcher = watch_roots(&claude, Some(&codex), move || {
+            seen.fetch_add(1, Ordering::Relaxed);
+        })
+        .unwrap();
+        std::thread::sleep(Duration::from_millis(150));
+        std::fs::create_dir(&codex).unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while hits.load(Ordering::Relaxed) == 0 && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(
+            hits.load(Ordering::Relaxed) > 0,
+            "missing root creation was not observed"
+        );
+        assert!(matches!(
+            watch_point(&codex).unwrap().1,
+            RecursiveMode::Recursive
+        ));
+        std::fs::create_dir(d.path().join("claude")).unwrap();
+        assert_eq!(watch_point(&claude).unwrap().0, d.path().join("claude"));
     }
 
     #[test]

@@ -38,11 +38,18 @@ export function resolveSessions(tabs: TabRef[], projects: Project[]): Map<TabKey
     }
     candidates.set(tab.key, mine.map(({ session }) => sessionKey(session)));
   }
-  for (const [key, ids] of candidates) {
-    if (ids.length !== 1) continue;
-    const id = ids[0];
-    if ([...candidates].some(([other, matches]) => other !== key && matches.includes(id))) continue;
-    out.set(key, id);
+  // Assign a sole candidate, then remove it from other tabs and repeat. Two tabs
+  // with the same sole candidate still remain unbound.
+  while (true) {
+    const singles = [...candidates].filter(([, ids]) => ids.length === 1);
+    const unique = singles.filter(([, ids]) => singles.filter(([, other]) => other[0] === ids[0]).length === 1);
+    if (unique.length === 0) break;
+    for (const [key, [id]] of unique) {
+      out.set(key, id);
+      candidates.delete(key);
+    }
+    const assigned = new Set(unique.map(([, [id]]) => id));
+    for (const [key, ids] of candidates) candidates.set(key, ids.filter((id) => !assigned.has(id)));
   }
   return out;
 }

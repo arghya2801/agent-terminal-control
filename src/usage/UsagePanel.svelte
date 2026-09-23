@@ -194,7 +194,7 @@
   }
 
   let groupBy = $state<'project' | 'model' | 'session'>('project');
-  let metric = $state<'tokens' | 'cost'>('tokens');
+  let metric = $state<'tokens' | 'cost'>('cost');
   /** Project keys whose sessions are shown. */
   let expanded = $state<Set<string>>(new Set());
 
@@ -260,6 +260,8 @@
 </script>
 
 <Page title="Usage" {onClose}>
+  <div class="plan-grid">
+  <section class="plan-card" aria-label="Claude plan limits">
   <h2>
     Claude plan limits
     {#if typeof plan?.subscriptionType === 'string'}<span class="tag">{plan.subscriptionType}</span>{/if}
@@ -318,6 +320,8 @@
     {/if}
   </div>
 
+  </section>
+  <section class="plan-card" aria-label="Codex plan limits">
   <h2>Codex plan limits</h2>
   {#if codexError}<p class="err">{codexError}</p>{/if}
   {#if codexLoading && !codexPlan}<p class="muted">Loading Codex limits…</p>
@@ -335,6 +339,8 @@
     <p class="muted">5-hour limit: not reported by Codex for this account. ATC cannot calculate it from local token counts.</p>
   {/if}
   <button class="btn" onclick={loadCodex} disabled={codexLoading}>Refresh Codex limits</button>
+  </section>
+  </div>
 
   <h2>Local usage</h2>
   <p class="muted">
@@ -493,6 +499,14 @@
 </Page>
 
 <style>
+  .plan-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+    gap: 24px;
+  }
+  .plan-card {
+    min-width: 0;
+  }
   .tag {
     margin-left: 6px;
     padding: 1px 6px;
@@ -529,6 +543,8 @@
   .limit-head {
     display: flex;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px 12px;
     margin-bottom: 5px;
     color: var(--fg);
     font-size: 13px;
