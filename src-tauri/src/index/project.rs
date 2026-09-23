@@ -127,7 +127,12 @@ pub fn build(sessions: Vec<SessionMeta>, settings: &Settings) -> IndexSnapshot {
             if let Some(name) = settings
                 .projects
                 .session_names
-                .get(&s.id)
+                .get(&s.provider.key(&s.id))
+                .or_else(|| {
+                    (s.provider == crate::agent::AgentProvider::Claude)
+                        .then(|| settings.projects.session_names.get(&s.id))
+                        .flatten()
+                })
                 .map(|n| n.trim())
                 .filter(|n| !n.is_empty())
             {
@@ -180,6 +185,10 @@ mod tests {
 
     fn sess(id: &str, cwd: Option<&str>, mtime: u64) -> SessionMeta {
         SessionMeta {
+            provider: crate::agent::AgentProvider::Claude,
+            created_at_ms: None,
+            activity: None,
+            activity_sequence: 0,
             id: id.into(),
             file: PathBuf::from(format!("{id}.jsonl")),
             cwd: cwd.map(PathBuf::from),

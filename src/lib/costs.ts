@@ -7,6 +7,8 @@ export interface ProjectSpend {
   name: string;
   cost: number;
   tokens: number;
+  partial?: boolean;
+  unavailable?: boolean;
 }
 
 /** One model, or one session inside a project. */
@@ -14,17 +16,22 @@ export interface Spend {
   key: string;
   cost: number;
   tokens: number;
+  partial?: boolean;
+  unavailable?: boolean;
 }
 
 export interface SpendSummary {
   total: number;
   tokens: number;
+  partial?: boolean;
+  unavailable?: boolean;
   byProject: ProjectSpend[];
   byModel: Spend[];
+  bySession: Spend[];
   /** Sessions of each project, by project key, most expensive first. */
   sessionsByProject: Map<string, Spend[]>;
-  /** Every day in the range, oldest first, including days with no spend. */
-  byDay: { day: string; cost: number }[];
+  /** Days from the first recorded usage in the range, including gaps. */
+  byDay: { day: string; cost: number; tokens: number }[];
   unpricedModels: string[];
 }
 
@@ -72,50 +79,68 @@ export function summarize(
 ): SpendSummary {
   const projects = new Map<string, ProjectSpend>();
   const models = new Map<string, Spend>();
+  const allSessions = new Map<string, Spend>();
   const sessions = new Map<string, Map<string, Spend>>();
   const days = new Map<string, number>();
+  const dayTokens = new Map<string, number>();
   const unpriced = new Set<string>();
   let total = 0;
   let tokens = 0;
+  let partial = false;
+  let priced = false;
 
   for (const r of rows) {
     const day = hourToLocalDay(r.hour);
     if (day < from || day > to) continue;
-    const t = r.input + r.output + r.cacheWrite + r.cacheRead;
-    total += r.costUsd;
+    const t = r.totalTokens;
+    const cost = r.costUsd ?? 0;
+    const unavailable = r.costUsd === null;
+    const rowPartial = unavailable || r.unpriced;
+    partial ||= rowPartial;
+    priced ||= !unavailable;
+    total += cost;
     tokens += t;
-    days.set(day, (days.get(day) ?? 0) + r.costUsd);
+    days.set(day, (days.get(day) ?? 0) + cost);
+    dayTokens.set(day, (dayTokens.get(day) ?? 0) + t);
     if (r.unpriced) unpriced.add(r.model);
     const owner = projectOf(r.projectKey, r.projectPath);
     let p = projects.get(owner.key);
     if (!p) {
-      p = { ...owner, cost: 0, tokens: 0 };
+      p = { ...owner, cost: 0, tokens: 0, ...(unavailable ? { unavailable: true } : {}), ...(rowPartial ? { partial: true } : {}) };
       projects.set(owner.key, p);
     }
-    p.cost += r.costUsd;
+    p.cost += cost;
     p.tokens += t;
-    add(models, r.model, r.costUsd, t);
+    if (rowPartial) p.partial = true;
+    if (!unavailable && p.unavailable) p.unavailable = false;
+    add(models, `${r.provider}:${r.model}`, cost, t, rowPartial, unavailable);
     let inProject = sessions.get(owner.key);
     if (!inProject) {
       inProject = new Map();
       sessions.set(owner.key, inProject);
     }
-    add(inProject, r.sessionId, r.costUsd, t);
+    add(inProject, `${r.provider}:${r.sessionId}`, cost, t, rowPartial, unavailable);
+    add(allSessions, `${r.provider}:${r.sessionId}`, cost, t, rowPartial, unavailable);
   }
 
   return {
     total,
     tokens,
+    partial,
+    unavailable: partial && !priced,
     byProject: [...projects.values()].sort((a, b) => b.cost - a.cost),
     byModel: dearestFirst(models),
+    bySession: dearestFirst(allSessions),
     sessionsByProject: new Map([...sessions].map(([k, v]) => [k, dearestFirst(v)])),
-    byDay: daysBetween(from, to).map((day) => ({ day, cost: days.get(day) ?? 0 })),
+    byDay: days.size ? daysBetween([...days.keys()].sort()[0], to).map((day) => ({ day, cost: days.get(day) ?? 0, tokens: dayTokens.get(day) ?? 0 })) : [],
     unpricedModels: [...unpriced].sort(),
   };
 }
 
-function add(into: Map<string, Spend>, key: string, cost: number, tokens: number) {
-  const s = into.get(key) ?? { key, cost: 0, tokens: 0 };
+function add(into: Map<string, Spend>, key: string, cost: number, tokens: number, partial: boolean, unavailable: boolean) {
+  const s = into.get(key) ?? { key, cost: 0, tokens: 0, ...(unavailable ? { unavailable: true } : {}), ...(partial ? { partial: true } : {}) };
+  if (partial) s.partial = true;
+  if (!unavailable && s.unavailable) s.unavailable = false;
   s.cost += cost;
   s.tokens += tokens;
   into.set(key, s);
@@ -136,24 +161,27 @@ export function toCsv(
   projectOf: (key: string, path: string | null) => { key: string; name: string },
 ): string {
   const q = (v: string | number) => `"${String(v).replaceAll('"', '""')}"`;
-  const header = ['day', 'hour_utc', 'project', 'path', 'model', 'session', 'input', 'output', 'cache_write', 'cache_read', 'cost_usd'];
+  const header = ['provider', 'day', 'hour_utc', 'project', 'path', 'model', 'session', 'input', 'output', 'cache_write', 'cache_read', 'reasoning', 'total_tokens', 'cost_usd'];
   const lines = [header.map(q).join(',')];
   for (const r of rows) {
     const day = hourToLocalDay(r.hour);
     if (day < from || day > to) continue;
     lines.push(
       [
+        r.provider,
         day,
         r.hour,
         projectOf(r.projectKey, r.projectPath).name,
         r.projectPath ?? '',
         r.model,
-        r.sessionId,
+        `${r.provider}:${r.sessionId}`,
         r.input,
         r.output,
         r.cacheWrite,
         r.cacheRead,
-        r.costUsd.toFixed(6),
+        r.reasoning,
+        r.totalTokens,
+        r.costUsd === null ? '' : r.costUsd.toFixed(6),
       ]
         .map(q)
         .join(','),
@@ -171,4 +199,8 @@ export function formatTokens(n: number): string {
   if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
   if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
   return String(n);
+}
+
+export function monetary(s: { cost: number; partial?: boolean; unavailable?: boolean }): string {
+  return s.unavailable ? 'Unavailable' : `${formatUsd(s.cost)}${s.partial ? ' (partial)' : ''}`;
 }

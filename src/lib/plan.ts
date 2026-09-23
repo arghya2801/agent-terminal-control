@@ -10,6 +10,7 @@ export interface PlanLimit {
   label: string;
   percent: number;
   resetsAt: string | null;
+  windowMinutes?: number;
 }
 
 const KIND_LABELS: Record<string, string> = {
@@ -71,4 +72,34 @@ export function weeklyBreakdown(plan: Record<string, unknown>): { name: string; 
       ? [{ name: r.display_name, percent: r.percent }]
       : [],
   );
+}
+
+
+export function limitDuration(minutes: unknown): string {
+  if (typeof minutes !== 'number' || !Number.isFinite(minutes) || minutes <= 0) return 'duration unavailable';
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const remaining = minutes % 60;
+  return [[days, 'day'], [hours, 'hour'], [remaining, 'minute']]
+    .filter(([amount]) => Number(amount) > 0)
+    .map(([amount, unit]) => `${amount} ${unit}${amount === 1 ? '' : 's'}`)
+    .join(' ');
+}
+
+/** Codex reports its own window durations. Missing windows are unavailable. */
+export function codexLimits(plan: Record<string, unknown>): PlanLimit[] {
+  const buckets = isObj(plan.rateLimitsByLimitId) && Object.keys(plan.rateLimitsByLimitId).length
+    ? Object.entries(plan.rateLimitsByLimitId) : [['codex', plan.rateLimits] as const];
+  return buckets.flatMap(([id, bucket]) => {
+    if (!isObj(bucket)) return [];
+    return ['primary', 'secondary'].flatMap(kind => {
+      const w = bucket[kind];
+      if (!isObj(w) || typeof w.usedPercent !== 'number' || !Number.isFinite(w.usedPercent)) return [];
+      const duration = limitDuration(w.windowDurationMins);
+      const reset = typeof w.resetsAt === 'number' ? new Date(w.resetsAt * 1000) : null;
+      return [{ key: `${id}:${kind}`, label: `${typeof bucket.limitName === 'string' ? bucket.limitName : id} · ${duration}`,
+        windowMinutes: typeof w.windowDurationMins === 'number' ? w.windowDurationMins : undefined,
+        percent: clampPct(w.usedPercent), resetsAt: reset && Number.isFinite(reset.getTime()) ? reset.toISOString() : null }];
+    });
+  });
 }

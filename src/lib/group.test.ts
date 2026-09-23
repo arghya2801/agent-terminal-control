@@ -7,6 +7,7 @@ function session(mtimeMs: number, cwd: string | null = null): SessionMeta {
   seq += 1;
   return {
     id: `s${seq}`,
+    provider: 'claude',
     file: `s${seq}.jsonl`,
     cwd,
     gitBranch: null,

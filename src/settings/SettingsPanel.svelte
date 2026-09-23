@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { sessionKey } from '../lib/agents';
   import Page from '../lib/Page.svelte';
   import { openSettingsFile } from '../lib/ipc';
   import { appState, refresh, saveSettings, themeState } from '../lib/stores.svelte';
@@ -11,18 +12,23 @@
   let draft = $state<Settings | null>(
     appState.settings ? structuredClone($state.snapshot(appState.settings)) : null,
   );
-  let resumeArgs = $state(appState.settings?.claude.resumeArgs.join(' ') ?? '');
+  let resumeArgs = $state(appState.settings?.claude.resumeArgs.join('\n') ?? '');
+  let codexResumeArgs = $state(appState.settings?.codex.resumeArgs.join('\n') ?? '');
   let saved = $state(false);
 
   const dirty = $derived(
     !!draft &&
       !!appState.settings &&
-      JSON.stringify({ ...draft, claude: { ...draft.claude, resumeArgs: splitArgs(resumeArgs) } }) !==
+      JSON.stringify({
+        ...draft,
+        codex: { ...draft.codex, resumeArgs: splitArgs(codexResumeArgs) },
+        claude: { ...draft.claude, resumeArgs: splitArgs(resumeArgs) },
+      }) !==
         JSON.stringify(appState.settings),
   );
 
   function splitArgs(s: string): string[] {
-    return s.split(/\s+/).filter(Boolean);
+    return s.split('\n').map((arg) => arg.trim()).filter((arg) => arg.length > 0);
   }
 
   /**
@@ -61,6 +67,12 @@
         fontSize: clamp(draft.terminal.fontSize, 6, 48, 13),
         scrollback: clamp(draft.terminal.scrollback, 0, 1_000_000, 10_000),
       },
+      codex: {
+        ...draft.codex,
+        command: draft.codex.command.trim() || 'codex',
+        resumeArgs: splitArgs(codexResumeArgs),
+        homeDir: draft.codex.homeDir?.trim() || null,
+      },
       claude: {
         ...draft.claude,
         command: draft.claude.command.trim() || 'claude',
@@ -76,7 +88,8 @@
     // Renames and the projects directory only show up after a rescan.
     await refresh();
     draft = structuredClone(next);
-    resumeArgs = next.claude.resumeArgs.join(' ');
+    resumeArgs = next.claude.resumeArgs.join('\n');
+    codexResumeArgs = next.codex.resumeArgs.join('\n');
     saved = true;
     setTimeout(() => (saved = false), 1500);
   }
@@ -89,10 +102,11 @@
   }
 
   function sessionLabel(id: string): string {
+    const shortId = id.slice(id.indexOf(':') + 1, id.indexOf(':') + 9);
     for (const p of appState.index.projects) {
-      if (p.sessions.some((s) => s.id === id)) return `${p.name} · ${id.slice(0, 8)}`;
+      if (p.sessions.some((s) => sessionKey(s) === id)) return `${p.name} · ${shortId}`;
     }
-    return id.slice(0, 8);
+    return shortId;
   }
 </script>
 
@@ -109,7 +123,7 @@
       <label for="rt">Restore tabs</label>
       <label class="check">
         <input id="rt" type="checkbox" bind:checked={draft.ui.restoreTabs} />
-        <span class="muted">Reopen the tabs from last time on launch; Claude sessions resume</span>
+        <span class="muted">Reopen the tabs from last time on launch; agent sessions resume</span>
       </label>
       <label for="gs">Group subfolders</label>
       <label class="check">
@@ -119,7 +133,7 @@
       <label for="nt">Notifications</label>
       <label class="check">
         <input id="nt" type="checkbox" bind:checked={draft.ui.notifications} />
-        <span class="muted">Notify when a background Claude session finishes or needs input while ATC is not focused</span>
+        <span class="muted">Notify when a background agent session finishes or needs input while ATC is not focused</span>
       </label>
     </div>
 
@@ -152,16 +166,27 @@
       </div>
     </div>
 
+    <h2>Codex</h2>
+    <div class="fields">
+      <label for="codex-command">Command</label>
+      <input id="codex-command" class="wide" bind:value={draft.codex.command} />
+      <label for="codex-resume">Resume arguments, one per line</label>
+      <textarea id="codex-resume" bind:value={codexResumeArgs}></textarea>
+      <label for="codex-home">Codex home</label>
+      <input id="codex-home" class="wide" placeholder="CODEX_HOME or ~/.codex" bind:value={draft.codex.homeDir} />
+      <p class="muted">Codex manages authentication, models, permissions, and CLI configuration.</p>
+    </div>
+
     <h2>Claude</h2>
     <div class="grid">
       <label for="cc">Command</label>
       <input id="cc" bind:value={draft.claude.command} />
-      <label for="ra">Resume arguments</label>
+      <label for="ra">Resume arguments, one per line</label>
       <div>
-        <input id="ra" class="wide" bind:value={resumeArgs} />
+        <textarea id="ra" class="wide" bind:value={resumeArgs}></textarea>
         <div class="muted hint"><code>{'{session}'}</code> becomes the session id</div>
       </div>
-      <label for="sd">Ask Claude directory</label>
+      <label for="sd">Scratch directory</label>
       <div>
         <input
           id="sd"
@@ -170,7 +195,7 @@
           value={draft.claude.scratchDir ?? ''}
           oninput={(e) => draft && (draft.claude.scratchDir = e.currentTarget.value)}
         />
-        <div class="muted hint">Where the ✳ button runs Claude, for questions with no project</div>
+        <div class="muted hint">Shared directory for Ask agent sessions</div>
       </div>
       <label for="pd">Projects directory</label>
       <div>
@@ -201,7 +226,7 @@
       <div class="rename-row">
         <input class="wide" bind:value={draft.projects.sessionNames[id]} aria-label="Name for session {id}" />
         <span class="muted path" title={id}>{sessionLabel(id)}</span>
-        <button class="btn" onclick={() => removeName('sessionNames', id)} title="Use Claude's title again">Reset</button>
+        <button class="btn" onclick={() => removeName('sessionNames', id)} title="Use the agent's title again">Reset</button>
       </div>
     {:else}
       <p class="muted">None. Right-click a session in the sidebar and choose Rename.</p>

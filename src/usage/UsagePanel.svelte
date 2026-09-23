@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { sessionKey, providerName } from '../lib/agents';
   import Page from '../lib/Page.svelte';
   import { save } from '@tauri-apps/plugin-dialog';
-  import { claudeUsage, usageCosts, writeTextFile } from '../lib/ipc';
+  import { claudeUsage, codexUsage, codexUsageStop, usageCosts, writeTextFile } from '../lib/ipc';
   import { appState } from '../lib/stores.svelte';
-  import { formatTokens, formatUsd, localDay, owningProject, summarize, toCsv } from '../lib/costs';
+  import { formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv } from '../lib/costs';
   import {
     clampDays,
     isActive,
@@ -15,11 +16,23 @@
     type Dates,
     type Selection,
   } from '../lib/range';
-  import { planLimits, weeklyBreakdown } from '../lib/plan';
+  import { codexLimits, planLimits, weeklyBreakdown } from '../lib/plan';
   import { relativeTime } from '../lib/format';
-  import type { CostRow } from '../types';
+  import type { AgentProvider, CostRow } from '../types';
 
   let { onClose }: { onClose: () => void } = $props();
+
+  let codexPlan = $state<Record<string, unknown> | null>(null);
+  let codexError = $state<string | null>(null);
+  let codexLoading = $state(false);
+  const codexWindows = $derived(codexPlan ? codexLimits(codexPlan) : []);
+  async function loadCodex() {
+    if (codexLoading) return;
+    codexLoading = true;
+    try { codexPlan = await codexUsage(); codexError = null; }
+    catch (e) { codexError = String(e); }
+    finally { codexLoading = false; }
+  }
 
   // --- plan limits
   let plan = $state<Record<string, unknown> | null>(null);
@@ -93,6 +106,8 @@
 
   // --- spend
   let rows = $state<CostRow[]>([]);
+  let provider = $state<'all' | AgentProvider>('all');
+  const filteredRows = $derived(provider === 'all' ? rows : rows.filter(r => r.provider === provider));
   let costError = $state<string | null>(null);
   let costLoading = $state(false);
   const today = localDay(new Date());
@@ -178,7 +193,8 @@
     return { key, name: path?.split(/[\\/]/).filter(Boolean).pop() ?? key };
   }
 
-  let groupBy = $state<'project' | 'model'>('project');
+  let groupBy = $state<'project' | 'model' | 'session'>('project');
+  let metric = $state<'tokens' | 'cost'>('cost');
   /** Project keys whose sessions are shown. */
   let expanded = $state<Set<string>>(new Set());
 
@@ -191,10 +207,11 @@
   /** Session label from the sidebar index, falling back to a short id. */
   function sessionName(id: string): string {
     for (const p of appState.index.projects) {
-      const s = p.sessions.find((x) => x.id === id);
-      if (s) return s.label;
+      const s = p.sessions.find((x) => sessionKey(x) === id);
+      if (s) return `${providerName(s.provider)} · ${s.label}`;
     }
-    return id.slice(0, 8);
+    const provider = id.startsWith('codex:') ? 'codex' : 'claude';
+    return `${providerName(provider)} · ${id.slice(id.indexOf(':') + 1, id.indexOf(':') + 9)}`;
   }
 
   let exportError = $state<string | null>(null);
@@ -206,7 +223,7 @@
         filters: [{ name: 'CSV', extensions: ['csv'] }],
       });
       if (!path) return;
-      await writeTextFile(path, toCsv(rows, from <= to ? from : to, from <= to ? to : from, projectOf));
+      await writeTextFile(path, toCsv(filteredRows, from <= to ? from : to, from <= to ? to : from, projectOf));
       exportError = null;
     } catch (e) {
       exportError = String(e);
@@ -214,22 +231,28 @@
   }
 
   const summary = $derived(
-    summarize(rows, from <= to ? from : to, from <= to ? to : from, projectOf),
+    summarize(filteredRows, from <= to ? from : to, from <= to ? to : from, projectOf),
   );
-  // Start the chart at the first day with spend, or "all time" draws years of empty bars.
+  const rankedProjects = $derived([...summary.byProject].sort((a, b) => b[metric] - a[metric]));
+  const rankedModels = $derived([...summary.byModel].sort((a, b) => b[metric] - a[metric]));
+  const rankedSessions = $derived([...summary.bySession].sort((a, b) => b[metric] - a[metric]));
+  const metricTotal = $derived(metric === 'tokens' ? summary.tokens : summary.total);
+  // Start at the first day with usage for the selected metric.
   const chartDays = $derived.by(() => {
-    const first = summary.byDay.findIndex((d) => d.cost > 0);
+    const first = summary.byDay.findIndex((d) => d[metric] > 0);
     return first < 0 ? [] : summary.byDay.slice(first);
   });
-  const maxDay = $derived(Math.max(0, ...chartDays.map((d) => d.cost)));
+  const maxDay = $derived(Math.max(0, ...chartDays.map((d) => d[metric])));
 
   onMount(() => {
     restoreRange();
     void loadPlan();
+    void loadCodex();
     void loadCosts();
-    const poll = setInterval(() => void loadPlan(), PLAN_REFRESH_MS);
+    const poll = setInterval(() => { void loadPlan(); void loadCodex(); void loadCosts(); }, PLAN_REFRESH_MS);
     const tick = setInterval(() => (now = Date.now()), 30_000);
     return () => {
+      void codexUsageStop();
       clearInterval(poll);
       clearInterval(tick);
     };
@@ -237,8 +260,10 @@
 </script>
 
 <Page title="Usage" {onClose}>
+  <div class="plan-grid">
+  <section class="plan-card" aria-label="Claude plan limits">
   <h2>
-    Plan limits
+    Claude plan limits
     {#if typeof plan?.subscriptionType === 'string'}<span class="tag">{plan.subscriptionType}</span>{/if}
   </h2>
   {#if planError && !plan}
@@ -295,12 +320,34 @@
     {/if}
   </div>
 
-  <h2>Spend at API prices</h2>
+  </section>
+  <section class="plan-card" aria-label="Codex plan limits">
+  <h2>Codex plan limits</h2>
+  {#if codexError}<p class="err">{codexError}</p>{/if}
+  {#if codexLoading && !codexPlan}<p class="muted">Loading Codex limits…</p>
+  {:else if codexPlan && codexWindows.length === 0}<p class="muted">No rate-limit data for this account.</p>{/if}
+  <div class="limits">
+    {#each codexWindows as l (l.key)}
+      <div class="limit">
+        <div class="limit-head"><span>{l.label}</span><span>{Math.round(100 - l.percent)}% remaining · {Math.round(l.percent)}% used</span></div>
+        <div class="meter"><div class="fill" style="width: {l.percent}%"></div></div>
+        <div class="muted">{l.resetsAt ? resetsIn(l.resetsAt) : 'Reset time unavailable'}</div>
+      </div>
+    {/each}
+  </div>
+  {#if codexPlan && !codexWindows.some(l => l.windowMinutes === 300)}
+    <p class="muted">5-hour limit: not reported by Codex for this account. ATC cannot calculate it from local token counts.</p>
+  {/if}
+  <button class="btn" onclick={loadCodex} disabled={codexLoading}>Refresh Codex limits</button>
+  </section>
+  </div>
+
+  <h2>Local usage</h2>
   <p class="muted">
-    What the tokens in your local Claude Code transcripts would cost at API list prices,
-    subagents included. On a subscription, this isn't what you pay.
+    Local tokens include linked child agents. Costs are API-equivalent estimates, not subscription charges. Codex uses standard short-context prices, including cached input; tier and long-context surcharges are excluded. Unknown model prices are unavailable.
   </p>
 
+  <label>Provider <select bind:value={provider}><option value="all">All</option><option value="claude">Claude</option><option value="codex">Codex</option></select></label>
   <div class="range">
     <label>From <input type="date" bind:value={from} max={today} onchange={pickedByHand} /></label>
     <label>To <input type="date" bind:value={to} max={today} onchange={pickedByHand} /></label>
@@ -344,16 +391,20 @@
   {:else if costLoading && rows.length === 0}
     <p class="muted">Reading transcripts. The first scan can take a few seconds.</p>
   {:else}
+    <div class="group" aria-label="Usage metric">
+      <button class="btn" class:primary={metric === 'tokens'} onclick={() => metric = 'tokens'}>Tokens</button>
+      <button class="btn" class:primary={metric === 'cost'} onclick={() => metric = 'cost'}>API cost estimates</button>
+    </div>
     <div class="total">
-      <span class="big">{formatUsd(summary.total)}</span>
-      <span class="muted">{formatTokens(summary.tokens)} tokens</span>
+      <span class="big">{metric === 'tokens' ? `${formatTokens(summary.tokens)} tokens` : monetary({ cost: summary.total, partial: summary.partial, unavailable: summary.unavailable })}</span>
+      <span class="muted">{metric === 'tokens' ? `${monetary({cost: summary.total, partial: summary.partial, unavailable: summary.unavailable})} API cost estimate` : `${formatTokens(summary.tokens)} tokens`}</span>
     </div>
 
     {#if chartDays.length > 0}
-      <div class="chart" role="img" aria-label="Spend per day">
+      <div class="chart" role="img" aria-label={metric === 'tokens' ? 'Tokens per day' : 'Estimated cost per day'}>
         {#each chartDays as d (d.day)}
-          <div class="bar-col" title="{d.day}: {formatUsd(d.cost)}">
-            <div class="bar" style="height: {maxDay ? (d.cost / maxDay) * 100 : 0}%"></div>
+          <div class="bar-col" title="{d.day}: {metric === 'tokens' ? `${formatTokens(d.tokens)} tokens` : formatUsd(d.cost)}">
+            <div class="bar" style="height: {maxDay ? (d[metric] / maxDay) * 100 : 0}%"></div>
           </div>
         {/each}
       </div>
@@ -369,25 +420,37 @@
       <button class="btn" class:primary={groupBy === 'model'} onclick={() => (groupBy = 'model')}>
         By model
       </button>
+      <button class="btn" class:primary={groupBy === 'session'} onclick={() => groupBy = 'session'}>By session</button>
     </div>
 
     <table>
       <thead>
         <tr>
-          <th>{groupBy === 'project' ? 'Project' : 'Model'}</th>
-          <th class="num">Tokens</th><th class="num">Cost</th><th class="share"></th>
+          <th>{groupBy === 'project' ? 'Project' : groupBy === 'model' ? 'Model' : 'Session'}</th>
+          <th class="num">Tokens</th><th class="num">Cost</th><th class="share">{metric === 'tokens' ? 'Token share' : 'Cost share'}</th>
         </tr>
       </thead>
       <tbody>
-        {#if groupBy === 'model'}
-          {#each summary.byModel as m (m.key)}
+        {#if groupBy === 'session'}
+          {#each rankedSessions as s (s.key)}
             <tr>
-              <td>{m.key}</td>
+              <td title={s.key}>{sessionName(s.key)}</td>
+              <td class="num">{formatTokens(s.tokens)}</td>
+              <td class="num">{monetary(s)}</td>
+              <td class="share"><div class="meter small"><div class="fill" style="width: {metricTotal ? s[metric] / metricTotal * 100 : 0}%"></div></div></td>
+            </tr>
+          {:else}
+            <tr><td colspan="4" class="muted">No usage in this range.</td></tr>
+          {/each}
+        {:else if groupBy === 'model'}
+          {#each rankedModels as m (m.key)}
+            <tr>
+              <td>{m.key.startsWith('codex:') ? 'Codex' : 'Claude'} · {m.key.slice(m.key.indexOf(':') + 1)}</td>
               <td class="num">{formatTokens(m.tokens)}</td>
-              <td class="num">{formatUsd(m.cost)}</td>
+              <td class="num">{monetary(m)}</td>
               <td class="share">
                 <div class="meter small">
-                  <div class="fill" style="width: {summary.total ? (m.cost / summary.total) * 100 : 0}%"></div>
+                  <div class="fill" style="width: {metricTotal ? (m[metric] / metricTotal) * 100 : 0}%"></div>
                 </div>
               </td>
             </tr>
@@ -395,8 +458,8 @@
             <tr><td colspan="4" class="muted">No usage in this range.</td></tr>
           {/each}
         {:else}
-          {#each summary.byProject as p (p.key)}
-            {@const sessions = summary.sessionsByProject.get(p.key) ?? []}
+          {#each rankedProjects as p (p.key)}
+            {@const sessions = [...(summary.sessionsByProject.get(p.key) ?? [])].sort((a, b) => b[metric] - a[metric])}
             <tr>
               <td>
                 <button class="expand" onclick={() => toggleProject(p.key)} aria-expanded={expanded.has(p.key)}>
@@ -405,10 +468,10 @@
                 </button>
               </td>
               <td class="num">{formatTokens(p.tokens)}</td>
-              <td class="num">{formatUsd(p.cost)}</td>
+              <td class="num">{monetary(p)}</td>
               <td class="share">
                 <div class="meter small">
-                  <div class="fill" style="width: {summary.total ? (p.cost / summary.total) * 100 : 0}%"></div>
+                  <div class="fill" style="width: {metricTotal ? (p[metric] / metricTotal) * 100 : 0}%"></div>
                 </div>
               </td>
             </tr>
@@ -417,7 +480,7 @@
                 <tr class="session">
                   <td title={s.key}>{sessionName(s.key)}</td>
                   <td class="num">{formatTokens(s.tokens)}</td>
-                  <td class="num">{formatUsd(s.cost)}</td>
+                  <td class="num">{monetary(s)}</td>
                   <td class="share"></td>
                 </tr>
               {/each}
@@ -430,12 +493,20 @@
     </table>
 
     {#if summary.unpricedModels.length > 0}
-      <p class="muted">No price known for: {summary.unpricedModels.join(', ')} (counted as $0).</p>
+      <p class="muted">Pricing is incomplete for: {summary.unpricedModels.join(', ')} (unknown portions are excluded from the estimate).</p>
     {/if}
   {/if}
 </Page>
 
 <style>
+  .plan-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+    gap: 24px;
+  }
+  .plan-card {
+    min-width: 0;
+  }
   .tag {
     margin-left: 6px;
     padding: 1px 6px;
@@ -472,6 +543,8 @@
   .limit-head {
     display: flex;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px 12px;
     margin-bottom: 5px;
     color: var(--fg);
     font-size: 13px;

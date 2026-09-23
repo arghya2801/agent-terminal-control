@@ -5,7 +5,7 @@
 //! hard and debounced, and the rendered projection is compared rather than the events
 //! themselves — see `Index::scan_if_changed`.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use notify::RecursiveMode;
@@ -16,6 +16,23 @@ pub const DEBOUNCE: Duration = Duration::from_millis(400);
 /// The live watcher. **Must be kept alive** — `Debouncer` stops watching on `Drop`, so
 /// this is owned by `AppState` rather than dropped at the end of setup.
 pub type SessionWatcher = Debouncer<notify::RecommendedWatcher, RecommendedCache>;
+
+/// Watch a missing root's closest existing parent without recursively scanning it.
+/// Each newly created path component lets the caller move the watch closer.
+pub fn watch_point(target: &Path) -> Option<(PathBuf, RecursiveMode)> {
+    let mut path = target;
+    loop {
+        if path.is_dir() {
+            let mode = if path == target {
+                RecursiveMode::Recursive
+            } else {
+                RecursiveMode::NonRecursive
+            };
+            return Some((path.to_path_buf(), mode));
+        }
+        path = path.parent()?;
+    }
+}
 
 /// Whether a changed path could affect the sidebar.
 ///
@@ -36,28 +53,69 @@ pub fn is_relevant(root: &Path, path: &Path) -> bool {
 
 /// Start watching `root`, calling `on_change` after the debounce window whenever at least
 /// one relevant path changed.
-pub fn watch<F>(root: &Path, mut on_change: F) -> notify::Result<SessionWatcher>
+pub fn watch<F>(root: &Path, on_change: F) -> notify::Result<SessionWatcher>
 where
     F: FnMut() + Send + 'static,
 {
-    let watched = root.to_path_buf();
-    let for_filter = watched.clone();
+    watch_roots(root, None, on_change)
+}
+
+pub fn watch_roots<F>(
+    root: &Path,
+    codex_home: Option<&Path>,
+    mut on_change: F,
+) -> notify::Result<SessionWatcher>
+where
+    F: FnMut() + Send + 'static,
+{
+    let claude = root.to_path_buf();
+    let codex = codex_home.map(Path::to_path_buf);
+    let mut targets = vec![claude.clone()];
+    if let Some(home) = &codex {
+        targets.push(home.clone());
+    }
     let mut debouncer = new_debouncer(DEBOUNCE, None, move |res: DebounceEventResult| {
         let Ok(events) = res else { return };
-        // Coalesce: the whole batch is one question -- did anything relevant change?
-        if events
-            .iter()
-            .flat_map(|e| e.paths.iter())
-            .any(|p| is_relevant(&for_filter, p))
-        {
+        if events.iter().any(|e| {
+            e.paths.iter().any(|p| {
+                let directory_change = matches!(
+                    e.kind,
+                    notify::EventKind::Create(_)
+                        | notify::EventKind::Remove(_)
+                        | notify::EventKind::Modify(notify::event::ModifyKind::Name(_))
+                );
+                is_relevant(&claude, p)
+                    || (directory_change
+                        && (claude.starts_with(p)
+                            || (p
+                                .strip_prefix(&claude)
+                                .is_ok_and(|r| r.components().count() == 1)
+                                && p.extension().is_none())))
+                    || codex.as_ref().is_some_and(|home| {
+                        (directory_change && home.starts_with(p))
+                            || p == &home.join("session_index.jsonl")
+                            || p.starts_with(home.join("sessions"))
+                    })
+            })
+        }) {
             on_change();
         }
     })?;
-
-    // The directory may not exist yet on a fresh machine; watching then is not an error
-    // worth failing startup over.
-    if watched.is_dir() {
-        debouncer.watch(&watched, RecursiveMode::Recursive)?;
+    let mut watched = std::collections::HashMap::new();
+    for target in targets {
+        if let Some((path, mode)) = watch_point(&target) {
+            if matches!(mode, RecursiveMode::Recursive) {
+                watched.insert(path, RecursiveMode::Recursive);
+            } else {
+                watched.entry(path).or_insert(RecursiveMode::NonRecursive);
+            }
+        }
+    }
+    for (path, mode) in watched {
+        // One inaccessible provider must not disable the other watcher.
+        if let Err(e) = debouncer.watch(&path, mode) {
+            eprintln!("could not watch {}: {e}", path.display());
+        }
     }
     Ok(debouncer)
 }
@@ -69,6 +127,43 @@ mod tests {
 
     fn root() -> PathBuf {
         PathBuf::from(r"C:\Users\x\.claude\projects")
+    }
+
+    #[test]
+    fn missing_roots_watch_only_the_nearest_existing_parent() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let d = tempfile::tempdir().unwrap();
+        let claude = d.path().join("claude/projects");
+        let codex = d.path().join("codex");
+        assert_eq!(watch_point(&claude).unwrap().0, d.path());
+        assert!(matches!(
+            watch_point(&codex).unwrap().1,
+            RecursiveMode::NonRecursive
+        ));
+        let hits = Arc::new(AtomicUsize::new(0));
+        let seen = Arc::clone(&hits);
+        let _watcher = watch_roots(&claude, Some(&codex), move || {
+            seen.fetch_add(1, Ordering::Relaxed);
+        })
+        .unwrap();
+        std::thread::sleep(Duration::from_millis(150));
+        std::fs::create_dir(&codex).unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while hits.load(Ordering::Relaxed) == 0 && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(
+            hits.load(Ordering::Relaxed) > 0,
+            "missing root creation was not observed"
+        );
+        assert!(matches!(
+            watch_point(&codex).unwrap().1,
+            RecursiveMode::Recursive
+        ));
+        std::fs::create_dir(d.path().join("claude")).unwrap();
+        assert_eq!(watch_point(&claude).unwrap().0, d.path().join("claude"));
     }
 
     #[test]

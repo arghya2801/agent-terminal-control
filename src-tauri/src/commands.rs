@@ -19,6 +19,19 @@ pub fn pty_spawn(
     on_event: Channel<PtyEvent>,
     state: State<'_, AppState>,
 ) -> AppResult<String> {
+    if let Some(provider) = opts.provider {
+        let settings = state.settings.get();
+        let command = match provider {
+            crate::agent::AgentProvider::Claude => &settings.claude.command,
+            crate::agent::AgentProvider::Codex => &settings.codex.command,
+        };
+        crate::pty::shell::resolve_shell(Some(command)).map_err(|_| {
+            crate::error::AppError::Message(format!(
+                "{} launch failed: configured command `{command}` was not found",
+                provider.name()
+            ))
+        })?;
+    }
     Ok(state.ptys.spawn(opts, on_event)?)
 }
 
@@ -69,11 +82,20 @@ pub fn settings_get(state: State<'_, AppState>) -> AppResult<Settings> {
 }
 
 #[tauri::command]
-pub fn settings_set(settings: Settings, state: State<'_, AppState>) -> AppResult<()> {
+pub fn settings_set(
+    settings: Settings,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
     crate::settings::save(&settings).map_err(crate::error::AppError::Io)?;
     state.settings.set(settings);
     // Settings can repoint the projects directory, so the next scan must report.
     state.index.invalidate();
+    crate::start_watcher(&app);
+    use tauri::Emitter;
+    if let Some(snap) = state.index.scan_if_changed(&state.settings.get(), false) {
+        let _ = app.emit(crate::EVENT_INDEX_UPDATED, snap);
+    }
     Ok(())
 }
 
@@ -86,8 +108,10 @@ pub async fn usage_costs(app: tauri::AppHandle) -> AppResult<Vec<CostRow>> {
     tauri::async_runtime::spawn_blocking(move || {
         use tauri::Manager;
         let state = app.state::<AppState>();
-        let root = state.settings.get().claude_projects_dir();
-        state.costs.rows(&root)
+        let settings = state.settings.get();
+        let mut rows = state.costs.rows(&settings.claude_projects_dir());
+        rows.extend(state.codex_costs.rows(&settings.codex_home()));
+        rows
     })
     .await
     .map_err(|e| crate::error::AppError::Message(e.to_string()))
@@ -329,4 +353,32 @@ pub fn open_in_explorer(path: String) -> AppResult<()> {
         )));
     }
     open_with_shell_handler(p)
+}
+
+#[tauri::command]
+pub fn agent_command(
+    provider: crate::agent::AgentProvider,
+    session_id: Option<String>,
+    state: State<'_, AppState>,
+) -> String {
+    crate::agent::command(&state.settings.get(), provider, session_id.as_deref())
+}
+
+#[tauri::command]
+pub async fn codex_usage(app: tauri::AppHandle) -> AppResult<serde_json::Value> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri::Manager;
+        let state = app.state::<AppState>();
+        state
+            .codex_limits
+            .read(&state.settings.get())
+            .map_err(crate::error::AppError::Message)
+    })
+    .await
+    .map_err(|e| crate::error::AppError::Message(e.to_string()))?
+}
+
+#[tauri::command]
+pub fn codex_usage_stop(state: State<'_, AppState>) {
+    state.codex_limits.stop();
 }

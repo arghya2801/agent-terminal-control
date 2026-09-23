@@ -1,3 +1,5 @@
+export type AgentProvider = 'claude' | 'codex';
+
 /** Mirrors the Rust types in src-tauri/src/pty. Keep the two in sync by hand. */
 
 /** Output and lifecycle share one ordered stream — see PtyEvent in session.rs. */
@@ -7,6 +9,7 @@ export type PtyEvent =
   | { t: 'e'; msg: string };
 
 export interface SpawnOpts {
+  provider?: AgentProvider | null;
   cwd?: string | null;
   cols: number;
   rows: number;
@@ -30,7 +33,8 @@ export type TabKey =
   | `project:${string}`
   | `session:${string}`
   | `plain:${string}`
-  | `claude:${string}`;
+  | `claude:${string}`
+  | `agent:${AgentProvider}:${string}`;
 
 export interface Dims {
   cols: number;
@@ -40,6 +44,10 @@ export interface Dims {
 export type LabelSource = 'custom' | 'agentName' | 'aiTitle' | 'slug' | 'firstMessage' | 'uuid';
 
 export interface SessionMeta {
+  provider: AgentProvider;
+  createdAtMs?: number | null;
+  activity?: 'working' | 'idle' | 'interrupted' | null;
+  activitySequence?: number;
   id: string;
   file: string;
   /** Authoritative cwd from the transcript. Null when the head budget found none. */
@@ -90,6 +98,7 @@ export interface Settings {
     groupSubfolders: boolean;
   };
   terminal: TerminalSettings;
+  codex: { command: string; resumeArgs: string[]; homeDir: string | null };
   claude: { command: string; resumeArgs: string[]; scratchDir: string | null };
 }
 
@@ -101,6 +110,9 @@ export interface TerminalSettings {
 
 /** Mirrors `CostRow` in src-tauri/src/index/cost.rs. */
 export interface CostRow {
+  provider: AgentProvider;
+  totalTokens: number;
+  reasoning: number;
   /** UTC hour, `YYYY-MM-DDTHH`. */
   hour: string;
   /** Session uuid, for the per-session breakdown. */
@@ -113,6 +125,6 @@ export interface CostRow {
   output: number;
   cacheWrite: number;
   cacheRead: number;
-  costUsd: number;
+  costUsd: number | null;
   unpriced: boolean;
 }

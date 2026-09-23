@@ -19,6 +19,7 @@ pub struct Settings {
     pub ui: UiSettings,
     pub terminal: TerminalSettings,
     pub claude: ClaudeSettings,
+    pub codex: CodexSettings,
 }
 
 impl Default for Settings {
@@ -29,6 +30,7 @@ impl Default for Settings {
             ui: UiSettings::default(),
             terminal: TerminalSettings::default(),
             claude: ClaudeSettings::default(),
+            codex: CodexSettings::default(),
         }
     }
 }
@@ -136,21 +138,36 @@ impl Default for ClaudeSettings {
     }
 }
 
-impl ClaudeSettings {
-    /// The command line typed into the shell to resume `session_id`.
-    pub fn resume_command(&self, session_id: &str) -> String {
-        let mut parts = vec![self.command.clone()];
-        parts.extend(
-            self.resume_args
-                .iter()
-                .map(|a| a.replace("{session}", session_id)),
-        );
-        parts.join(" ")
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct CodexSettings {
+    pub command: String,
+    pub resume_args: Vec<String>,
+    pub home_dir: Option<String>,
+}
+impl Default for CodexSettings {
+    fn default() -> Self {
+        Self {
+            command: "codex".into(),
+            resume_args: vec!["resume".into(), "{session}".into()],
+            home_dir: None,
+        }
     }
 }
 
 impl Settings {
+    pub fn codex_home(&self) -> PathBuf {
+        if self.codex.home_dir.is_none() && std::env::var("ATC_DEV").is_ok_and(|v| v == "1") {
+            return crate::settings::config_dir().join("codex");
+        }
+        crate::index::codex::home(self.codex.home_dir.as_deref())
+    }
     pub fn claude_projects_dir(&self) -> PathBuf {
+        if self.projects.claude_projects_dir.is_none()
+            && std::env::var("ATC_DEV").is_ok_and(|v| v == "1")
+        {
+            return crate::settings::config_dir().join("claude/projects");
+        }
         crate::paths::claude_projects_dir(self.projects.claude_projects_dir.as_deref())
     }
 
@@ -207,32 +224,6 @@ mod tests {
         });
         let text = serde_json::to_string(&s).unwrap();
         assert_eq!(serde_json::from_str::<Settings>(&text).unwrap(), s);
-    }
-
-    #[test]
-    fn resume_command_substitutes_the_session_id() {
-        let c = ClaudeSettings::default();
-        assert_eq!(
-            c.resume_command("abc-123"),
-            "claude --resume abc-123",
-            "this string is typed straight into the shell"
-        );
-    }
-
-    #[test]
-    fn resume_command_honours_a_customised_invocation() {
-        let c = ClaudeSettings {
-            resume_args: vec![
-                "--resume".into(),
-                "{session}".into(),
-                "--fork-session".into(),
-            ],
-            ..ClaudeSettings::default()
-        };
-        assert_eq!(
-            c.resume_command("xyz"),
-            "claude --resume xyz --fork-session"
-        );
     }
 
     #[test]

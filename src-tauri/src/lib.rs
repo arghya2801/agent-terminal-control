@@ -1,3 +1,5 @@
+pub mod agent;
+pub mod codex_limits;
 pub mod commands;
 pub mod error;
 pub mod index;
@@ -33,6 +35,7 @@ pub fn run() {
         .manage(AppState::new(settings, cache_path))
         .invoke_handler(tauri::generate_handler![
             commands::pty_spawn,
+            commands::agent_command,
             commands::pty_write,
             commands::pty_resize,
             commands::pty_ack,
@@ -49,6 +52,8 @@ pub fn run() {
             commands::open_devtools,
             commands::usage_costs,
             commands::claude_usage,
+            commands::codex_usage,
+            commands::codex_usage_stop,
             commands::list_themes,
         ])
         .setup(|app| {
@@ -62,6 +67,7 @@ pub fn run() {
         .run(|app, event| {
             // Never leave orphaned pwsh/node/claude processes behind.
             if let tauri::RunEvent::ExitRequested { .. } = event {
+                app.state::<AppState>().codex_limits.stop();
                 app.state::<AppState>().ptys.kill_all();
             }
         });
@@ -122,6 +128,10 @@ fn start_settings_watcher(app: &tauri::AppHandle) {
                 }
                 state.settings.set(next.clone());
                 state.index.invalidate();
+                start_watcher(&handle);
+                if let Some(snap) = state.index.scan_if_changed(&state.settings.get(), false) {
+                    let _ = handle.emit(EVENT_INDEX_UPDATED, snap);
+                }
                 let _ = handle.emit(EVENT_SETTINGS_UPDATED, next);
             }
         }
@@ -138,16 +148,44 @@ fn start_settings_watcher(app: &tauri::AppHandle) {
     }
 }
 
-fn start_watcher(app: &tauri::AppHandle) {
+pub(crate) fn start_watcher(app: &tauri::AppHandle) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
     let state = app.state::<AppState>();
-    let root = state.settings.get().claude_projects_dir();
+    let settings = state.settings.get();
+    let root = settings.claude_projects_dir();
+    let codex_home = settings.codex_home();
+    let watched = [
+        index::watcher::watch_point(&root).map(|(path, _)| path),
+        index::watcher::watch_point(&codex_home).map(|(path, _)| path),
+    ];
+    let rearming = Arc::new(AtomicBool::new(false));
 
     let handle = app.clone();
-    let watcher = index::watcher::watch(&root, move || {
+    let watched_root = root.clone();
+    let watched_codex = codex_home.clone();
+    let watcher = index::watcher::watch_roots(&root, Some(&codex_home), move || {
         let state = handle.state::<AppState>();
         // A live session appends constantly; only emit when the projection differs.
         if let Some(snap) = state.index.scan_if_changed(&state.settings.get(), false) {
             let _ = handle.emit(EVENT_INDEX_UPDATED, snap);
+        }
+        let current = [
+            index::watcher::watch_point(&watched_root).map(|(path, _)| path),
+            index::watcher::watch_point(&watched_codex).map(|(path, _)| path),
+        ];
+        if current != watched && !rearming.swap(true, Ordering::AcqRel) {
+            // Replacing the current watcher on its callback thread could join itself.
+            let handle = handle.clone();
+            std::thread::spawn(move || {
+                start_watcher(&handle);
+                // Catch files written between the first scan and the new watch.
+                let state = handle.state::<AppState>();
+                if let Some(snap) = state.index.scan_if_changed(&state.settings.get(), false) {
+                    let _ = handle.emit(EVENT_INDEX_UPDATED, snap);
+                }
+            });
         }
     });
 

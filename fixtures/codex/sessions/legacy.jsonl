@@ -1,0 +1,2 @@
+{"id": "legacy-id", "timestamp": "2025-07-01T00:00:00Z", "cwd": "D:\\Coding\\portfolio2"}
+{"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Legacy conversation"}]}}

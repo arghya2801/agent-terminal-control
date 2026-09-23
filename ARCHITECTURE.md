@@ -40,6 +40,24 @@ graph LR
 
 ## Where things live
 
+### Provider identity and Codex
+
+`AgentProvider` is `claude | codex` on both sides of IPC. Transcripts retain native IDs. Frontend identity, rename maps, tab reuse, activity maps, and usage grouping use `provider:id`. Legacy saved session tabs and bare rename keys are Claude. An unbound agent tab persists its provider and launch directory separately from shell tabs.
+
+`index/codex.rs` reads complete JSONL records from recursive `sessions/` files. Metadata supplies the native ID, cwd, creation time, and branch. Child sessions are excluded by source and parent linkage. The name index is read separately so a rename can update an unchanged rollout. The cache schema stores provider-specific reader state and native IDs. A partial record retains its byte offset for the next scan. Shrinks and same-size rewrites rebuild that entry.
+
+The watcher covers Claude projects, Codex sessions, and the Codex name index. It watches existing ancestors when configured roots are absent, filters events, and retains the 400 ms debounce. Settings changes replace the watches and immediately rescan. Snapshot change detection includes provider, labels, recency, and recorded activity.
+
+`agent.rs` builds all launch and resume commands with literal PowerShell quoting. The frontend uses the same IPC command for launching, restoring, and copying. Codex receives the resolved `CODEX_HOME`; normal CLI configuration remains owned by Codex. PTY transport, resize, clipboard, and shell shortcuts stay shared.
+
+Fresh launch matching uses provider, exact canonical cwd, launch time, and the sessions known at launch. Codex uses creation time rather than transcript modification time. Multiple eligible conversations or competing tabs remain unbound. Once assigned, a binding does not follow subsequent title or recency changes. Claude still reads OSC titles. Codex reads recorded start, completion, and interruption events. The first observed status initializes the tab without notifying about historical completion.
+
+`index/codex_cost.rs` retains offsets and usage records, deduplicates response identities, and uses structured response usage as authoritative once available for a thread. Legacy cumulative snapshots are used only before that boundary or for legacy-only histories; lagging snapshots cannot be mistaken for counter resets. Child linkage attributes tokens to the parent project and session. After deduplication, recognized Codex models receive baseline standard API cost estimates using disjoint input/cache buckets and output including reasoning. Unknown model rates remain null and mark totals partial. `CostRow` includes provider, explicit total tokens, reasoning tokens, and nullable cost. The frontend qualifies session/model identities while retaining shared project aggregation.
+
+`codex_limits.rs` opens a stdio app-server connection only for Usage requests, identifies the client as ATC, performs the initialize/initialized handshake, and requests `account/rateLimits/read`. Each response has a timeout. Closing Usage or exiting ATC stops the owned process tree. Claude and Codex failures are independent. No access token enters the frontend.
+
+Protocol references: [app-server](https://developers.openai.com/codex/app-server) and [Codex 0.155.1 protocol definitions](https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/protocol/src/protocol.rs).
+
 ### Rust (`src-tauri/src/`)
 
 | File | Responsibility |

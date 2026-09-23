@@ -47,7 +47,7 @@ export function usableTitle(title: string): string | null {
   return t;
 }
 
-export type Activity = 'working' | 'idle';
+export type Activity = 'working' | 'idle' | 'interrupted';
 
 /**
  * What Claude Code's terminal title says about the session. It prefixes the title with

@@ -5,6 +5,7 @@
  * `.svelte.ts` files, so `$state` in a plain `.ts` would silently not be reactive.
  */
 
+import { migrateSessionNames } from './agents';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { indexRefresh, indexSnapshot, settingsGet, settingsSet } from './ipc';
@@ -83,6 +84,7 @@ function applySnapshot(snap: IndexSnapshot) {
 
 /** Push settings into the parts of the app that are not reactive. */
 function applySettings(s: Settings) {
+  s.projects.sessionNames = migrateSessionNames(s.projects.sessionNames);
   applyTerminalSettings(s.terminal);
   applyThemeByName(s.ui.theme);
   void applyZoom(s.ui.zoom);

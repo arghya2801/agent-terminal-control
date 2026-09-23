@@ -15,6 +15,8 @@ pub struct AppState {
     pub settings: SettingsStore,
     pub index: Index,
     pub costs: CostIndex,
+    pub codex_costs: crate::index::codex_cost::CodexCostIndex,
+    pub codex_limits: crate::codex_limits::Client,
     /// The filesystem watcher stops on `Drop`, so it lives here for the life of the app
     /// rather than being dropped at the end of setup.
     pub watcher: Mutex<Option<SessionWatcher>>,
@@ -29,6 +31,8 @@ impl AppState {
             settings: SettingsStore::new(settings),
             index: Index::new(cache_path),
             costs: CostIndex::default(),
+            codex_costs: Default::default(),
+            codex_limits: Default::default(),
             watcher: Mutex::new(None),
             settings_watcher: Mutex::new(None),
         }

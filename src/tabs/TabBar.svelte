@@ -1,10 +1,11 @@
 <script lang="ts">
   import { activate, focusActiveTerminal, renameTab } from '../terminal/manager';
   import InlineRename from '../lib/InlineRename.svelte';
-  import type { TabKey } from '../types';
+  import ProviderIcon from '../lib/ProviderIcon.svelte';
+  import type { AgentProvider, TabKey } from '../types';
 
   let { tabs, activeKey, onNew, onClose, renaming = $bindable(null) }: {
-    tabs: { key: TabKey; title: string; exited: boolean; attention: boolean }[];
+    tabs: { key: TabKey; provider: AgentProvider | null; title: string; exited: boolean; attention: boolean }[];
     activeKey: TabKey | null;
     onNew: () => void;
     /** Asks first when something is still running in the tab. */
@@ -45,6 +46,7 @@
       title="{tab.title} (double-click or Ctrl+Shift+R to rename)"
     >
       {#if tab.attention}<span class="attention" title="Needs your attention"></span>{/if}
+      {#if tab.provider}<ProviderIcon provider={tab.provider} />{/if}
       <span class="label">{tab.title}</span>
       <span class="close" role="button" tabindex="-1"
         onclick={(e) => close(e, tab.key)}

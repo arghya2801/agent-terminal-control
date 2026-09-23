@@ -4,6 +4,7 @@ import type { Project, SessionMeta } from '../types';
 
 const session = (id: string, label: string, gitBranch: string | null = null): SessionMeta => ({
   id,
+  provider: 'claude',
   file: `${id}.jsonl`,
   cwd: null,
   gitBranch,

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { sessionKey } from '../lib/agents';
+  import { agentCommand } from '../lib/ipc';
   import ProjectNode from './ProjectNode.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import { openInExplorer } from '../lib/ipc';
@@ -13,7 +15,7 @@
     saveSettings,
     toggleAllProjects,
   } from '../lib/stores.svelte';
-  import type { Project, SessionMeta, TabKey } from '../types';
+  import type { AgentProvider, Project, SessionMeta, TabKey } from '../types';
   import type { SessionMark } from './SessionNode.svelte';
 
   let {
@@ -24,7 +26,7 @@
     onOpenProject,
     onOpenSession,
     onNewShell,
-    onNewClaude,
+    onNewAgent,
   }: {
     activeKey: TabKey | null;
     activeSessionId: string | null;
@@ -34,7 +36,7 @@
     onOpenProject: (p: Project) => void;
     onOpenSession: (p: Project, s: SessionMeta) => void;
     onNewShell: (p: Project) => void;
-    onNewClaude: (p: Project) => void;
+    onNewAgent: (p: Project, provider: AgentProvider) => void;
   } = $props();
 
   /** `p:<project key>` or `s:<session id>` while its name is being edited. */
@@ -82,7 +84,8 @@
       x: e.clientX,
       y: e.clientY,
       items: [
-        { label: 'Open Claude here', disabled: !path || !p.exists, run: () => onNewClaude(p) },
+        { label: 'Open in Claude', disabled: !path || !p.exists, run: () => onNewAgent(p, 'claude') },
+        { label: 'Open in Codex', disabled: !path || !p.exists, run: () => onNewAgent(p, 'codex') },
         { label: 'Open terminal here', disabled: !path || !p.exists, run: () => onNewShell(p) },
         { label: 'Rename…', disabled: !path, run: () => (renaming = `p:${p.key}`) },
         {
@@ -107,11 +110,11 @@
       x: e.clientX,
       y: e.clientY,
       items: [
-        { label: 'Rename…', run: () => (renaming = `s:${s.id}`) },
+        { label: 'Rename…', run: () => (renaming = `s:${sessionKey(s)}`) },
         { label: 'Copy session id', run: () => void copy(s.id) },
         {
           label: 'Copy resume command',
-          run: () => void copy(`claude --resume ${s.id}`),
+          run: () => void agentCommand(s.provider, s.id).then(copy).catch(e => appState.error = String(e)),
         },
         {
           label: 'Open in Explorer',
@@ -200,7 +203,7 @@
       <div class="hint err">{appState.error}</div>
     {:else if appState.index.projects.length === 0}
       <div class="hint">
-        No Claude sessions found yet. Run <code>claude</code> in a project and it will appear here.
+        No agent sessions found yet. Run <code>claude</code> or <code>codex</code> in a project and it will appear here.
       </div>
     {:else if shown.length === 0}
       <div class="hint">Nothing matches “{query.trim()}”.</div>
@@ -216,7 +219,7 @@
           open={openProjectKeys.has(project.key)}
           {renaming}
           onRenameProject={(p, name) => p.path && void saveName('names', p.path, name)}
-          onRenameSession={(s, name) => void saveName('sessionNames', s.id, name)}
+          onRenameSession={(s, name) => void saveName('sessionNames', sessionKey(s), name)}
           onRenameCancel={() => (renaming = null)}
           {onOpenProject}
           {onOpenSession}

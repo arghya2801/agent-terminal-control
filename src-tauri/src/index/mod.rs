@@ -1,6 +1,8 @@
 //! Discovering projects and their Claude sessions.
 
 pub mod cache;
+pub mod codex;
+pub mod codex_cost;
 pub mod cost;
 pub mod project;
 pub mod session;
@@ -56,7 +58,11 @@ impl Index {
     /// Rescan and build a snapshot. `force` bypasses the cache entirely.
     pub fn scan(&self, settings: &Settings, force: bool) -> IndexSnapshot {
         let root = settings.claude_projects_dir();
-        let files = discover_session_files(&root);
+        let mut files = discover_session_files(&root);
+        let codex_home = settings.codex_home();
+        let codex_files = codex::files(&codex_home.join("sessions"));
+        let claude_files = files.clone();
+        files.extend(codex_files.iter().cloned());
 
         let mut cache = self.cache.lock().expect("index cache");
         if force {
@@ -64,16 +70,33 @@ impl Index {
         }
         cache.retain_existing(&files);
 
-        let sessions: Vec<SessionMeta> = files
+        let mut sessions: Vec<SessionMeta> = claude_files
             .iter()
             .filter_map(|f| cache.get_or_parse(f, session::read_session))
             .collect();
 
+        let names = codex::names(&codex_home.join("session_index.jsonl"));
+        sessions.extend(
+            codex_files
+                .iter()
+                .filter_map(|f| cache.codex(f))
+                .map(|mut s| {
+                    if let Some(name) = names.get(&s.id) {
+                        s.label = name.clone();
+                        s.label_source = session::LabelSource::AgentName;
+                    }
+                    s
+                }),
+        );
         if cache.is_dirty() {
             let _ = cache.save_to(&self.cache_path);
         }
         drop(cache);
 
+        // Reverts may leave several rollout filenames with the same stable thread ID.
+        sessions.sort_by_key(|s| std::cmp::Reverse(s.mtime_ms));
+        let mut identities = std::collections::HashSet::new();
+        sessions.retain(|s| identities.insert(s.provider.key(&s.id)));
         project::build(sessions, settings)
     }
 
@@ -105,12 +128,19 @@ fn hash_snapshot(snap: &IndexSnapshot) -> u64 {
     snap.projects.len().hash(&mut h);
     for p in &snap.projects {
         p.key.hash(&mut h);
+        p.path.hash(&mut h);
         p.name.hash(&mut h);
         p.pinned.hash(&mut h);
         p.exists.hash(&mut h);
         p.sessions.len().hash(&mut h);
         for s in &p.sessions {
             s.id.hash(&mut h);
+            s.provider.hash(&mut h);
+            s.created_at_ms.hash(&mut h);
+            s.activity.hash(&mut h);
+            s.activity_sequence.hash(&mut h);
+            s.cwd.hash(&mut h);
+            std::mem::discriminant(&s.label_source).hash(&mut h);
             s.label.hash(&mut h);
             s.git_branch.hash(&mut h);
         }
@@ -133,6 +163,12 @@ mod tests {
     fn fixture_settings() -> Settings {
         let mut s = Settings::default();
         s.projects.claude_projects_dir = Some(fixtures().to_string_lossy().into_owned());
+        s.codex.home_dir = Some(
+            fixtures()
+                .join("absent-codex")
+                .to_string_lossy()
+                .into_owned(),
+        );
         s
     }
 
@@ -196,6 +232,20 @@ mod tests {
         );
         assert!(idx.scan_if_changed(&s, false).is_none(), "nothing changed");
         assert!(idx.scan_if_changed(&s, false).is_none());
+    }
+
+    #[test]
+    fn activity_timestamps_do_not_change_the_rendered_projection_hash() {
+        let d = tempfile::tempdir().unwrap();
+        let mut snap = index(&d).scan(&fixture_settings(), false);
+        let before = hash_snapshot(&snap);
+        for project in &mut snap.projects {
+            project.last_active_ms += 1;
+            for session in &mut project.sessions {
+                session.mtime_ms += 1;
+            }
+        }
+        assert_eq!(hash_snapshot(&snap), before);
     }
 
     #[test]

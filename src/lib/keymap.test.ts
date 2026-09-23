@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chordLabel, isNativePaste, matchChord, shortcutGroups, type ChordEvent } from './keymap';
+import { chordLabel, codexNewlineInput, isNativePaste, matchChord, shortcutGroups, type ChordEvent } from './keymap';
 
 const press = (key: string, mods: Partial<ChordEvent> = {}): ChordEvent => ({
   key,
@@ -23,12 +23,12 @@ describe('matchChord', () => {
   });
 
   it('claims the launch and page chords', () => {
-    expect(matchChord(ctrlShift('L'))).toBe('openClaudeHere');
+    expect(matchChord(ctrlShift('L'))).toBe('openAgentHere');
     expect(matchChord(ctrlShift('N'))).toBe('openShellHere');
     expect(matchChord(ctrlShift('R'))).toBe('renameTab');
     expect(matchChord(ctrlShift('U'))).toBe('openUsage');
     expect(matchChord(ctrlShift('P'))).toBe('focusSearch');
-    expect(matchChord(ctrlShift('A'))).toBe('askClaude');
+    expect(matchChord(ctrlShift('A'))).toBe('askAgent');
     expect(matchChord(press(',', { ctrlKey: true }))).toBe('openSettings');
   });
 
@@ -107,6 +107,10 @@ describe('matchChord', () => {
     it('ignores Ctrl+I, which is Tab on some terminals', () => {
       expect(matchChord(press('i', { ctrlKey: true }))).toBeNull();
     });
+
+    it('leaves Ctrl+J to xterm as the line-feed shortcut', () => {
+      expect(matchChord(press('j', { ctrlKey: true }))).toBeNull();
+    });
   });
 
   describe('zoom and find', () => {
@@ -159,6 +163,21 @@ describe('isNativePaste', () => {
     expect(isNativePaste(ev({ altKey: true }), true)).toBe(false);
     expect(isNativePaste(ev({ key: 'c' }), true)).toBe(false);
     expect(isNativePaste(ev({ type: 'keyup' }), true)).toBe(false);
+  });
+});
+
+describe('codexNewlineInput', () => {
+  it('maps Ctrl+J and Shift+Enter to the LF byte Codex binds', () => {
+    expect(codexNewlineInput(press('j', { ctrlKey: true }))).toBe('\n');
+    expect(codexNewlineInput(press('Enter', { shiftKey: true }))).toBe('\n');
+    expect(codexNewlineInput(press('j', { ctrlKey: true }))?.charCodeAt(0)).toBe(0x0a);
+  });
+
+  it('does not turn plain Enter or modified near-misses into newlines', () => {
+    expect(codexNewlineInput(press('Enter'))).toBeNull();
+    expect(codexNewlineInput(press('j', { ctrlKey: true, shiftKey: true }))).toBeNull();
+    expect(codexNewlineInput(press('j', { ctrlKey: true, altKey: true }))).toBeNull();
+    expect(codexNewlineInput(press('j', { ctrlKey: true, type: 'keyup' }))).toBeNull();
   });
 });
 

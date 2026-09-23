@@ -1,0 +1,4 @@
+{"type": "session_meta", "payload": {"id": "desktop", "timestamp": "2026-09-20T10:00:00Z", "cwd": "D:\\Coding\\game_tracker_app", "source": "exec", "originator": "Codex Desktop"}}
+{"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Desktop question"}]}}
+{"type": "turn_context", "timestamp": "2026-09-20T10:00:00Z", "payload": {"model": "gpt-test"}}
+{"type": "token_usage", "timestamp": "2026-09-20T10:00:01Z", "payload": {"thread_id": "desktop", "response_id": "fixture-response-1", "usage": {"input_tokens": 1000, "cached_input_tokens": 400, "output_tokens": 100, "reasoning_output_tokens": 40, "total_tokens": 1100}, "thread_token_usage": {"input_tokens": 1000, "cached_input_tokens": 400, "output_tokens": 100, "reasoning_output_tokens": 40, "total_tokens": 1100}}}

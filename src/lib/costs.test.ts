@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  monetary,
   formatTokens,
   formatUsd,
   hourToLocalDay,
@@ -11,6 +12,9 @@ import {
 import type { CostRow } from '../types';
 
 const row = (o: Partial<CostRow>): CostRow => ({
+  provider: 'claude',
+  totalTokens: (o.input ?? 1) + (o.output ?? 1) + (o.cacheWrite ?? 1) + (o.cacheRead ?? 1),
+  reasoning: 0,
   hour: '2026-09-10T12',
   projectKey: 'd:/a',
   projectPath: 'D:/a',
@@ -40,6 +44,40 @@ describe('owningProject', () => {
 });
 
 describe('summarize', () => {
+  it('keeps Codex tokens visible by day and session when dollar cost is unavailable', () => {
+    const s = summarize([
+      row({provider: 'codex', sessionId: 'same', totalTokens: 100, costUsd: null}),
+      row({provider: 'codex', sessionId: 'same', totalTokens: 50, costUsd: null, projectKey: 'other'}),
+      row({provider: 'claude', sessionId: 'same', totalTokens: 10, costUsd: 1}),
+    ], '2026-09-01', '2026-09-30', name);
+    expect(s.byDay.reduce((n, d) => n + d.tokens, 0)).toBe(160);
+    expect(s.bySession.find(x => x.key === 'codex:same')).toMatchObject({tokens: 150, unavailable: true});
+    expect(s.bySession.find(x => x.key === 'claude:same')).toMatchObject({tokens: 10, cost: 1});
+    expect(s.bySession).toHaveLength(2);
+    const allTime = summarize([row({provider: 'codex', totalTokens: 100, costUsd: null})], '2000-01-01', '2026-09-30', name);
+    expect(allTime.byDay[0].tokens).toBe(100);
+  });
+  it('excludes an unpriced Claude row instead of treating it as a zero-dollar estimate', () => {
+    const s = summarize(
+      [row({ model: 'claude-unknown', costUsd: null, unpriced: true })],
+      '2026-09-01',
+      '2026-09-30',
+      name,
+    );
+    expect(s.total).toBe(0);
+    expect(s.unavailable).toBe(true);
+    expect(s.byModel[0]).toMatchObject({ unavailable: true, partial: true });
+  });
+  it('keeps the known subtotal for a partially priced Codex row', () => {
+    const s = summarize(
+      [row({ provider: 'codex', model: 'gpt-5.5', costUsd: 1.5, unpriced: true })],
+      '2026-09-01',
+      '2026-09-30',
+      name,
+    );
+    expect(s.total).toBe(1.5);
+    expect(monetary(s.byModel[0])).toBe('$1.50 (partial)');
+  });
   it('merges rows that map to the same project', () => {
     const s = summarize(
       [row({ projectKey: 'sub1', costUsd: 2 }), row({ projectKey: 'sub2', costUsd: 3 })],
@@ -80,12 +118,12 @@ describe('summarize', () => {
     expect(s.total).toBe(1);
     expect(s.byDay).toHaveLength(1);
     const wide = summarize([inside], '2026-09-08', '2026-09-12', name);
-    expect(wide.byDay).toHaveLength(5);
+    expect(wide.byDay).toHaveLength(3);
     expect(wide.byDay.reduce((a, d) => a + d.cost, 0)).toBe(1);
   });
 
   it('lists unpriced models', () => {
-    const s = summarize([row({ model: 'x', unpriced: true, costUsd: 0 })], '2026-01-01', '2026-12-31', name);
+    const s = summarize([row({ model: 'x', unpriced: true, costUsd: null })], '2026-01-01', '2026-12-31', name);
     expect(s.unpricedModels).toEqual(['x']);
   });
 });
@@ -113,17 +151,17 @@ describe('byModel and sessionsByProject', () => {
 
   it('totals each model, dearest first', () => {
     expect(s.byModel).toEqual([
-      { key: 'claude-opus-5', cost: 10, tokens: 12 },
-      { key: 'claude-sonnet-5', cost: 1, tokens: 4 },
+      { key: 'claude:claude-opus-5', cost: 10, tokens: 12 },
+      { key: 'claude:claude-sonnet-5', cost: 1, tokens: 4 },
     ]);
   });
 
   it('breaks a project down by session, dearest first', () => {
     expect(s.sessionsByProject.get('d:/a')?.map((x) => [x.key, x.cost])).toEqual([
-      ['s1', 4],
-      ['s2', 2],
+      ['claude:s1', 4],
+      ['claude:s2', 2],
     ]);
-    expect(s.sessionsByProject.get('d:/b')?.map((x) => x.key)).toEqual(['s3']);
+    expect(s.sessionsByProject.get('d:/b')?.map((x) => x.key)).toEqual(['claude:s3']);
   });
 
   it('leaves out rows outside the range', () => {
@@ -143,10 +181,10 @@ describe('toCsv', () => {
     const lines = csv.trimEnd().split('\n');
     expect(lines).toHaveLength(2);
     expect(lines[0]).toBe(
-      '"day","hour_utc","project","path","model","session","input","output","cache_write","cache_read","cost_usd"',
+      '"provider","day","hour_utc","project","path","model","session","input","output","cache_write","cache_read","reasoning","total_tokens","cost_usd"',
     );
     expect(lines[1]).toContain('"a, with comma"');
-    expect(lines[1]).toContain('"sess-1"');
+    expect(lines[1]).toContain('"claude:sess-1"');
     expect(lines[1]).toContain('"1.500000"');
     expect(csv.endsWith('\n')).toBe(true);
   });
@@ -155,4 +193,33 @@ describe('toCsv', () => {
     const csv = toCsv([row({})], '2026-09-01', '2026-09-30', () => ({ key: 'k', name: 'say "hi"' }));
     expect(csv).toContain('"say ""hi"""');
   });
+});
+
+
+it('keeps Codex cost unavailable and combined estimates partial without merging provider identities', () => {
+  const codex = row({ provider: 'codex', costUsd: null, model: 'shared', totalTokens: 120, input: 50, cacheRead: 50, output: 20, reasoning: 10 });
+  const claude = row({ model: 'shared', costUsd: 2 });
+  const combined = summarize([codex, claude], '2026-09-01', '2026-09-30', name);
+  expect(combined.tokens).toBe(124);
+  expect(combined.byModel.map(m => m.key)).toEqual(['claude:shared', 'codex:shared']);
+  expect(combined.sessionsByProject.get('d:/a')?.map(s => s.key)).toEqual(['claude:s1','codex:s1']);
+  expect(monetary(combined.byProject[0])).toBe('$2.00 (partial)');
+  const only = summarize([codex], '2026-09-01', '2026-09-30', name);
+  expect(monetary(only.byProject[0])).toBe('Unavailable');
+  const csv = toCsv([codex], '2026-09-01', '2026-09-30', name);
+  expect(csv).toContain('"codex:s1"');
+  expect(csv).toContain('"10","120",""');
+  expect(csv).not.toContain('0.000000');
+});
+
+it('includes priced Codex usage in project, model, session, daily totals and CSV', () => {
+  const codex = row({provider: 'codex', model: 'gpt-6-astra', costUsd: 4.05});
+  const result = summarize([codex, row({costUsd: 2})], '2026-09-01', '2026-09-30', name);
+  expect(result.total).toBe(6.05);
+  expect(result.partial).toBe(false);
+  expect(result.byProject[0].cost).toBe(6.05);
+  expect(result.byModel.find(m => m.key === 'codex:gpt-6-astra')?.cost).toBe(4.05);
+  expect(result.bySession.find(s => s.key === 'codex:s1')?.cost).toBe(4.05);
+  expect(result.byDay.reduce((n, d) => n + d.cost, 0)).toBe(6.05);
+  expect(toCsv([codex], '2026-09-01', '2026-09-30', name)).toContain('"4.050000"');
 });

@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "play": "cross-env ATC_CONFIG_DIR=./playground/config ATC_DEV=1 tauri dev",
+    "play": "node scripts/play.mjs",
     "test": "npm run test:ts && npm run test:rs",
     "test:ts": "vitest run",
     "test:ts:watch": "vitest",

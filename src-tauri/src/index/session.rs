@@ -41,9 +41,13 @@ pub enum LabelSource {
     Uuid,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionMeta {
+    pub created_at_ms: Option<u64>,
+    pub activity: Option<String>,
+    pub activity_sequence: u64,
+    pub provider: crate::agent::AgentProvider,
     /// Session uuid — the file stem, and what `claude --resume` takes.
     pub id: String,
     pub file: PathBuf,
@@ -97,6 +101,10 @@ pub fn read_session(path: &Path) -> Option<SessionMeta> {
     let (label, label_source) = pick_label(&head, &id);
 
     Some(SessionMeta {
+        provider: crate::agent::AgentProvider::Claude,
+        created_at_ms: None,
+        activity: None,
+        activity_sequence: 0,
         id,
         file: path.to_path_buf(),
         cwd: head.cwd,
@@ -108,7 +116,7 @@ pub fn read_session(path: &Path) -> Option<SessionMeta> {
     })
 }
 
-fn mtime_ms(meta: &std::fs::Metadata) -> u64 {
+pub(crate) fn mtime_ms(meta: &std::fs::Metadata) -> u64 {
     meta.modified()
         .ok()
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())

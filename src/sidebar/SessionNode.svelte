@@ -1,9 +1,11 @@
 <script lang="ts" module>
   /** A session with a live tab: what Claude is doing, or just "open" before it says. */
-  export type SessionMark = 'working' | 'idle' | 'open' | 'attention';
+  export type SessionMark = 'working' | 'idle' | 'interrupted' | 'open' | 'attention';
 </script>
 
 <script lang="ts">
+  import ProviderIcon from '../lib/ProviderIcon.svelte';
+  import { providerName } from '../lib/agents';
   import { relativeTime } from '../lib/format';
   import { subfolderLabel } from '../lib/group';
   import InlineRename from '../lib/InlineRename.svelte';
@@ -44,6 +46,7 @@
 
 {#if renaming}
   <div class="session">
+    <ProviderIcon provider={session.provider} />
     <InlineRename value={session.label} onDone={onRename} onCancel={onRenameCancel} />
   </div>
 {:else}
@@ -62,13 +65,15 @@
     <span
       class="mark {mark}"
       title={{
-        working: 'Claude is working',
-        idle: 'Claude is waiting for you',
+        working: `${providerName(session.provider)} is working`,
+        idle: `${providerName(session.provider)} is waiting for you`,
+        interrupted: `${providerName(session.provider)} was interrupted`,
         attention: 'Finished in the background: needs your attention',
         open: 'Open in a tab',
       }[mark]}
     ></span>
   {/if}
+  <ProviderIcon provider={session.provider} />
   <span class="label">{session.label}</span>
   <span class="meta">
     {#if subfolder}<span class="sub" title="Started in {subfolder}">{subfolder}</span>{/if}
@@ -86,9 +91,9 @@
   .session {
     position: relative;
     display: flex;
+    box-sizing: border-box;
     width: 100%;
-    align-items: baseline;
-    justify-content: space-between;
+    align-items: center;
     gap: 8px;
     /* Indented well past the project row's text, or the tree reads as a flat list. */
     padding: 4px 10px 4px 40px;
@@ -121,6 +126,8 @@
     cursor: default;
   }
   .label {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

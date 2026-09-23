@@ -49,4 +49,33 @@ describe('xterm integration', () => {
     expect(term.modes.bracketedPasteMode).toBe(false);
     term.dispose();
   });
+
+  it('encodes Ctrl+J as LF for multiline agent input', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: () => ({
+        matches: false,
+        addEventListener() {},
+        removeEventListener() {},
+        addListener() {},
+        removeListener() {},
+      }),
+    });
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const term = new Terminal();
+    term.open(host);
+    const got: string[] = [];
+    term.onData((data) => got.push(data));
+    const textarea = host.querySelector('textarea');
+    expect(textarea).not.toBeNull();
+    textarea!.focus();
+    textarea!.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'j', code: 'KeyJ', keyCode: 74, which: 74,
+      ctrlKey: true, bubbles: true, cancelable: true,
+    }));
+    expect(got).toEqual(['\n']);
+    term.dispose();
+    host.remove();
+  });
 });
