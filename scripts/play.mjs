@@ -35,6 +35,6 @@ writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
 
 const child = spawn(process.execPath, [join(root, 'node_modules/@tauri-apps/cli/tauri.js'), 'dev'], {
   cwd: root, stdio: 'inherit', windowsHide: true,
-  env: { ...process.env, ATC_CONFIG_DIR: config, ATC_DEV: '1', VITE_ATC_PLAYGROUND: '1', CODEX_HOME: codex, CLAUDE_CONFIG_DIR: claude },
+  env: { ...process.env, ATC_CONFIG_DIR: config, VITE_ATC_PLAYGROUND: '1', CODEX_HOME: codex, CLAUDE_CONFIG_DIR: claude },
 });
 child.on('exit', code => { process.exitCode = code ?? 1; });

@@ -73,12 +73,11 @@ pub fn command(
     }
     let command = parts.join(" ");
     if provider == AgentProvider::Codex
-        && (settings
+        && settings
             .codex
             .home_dir
             .as_deref()
             .is_some_and(|v| !v.trim().is_empty())
-            || std::env::var("ATC_DEV").is_ok_and(|v| v == "1"))
     {
         format!(
             "$env:CODEX_HOME = {}; {command}",
