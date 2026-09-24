@@ -382,3 +382,67 @@ pub async fn codex_usage(app: tauri::AppHandle) -> AppResult<serde_json::Value> 
 pub fn codex_usage_stop(state: State<'_, AppState>) {
     state.codex_limits.stop();
 }
+
+/// Local branch names in `path`, for a task's branch picker. Empty when `path` is not a
+/// git repo or git is missing: this is a picker, not a git client.
+#[tauri::command]
+pub async fn git_branches(path: String) -> Vec<String> {
+    tauri::async_runtime::spawn_blocking(move || local_branches(std::path::Path::new(&path)))
+        .await
+        .unwrap_or_default()
+}
+
+fn local_branches(dir: &std::path::Path) -> Vec<String> {
+    if !dir.is_dir() {
+        return Vec::new();
+    }
+    let mut cmd = std::process::Command::new("git");
+    cmd.args(["branch", "--format=%(refname:short)"])
+        .current_dir(dir)
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    match cmd.output() {
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(str::to_string)
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod git_tests {
+    use super::local_branches;
+
+    fn git(dir: &std::path::Path, args: &[&str]) {
+        let ok = std::process::Command::new("git")
+            .args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"])
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .expect("git is installed")
+            .status
+            .success();
+        assert!(ok, "git {args:?}");
+    }
+
+    #[test]
+    fn lists_local_branches_and_is_empty_outside_a_repo() {
+        let d = tempfile::tempdir().unwrap();
+        assert!(local_branches(d.path()).is_empty());
+        assert!(local_branches(&d.path().join("missing")).is_empty());
+        git(d.path(), &["init", "-q", "-b", "main"]);
+        git(d.path(), &["commit", "-q", "--allow-empty", "-m", "x"]);
+        git(d.path(), &["branch", "feat/tasks"]);
+        let mut branches = local_branches(d.path());
+        branches.sort();
+        assert_eq!(branches, ["feat/tasks", "main"]);
+    }
+}

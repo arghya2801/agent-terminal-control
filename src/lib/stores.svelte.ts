@@ -8,7 +8,8 @@
 import { migrateSessionNames } from './agents';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { indexRefresh, indexSnapshot, settingsGet, settingsSet } from './ipc';
+import { gitBranches, indexRefresh, indexSnapshot, settingsGet, settingsSet } from './ipc';
+import { projectKey } from './paths';
 import {
   anyExpanded,
   isExpandedIn,
@@ -129,7 +130,21 @@ export async function initStores() {
   });
 }
 
+/** Branch lists by repo, fetched when a picker first needs one. A rescan forgets them. */
+const branchCache = new Map<string, Promise<string[]>>();
+
+export function branchesOf(repo: string): Promise<string[]> {
+  const key = projectKey(repo);
+  let hit = branchCache.get(key);
+  if (!hit) {
+    hit = gitBranches(repo).catch(() => []);
+    branchCache.set(key, hit);
+  }
+  return hit;
+}
+
 export async function refresh(force = false) {
+  branchCache.clear();
   try {
     applySnapshot(await indexRefresh(force));
     appState.error = null;

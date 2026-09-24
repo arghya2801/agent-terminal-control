@@ -50,6 +50,11 @@ export function openInExplorer(path: string): Promise<void> {
   return invoke('open_in_explorer', { path });
 }
 
+/** Local branches of the repo at `path`; empty when it is not one. */
+export function gitBranches(path: string): Promise<string[]> {
+  return invoke('git_branches', { path });
+}
+
 /** Devtools, re-added under our own chord after WebView2's F12 was disabled. */
 export function openDevtools(): Promise<void> {
   return invoke('open_devtools');
