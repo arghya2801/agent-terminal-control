@@ -83,7 +83,6 @@ fn no_profile_shells() {
 fn opts(initial: Option<&str>) -> SpawnOpts {
     no_profile_shells();
     SpawnOpts {
-        provider: None,
         cwd: Some(env!("CARGO_MANIFEST_DIR").to_string()),
         cols: 120,
         rows: 30,

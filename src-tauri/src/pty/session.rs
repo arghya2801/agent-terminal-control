@@ -51,7 +51,6 @@ const CPR_REPLY: &[u8] = b"\x1b[1;1R";
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SpawnOpts {
-    pub provider: Option<crate::agent::AgentProvider>,
     pub cwd: Option<String>,
     pub cols: u16,
     pub rows: u16,
