@@ -20,7 +20,7 @@ import { normalizeZoom, stepZoom } from './zoom';
 import { applyTerminalSettings, applyTheme, refit } from '../terminal/manager';
 import { applyPalette, type Palette } from './theme';
 import { findTheme, loadThemes } from './themes';
-import type { IndexSnapshot, Settings } from '../types';
+import type { IndexSnapshot, Settings, Task } from '../types';
 
 const EVENT_INDEX_UPDATED = 'index://updated';
 const EVENT_SETTINGS_UPDATED = 'settings://updated';
@@ -149,6 +149,11 @@ export async function saveSettings(next: Settings) {
   ) {
     applySettings(next);
   }
+  // This write carries everything a pending debounced one would.
+  if (saveTimer !== undefined) {
+    clearTimeout(saveTimer);
+    saveTimer = undefined;
+  }
   try {
     await settingsSet(next);
   } catch (e) {
@@ -163,8 +168,21 @@ function saveSettingsDebounced(next: Settings) {
   if (saveTimer !== undefined) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveTimer = undefined;
-    void settingsSet(next).catch((e) => (appState.error = String(e)));
+    // Whatever is current when the burst ends, not what started it.
+    if (appState.settings) void settingsSet(appState.settings).catch((e) => (appState.error = String(e)));
   }, SETTINGS_SAVE_DEBOUNCE_MS);
+}
+
+export function tasks(): Task[] {
+  return appState.settings?.tasks ?? [];
+}
+
+/** Structural edits save at once; `debounced` is for typing, such as notes. */
+export function saveTasks(next: Task[], debounced = false) {
+  if (!appState.settings) return;
+  const settings = { ...appState.settings, tasks: next };
+  if (debounced) saveSettingsDebounced(settings);
+  else void saveSettings(settings);
 }
 
 export function currentZoom(): number {

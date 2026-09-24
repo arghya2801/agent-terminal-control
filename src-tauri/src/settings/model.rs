@@ -20,6 +20,8 @@ pub struct Settings {
     pub terminal: TerminalSettings,
     pub claude: ClaudeSettings,
     pub codex: CodexSettings,
+    /// Local tasks, linked to branches and through them to sessions.
+    pub tasks: Vec<Task>,
 }
 
 impl Default for Settings {
@@ -31,6 +33,7 @@ impl Default for Settings {
             terminal: TerminalSettings::default(),
             claude: ClaudeSettings::default(),
             codex: CodexSettings::default(),
+            tasks: Vec::new(),
         }
     }
 }
@@ -47,6 +50,42 @@ pub struct ProjectSettings {
     pub names: BTreeMap<String, String>,
     /// Sidebar labels chosen by the user, by session uuid.
     pub session_names: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Task {
+    pub id: u32,
+    pub title: String,
+    pub state: TaskState,
+    /// Project root the task belongs to. `None` for a plain to-do with no repo.
+    pub repo: Option<String>,
+    pub branches: Vec<String>,
+    /// Markdown source.
+    pub notes: String,
+    /// Linked sessions as `provider:id`, the same key the sidebar uses.
+    pub sessions: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TaskState {
+    #[default]
+    Todo,
+    Doing,
+    Done,
+}
+
+/// Lenient: an unknown state in a hand-edited file reads as `todo` rather than failing
+/// the whole file, which would put every other setting back to its default.
+impl<'de> Deserialize<'de> for TaskState {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(d)?.as_str() {
+            "doing" => Self::Doing,
+            "done" => Self::Done,
+            _ => Self::Todo,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -226,6 +265,21 @@ mod tests {
             order: 0,
         });
         let text = serde_json::to_string(&s).unwrap();
+        assert_eq!(serde_json::from_str::<Settings>(&text).unwrap(), s);
+    }
+
+    #[test]
+    fn tasks_round_trip_and_tolerate_hand_edits() {
+        let s: Settings = serde_json::from_str(
+            r#"{"tasks":[{"id":3,"title":"t","state":"doing","branches":["main"]},{"id":4,"state":"blocked"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(s.tasks[0].state, TaskState::Doing);
+        assert_eq!(s.tasks[0].repo, None);
+        assert_eq!(s.tasks[1].state, TaskState::Todo, "unknown state falls back");
+        assert!(s.tasks[1].sessions.is_empty());
+        let text = serde_json::to_string(&s).unwrap();
+        assert!(text.contains(r#""state":"doing""#));
         assert_eq!(serde_json::from_str::<Settings>(&text).unwrap(), s);
     }
 
