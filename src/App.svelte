@@ -7,6 +7,7 @@
   import Sidebar from './sidebar/Sidebar.svelte';
   import FindBar from './terminal/FindBar.svelte';
   import SettingsPanel from './settings/SettingsPanel.svelte';
+  import TaskPanel from './tasks/TaskPanel.svelte';
   import UsagePanel from './usage/UsagePanel.svelte';
   import ShortcutsPanel from './settings/ShortcutsPanel.svelte';
   import ConfirmDialog from './lib/ConfirmDialog.svelte';
@@ -25,6 +26,8 @@
     toggleSidebar,
     setSidebarView,
     sidebarView,
+    taskUi,
+    tasks,
   } from './lib/stores.svelte';
   import {
     bindSessions,
@@ -341,6 +344,8 @@
   }
 
   /** The sidebar project the focused tab belongs to, if it has one. */
+  const TASK_PANEL_WIDTH = 320;
+
   // Tab keys and the index are both reactive, so this follows the active tab.
   const currentRepo = $derived(activeProject()?.path ?? null);
 
@@ -416,6 +421,10 @@
       case 'focusSearch':
         void focusSearch();
         break;
+      case 'toggleTaskPanel':
+        taskUi.panelOpen = !taskUi.panelOpen;
+        if (taskUi.panelOpen && taskUi.selected === null) taskUi.selected = tasks()[0]?.id ?? null;
+        break;
       case 'toggleTaskView':
         if (!sidebarOpen()) void toggleSidebar();
         void setSidebarView(sidebarView() === 'tasks' ? 'sessions' : 'tasks');
@@ -468,12 +477,13 @@
   $effect(() => {
     void open;
     void width;
+    void taskUi.panelOpen;
     const t = setTimeout(refit, 180);
     return () => clearTimeout(t);
   });
 </script>
 
-<div class="app" style="--panel: {open ? width : 0}px">
+<div class="app" style="--panel: {open ? width : 0}px; --tasks: {taskUi.panelOpen ? TASK_PANEL_WIDTH : 0}px">
   <nav class="rail">
     <button
       class="rail-btn"
@@ -608,13 +618,18 @@
       </div>
     {/if}
   </section>
+
+  <!-- Its own column: it pushes the terminal narrower and never covers it. -->
+  <div class="task-panel">
+    {#if taskUi.panelOpen}<TaskPanel {sessionMarks} onOpenSession={openSession} />{/if}
+  </div>
 </div>
 
 <style>
   .app {
     display: grid;
     height: 100%;
-    grid-template-columns: 44px var(--panel) 1fr;
+    grid-template-columns: 44px var(--panel) 1fr var(--tasks);
   }
   .rail {
     display: flex;
@@ -671,6 +686,11 @@
   .resize:hover,
   .resize.dragging {
     background: color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  .task-panel {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
   }
   .main {
     position: relative;

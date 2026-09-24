@@ -50,6 +50,11 @@ export function openInExplorer(path: string): Promise<void> {
   return invoke('open_in_explorer', { path });
 }
 
+/** Open an http(s) link in the default browser. */
+export function openUrl(url: string): Promise<void> {
+  return invoke('open_url', { url });
+}
+
 /** Local branches of the repo at `path`; empty when it is not one. */
 export function gitBranches(path: string): Promise<string[]> {
   return invoke('git_branches', { path });

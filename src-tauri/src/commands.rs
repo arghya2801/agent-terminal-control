@@ -355,6 +355,27 @@ pub fn open_in_explorer(path: String) -> AppResult<()> {
     open_with_shell_handler(p)
 }
 
+/// Open a link from task notes in the default browser. Only http(s): anything else could
+/// name a local program or file for the shell handler to run.
+#[tauri::command]
+pub fn open_url(url: String) -> AppResult<()> {
+    if !is_web_url(&url) {
+        return Err(crate::error::AppError::Message(format!(
+            "not a web link: {url}"
+        )));
+    }
+    open_with_shell_handler(std::path::Path::new(&url))
+}
+
+fn is_web_url(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    (lower.starts_with("https://") || lower.starts_with("http://"))
+        && url.len() > "https://".len()
+        && !url
+            .chars()
+            .any(|c| c.is_whitespace() || c.is_control() || c == '"')
+}
+
 #[tauri::command]
 pub fn agent_command(
     provider: crate::agent::AgentProvider,
@@ -419,11 +440,35 @@ fn local_branches(dir: &std::path::Path) -> Vec<String> {
 
 #[cfg(test)]
 mod git_tests {
-    use super::local_branches;
+    use super::{is_web_url, local_branches};
+
+    #[test]
+    fn only_plain_web_links_are_opened() {
+        assert!(is_web_url("https://github.com/a/b?c=1&d=2"));
+        assert!(is_web_url("HTTP://x.y"));
+        for bad in [
+            "file:///C:/Windows/System32/calc.exe",
+            r"C:\Windows\notepad.exe",
+            "javascript:alert(1)",
+            "https://",
+            "https://a b",
+            "https://a\"b",
+            "ms-settings:",
+        ] {
+            assert!(!is_web_url(bad), "{bad}");
+        }
+    }
 
     fn git(dir: &std::path::Path, args: &[&str]) {
         let ok = std::process::Command::new("git")
-            .args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"])
+            .args([
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "-c",
+                "commit.gpgsign=false",
+            ])
             .args(args)
             .current_dir(dir)
             .output()

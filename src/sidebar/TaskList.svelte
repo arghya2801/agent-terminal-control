@@ -139,6 +139,10 @@
         renaming={taskUi.renaming === task.id}
         showRepo={manyRepos}
         onSelect={select}
+        onOpen={(t) => {
+          taskUi.selected = t.id;
+          taskUi.panelOpen = true;
+        }}
         onMenu={taskMenu}
         onRename={(name) => rename(task, name)}
         onRenameCancel={() => (taskUi.renaming = null)}

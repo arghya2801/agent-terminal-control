@@ -47,6 +47,7 @@ pub fn run() {
             commands::settings_set,
             commands::open_in_explorer,
             commands::git_branches,
+            commands::open_url,
             commands::open_settings_file,
             commands::write_text_file,
             commands::scratch_dir,

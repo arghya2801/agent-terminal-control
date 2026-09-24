@@ -29,6 +29,7 @@ describe('matchChord', () => {
     expect(matchChord(ctrlShift('U'))).toBe('openUsage');
     expect(matchChord(ctrlShift('P'))).toBe('focusSearch');
     expect(matchChord(ctrlShift('K'))).toBe('toggleTaskView');
+    expect(matchChord(ctrlShift('E'))).toBe('toggleTaskPanel');
     expect(matchChord(ctrlShift('A'))).toBe('askAgent');
     expect(matchChord(press(',', { ctrlKey: true }))).toBe('openSettings');
   });

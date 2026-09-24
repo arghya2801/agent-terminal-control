@@ -280,7 +280,11 @@ mod tests {
         .unwrap();
         assert_eq!(s.tasks[0].state, TaskState::Doing);
         assert_eq!(s.tasks[0].repo, None);
-        assert_eq!(s.tasks[1].state, TaskState::Todo, "unknown state falls back");
+        assert_eq!(
+            s.tasks[1].state,
+            TaskState::Todo,
+            "unknown state falls back"
+        );
         assert!(s.tasks[1].sessions.is_empty());
         let text = serde_json::to_string(&s).unwrap();
         assert!(text.contains(r#""state":"doing""#));

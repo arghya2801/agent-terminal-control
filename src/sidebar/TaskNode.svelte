@@ -9,6 +9,7 @@
     renaming = false,
     showRepo = false,
     onSelect,
+    onOpen,
     onMenu,
     onRename,
     onRenameCancel,
@@ -21,6 +22,8 @@
     /** Name the repo, for when tasks from several repos share the list. */
     showRepo?: boolean;
     onSelect: (task: Task) => void;
+    /** Double-click: show it in the task panel. */
+    onOpen: (task: Task) => void;
     onMenu: (e: MouseEvent, task: Task) => void;
     onRename: (name: string) => void;
     onRenameCancel: () => void;
@@ -38,8 +41,9 @@
     class="task {task.state}"
     class:selected
     onclick={() => onSelect(task)}
+    ondblclick={() => onOpen(task)}
     oncontextmenu={(e) => onMenu(e, task)}
-    title={task.title}
+    title="{task.title} (double-click for branches and notes)"
   >
     <span class="title">{task.title}</span>
     {#if (showRepo && repoName) || task.branches.length || task.sessions.length}
