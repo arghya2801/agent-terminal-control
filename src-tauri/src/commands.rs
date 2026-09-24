@@ -352,7 +352,7 @@ pub fn agent_command(
 }
 
 #[tauri::command]
-pub async fn codex_usage(app: tauri::AppHandle) -> AppResult<serde_json::Value> {
+pub async fn codex_usage(app: tauri::AppHandle) -> AppResult<Option<serde_json::Value>> {
     tauri::async_runtime::spawn_blocking(move || {
         use tauri::Manager;
         let state = app.state::<AppState>();

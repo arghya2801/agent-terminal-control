@@ -34,11 +34,13 @@ impl Client {
         }
     }
 
-    pub fn read(&self, settings: &crate::settings::Settings) -> Result<Value, String> {
+    /// `None` when the Codex CLI is not installed, so the UI can leave Codex out.
+    pub fn read(&self, settings: &crate::settings::Settings) -> Result<Option<Value>, String> {
         let _request = self.request.lock().unwrap_or_else(|e| e.into_inner());
         let exe = &settings.codex.command;
-        let resolved = crate::pty::shell::resolve_shell(Some(exe))
-            .map_err(|e| format!("Codex `{exe}` app-server unavailable: {e}"))?;
+        let Ok(resolved) = crate::pty::shell::resolve_shell(Some(exe)) else {
+            return Ok(None);
+        };
         let mut command = Command::new(resolved.path);
         command
             .arg("app-server")
@@ -95,7 +97,7 @@ impl Client {
         drop(rx);
         self.stop();
         let _ = reader.join();
-        result
+        result.map(Some)
     }
 }
 
@@ -138,7 +140,8 @@ mod tests {
         let result = client.read(&settings);
         assert!(client.child.lock().unwrap().is_none());
         match result {
-            Ok(v) => assert!(v["rateLimits"].is_null(), "unexpected authenticated data"),
+            Ok(None) => panic!("ATC_TEST_CODEX was not found"),
+            Ok(Some(v)) => assert!(v["rateLimits"].is_null(), "unexpected authenticated data"),
             Err(e) => assert!(e.contains("Codex rate limits unavailable"), "{e}"),
         }
     }
@@ -169,7 +172,7 @@ mod tests {
         let mut settings = crate::settings::Settings::default();
         settings.codex.command = "atc-nonexistent-codex-123.exe".into();
         let client = Client::default();
-        assert!(client.read(&settings).unwrap_err().contains("unavailable"));
+        assert_eq!(client.read(&settings), Ok(None));
         assert!(client.child.lock().unwrap().is_none());
     }
 }

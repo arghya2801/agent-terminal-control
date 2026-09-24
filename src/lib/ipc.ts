@@ -89,5 +89,6 @@ export function agentCommand(provider: AgentProvider, sessionId: string | null =
   return invoke<string>('agent_command', { provider, sessionId });
 }
 
-export function codexUsage(): Promise<Record<string, unknown>> { return invoke('codex_usage'); }
+/** Null when the Codex CLI is not installed. */
+export function codexUsage(): Promise<Record<string, unknown> | null> { return invoke('codex_usage'); }
 export function codexUsageStop(): Promise<void> { return invoke('codex_usage_stop'); }

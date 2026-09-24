@@ -25,11 +25,17 @@
   let codexPlan = $state<Record<string, unknown> | null>(null);
   let codexError = $state<string | null>(null);
   let codexLoading = $state(false);
+  let codexMissing = $state(false);
   const codexWindows = $derived(codexPlan ? codexLimits(codexPlan) : []);
   async function loadCodex() {
     if (codexLoading) return;
     codexLoading = true;
-    try { codexPlan = await codexUsage(); codexError = null; }
+    try {
+      const plan = await codexUsage();
+      codexMissing = plan === null;
+      codexPlan = plan;
+      codexError = null;
+    }
     catch (e) { codexError = String(e); }
     finally { codexLoading = false; }
   }
@@ -43,6 +49,7 @@
   let now = $state(Date.now());
   /** Limits move slowly, and the endpoint rate-limits, so poll gently. */
   const PLAN_REFRESH_MS = 90_000;
+  const CODEX_REFRESH_MS = 300_000;
 
   const limits = $derived(plan ? planLimits(plan) : []);
   const breakdown = $derived(plan ? weeklyBreakdown(plan) : []);
@@ -249,11 +256,14 @@
     void loadPlan();
     void loadCodex();
     void loadCosts();
-    const poll = setInterval(() => { void loadPlan(); void loadCodex(); void loadCosts(); }, PLAN_REFRESH_MS);
+    const poll = setInterval(() => { void loadPlan(); void loadCosts(); }, PLAN_REFRESH_MS);
+    // Each Codex read starts a `codex app-server` process, so it refreshes less often.
+    const codexPoll = setInterval(() => void loadCodex(), CODEX_REFRESH_MS);
     const tick = setInterval(() => (now = Date.now()), 30_000);
     return () => {
       void codexUsageStop();
       clearInterval(poll);
+      clearInterval(codexPoll);
       clearInterval(tick);
     };
   });
@@ -321,6 +331,7 @@
   </div>
 
   </section>
+  {#if !codexMissing}
   <section class="plan-card" aria-label="Codex plan limits">
   <h2>Codex plan limits</h2>
   {#if codexError}<p class="err">{codexError}</p>{/if}
@@ -340,6 +351,7 @@
   {/if}
   <button class="btn" onclick={loadCodex} disabled={codexLoading}>Refresh Codex limits</button>
   </section>
+  {/if}
   </div>
 
   <h2>Local usage</h2>
