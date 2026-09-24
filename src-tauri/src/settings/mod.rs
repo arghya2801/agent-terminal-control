@@ -17,10 +17,12 @@ const APP_DIR: &str = "Agent Terminal Control";
 const LEGACY_APP_DIRS: [&str; 2] = ["dev.arghya.atc", "dev.arghya.ccpg"];
 
 /// Config directory. `ATC_CONFIG_DIR` lets the playground run against fixtures without
-/// touching the real config.
+/// touching the real config. Made absolute because the watcher compares against the
+/// absolute paths `notify` reports; not canonicalized, which would add a `\\?\` prefix.
 pub fn config_dir() -> PathBuf {
     if let Some(d) = std::env::var_os("ATC_CONFIG_DIR") {
-        return PathBuf::from(d);
+        let d = PathBuf::from(d);
+        return std::path::absolute(&d).unwrap_or(d);
     }
     appdata().join(APP_DIR)
 }
@@ -210,6 +212,11 @@ mod tests {
         let prev = std::env::var_os(key);
         std::env::set_var(key, r"D:\playground\config");
         assert_eq!(config_dir(), PathBuf::from(r"D:\playground\config"));
+        // A relative spelling must come back absolute, or the watcher never matches (#67).
+        std::env::set_var(key, "./playground/config");
+        let dir = config_dir();
+        assert!(dir.is_absolute(), "got {dir:?}");
+        assert!(dir.ends_with("playground/config"), "got {dir:?}");
         match prev {
             Some(v) => std::env::set_var(key, v),
             None => std::env::remove_var(key),
