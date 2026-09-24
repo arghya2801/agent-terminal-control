@@ -269,10 +269,25 @@ impl PtySession {
     }
 }
 
+/// Variables that describe whoever launched ATC, not the shells ATC opens. Launched from
+/// inside a Claude Code session, the markers make every `claude` in ATC a child session
+/// with transcript saving off; `NO_COLOR` strips colour from Claude, Codex and prompts.
+const LAUNCHER_ONLY_ENV: &[&str] = &[
+    "NO_COLOR",
+    "CLAUDECODE",
+    "CLAUDE_PID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_SESSION_ATTENDED",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_MESSAGING_SOCKET",
+    "CLAUDE_CODE_MESSAGING_TOKEN",
+];
+
 fn configure_terminal_environment(cmd: &mut CommandBuilder) {
-    // The process that launched ATC may set NO_COLOR=1 for its own logs. Do not
-    // pass that into interactive shells, where it disables Claude, Codex and prompt colours.
-    cmd.env_remove("NO_COLOR");
+    for name in LAUNCHER_ONLY_ENV {
+        cmd.env_remove(name);
+    }
     cmd.env("TERM", "xterm-256color");
 }
 
@@ -441,11 +456,17 @@ mod environment_tests {
     use super::*;
 
     #[test]
-    fn interactive_shell_does_not_inherit_no_color() {
+    fn interactive_shell_does_not_inherit_launcher_markers() {
         let mut cmd = CommandBuilder::new("pwsh");
-        cmd.env("NO_COLOR", "1");
+        for name in LAUNCHER_ONLY_ENV {
+            cmd.env(name, "1");
+        }
+        cmd.env("PATH", "kept");
         configure_terminal_environment(&mut cmd);
-        assert!(cmd.get_env("NO_COLOR").is_none());
+        for name in LAUNCHER_ONLY_ENV {
+            assert!(cmd.get_env(name).is_none(), "{name} leaked");
+        }
+        assert_eq!(cmd.get_env("PATH"), Some(std::ffi::OsStr::new("kept")));
         assert_eq!(
             cmd.get_env("TERM"),
             Some(std::ffi::OsStr::new("xterm-256color"))
