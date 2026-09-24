@@ -95,10 +95,31 @@ export interface Settings {
     theme: string;
     /** Sessions from a subfolder appear under the project containing it. */
     groupSubfolders: boolean;
+    /** Sessions appear under the git branch they ran on. */
+    groupByBranch: boolean;
+    /** Which list the sidebar shows. Unknown values read as sessions. */
+    sidebarView: string;
   };
   terminal: TerminalSettings;
   codex: { command: string; resumeArgs: string[]; homeDir: string | null };
   claude: { command: string; resumeArgs: string[]; scratchDir: string | null };
+  tasks: Task[];
+}
+
+export type TaskState = 'todo' | 'doing' | 'done';
+
+/** Mirrors `Task` in src-tauri/src/settings/model.rs. */
+export interface Task {
+  id: number;
+  title: string;
+  state: TaskState;
+  /** Project root, or null for a to-do that belongs to no repo. */
+  repo: string | null;
+  branches: string[];
+  /** Markdown source. */
+  notes: string;
+  /** Linked sessions as `provider:id`. */
+  sessions: string[];
 }
 
 export interface TerminalSettings {

@@ -130,6 +130,11 @@
         <input id="gs" type="checkbox" bind:checked={draft.ui.groupSubfolders} />
         <span class="muted">Show sessions started in a subfolder under the project containing it; they still resume in their own directory</span>
       </label>
+      <label for="gb">Group by branch</label>
+      <label class="check">
+        <input id="gb" type="checkbox" bind:checked={draft.ui.groupByBranch} />
+        <span class="muted">Show each project's sessions under the git branch they ran on</span>
+      </label>
       <label for="nt">Notifications</label>
       <label class="check">
         <input id="nt" type="checkbox" bind:checked={draft.ui.notifications} />

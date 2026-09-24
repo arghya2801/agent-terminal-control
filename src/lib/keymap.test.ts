@@ -28,6 +28,8 @@ describe('matchChord', () => {
     expect(matchChord(ctrlShift('R'))).toBe('renameTab');
     expect(matchChord(ctrlShift('U'))).toBe('openUsage');
     expect(matchChord(ctrlShift('P'))).toBe('focusSearch');
+    expect(matchChord(ctrlShift('K'))).toBe('toggleTaskView');
+    expect(matchChord(ctrlShift('E'))).toBe('toggleTaskPanel');
     expect(matchChord(ctrlShift('A'))).toBe('askAgent');
     expect(matchChord(press(',', { ctrlKey: true }))).toBe('openSettings');
   });
@@ -101,7 +103,7 @@ describe('matchChord', () => {
     });
 
     it('ignores unmapped Ctrl+Shift letters', () => {
-      expect(matchChord(ctrlShift('K'))).toBeNull();
+      expect(matchChord(ctrlShift('Y'))).toBeNull();
     });
 
     it('ignores Ctrl+I, which is Tab on some terminals', () => {

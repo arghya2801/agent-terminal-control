@@ -16,6 +16,8 @@
     projectPath,
     active = false,
     mark = null,
+    showBranch = true,
+    task = null,
     renaming = false,
     onRename,
     onRenameCancel,
@@ -27,6 +29,10 @@
     projectPath: string | null;
     active?: boolean;
     mark?: SessionMark | null;
+    /** Off under a branch sub-header, which already says it. */
+    showBranch?: boolean;
+    /** The task this session is linked to. */
+    task?: { id: number; title: string } | null;
     renaming?: boolean;
     onRename: (name: string) => void;
     onRenameCancel: () => void;
@@ -77,12 +83,13 @@
   <span class="label">{session.label}</span>
   <span class="meta">
     {#if subfolder}<span class="sub" title="Started in {subfolder}">{subfolder}</span>{/if}
-    {#if session.gitBranch}
+    {#if showBranch && session.gitBranch}
       <span class="branch" class:default={session.gitBranch === 'main'}>
         {session.gitBranch}
       </span>
     {/if}
-    <span class="age">{age}</span>
+    {#if task}<span class="task" title="Linked to {task.title}">• task {task.id}</span>{/if}
+    <span class="age">{mark ? 'open' : age}</span>
   </span>
 </button>
 {/if}
@@ -182,5 +189,9 @@
   }
   .age {
     color: var(--fg-faint);
+  }
+  .task {
+    color: var(--fg-dim);
+    white-space: nowrap;
   }
 </style>

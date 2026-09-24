@@ -2,17 +2,24 @@
   import { sessionKey } from '../lib/agents';
   import { agentCommand } from '../lib/ipc';
   import ProjectNode from './ProjectNode.svelte';
+  import TaskList from './TaskList.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import { openInExplorer } from '../lib/ipc';
   import { filterProjects } from '../lib/filter';
   import { groupSubfolders } from '../lib/group';
   import { focusActiveTerminal } from '../terminal/manager';
   import { isPinned, togglePinned } from '../lib/pinned';
+  import { inRepo, linkSession, taskForSession, unlinkSession } from '../lib/tasks';
   import {
     anyProjectExpanded,
     appState,
+    createTask,
     refresh,
     saveSettings,
+    saveTasks,
+    setSidebarView,
+    sidebarView,
+    tasks,
     toggleAllProjects,
   } from '../lib/stores.svelte';
   import type { AgentProvider, Project, SessionMeta, TabKey } from '../types';
@@ -21,6 +28,7 @@
   let {
     activeKey,
     activeSessionId,
+    currentRepo,
     openProjectKeys,
     sessionMarks,
     onOpenProject,
@@ -30,6 +38,8 @@
   }: {
     activeKey: TabKey | null;
     activeSessionId: string | null;
+    /** Project root of the active tab, the default repo for a new task. */
+    currentRepo: string | null;
     openProjectKeys: Set<string>;
     /** Sessions with a live tab, by id. */
     sessionMarks: Map<string, SessionMark>;
@@ -103,6 +113,44 @@
     };
   }
 
+  function taskItems(p: Project, s: SessionMeta): MenuItem[] {
+    const key = sessionKey(s);
+    const dir = s.cwd ?? p.path;
+    const linked = taskForSession(tasks(), key);
+    const items: MenuItem[] = [
+      {
+        label: 'New task from this session',
+        sep: true,
+        run: () => {
+          createTask({
+            title: s.label,
+            state: 'doing',
+            repo: p.path,
+            branches: s.gitBranch ? [s.gitBranch] : [],
+            sessions: [key],
+          });
+          // Show it, already in rename, so the title can be fixed straight away.
+          void setSidebarView('tasks');
+        },
+      },
+    ];
+    // Tasks in this session's repo, and to-dos with no repo.
+    const fits = tasks().filter(
+      (t) => t.state !== 'done' && t.id !== linked?.id && (!t.repo || inRepo(t.repo, dir)),
+    );
+    if (fits.length) items.push({ label: linked ? 'Move to task' : 'Link to task' });
+    for (const t of fits.slice(0, 8)) {
+      items.push({ label: t.title, run: () => saveTasks(linkSession(tasks(), t.id, s)) });
+    }
+    if (linked) {
+      items.push({
+        label: `Unlink from task ${linked.id}`,
+        run: () => saveTasks(unlinkSession(tasks(), linked.id, key)),
+      });
+    }
+    return items;
+  }
+
   function sessionMenu(e: MouseEvent, p: Project, s: SessionMeta) {
     e.preventDefault();
     const dir = s.cwd ?? p.path;
@@ -121,9 +169,17 @@
           disabled: !dir,
           run: () => dir && void openInExplorer(dir),
         },
+        ...taskItems(p, s),
       ],
     };
   }
+
+  const sessionTasks = $derived(
+    new Map(tasks().flatMap((t) => t.sessions.map((k) => [k, { id: t.id, title: t.title }] as const))),
+  );
+
+  const view = $derived(sidebarView());
+  const openTasks = $derived(tasks().filter((t) => t.state !== 'done').length);
 
   let query = $state('');
   const searching = $derived(query.trim() !== '');
@@ -160,8 +216,28 @@
 
 <div class="panel">
   <header>
-    <span class="title">Projects</span>
+    <div class="views" role="tablist" aria-label="Sidebar view">
+      <button
+        role="tab"
+        aria-selected={view === 'sessions'}
+        onclick={() => void setSidebarView('sessions')}
+        title="Projects and sessions (Ctrl+Shift+K)"
+      >
+        Sessions <span class="n">{appState.index.sessionCount}</span>
+      </button>
+      <button
+        role="tab"
+        aria-selected={view === 'tasks'}
+        onclick={() => void setSidebarView('tasks')}
+        title="Tasks (Ctrl+Shift+K)"
+      >
+        Tasks <span class="n">{openTasks}</span>
+      </button>
+    </div>
     <div class="actions">
+      {#if view === 'tasks'}
+        <button class="icon" onclick={() => createTask({ repo: currentRepo })} title="New task" aria-label="New task">+</button>
+      {:else}
       <button
         class="icon"
         onclick={toggleAllProjects}
@@ -179,6 +255,7 @@
       >
         ⟳
       </button>
+      {/if}
     </div>
   </header>
 
@@ -186,9 +263,9 @@
     <input
       id="sidebar-search"
       type="search"
-      placeholder="Filter projects and sessions"
+      placeholder={view === 'tasks' ? 'Filter tasks' : 'Filter projects and sessions'}
       title="Filter by project, path, session name or branch (Ctrl+Shift+P)"
-      aria-label="Filter projects and sessions"
+      aria-label={view === 'tasks' ? 'Filter tasks' : 'Filter projects and sessions'}
       spellcheck="false"
       autocomplete="off"
       bind:value={query}
@@ -197,7 +274,9 @@
   </div>
 
   <div class="list">
-    {#if appState.loading}
+    {#if view === 'tasks'}
+      <TaskList {query} {sessionMarks} {onOpenSession} />
+    {:else if appState.loading}
       <div class="hint">scanning…</div>
     {:else if appState.error}
       <div class="hint err">{appState.error}</div>
@@ -213,7 +292,9 @@
           {project}
           {limit}
           forceOpen={searching}
+          groupByBranch={appState.settings?.ui.groupByBranch ?? false}
           {sessionMarks}
+          {sessionTasks}
           {activeKey}
           {activeSessionId}
           open={openProjectKeys.has(project.key)}
@@ -235,7 +316,11 @@
   {/if}
 
   <footer>
-    {appState.index.projects.length} projects · {appState.index.sessionCount} sessions
+    {#if view === 'tasks'}
+      {tasks().length} tasks · {openTasks} open
+    {:else}
+      {appState.index.projects.length} projects · {appState.index.sessionCount} sessions
+    {/if}
   </footer>
 </div>
 
@@ -262,6 +347,32 @@
   .actions {
     display: flex;
     gap: 2px;
+  }
+  .views {
+    display: flex;
+    gap: 10px;
+  }
+  .views button {
+    padding: 0 0 3px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--fg-faint);
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+  }
+  .views button:hover {
+    color: var(--fg);
+  }
+  .views button[aria-selected='true'] {
+    border-bottom-color: var(--accent);
+    color: var(--fg-bright);
+  }
+  .views .n {
+    color: var(--fg-faint);
+    font-variant-numeric: tabular-nums;
   }
   .icon {
     width: 20px;

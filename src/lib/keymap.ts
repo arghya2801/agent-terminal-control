@@ -28,6 +28,8 @@ export type Action =
   | 'openSettings'
   | 'openUsage'
   | 'focusSearch'
+  | 'toggleTaskView'
+  | 'toggleTaskPanel'
   | 'askAgent'
   | 'showShortcuts';
 
@@ -77,6 +79,8 @@ const BINDINGS: Binding[] = [
   { key: 'r', ctrl: true, shift: true, action: 'renameTab' },
   { key: 'u', ctrl: true, shift: true, action: 'openUsage' },
   { key: 'p', ctrl: true, shift: true, action: 'focusSearch' },
+  { key: 'k', ctrl: true, shift: true, action: 'toggleTaskView' },
+  { key: 'e', ctrl: true, shift: true, action: 'toggleTaskPanel' },
   { key: 'a', ctrl: true, shift: true, action: 'askAgent' },
   // Ctrl+Comma is the settings chord in most editors; the shell and Claude Code ignore it.
   { key: ',', ctrl: true, shift: false, action: 'openSettings' },
@@ -102,6 +106,8 @@ const DESCRIPTIONS: Record<Action, { group: Group; label: string }> = {
   askAgent: { group: 'Launch', label: 'Ask agent (scratch directory)' },
   toggleSidebar: { group: 'View', label: 'Show or hide the sidebar' },
   focusSearch: { group: 'View', label: 'Search projects and sessions' },
+  toggleTaskView: { group: 'View', label: 'Switch the sidebar between sessions and tasks' },
+  toggleTaskPanel: { group: 'View', label: 'Show or hide the task panel' },
   find: { group: 'View', label: 'Find in the terminal' },
   zoomIn: { group: 'View', label: 'Zoom in' },
   zoomOut: { group: 'View', label: 'Zoom out' },

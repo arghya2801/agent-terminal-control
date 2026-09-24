@@ -8,7 +8,9 @@
 import { migrateSessionNames } from './agents';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { indexRefresh, indexSnapshot, settingsGet, settingsSet } from './ipc';
+import { gitBranches, indexRefresh, indexSnapshot, settingsGet, settingsSet } from './ipc';
+import { projectKey } from './paths';
+import { newTask } from './tasks';
 import {
   anyExpanded,
   isExpandedIn,
@@ -20,7 +22,7 @@ import { normalizeZoom, stepZoom } from './zoom';
 import { applyTerminalSettings, applyTheme, refit } from '../terminal/manager';
 import { applyPalette, type Palette } from './theme';
 import { findTheme, loadThemes } from './themes';
-import type { IndexSnapshot, Settings } from '../types';
+import type { IndexSnapshot, Settings, Task } from '../types';
 
 const EVENT_INDEX_UPDATED = 'index://updated';
 const EVENT_SETTINGS_UPDATED = 'settings://updated';
@@ -129,7 +131,21 @@ export async function initStores() {
   });
 }
 
+/** Branch lists by repo, fetched when a picker first needs one. A rescan forgets them. */
+const branchCache = new Map<string, Promise<string[]>>();
+
+export function branchesOf(repo: string): Promise<string[]> {
+  const key = projectKey(repo);
+  let hit = branchCache.get(key);
+  if (!hit) {
+    hit = gitBranches(repo).catch(() => []);
+    branchCache.set(key, hit);
+  }
+  return hit;
+}
+
 export async function refresh(force = false) {
+  branchCache.clear();
   try {
     applySnapshot(await indexRefresh(force));
     appState.error = null;
@@ -149,6 +165,11 @@ export async function saveSettings(next: Settings) {
   ) {
     applySettings(next);
   }
+  // This write carries everything a pending debounced one would.
+  if (saveTimer !== undefined) {
+    clearTimeout(saveTimer);
+    saveTimer = undefined;
+  }
   try {
     await settingsSet(next);
   } catch (e) {
@@ -163,8 +184,47 @@ function saveSettingsDebounced(next: Settings) {
   if (saveTimer !== undefined) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveTimer = undefined;
-    void settingsSet(next).catch((e) => (appState.error = String(e)));
+    // Whatever is current when the burst ends, not what started it.
+    if (appState.settings) void settingsSet(appState.settings).catch((e) => (appState.error = String(e)));
   }, SETTINGS_SAVE_DEBOUNCE_MS);
+}
+
+/** Which task the panel shows and whether it is open. Not persisted. */
+export const taskUi = $state({
+  selected: null as number | null,
+  panelOpen: false,
+  /** Task whose title is being edited in the sidebar. */
+  renaming: null as number | null,
+});
+
+export function sidebarView(): 'sessions' | 'tasks' {
+  return appState.settings?.ui.sidebarView === 'tasks' ? 'tasks' : 'sessions';
+}
+
+export async function setSidebarView(view: 'sessions' | 'tasks') {
+  if (!appState.settings || sidebarView() === view) return;
+  await saveSettings({ ...appState.settings, ui: { ...appState.settings.ui, sidebarView: view } });
+}
+
+export function tasks(): Task[] {
+  return appState.settings?.tasks ?? [];
+}
+
+/** Add a task at the top of the list, select it and start renaming it. */
+export function createTask(fields: Partial<Task> = {}): Task {
+  const task = newTask(tasks(), fields);
+  saveTasks([task, ...tasks()]);
+  taskUi.selected = task.id;
+  taskUi.renaming = task.id;
+  return task;
+}
+
+/** Structural edits save at once; `debounced` is for typing, such as notes. */
+export function saveTasks(next: Task[], debounced = false) {
+  if (!appState.settings) return;
+  const settings = { ...appState.settings, tasks: next };
+  if (debounced) saveSettingsDebounced(settings);
+  else void saveSettings(settings);
 }
 
 export function currentZoom(): number {
