@@ -79,6 +79,8 @@ pub struct UiSettings {
     /// of as a project of their own. Off by default: it merges rows the user may well
     /// want apart.
     pub group_subfolders: bool,
+    /// Show a project's sessions under the git branch each one ran on.
+    pub group_by_branch: bool,
 }
 
 impl Default for UiSettings {
@@ -92,6 +94,7 @@ impl Default for UiSettings {
             restore_tabs: true,
             theme: "ATC Dark".into(),
             group_subfolders: false,
+            group_by_branch: false,
         }
     }
 }

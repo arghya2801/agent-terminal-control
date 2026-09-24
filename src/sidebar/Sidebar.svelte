@@ -213,6 +213,7 @@
           {project}
           {limit}
           forceOpen={searching}
+          groupByBranch={appState.settings?.ui.groupByBranch ?? false}
           {sessionMarks}
           {activeKey}
           {activeSessionId}

@@ -4,6 +4,7 @@
   import InlineRename from '../lib/InlineRename.svelte';
   import { isExpanded, toggleExpanded } from '../lib/stores.svelte';
   import { shortenPath } from '../lib/format';
+  import { branchGroups } from '../lib/branchGroups';
   import type { Project, SessionMeta, TabKey } from '../types';
   import type { SessionMark } from './SessionNode.svelte';
 
@@ -11,6 +12,7 @@
     project,
     limit,
     forceOpen = false,
+    groupByBranch = false,
     sessionMarks,
     activeKey,
     activeSessionId,
@@ -28,6 +30,8 @@
     limit: number;
     /** Expanded regardless of the user's toggle, e.g. while a search is showing results. */
     forceOpen?: boolean;
+    /** Sub-headers per git branch. The "show more" limit stays per project. */
+    groupByBranch?: boolean;
     sessionMarks: Map<string, SessionMark>;
     activeKey: TabKey | null;
     /** Session whose tab is focused, already resolved from the tab. */
@@ -102,19 +106,28 @@
 
   {#if open}
     <div class="sessions">
-      {#each visible as session (sessionKey(session))}
+      {#snippet row(session: SessionMeta)}
         <SessionNode
           {session}
           projectPath={project.path}
           active={sessionKey(session) === activeSessionId}
           mark={sessionMarks.get(sessionKey(session)) ?? null}
+          showBranch={!groupByBranch}
           renaming={renaming === `s:${sessionKey(session)}`}
           onRename={(name) => onRenameSession(session, name)}
           onRenameCancel={onRenameCancel}
           onOpen={(s) => onOpenSession(project, s)}
           onMenu={(e, s) => onSessionMenu(e, project, s)}
         />
-      {/each}
+      {/snippet}
+      {#if groupByBranch}
+        {#each branchGroups(visible) as group (group.branch ?? '')}
+          <div class="branch-head" class:none={group.branch === null}>{group.branch ?? 'no branch'}</div>
+          {#each group.sessions as session (sessionKey(session))}{@render row(session)}{/each}
+        {/each}
+      {:else}
+        {#each visible as session (sessionKey(session))}{@render row(session)}{/each}
+      {/if}
       {#if hidden > 0}
         <button class="more" onclick={() => (showAll = true)}>show {hidden} more</button>
       {/if}
@@ -225,6 +238,20 @@
   .open:disabled {
     cursor: default;
     opacity: 0;
+  }
+  .branch-head {
+    overflow: hidden;
+    padding: 5px 10px 2px 40px;
+    color: var(--info);
+    font-family: ui-monospace, monospace;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .branch-head.none {
+    color: var(--fg-faint);
+    font-family: inherit;
+    font-style: italic;
   }
   .more,
   .empty {

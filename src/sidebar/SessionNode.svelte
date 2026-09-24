@@ -16,6 +16,7 @@
     projectPath,
     active = false,
     mark = null,
+    showBranch = true,
     renaming = false,
     onRename,
     onRenameCancel,
@@ -27,6 +28,8 @@
     projectPath: string | null;
     active?: boolean;
     mark?: SessionMark | null;
+    /** Off under a branch sub-header, which already says it. */
+    showBranch?: boolean;
     renaming?: boolean;
     onRename: (name: string) => void;
     onRenameCancel: () => void;
@@ -77,7 +80,7 @@
   <span class="label">{session.label}</span>
   <span class="meta">
     {#if subfolder}<span class="sub" title="Started in {subfolder}">{subfolder}</span>{/if}
-    {#if session.gitBranch}
+    {#if showBranch && session.gitBranch}
       <span class="branch" class:default={session.gitBranch === 'main'}>
         {session.gitBranch}
       </span>

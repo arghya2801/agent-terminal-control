@@ -96,6 +96,8 @@ export interface Settings {
     theme: string;
     /** Sessions from a subfolder appear under the project containing it. */
     groupSubfolders: boolean;
+    /** Sessions appear under the git branch they ran on. */
+    groupByBranch: boolean;
   };
   terminal: TerminalSettings;
   codex: { command: string; resumeArgs: string[]; homeDir: string | null };
