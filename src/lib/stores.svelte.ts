@@ -10,6 +10,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { gitBranches, indexRefresh, indexSnapshot, settingsGet, settingsSet } from './ipc';
 import { projectKey } from './paths';
+import { newTask } from './tasks';
 import {
   anyExpanded,
   isExpandedIn,
@@ -188,8 +189,34 @@ function saveSettingsDebounced(next: Settings) {
   }, SETTINGS_SAVE_DEBOUNCE_MS);
 }
 
+/** Which task the panel shows and whether it is open. Not persisted. */
+export const taskUi = $state({
+  selected: null as number | null,
+  panelOpen: false,
+  /** Task whose title is being edited in the sidebar. */
+  renaming: null as number | null,
+});
+
+export function sidebarView(): 'sessions' | 'tasks' {
+  return appState.settings?.ui.sidebarView === 'tasks' ? 'tasks' : 'sessions';
+}
+
+export async function setSidebarView(view: 'sessions' | 'tasks') {
+  if (!appState.settings || sidebarView() === view) return;
+  await saveSettings({ ...appState.settings, ui: { ...appState.settings.ui, sidebarView: view } });
+}
+
 export function tasks(): Task[] {
   return appState.settings?.tasks ?? [];
+}
+
+/** Add a task at the top of the list, select it and start renaming it. */
+export function createTask(fields: Partial<Task> = {}): Task {
+  const task = newTask(tasks(), fields);
+  saveTasks([task, ...tasks()]);
+  taskUi.selected = task.id;
+  taskUi.renaming = task.id;
+  return task;
 }
 
 /** Structural edits save at once; `debounced` is for typing, such as notes. */

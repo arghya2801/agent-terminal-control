@@ -23,6 +23,8 @@
     saveSettings,
     sidebarOpen,
     toggleSidebar,
+    setSidebarView,
+    sidebarView,
   } from './lib/stores.svelte';
   import {
     bindSessions,
@@ -339,6 +341,9 @@
   }
 
   /** The sidebar project the focused tab belongs to, if it has one. */
+  // Tab keys and the index are both reactive, so this follows the active tab.
+  const currentRepo = $derived(activeProject()?.path ?? null);
+
   function activeProject(): Project | undefined {
     const key = activeKey ? getTab(activeKey)?.projectKey : null;
     return key ? appState.index.projects.find((p) => p.key === key) : undefined;
@@ -410,6 +415,10 @@
         break;
       case 'focusSearch':
         void focusSearch();
+        break;
+      case 'toggleTaskView':
+        if (!sidebarOpen()) void toggleSidebar();
+        void setSidebarView(sidebarView() === 'tasks' ? 'sessions' : 'tasks');
         break;
       case 'askAgent':
         picker = { project: null };
@@ -555,6 +564,7 @@
       <Sidebar
         {activeKey}
         {activeSessionId}
+        {currentRepo}
         {openProjectKeys}
         {sessionMarks}
         onOpenProject={openProject}

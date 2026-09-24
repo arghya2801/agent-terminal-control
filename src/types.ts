@@ -98,6 +98,8 @@ export interface Settings {
     groupSubfolders: boolean;
     /** Sessions appear under the git branch they ran on. */
     groupByBranch: boolean;
+    /** Which list the sidebar shows. Unknown values read as sessions. */
+    sidebarView: string;
   };
   terminal: TerminalSettings;
   codex: { command: string; resumeArgs: string[]; homeDir: string | null };

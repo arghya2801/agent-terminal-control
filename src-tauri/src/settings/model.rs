@@ -120,6 +120,9 @@ pub struct UiSettings {
     pub group_subfolders: bool,
     /// Show a project's sessions under the git branch each one ran on.
     pub group_by_branch: bool,
+    /// Which list the sidebar shows: `sessions` or `tasks`. Anything else reads as
+    /// sessions.
+    pub sidebar_view: String,
 }
 
 impl Default for UiSettings {
@@ -134,6 +137,7 @@ impl Default for UiSettings {
             theme: "ATC Dark".into(),
             group_subfolders: false,
             group_by_branch: false,
+            sidebar_view: "sessions".into(),
         }
     }
 }

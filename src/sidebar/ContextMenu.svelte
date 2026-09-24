@@ -3,8 +3,14 @@
 
   export interface MenuItem {
     label: string;
-    run: () => void;
+    /** Omitted for a heading. */
+    run?: () => void;
     disabled?: boolean;
+    /** A rule above this item. */
+    sep?: boolean;
+    /** Shows a tick column; true ticks it. */
+    checked?: boolean;
+    danger?: boolean;
   }
 
   let {
@@ -22,7 +28,7 @@
   const pos = $derived(clamped ?? { left: x, top: y });
 
   function choose(item: MenuItem) {
-    if (item.disabled) return;
+    if (item.disabled || !item.run) return;
     item.run();
     onClose();
   }
@@ -60,16 +66,25 @@
   role="menu"
   tabindex="-1"
 >
-  {#each items as item (item.label)}
-    <button
-      class="item"
-      class:disabled={item.disabled}
-      disabled={item.disabled}
-      onclick={() => choose(item)}
-      role="menuitem"
-    >
-      {item.label}
-    </button>
+  <!-- Keyed by position: labels repeat, e.g. two sessions with the same name. -->
+  {#each items as item, i (i)}
+    {#if item.sep}<div class="sep" role="separator"></div>{/if}
+    {#if item.run}
+      <button
+        class="item"
+        class:disabled={item.disabled}
+        class:danger={item.danger}
+        disabled={item.disabled}
+        onclick={() => choose(item)}
+        role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
+        aria-checked={item.checked}
+      >
+        {#if item.checked !== undefined}<span class="tick">{item.checked ? '✓' : ''}</span>{/if}
+        {item.label}
+      </button>
+    {:else}
+      <div class="heading">{item.label}</div>
+    {/if}
   {/each}
 </div>
 
@@ -78,6 +93,8 @@
     position: fixed;
     z-index: 50;
     min-width: 168px;
+    /* Session names can be long; they truncate rather than widen the menu. */
+    max-width: 320px;
     padding: 4px;
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -96,6 +113,9 @@
     font-size: 12px;
     text-align: left;
     cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .item:hover:not(.disabled) {
     background: color-mix(in srgb, var(--accent-strong) 20%, transparent);
@@ -104,5 +124,27 @@
   .item.disabled {
     color: var(--fg-faint);
     cursor: default;
+  }
+  .item.danger {
+    color: var(--danger);
+  }
+  .item.danger:hover:not(.disabled) {
+    background: color-mix(in srgb, var(--danger) 20%, transparent);
+    color: var(--danger);
+  }
+  .tick {
+    display: inline-block;
+    width: 14px;
+    color: var(--ok);
+  }
+  .sep {
+    height: 1px;
+    margin: 4px 2px;
+    background: var(--border);
+  }
+  .heading {
+    padding: 4px 10px 2px;
+    color: var(--fg-faint);
+    font-size: 11px;
   }
 </style>

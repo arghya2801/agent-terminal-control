@@ -2,6 +2,7 @@
   import { sessionKey } from '../lib/agents';
   import { agentCommand } from '../lib/ipc';
   import ProjectNode from './ProjectNode.svelte';
+  import TaskList from './TaskList.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import { openInExplorer } from '../lib/ipc';
   import { filterProjects } from '../lib/filter';
@@ -11,8 +12,12 @@
   import {
     anyProjectExpanded,
     appState,
+    createTask,
     refresh,
     saveSettings,
+    setSidebarView,
+    sidebarView,
+    tasks,
     toggleAllProjects,
   } from '../lib/stores.svelte';
   import type { AgentProvider, Project, SessionMeta, TabKey } from '../types';
@@ -21,6 +26,7 @@
   let {
     activeKey,
     activeSessionId,
+    currentRepo,
     openProjectKeys,
     sessionMarks,
     onOpenProject,
@@ -30,6 +36,8 @@
   }: {
     activeKey: TabKey | null;
     activeSessionId: string | null;
+    /** Project root of the active tab, the default repo for a new task. */
+    currentRepo: string | null;
     openProjectKeys: Set<string>;
     /** Sessions with a live tab, by id. */
     sessionMarks: Map<string, SessionMark>;
@@ -125,6 +133,9 @@
     };
   }
 
+  const view = $derived(sidebarView());
+  const openTasks = $derived(tasks().filter((t) => t.state !== 'done').length);
+
   let query = $state('');
   const searching = $derived(query.trim() !== '');
   // Grouped before filtering, so a query matching a parent's name keeps the sessions it
@@ -160,8 +171,28 @@
 
 <div class="panel">
   <header>
-    <span class="title">Projects</span>
+    <div class="views" role="tablist" aria-label="Sidebar view">
+      <button
+        role="tab"
+        aria-selected={view === 'sessions'}
+        onclick={() => void setSidebarView('sessions')}
+        title="Projects and sessions (Ctrl+Shift+K)"
+      >
+        Sessions <span class="n">{appState.index.sessionCount}</span>
+      </button>
+      <button
+        role="tab"
+        aria-selected={view === 'tasks'}
+        onclick={() => void setSidebarView('tasks')}
+        title="Tasks (Ctrl+Shift+K)"
+      >
+        Tasks <span class="n">{openTasks}</span>
+      </button>
+    </div>
     <div class="actions">
+      {#if view === 'tasks'}
+        <button class="icon" onclick={() => createTask({ repo: currentRepo })} title="New task" aria-label="New task">+</button>
+      {:else}
       <button
         class="icon"
         onclick={toggleAllProjects}
@@ -179,6 +210,7 @@
       >
         ⟳
       </button>
+      {/if}
     </div>
   </header>
 
@@ -186,9 +218,9 @@
     <input
       id="sidebar-search"
       type="search"
-      placeholder="Filter projects and sessions"
+      placeholder={view === 'tasks' ? 'Filter tasks' : 'Filter projects and sessions'}
       title="Filter by project, path, session name or branch (Ctrl+Shift+P)"
-      aria-label="Filter projects and sessions"
+      aria-label={view === 'tasks' ? 'Filter tasks' : 'Filter projects and sessions'}
       spellcheck="false"
       autocomplete="off"
       bind:value={query}
@@ -197,7 +229,9 @@
   </div>
 
   <div class="list">
-    {#if appState.loading}
+    {#if view === 'tasks'}
+      <TaskList {query} {sessionMarks} {onOpenSession} />
+    {:else if appState.loading}
       <div class="hint">scanning…</div>
     {:else if appState.error}
       <div class="hint err">{appState.error}</div>
@@ -236,7 +270,11 @@
   {/if}
 
   <footer>
-    {appState.index.projects.length} projects · {appState.index.sessionCount} sessions
+    {#if view === 'tasks'}
+      {tasks().length} tasks · {openTasks} open
+    {:else}
+      {appState.index.projects.length} projects · {appState.index.sessionCount} sessions
+    {/if}
   </footer>
 </div>
 
@@ -263,6 +301,32 @@
   .actions {
     display: flex;
     gap: 2px;
+  }
+  .views {
+    display: flex;
+    gap: 10px;
+  }
+  .views button {
+    padding: 0 0 3px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--fg-faint);
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+  }
+  .views button:hover {
+    color: var(--fg);
+  }
+  .views button[aria-selected='true'] {
+    border-bottom-color: var(--accent);
+    color: var(--fg-bright);
+  }
+  .views .n {
+    color: var(--fg-faint);
+    font-variant-numeric: tabular-nums;
   }
   .icon {
     width: 20px;
