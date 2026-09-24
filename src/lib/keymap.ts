@@ -97,7 +97,7 @@ const DESCRIPTIONS: Record<Action, { group: Group; label: string }> = {
   nextTab: { group: 'Tabs', label: 'Next tab' },
   prevTab: { group: 'Tabs', label: 'Previous tab' },
   renameTab: { group: 'Tabs', label: 'Rename tab' },
-  openAgentHere: { group: 'Launch', label: 'Open Claude in this tab’s project' },
+  openAgentHere: { group: 'Launch', label: 'Open an agent in this tab’s project' },
   openShellHere: { group: 'Launch', label: 'Open a shell in this tab’s project' },
   askAgent: { group: 'Launch', label: 'Ask agent (scratch directory)' },
   toggleSidebar: { group: 'View', label: 'Show or hide the sidebar' },
