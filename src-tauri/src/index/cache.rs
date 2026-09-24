@@ -19,6 +19,8 @@ use super::session::{LabelSource, SessionMeta};
 /// 2: `ai-title` below the first user turn is no longer skipped (labels were falling
 ///    back to the uuid for real transcripts).
 /// 3: the session's `agent-name` is preferred, read from the end of the file.
+/// 4: entries record the session id and provider, so Claude and Codex ids can coincide.
+/// 5: Codex rollouts are cached incrementally in `codex_entries`.
 pub const SCHEMA_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

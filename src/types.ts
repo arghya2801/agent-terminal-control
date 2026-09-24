@@ -9,7 +9,6 @@ export type PtyEvent =
   | { t: 'e'; msg: string };
 
 export interface SpawnOpts {
-  provider?: AgentProvider | null;
   cwd?: string | null;
   cols: number;
   rows: number;

@@ -157,17 +157,9 @@ impl Default for CodexSettings {
 
 impl Settings {
     pub fn codex_home(&self) -> PathBuf {
-        if self.codex.home_dir.is_none() && std::env::var("ATC_DEV").is_ok_and(|v| v == "1") {
-            return crate::settings::config_dir().join("codex");
-        }
         crate::index::codex::home(self.codex.home_dir.as_deref())
     }
     pub fn claude_projects_dir(&self) -> PathBuf {
-        if self.projects.claude_projects_dir.is_none()
-            && std::env::var("ATC_DEV").is_ok_and(|v| v == "1")
-        {
-            return crate::settings::config_dir().join("claude/projects");
-        }
         crate::paths::claude_projects_dir(self.projects.claude_projects_dir.as_deref())
     }
 

@@ -19,19 +19,6 @@ pub fn pty_spawn(
     on_event: Channel<PtyEvent>,
     state: State<'_, AppState>,
 ) -> AppResult<String> {
-    if let Some(provider) = opts.provider {
-        let settings = state.settings.get();
-        let command = match provider {
-            crate::agent::AgentProvider::Claude => &settings.claude.command,
-            crate::agent::AgentProvider::Codex => &settings.codex.command,
-        };
-        crate::pty::shell::resolve_shell(Some(command)).map_err(|_| {
-            crate::error::AppError::Message(format!(
-                "{} launch failed: configured command `{command}` was not found",
-                provider.name()
-            ))
-        })?;
-    }
     Ok(state.ptys.spawn(opts, on_event)?)
 }
 
@@ -365,7 +352,7 @@ pub fn agent_command(
 }
 
 #[tauri::command]
-pub async fn codex_usage(app: tauri::AppHandle) -> AppResult<serde_json::Value> {
+pub async fn codex_usage(app: tauri::AppHandle) -> AppResult<Option<serde_json::Value>> {
     tauri::async_runtime::spawn_blocking(move || {
         use tauri::Manager;
         let state = app.state::<AppState>();

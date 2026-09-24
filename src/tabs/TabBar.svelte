@@ -103,6 +103,8 @@
       data-tab-key={tab.key}
       onclick={() => activate(tab.key)}
       ondblclick={() => (renaming = tab.key)}
+      onmousedown={(e) => { if (e.button === 1) e.preventDefault(); }}
+      onauxclick={(e) => { if (e.button === 1) close(e, tab.key); }}
       title="{tab.title} (double-click or Ctrl+Shift+R to rename)"
     >
       {#if tab.attention}<span class="attention" title="Needs your attention"></span>{/if}

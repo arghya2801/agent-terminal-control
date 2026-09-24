@@ -335,7 +335,7 @@ export async function openTab(
     }
   };
 
-  tab.ptyId = await ptySpawn({ ...opts, provider, cols: dims.cols, rows: dims.rows }, channel);
+  tab.ptyId = await ptySpawn({ ...opts, cols: dims.cols, rows: dims.rows }, channel);
   notify();
   return tab;
 }
