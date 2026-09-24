@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { sessionKey } from '../lib/agents';
   import { renderMarkdown } from '../lib/markdown';
   import { TASK_STATES, candidates, findSession, linkSession, unlinkSession, updateTask } from '../lib/tasks';
@@ -37,6 +37,18 @@
     task ? candidates(task, tasks(), projects).filter((s) => !dismissed[task.id]?.includes(sessionKey(s))) : [],
   );
   const linked = $derived(task ? task.sessions.map((key) => ({ key, hit: findSession(projects, key) })) : []);
+
+  // Owned here rather than derived from the branch count, so ticking a branch does not
+  // close the list. Opens by itself only for a task that has no branch yet.
+  let pickerOpen = $state(false);
+  const taskId = $derived(task?.id ?? null);
+  $effect(() => {
+    void taskId;
+    untrack(() => {
+      pickerOpen = !!task?.repo && task.branches.length === 0;
+      editingNotes = false;
+    });
+  });
 
   let editingNotes = $state(false);
   let notesEl = $state<HTMLTextAreaElement>();
@@ -121,7 +133,7 @@
     {#if task.repo}
       <div class="row">
         <span class="label">Branches</span>
-        <details class="picker" open={task.branches.length === 0}>
+        <details class="picker" bind:open={pickerOpen}>
           <summary>
             {#if task.branches.length}<span class="chips">{task.branches.join(', ')}</span>
             {:else}<span class="none">Pick one or more</span>{/if}
@@ -394,7 +406,7 @@
   .btn.primary {
     border-color: var(--accent-strong);
     background: var(--accent-strong);
-    color: #fff;
+    color: var(--on-accent);
   }
   h3 {
     margin: 16px 0 4px;
