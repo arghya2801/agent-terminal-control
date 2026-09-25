@@ -60,7 +60,7 @@
   const projectActive = $derived(activeKey === `project:${project.key}`);
 </script>
 
-<div class="project">
+<div class="project" data-group>
   <!-- The whole row toggles expansion, so hitting a 10px chevron is never required.
        Opening a shell is the explicit action on the right. -->
   <div
@@ -82,6 +82,8 @@
     {:else}
       <button
         class="disclosure"
+        data-row
+        tabindex="-1"
         onclick={() => toggleExpanded(project.key)}
         aria-expanded={open}
         title={open ? 'Collapse' : 'Expand'}
@@ -96,6 +98,7 @@
 
     <button
       class="open"
+      tabindex="-1"
       disabled={!launchable}
       onclick={() => onOpenProject(project)}
       title={project.path
@@ -133,7 +136,7 @@
         {#each visible as session (sessionKey(session))}{@render row(session)}{/each}
       {/if}
       {#if hidden > 0}
-        <button class="more" onclick={() => (showAll = true)}>show {hidden} more</button>
+        <button class="more" data-row tabindex="-1" onclick={() => (showAll = true)}>show {hidden} more</button>
       {/if}
       {#if project.sessions.length === 0}
         <div class="empty">no sessions yet</div>
