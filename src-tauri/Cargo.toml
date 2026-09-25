@@ -1,6 +1,6 @@
 [package]
 name = "atc"
-version = "0.3.0"
+version = "0.3.1"
 description = "ATC - Agent Terminal Control"
 edition = "2021"
 rust-version = "1.82"
