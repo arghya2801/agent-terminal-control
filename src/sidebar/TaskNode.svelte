@@ -39,6 +39,8 @@
 {:else}
   <button
     class="task {task.state}"
+    data-row
+    tabindex="-1"
     class:selected
     onclick={() => onSelect(task)}
     ondblclick={() => onOpen(task)}

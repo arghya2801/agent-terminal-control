@@ -58,6 +58,8 @@
 {:else}
 <button
   class="session"
+  data-row
+  tabindex="-1"
   class:active
   class:disabled={!launchable}
   disabled={!launchable}
