@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chordLabel, codexNewlineInput, isNativePaste, matchChord, shortcutGroups, type ChordEvent } from './keymap';
+import { SHIFT_ENTER, chordLabel, codexNewlineInput, isNativePaste, matchChord, shortcutGroups, type ChordEvent } from './keymap';
 
 const press = (key: string, mods: Partial<ChordEvent> = {}): ChordEvent => ({
   key,
@@ -169,10 +169,11 @@ describe('isNativePaste', () => {
 });
 
 describe('codexNewlineInput', () => {
-  it('maps Ctrl+J and Shift+Enter to the LF byte Codex binds', () => {
-    expect(codexNewlineInput(press('j', { ctrlKey: true }))).toBe('\n');
-    expect(codexNewlineInput(press('Enter', { shiftKey: true }))).toBe('\n');
-    expect(codexNewlineInput(press('j', { ctrlKey: true }))?.charCodeAt(0)).toBe(0x0a);
+  it('maps Ctrl+J and Shift+Enter to a Shift+Enter key record', () => {
+    expect(codexNewlineInput(press('j', { ctrlKey: true }))).toBe(SHIFT_ENTER);
+    expect(codexNewlineInput(press('Enter', { shiftKey: true }))).toBe(SHIFT_ENTER);
+    // Key down then key up of VK_RETURN with SHIFT_PRESSED, in win32-input-mode.
+    expect(SHIFT_ENTER).toBe('\x1b[13;28;13;1;16;1_\x1b[13;28;13;0;16;1_');
   });
 
   it('does not turn plain Enter or modified near-misses into newlines', () => {

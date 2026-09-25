@@ -194,6 +194,14 @@ export function isNativePaste(e: ChordEvent, bracketedPaste: boolean): boolean {
 }
 
 /**
+ * Shift+Enter as a win32-input-mode key record (`CSI Vk;Sc;Uc;Kd;Cs;Rc _`, down then up).
+ * ConPTY runs in win32-input-mode and turns this into a real KEY_EVENT with SHIFT_PRESSED,
+ * which Codex reads as Shift+Enter. A bare LF, pasted or typed, reaches Codex as plain
+ * Enter and submits (#82).
+ */
+export const SHIFT_ENTER = '\x1b[13;28;13;1;16;1_\x1b[13;28;13;0;16;1_';
+
+/**
  * Codex binds Shift+Enter to insert a newline, but xterm/WebView2 can collapse it to
  * ordinary Enter. Ctrl+J is ATC's alternate spelling for the same action.
  */
@@ -203,7 +211,5 @@ export function codexNewlineInput(e: ChordEvent): string | null {
   const matches =
     (e.key.toLowerCase() === 'j' && e.ctrlKey && !e.shiftKey) ||
     (e.key === 'Enter' && !e.ctrlKey && e.shiftKey);
-  // Codex binds Ctrl+J, whose terminal representation is a single LF byte. Sending a
-  // modified-Enter CSI-u sequence is not equivalent and is ignored by some Codex builds.
-  return matches ? '\n' : null;
+  return matches ? SHIFT_ENTER : null;
 }

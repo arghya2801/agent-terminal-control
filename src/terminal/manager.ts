@@ -214,12 +214,9 @@ export async function openTab(
     if (codexNewline !== null) {
       e.preventDefault();
       e.stopPropagation();
-      // xterm 6.0 cannot negotiate Codex's Kitty keyboard protocol. Sending LF as a
-      // synthetic key through ConPTY is consequently decoded inconsistently on Windows
-      // and makes the composer redraw without keeping the newline. Codex enables
-      // bracketed paste, so insert the literal newline as text instead of forging a key.
-      if (term.modes.bracketedPasteMode) term.paste(codexNewline);
-      else if (tab.ptyId) void ptyWrite(tab.ptyId, codexNewline);
+      // A real Shift+Enter key record rather than LF: Codex reads Windows key events,
+      // and ConPTY turns LF, pasted or typed, into plain Enter, which submits (#82).
+      if (tab.ptyId) void ptyWrite(tab.ptyId, codexNewline);
       return false;
     }
     const action = matchChord(e);
