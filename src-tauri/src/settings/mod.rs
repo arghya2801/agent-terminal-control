@@ -1,12 +1,13 @@
 //! Loading and saving settings.
 
 pub mod model;
+pub mod tasks;
 pub mod watcher;
 
 use std::path::PathBuf;
 use std::sync::RwLock;
 
-pub use model::{ClaudeSettings, PinnedProject, ProjectSettings, Settings, UiSettings};
+pub use model::{ClaudeSettings, PinnedProject, ProjectSettings, Settings, Task, UiSettings};
 
 /// The folder users actually browse to, so it reads as a product name rather than a
 /// bundle identifier.
@@ -104,11 +105,14 @@ pub fn load() -> LoadOutcome {
     load_from(&settings_path())
 }
 
-pub fn save_to(path: &std::path::Path, settings: &Settings) -> std::io::Result<()> {
+pub fn save_to<T: serde::Serialize + ?Sized>(
+    path: &std::path::Path,
+    value: &T,
+) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let text = serde_json::to_string_pretty(settings)?;
+    let text = serde_json::to_string_pretty(value)?;
     // Temp file + rename so a crash mid-write cannot leave a truncated config.
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, text)?;
@@ -119,23 +123,39 @@ pub fn save(settings: &Settings) -> std::io::Result<()> {
     save_to(&settings_path(), settings)
 }
 
-/// Process-wide settings, shared with every command.
-#[derive(Debug, Default)]
-pub struct SettingsStore {
-    inner: RwLock<Settings>,
+/// Whether the transcript watcher must be re-armed: it watches these two directories.
+pub fn dirs_changed(prev: &Settings, next: &Settings) -> bool {
+    prev.projects.claude_projects_dir != next.projects.claude_projects_dir
+        || prev.codex.home_dir != next.codex.home_dir
 }
 
-impl SettingsStore {
-    pub fn new(settings: Settings) -> Self {
+/// Whether the sidebar projection may have moved, so the index must rescan and report.
+/// Everything else (font, zoom, theme, the sidebar view) only needs storing.
+pub fn projection_changed(prev: &Settings, next: &Settings) -> bool {
+    dirs_changed(prev, next)
+        || prev.projects != next.projects
+        || prev.claude.scratch_dir != next.claude.scratch_dir
+}
+
+/// Process-wide value shared with every command: the settings, and the tasks.
+#[derive(Debug, Default)]
+pub struct Store<T> {
+    inner: RwLock<T>,
+}
+
+pub type SettingsStore = Store<Settings>;
+
+impl<T: Clone> Store<T> {
+    pub fn new(value: T) -> Self {
         Self {
-            inner: RwLock::new(settings),
+            inner: RwLock::new(value),
         }
     }
-    pub fn get(&self) -> Settings {
-        self.inner.read().expect("settings lock").clone()
+    pub fn get(&self) -> T {
+        self.inner.read().expect("store lock").clone()
     }
-    pub fn set(&self, s: Settings) {
-        *self.inner.write().expect("settings lock") = s;
+    pub fn set(&self, value: T) {
+        *self.inner.write().expect("store lock") = value;
     }
 }
 
@@ -293,6 +313,28 @@ mod tests {
         std::fs::write(legacy.join("settings.json"), "{}").unwrap();
         assert!(migrate_from(&legacy, &current));
         assert!(!migrate_from(&legacy, &current));
+    }
+
+    #[test]
+    fn only_directory_and_projection_changes_need_more_than_a_store() {
+        // #87: a font or view change must not restart the watcher or rescan.
+        let prev = Settings::default();
+        let mut next = prev.clone();
+        next.ui.zoom = 1.5;
+        next.ui.sidebar_view = "tasks".into();
+        next.terminal.font_size = 20;
+        assert!(!dirs_changed(&prev, &next));
+        assert!(!projection_changed(&prev, &next));
+
+        let mut named = prev.clone();
+        named.projects.names.insert(r"D:\atc".into(), "atc".into());
+        assert!(!dirs_changed(&prev, &named));
+        assert!(projection_changed(&prev, &named));
+
+        let mut moved = prev.clone();
+        moved.codex.home_dir = Some(r"D:\codex".into());
+        assert!(dirs_changed(&prev, &moved));
+        assert!(projection_changed(&prev, &moved));
     }
 
     #[test]

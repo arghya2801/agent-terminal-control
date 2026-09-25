@@ -69,20 +69,22 @@ pub fn settings_get(state: State<'_, AppState>) -> AppResult<Settings> {
 }
 
 #[tauri::command]
-pub fn settings_set(
-    settings: Settings,
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-) -> AppResult<()> {
+pub fn settings_set(settings: Settings, app: tauri::AppHandle) -> AppResult<()> {
     crate::settings::save(&settings).map_err(crate::error::AppError::Io)?;
-    state.settings.set(settings);
-    // Settings can repoint the projects directory, so the next scan must report.
-    state.index.invalidate();
-    crate::start_watcher(&app);
-    use tauri::Emitter;
-    if let Some(snap) = state.index.scan_if_changed(&state.settings.get(), false) {
-        let _ = app.emit(crate::EVENT_INDEX_UPDATED, snap);
-    }
+    crate::apply_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn tasks_get(state: State<'_, AppState>) -> AppResult<Vec<crate::settings::Task>> {
+    Ok(state.tasks.get())
+}
+
+#[tauri::command]
+pub fn tasks_set(tasks: Vec<crate::settings::Task>, state: State<'_, AppState>) -> AppResult<()> {
+    crate::settings::save_to(&crate::settings::tasks::tasks_path(), &tasks)
+        .map_err(crate::error::AppError::Io)?;
+    state.tasks.set(tasks);
     Ok(())
 }
 
