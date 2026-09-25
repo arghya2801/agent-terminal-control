@@ -311,7 +311,7 @@
       return;
     }
     const agent = tab.provider && /codex|claude|node/i.test(running);
-    closing = { key, title: displayTitle(tab), what: agent ? `${providerName(tab.provider!)} session` : `\`${running}\`` };
+    closing = { key, title: displayTitle(tab), what: agent ? `${providerName(tab.provider!)} session` : running };
   }
 
   function finishClose(confirmed: boolean) {
