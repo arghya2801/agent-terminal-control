@@ -16,6 +16,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - A card on the Usage page for the focused tab's session: cost, tokens and cache share by model. ([#80](https://github.com/arghya2801/agent-terminal-control/issues/80))
 - Model prices can be added or corrected with a `pricing.json` beside `settings.json`. ([#102](https://github.com/arghya2801/agent-terminal-control/issues/102))
 - A `CHANGELOG.md`, backfilled from the release notes. ([#98](https://github.com/arghya2801/agent-terminal-control/issues/98))
+- End-to-end tests (`npm run test:e2e`) that drive the built app through tauri-driver and WebDriver, with no desktop input. ([#97](https://github.com/arghya2801/agent-terminal-control/issues/97))
 - CI runs tests and lint on every pull request and push to `main`. ([#93](https://github.com/arghya2801/agent-terminal-control/issues/93))
 
 ### Changed

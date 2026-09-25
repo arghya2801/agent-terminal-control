@@ -22,8 +22,11 @@ function copyFixtures(source, target, projects) {
   }
 }
 
-/** Build the playground in `config` and return the environment to run ATC with. */
-export function preparePlayground(config) {
+/**
+ * Build the playground in `config` and return the environment to run ATC with. `extra`
+ * sections are merged into settings, e.g. to swap the agent commands for harmless ones.
+ */
+export function preparePlayground(config, extra = {}) {
   const claude = join(config, 'claude');
   const codex = join(config, 'codex');
   const projects = join(config, 'projects');
@@ -34,6 +37,7 @@ export function preparePlayground(config) {
   const settings = existsSync(settingsPath) ? JSON.parse(readFileSync(settingsPath, 'utf8')) : {};
   settings.projects = { ...settings.projects, claudeProjectsDir: join(claude, 'projects') };
   settings.codex = { ...settings.codex, homeDir: codex };
+  for (const [section, values] of Object.entries(extra)) settings[section] = { ...settings[section], ...values };
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
   return { ATC_CONFIG_DIR: config, CODEX_HOME: codex, CLAUDE_CONFIG_DIR: claude };
 }
