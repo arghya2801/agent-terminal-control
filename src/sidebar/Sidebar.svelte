@@ -2,6 +2,7 @@
   import SessionList from './SessionList.svelte';
   import TaskList from './TaskList.svelte';
   import { focusActiveTerminal } from '../terminal/manager';
+  import { enterList, listKeys, rows } from '../lib/roving';
   import {
     anyProjectExpanded,
     appState,
@@ -45,7 +46,21 @@
   const openTasks = $derived(tasks().filter((t) => t.state !== 'done').length);
 
   let query = $state('');
+  let taskList = $state<HTMLElement>();
+  let sessionList = $state<HTMLElement>();
+  /** Row last focused in each list, where Tab back into it lands. */
+  let lastRow: HTMLElement | null = null;
+  const visibleList = () => (view === 'tasks' ? taskList : sessionList);
+  const search = () => document.getElementById('sidebar-search')?.focus();
+  const leave = { up: search, escape: focusActiveTerminal };
+
   function onSearchKey(e: KeyboardEvent) {
+    if (e.key === 'ArrowDown') {
+      const list = visibleList();
+      if (list) rows(list)[0]?.focus();
+      e.preventDefault();
+      return;
+    }
     if (e.key !== 'Escape') return;
     // A second Esc on an empty box goes back to the terminal.
     if (query) query = '';
@@ -126,10 +141,34 @@
 
   <!-- Both views stay mounted and the hidden one is display:none, so switching does not
        rebuild every project and session row (#117). -->
-  <div class="list" hidden={view !== 'tasks'}>
+  <!-- One tab stop per list; Up/Down move between rows (#103). The list only takes focus
+       to hand it to a row, the roving-tabindex pattern, hence the ignores. -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+  <div
+    class="list"
+    hidden={view !== 'tasks'}
+    tabindex="0"
+    role="group"
+    aria-label="Tasks"
+    bind:this={taskList}
+    onfocus={(e) => taskList && enterList(e, taskList, lastRow)}
+    onfocusin={(e) => (lastRow = (e.target as HTMLElement).closest('[data-row]'))}
+    onkeydown={(e) => taskList && listKeys(e, taskList, leave)}
+  >
     <TaskList {query} {sessionMarks} {onOpenSession} />
   </div>
-  <div class="list" hidden={view === 'tasks'}>
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+  <div
+    class="list"
+    hidden={view === 'tasks'}
+    tabindex="0"
+    role="group"
+    aria-label="Projects and sessions"
+    bind:this={sessionList}
+    onfocus={(e) => sessionList && enterList(e, sessionList, lastRow)}
+    onfocusin={(e) => (lastRow = (e.target as HTMLElement).closest('[data-row]'))}
+    onkeydown={(e) => sessionList && listKeys(e, sessionList, leave)}
+  >
     <SessionList
       {query}
       {activeKey}
@@ -246,6 +285,10 @@
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
+  }
+  .list :global([data-row]:focus-visible) {
+    outline: 1px solid var(--accent);
+    outline-offset: -1px;
   }
   footer {
     padding: 6px 10px;

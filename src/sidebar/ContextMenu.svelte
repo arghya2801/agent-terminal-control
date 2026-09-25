@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { moveIndex } from '../lib/roving';
 
   export interface MenuItem {
     label: string;
@@ -44,11 +45,24 @@
     const onDown = (e: MouseEvent) => {
       if (!el.contains(e.target as Node)) onClose();
     };
+    // Keyboard use (#103): focus starts on the first item, arrows move, Esc returns focus
+    // to where the menu was opened from.
+    const opener = document.activeElement as HTMLElement | null;
+    const items = () => [...el.querySelectorAll<HTMLButtonElement>('button.item:not(:disabled)')];
+    items()[0]?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
         onClose();
+        opener?.focus();
+        return;
       }
+      const all = items();
+      const next = moveIndex(e.key, all.indexOf(document.activeElement as HTMLButtonElement), all.length);
+      if (next === null) return;
+      e.preventDefault();
+      e.stopPropagation();
+      all[next].focus();
     };
     window.addEventListener('mousedown', onDown, true);
     window.addEventListener('keydown', onKey, true);
@@ -117,7 +131,8 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .item:hover:not(.disabled) {
+  .item:hover:not(.disabled),
+  .item:focus-visible {
     background: color-mix(in srgb, var(--accent-strong) 20%, transparent);
     color: var(--fg-bright);
   }
