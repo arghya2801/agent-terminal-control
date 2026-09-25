@@ -6,6 +6,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-25
+
 ### Added
 - Split panes: `Ctrl+Shift+\` shows two terminals side by side, and `Ctrl+Shift+O` moves between them. ([#21](https://github.com/arghya2801/agent-terminal-control/issues/21))
 - Drag tabs to reorder them. ([#74](https://github.com/arghya2801/agent-terminal-control/issues/74))
@@ -20,6 +22,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - CI runs tests and lint on every pull request and push to `main`. ([#93](https://github.com/arghya2801/agent-terminal-control/issues/93))
 
 ### Changed
+- The README covers tasks, themes, split panes, the new shortcuts and the Usage page.
 - Tasks are stored in `tasks.json` beside `settings.json`. Existing tasks move over on first start. ([#99](https://github.com/arghya2801/agent-terminal-control/issues/99))
 - Changing a setting that does not affect the sidebar (font, zoom, theme, view) no longer restarts the transcript watcher or rescans. ([#87](https://github.com/arghya2801/agent-terminal-control/issues/87), [#100](https://github.com/arghya2801/agent-terminal-control/issues/100))
 - The release workflow uses the current majors of its actions and builds on Node 24. ([#94](https://github.com/arghya2801/agent-terminal-control/issues/94))
@@ -118,7 +121,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 First release.
 
-[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/arghya2801/agent-terminal-control/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/arghya2801/agent-terminal-control/compare/v0.1.2...v0.1.3
