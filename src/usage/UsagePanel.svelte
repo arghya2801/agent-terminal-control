@@ -5,7 +5,7 @@
   import { save } from '@tauri-apps/plugin-dialog';
   import { claudeUsage, codexUsage, codexUsageStop, usageCosts, writeTextFile } from '../lib/ipc';
   import { appState } from '../lib/stores.svelte';
-  import { chartData, formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv, type Split } from '../lib/costs';
+  import { chartData, sessionStats, formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv, type Split } from '../lib/costs';
   import {
     clampDays,
     isActive,
@@ -21,7 +21,8 @@
   import { relativeTime } from '../lib/format';
   import type { AgentProvider, CostRow } from '../types';
 
-  let { onClose }: { onClose: () => void } = $props();
+  let { onClose, sessionKey: current = null }: { onClose: () => void; sessionKey?: string | null } =
+    $props();
 
   let codexPlan = $state<Record<string, unknown> | null>(null);
   let codexError = $state<string | null>(null);
@@ -268,6 +269,10 @@
   // name if people compare screenshots across ranges.
   const color = (i: number) =>
     chart.series.length === 1 ? 'var(--accent)' : chart.series[i] === 'Other' ? 'var(--series-other)' : `var(--series-${i + 1})`;
+  /** The focused tab's session, all time (#80). */
+  const session = $derived(current ? sessionStats(rows, current) : null);
+  const localTime = (hour: string) =>
+    new Date(`${hour}:00:00Z`).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const fmt = (v: number) => (metric === 'tokens' ? `${formatTokens(v)} tokens` : formatUsd(v));
 
   onMount(() => {
@@ -372,6 +377,32 @@
   </section>
   {/if}
   </div>
+
+  {#if session && current}
+    <h2>This tab's session</h2>
+    <div class="total">
+      <span class="big">{monetary({ cost: session.cost, partial: session.partial, unavailable: false })}</span>
+      <span class="muted">{formatTokens(session.tokens)} tokens · {Math.round(session.cacheShare * 100)}% of input from cache · {sessionName(current)}</span>
+    </div>
+    <p class="muted">
+      Active {localTime(session.firstHour)} to {localTime(session.lastHour)}, by the hour. API and wall durations and code changes are only in the CLI's own <code>/usage</code>.
+    </p>
+    <table>
+      <thead><tr><th>Model</th><th class="num">Input</th><th class="num">Output</th><th class="num">Cache read</th><th class="num">Cache write</th><th class="num">API cost</th></tr></thead>
+      <tbody>
+        {#each session.byModel as m (m.model)}
+          <tr>
+            <td>{m.model}</td>
+            <td class="num">{formatTokens(m.input)}</td>
+            <td class="num">{formatTokens(m.output)}</td>
+            <td class="num">{formatTokens(m.cacheRead)}</td>
+            <td class="num">{formatTokens(m.cacheWrite)}</td>
+            <td class="num">{m.cost === null ? 'unavailable' : formatUsd(m.cost)}</td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  {/if}
 
   <h2>Local usage</h2>
   <p class="muted">
@@ -677,6 +708,11 @@
   }
   /* Categorical slots from the dataviz reference palette, validated against every bundled
      theme surface. light-dark() follows the color-scheme the theme sets on the root. */
+  th.num,
+  td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
   .chart,
   .legend {
     --series-1: light-dark(#2a78d6, #3987e5);

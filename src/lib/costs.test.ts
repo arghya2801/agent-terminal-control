@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   chartData,
+  sessionStats,
   monetary,
   formatTokens,
   formatUsd,
@@ -248,5 +249,21 @@ describe('chartData', () => {
     const c = chartData([row({ costUsd: 4 })], d1, d1, opts, name);
     expect(c.buckets).toHaveLength(24);
     expect(c.buckets.reduce((a, b) => a + b.total, 0)).toBe(4);
+  });
+});
+
+describe('sessionStats', () => {
+  it('totals one session across hours and models', () => {
+    const rows = [
+      row({ input: 10, cacheRead: 30, cacheWrite: 0, costUsd: 1 }),
+      row({ hour: '2026-09-10T14', model: 'claude-haiku-4-5', costUsd: 0.5, input: 10, cacheRead: 0, cacheWrite: 0 }),
+      row({ sessionId: 'other', costUsd: 99 }),
+    ];
+    const s = sessionStats(rows, 'claude:s1')!;
+    expect(s.cost).toBe(1.5);
+    expect(s.byModel.map((m) => m.model)).toEqual(['claude-opus-5', 'claude-haiku-4-5']);
+    expect(s.cacheShare).toBeCloseTo(30 / 50);
+    expect([s.firstHour, s.lastHour]).toEqual(['2026-09-10T12', '2026-09-10T14']);
+    expect(sessionStats(rows, 'codex:s1')).toBeNull();
   });
 });

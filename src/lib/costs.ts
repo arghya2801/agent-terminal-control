@@ -267,3 +267,48 @@ export function chartData(
   });
   return { series, buckets };
 }
+
+export interface SessionStats {
+  cost: number;
+  tokens: number;
+  partial: boolean;
+  /** Share of input served from the prompt cache, 0..1. */
+  cacheShare: number;
+  /** First and last UTC hour with usage; transcripts carry no finer duration. */
+  firstHour: string;
+  lastHour: string;
+  byModel: { model: string; input: number; output: number; cacheRead: number; cacheWrite: number; cost: number | null }[];
+}
+
+/** All-time totals for one session, keyed `provider:sessionId`, like `/usage` (#80). */
+export function sessionStats(rows: CostRow[], key: string): SessionStats | null {
+  const mine = rows.filter((r) => `${r.provider}:${r.sessionId}` === key);
+  if (!mine.length) return null;
+  const models = new Map<string, SessionStats['byModel'][number]>();
+  let input = 0;
+  let cacheRead = 0;
+  let cacheWrite = 0;
+  for (const r of mine) {
+    const m = models.get(r.model) ?? { model: r.model, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
+    m.input += r.input;
+    m.output += r.output;
+    m.cacheRead += r.cacheRead;
+    m.cacheWrite += r.cacheWrite;
+    m.cost = m.cost === null || r.costUsd === null ? null : m.cost + r.costUsd;
+    models.set(r.model, m);
+    input += r.input;
+    cacheRead += r.cacheRead;
+    cacheWrite += r.cacheWrite;
+  }
+  const hours = mine.map((r) => r.hour).sort();
+  const fed = input + cacheRead + cacheWrite;
+  return {
+    cost: mine.reduce((a, r) => a + (r.costUsd ?? 0), 0),
+    tokens: mine.reduce((a, r) => a + r.totalTokens, 0),
+    partial: mine.some((r) => r.costUsd === null || r.unpriced),
+    cacheShare: fed ? cacheRead / fed : 0,
+    firstHour: hours[0],
+    lastHour: hours[hours.length - 1],
+    byModel: [...models.values()].sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0)),
+  };
+}
