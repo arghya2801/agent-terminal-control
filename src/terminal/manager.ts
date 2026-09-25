@@ -16,6 +16,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebglAddon } from '@xterm/addon-webgl';
+import { moveItem } from '../lib/dragReorder';
 import '@xterm/xterm/css/xterm.css';
 
 import { Channel, ptyAck, ptyBusy, ptyKill, ptyResize, ptySpawn, ptyWrite } from '../lib/ipc';
@@ -134,6 +135,17 @@ export function onChange(fn: Listener): () => void {
 }
 function notify() {
   for (const l of listeners) l();
+}
+
+/** Put tab `from` where tab `to` is (#74). The Map's order is the tab bar's order. */
+export function moveTab(from: TabKey, to: TabKey) {
+  const keys = [...tabs.keys()];
+  const order = moveItem(keys, keys.indexOf(from), keys.indexOf(to));
+  if (order === keys) return;
+  const entries = order.map((k) => [k, tabs.get(k)!] as const);
+  tabs.clear();
+  for (const [k, t] of entries) tabs.set(k, t);
+  notify();
 }
 
 export function listTabs(): Tab[] {

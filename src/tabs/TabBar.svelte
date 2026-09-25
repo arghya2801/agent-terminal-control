@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { activate, focusActiveTerminal, renameTab } from '../terminal/manager';
+  import { activate, focusActiveTerminal, moveTab, renameTab } from '../terminal/manager';
+  import { reorderable } from '../lib/dragReorder';
   import InlineRename from '../lib/InlineRename.svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import { revealPosition, tabWheelDelta } from './scroll';
@@ -101,6 +102,7 @@
       class:active={tab.key === activeKey}
       class:exited={tab.exited}
       data-tab-key={tab.key}
+      use:reorderable={{ id: tab.key, group: 'tab', onMove: (from, to) => moveTab(from as TabKey, to as TabKey) }}
       onclick={() => activate(tab.key)}
       ondblclick={() => (renaming = tab.key)}
       onmousedown={(e) => { if (e.button === 1) e.preventDefault(); }}
@@ -169,6 +171,8 @@
   }
   .tab:hover { background: var(--bg-hover); color: var(--fg); }
   .tab.active { background: var(--bg); color: var(--fg-bright); }
+  /* Drop target while dragging a tab (#74). */
+  .tab:global(.drop-target) { box-shadow: inset 2px 0 0 var(--accent); }
   .tab.exited .label { text-decoration: line-through; opacity: 0.6; }
   .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .attention {
