@@ -34,12 +34,17 @@ impl Client {
         }
     }
 
-    /// `None` when the Codex CLI is not installed, so the UI can leave Codex out.
+    /// `None` when the Codex CLI is not installed, so the UI can leave Codex out. A
+    /// customised command that cannot be found is an error instead: that is a typo in
+    /// Settings, and hiding the card would hide it too (#90).
     pub fn read(&self, settings: &crate::settings::Settings) -> Result<Option<Value>, String> {
         let _request = self.request.lock().unwrap_or_else(|e| e.into_inner());
         let exe = &settings.codex.command;
         let Ok(resolved) = crate::pty::shell::resolve_shell(Some(exe)) else {
-            return Ok(None);
+            if exe == "codex" {
+                return Ok(None);
+            }
+            return Err(format!("Codex `{exe}` not found"));
         };
         let mut command = Command::new(resolved.path);
         command
@@ -168,11 +173,14 @@ mod tests {
         assert!(response(&rx, 5, Duration::from_millis(1)).is_err());
     }
     #[test]
-    fn missing_cli_does_not_start_a_process() {
+    fn a_misconfigured_cli_is_an_error_and_starts_no_process() {
         let mut settings = crate::settings::Settings::default();
         settings.codex.command = "atc-nonexistent-codex-123.exe".into();
         let client = Client::default();
-        assert_eq!(client.read(&settings), Ok(None));
+        assert_eq!(
+            client.read(&settings),
+            Err("Codex `atc-nonexistent-codex-123.exe` not found".into())
+        );
         assert!(client.child.lock().unwrap().is_none());
     }
 }

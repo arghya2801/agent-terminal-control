@@ -36,7 +36,7 @@
       codexPlan = plan;
       codexError = null;
     }
-    catch (e) { codexError = String(e); }
+    catch (e) { codexMissing = false; codexError = String(e); }
     finally { codexLoading = false; }
   }
 
