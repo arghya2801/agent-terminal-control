@@ -22,6 +22,9 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - `playground/` is ignored by git. ([#96](https://github.com/arghya2801/agent-terminal-control/issues/96))
 
 ### Fixed
+- Shift+Enter and Ctrl+J insert a newline in Codex again instead of sending the prompt. ([#82](https://github.com/arghya2801/agent-terminal-control/issues/82))
+- Codex starts when ATC runs inside a Windows Job Object that forbids breakaway, such as IntelliJ's terminal. ATC launches it with `--no-daemon` there. ([#118](https://github.com/arghya2801/agent-terminal-control/issues/118))
+- A tab whose agent has exited closes without asking. A plain shell with something running under it now asks, and names what would be stopped. ([#106](https://github.com/arghya2801/agent-terminal-control/issues/106))
 - Escape closes the Usage, Settings and Shortcuts pages. ([#105](https://github.com/arghya2801/agent-terminal-control/issues/105))
 - A misconfigured Codex command shows an error on the Usage page instead of hiding the Codex card. ([#90](https://github.com/arghya2801/agent-terminal-control/issues/90))
 - Saving the Settings page no longer overwrites task edits made while it was open. ([#86](https://github.com/arghya2801/agent-terminal-control/issues/86))
