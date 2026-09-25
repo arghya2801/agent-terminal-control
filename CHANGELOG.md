@@ -7,6 +7,10 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ## [Unreleased]
 
 ### Added
+- Usage chart: split by model or project, a running total, hourly bars for a single day, and a read-out of the hovered bar. ([#71](https://github.com/arghya2801/agent-terminal-control/issues/71))
+- Previous/next-day buttons on the Usage page, and clicking a bar shows that day. ([#76](https://github.com/arghya2801/agent-terminal-control/issues/76))
+- A card on the Usage page for the focused tab's session: cost, tokens and cache share by model. ([#80](https://github.com/arghya2801/agent-terminal-control/issues/80))
+- Model prices can be added or corrected with a `pricing.json` beside `settings.json`. ([#102](https://github.com/arghya2801/agent-terminal-control/issues/102))
 - A `CHANGELOG.md`, backfilled from the release notes. ([#98](https://github.com/arghya2801/agent-terminal-control/issues/98))
 - CI runs tests and lint on every pull request and push to `main`. ([#93](https://github.com/arghya2801/agent-terminal-control/issues/93))
 
@@ -18,6 +22,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - `playground/` is ignored by git. ([#96](https://github.com/arghya2801/agent-terminal-control/issues/96))
 
 ### Fixed
+- Escape closes the Usage, Settings and Shortcuts pages. ([#105](https://github.com/arghya2801/agent-terminal-control/issues/105))
+- A misconfigured Codex command shows an error on the Usage page instead of hiding the Codex card. ([#90](https://github.com/arghya2801/agent-terminal-control/issues/90))
 - Saving the Settings page no longer overwrites task edits made while it was open. ([#86](https://github.com/arghya2801/agent-terminal-control/issues/86))
 - **New task from this session** no longer leaves the session linked to its old task too. ([#88](https://github.com/arghya2801/agent-terminal-control/issues/88))
 - The task branch picker fetches fresh each time it opens, and no longer flashes existing branches as deleted. ([#91](https://github.com/arghya2801/agent-terminal-control/issues/91))
