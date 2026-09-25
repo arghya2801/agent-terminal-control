@@ -6,35 +6,22 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-/// Standard, short-context USD/1M rates checked 2026-09-23:
-/// https://developers.openai.com/api/docs/pricing
-/// Older models: /api/docs/models/gpt-5.5, gpt-5.4, gpt-5.3-codex.
-/// Baseline API equivalents, not subscription charges. No tier, regional, or
-/// long-context adjustments: older cumulative records do not preserve these.
+/// USD/1M (input, cached, cache write, output), from `prices.json`. No tier, regional
+/// or long-context adjustments: older cumulative records do not preserve these.
 fn prices(model: &str) -> Option<(f64, f64, Option<f64>, f64)> {
     let model = model.to_ascii_lowercase();
-    let rates = [
-        ("gpt-6-astra", (10.0, 1.0, Some(12.5), 50.0)),
-        ("gpt-6-sol", (2.0, 0.2, Some(2.5), 10.0)),
-        ("gpt-6-luna", (0.1, 0.01, Some(0.125), 0.5)),
-        ("gpt-5.6-sol", (4.0, 0.4, Some(5.0), 20.0)),
-        ("gpt-5.6-terra", (2.0, 0.2, Some(2.5), 12.0)),
-        ("gpt-5.6-luna", (0.2, 0.02, Some(0.25), 1.2)),
-        ("gpt-5.5", (5.0, 0.5, None, 30.0)),
-        ("gpt-5.4", (2.5, 0.25, None, 15.0)),
-        ("gpt-5.3-codex", (1.75, 0.175, None, 14.0)),
-    ];
-    rates
+    super::prices::prices()
+        .codex
         .iter()
-        .find(|(name, _)| {
-            model == *name
+        .find(|p| {
+            model == p.model
                 || model
-                    .strip_prefix(&format!("{name}-"))
+                    .strip_prefix(&format!("{}-", p.model))
                     .is_some_and(|suffix| {
                         chrono::NaiveDate::parse_from_str(suffix, "%Y-%m-%d").is_ok()
                     })
         })
-        .map(|(_, prices)| *prices)
+        .map(|p| (p.input, p.cached, p.cache_write, p.output))
 }
 
 fn estimate(row: &CostRow) -> Option<f64> {

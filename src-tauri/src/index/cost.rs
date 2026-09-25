@@ -53,28 +53,15 @@ pub struct CostRow {
     pub unpriced: bool,
 }
 
-/// USD per million tokens: (input, output). Cache writes are 1.25x input (5 minute) or
-/// 2x (1 hour); cache reads are 0.1x input.
+/// USD per million tokens: (input, output), from `prices.json`. Cache writes are 1.25x
+/// input (5 minute) or 2x (1 hour); cache reads are 0.1x input.
 fn price(model: &str) -> Option<(f64, f64)> {
     let m = model.to_ascii_lowercase();
-    // Most specific first: "claude-opus-4-1" must not match the "opus-4" family below it.
-    let table: &[(&str, (f64, f64))] = &[
-        ("fable", (10.0, 50.0)),
-        ("mythos", (10.0, 50.0)),
-        ("opus-5", (5.0, 25.0)),
-        ("opus-4-8", (5.0, 25.0)),
-        ("opus-4-7", (5.0, 25.0)),
-        ("opus-4-6", (5.0, 25.0)),
-        ("opus-4-5", (5.0, 25.0)),
-        ("opus-4", (15.0, 75.0)),
-        ("sonnet-5", (2.0, 10.0)),
-        ("sonnet-4", (3.0, 15.0)),
-        ("sonnet-3", (3.0, 15.0)),
-        ("haiku-4-5", (1.0, 5.0)),
-        ("haiku-3-5", (0.8, 4.0)),
-        ("haiku-3", (0.25, 1.25)),
-    ];
-    table.iter().find(|(k, _)| m.contains(k)).map(|(_, p)| *p)
+    super::prices::prices()
+        .claude
+        .iter()
+        .find(|p| m.contains(&p.pattern))
+        .map(|p| (p.input, p.output))
 }
 
 fn cost_of(u: &Usage) -> Option<f64> {
