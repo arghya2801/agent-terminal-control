@@ -76,13 +76,13 @@ pub enum TaskState {
     Done,
 }
 
-/// Lenient: an unknown state in a hand-edited file reads as `todo` rather than failing
-/// the whole file, which would put every other setting back to its default.
+/// Lenient: an unknown state in a hand-edited file, string or not, reads as `todo`
+/// rather than failing the whole file.
 impl<'de> Deserialize<'de> for TaskState {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        Ok(match String::deserialize(d)?.as_str() {
-            "doing" => Self::Doing,
-            "done" => Self::Done,
+        Ok(match serde_json::Value::deserialize(d)?.as_str() {
+            Some("doing") => Self::Doing,
+            Some("done") => Self::Done,
             _ => Self::Todo,
         })
     }
@@ -281,6 +281,17 @@ mod tests {
         let text = serde_json::to_string(&s).unwrap();
         assert!(text.contains(r#""state":"doing""#));
         assert_eq!(serde_json::from_str::<Settings>(&text).unwrap(), s);
+    }
+
+    #[test]
+    fn a_non_string_task_state_reads_as_todo() {
+        // #89: `null` or a number used to fail the whole file and reset every setting.
+        for state in ["null", "1", "{}", "[]", "true"] {
+            let s: Settings =
+                serde_json::from_str(&format!(r#"{{"tasks":[{{"id":1,"state":{state}}}]}}"#))
+                    .unwrap_or_else(|e| panic!("state {state}: {e}"));
+            assert_eq!(s.tasks[0].state, TaskState::Todo, "state {state}");
+        }
     }
 
     #[test]
