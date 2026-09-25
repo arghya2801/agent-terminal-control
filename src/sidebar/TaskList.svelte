@@ -12,6 +12,7 @@
   } from '../lib/tasks';
   import { appState, saveTasks, taskUi, tasks } from '../lib/stores.svelte';
   import { projectKey } from '../lib/paths';
+  import { moveItem } from '../lib/dragReorder';
   import type { Project, SessionMeta, Task, TaskState } from '../types';
   import type { SessionMark } from './SessionNode.svelte';
 
@@ -114,6 +115,12 @@
     if (taskUi.selected === t.id) taskUi.selected = null;
   }
 
+  /** Reorder: the array order is the order within each status group (#104). */
+  function moveTask(from: number, to: number) {
+    const all = tasks();
+    saveTasks(moveItem(all, all.findIndex((t) => t.id === from), all.findIndex((t) => t.id === to)));
+  }
+
   function select(t: Task) {
     taskUi.selected = t.id;
   }
@@ -147,6 +154,7 @@
         onMenu={taskMenu}
         onRename={(name) => rename(task, name)}
         onRenameCancel={() => (taskUi.renaming = null)}
+        onMove={moveTask}
       />
     {/each}
   {/each}
