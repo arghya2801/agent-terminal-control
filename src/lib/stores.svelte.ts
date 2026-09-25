@@ -8,7 +8,15 @@
 import { migrateSessionNames } from './agents';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { gitBranches, indexRefresh, indexSnapshot, settingsGet, settingsSet } from './ipc';
+import {
+  gitBranches,
+  indexRefresh,
+  indexSnapshot,
+  settingsGet,
+  settingsSet,
+  tasksGet,
+  tasksSet,
+} from './ipc';
 import { projectKey } from './paths';
 import { newTask } from './tasks';
 import {
@@ -26,6 +34,7 @@ import type { IndexSnapshot, Settings, Task } from '../types';
 
 const EVENT_INDEX_UPDATED = 'index://updated';
 const EVENT_SETTINGS_UPDATED = 'settings://updated';
+const EVENT_TASKS_UPDATED = 'tasks://updated';
 /** Holding a zoom key should not write settings.json on every step. */
 const SETTINGS_SAVE_DEBOUNCE_MS = 400;
 
@@ -34,6 +43,8 @@ const SETTINGS_SAVE_DEBOUNCE_MS = 400;
 export const appState = $state({
   index: { projects: [], sessionCount: 0 } as IndexSnapshot,
   settings: null as Settings | null,
+  /** Stored in tasks.json, apart from settings, so neither can overwrite the other. */
+  tasks: [] as Task[],
   loading: true,
   error: null as string | null,
   /** Bumped on every applied snapshot, so the debug overlay can show whether the
@@ -111,6 +122,7 @@ export async function initStores() {
     themeState.themes = await loadThemes();
     appState.settings = await settingsGet();
     applySettings(appState.settings);
+    appState.tasks = await tasksGet();
     applySnapshot(await indexSnapshot());
     appState.error = null;
   } catch (e) {
@@ -129,6 +141,9 @@ export async function initStores() {
     appState.settings = e.payload;
     applySettings(e.payload);
   });
+
+  // tasks.json edited outside the app.
+  await listen<Task[]>(EVENT_TASKS_UPDATED, (e) => (appState.tasks = e.payload));
 }
 
 /** Branch lists by repo, fetched when a picker first needs one. A rescan forgets them. */
@@ -207,7 +222,7 @@ export async function setSidebarView(view: 'sessions' | 'tasks') {
 }
 
 export function tasks(): Task[] {
-  return appState.settings?.tasks ?? [];
+  return appState.tasks;
 }
 
 /** Add a task at the top of the list, select it and start renaming it. */
@@ -219,12 +234,19 @@ export function createTask(fields: Partial<Task> = {}): Task {
   return task;
 }
 
+let tasksTimer: ReturnType<typeof setTimeout> | undefined;
+
 /** Structural edits save at once; `debounced` is for typing, such as notes. */
 export function saveTasks(next: Task[], debounced = false) {
-  if (!appState.settings) return;
-  const settings = { ...appState.settings, tasks: next };
-  if (debounced) saveSettingsDebounced(settings);
-  else void saveSettings(settings);
+  appState.tasks = next;
+  if (tasksTimer !== undefined) clearTimeout(tasksTimer);
+  const write = () => {
+    tasksTimer = undefined;
+    // Whatever is current when the burst ends, not what started it.
+    void tasksSet(appState.tasks).catch((e) => (appState.error = String(e)));
+  };
+  tasksTimer = debounced ? setTimeout(write, SETTINGS_SAVE_DEBOUNCE_MS) : undefined;
+  if (!debounced) write();
 }
 
 export function currentZoom(): number {

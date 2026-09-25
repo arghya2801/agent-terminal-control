@@ -1,7 +1,7 @@
 /** Typed wrappers over the Rust command surface. One place for every command name. */
 
 import { Channel, invoke } from '@tauri-apps/api/core';
-import type { AgentProvider, CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot } from '../types';
+import type { AgentProvider, CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot, Task } from '../types';
 
 export { Channel };
 
@@ -44,6 +44,14 @@ export function settingsGet(): Promise<Settings> {
 
 export function settingsSet(settings: Settings): Promise<void> {
   return invoke('settings_set', { settings });
+}
+
+export function tasksGet(): Promise<Task[]> {
+  return invoke<Task[]>('tasks_get');
+}
+
+export function tasksSet(tasks: Task[]): Promise<void> {
+  return invoke('tasks_set', { tasks });
 }
 
 export function openInExplorer(path: string): Promise<void> {

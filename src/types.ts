@@ -103,12 +103,11 @@ export interface Settings {
   terminal: TerminalSettings;
   codex: { command: string; resumeArgs: string[]; homeDir: string | null };
   claude: { command: string; resumeArgs: string[]; scratchDir: string | null };
-  tasks: Task[];
 }
 
 export type TaskState = 'todo' | 'doing' | 'done';
 
-/** Mirrors `Task` in src-tauri/src/settings/model.rs. */
+/** Mirrors `Task` in src-tauri/src/settings/model.rs. Stored in tasks.json. */
 export interface Task {
   id: number;
   title: string;
