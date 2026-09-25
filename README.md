@@ -194,6 +194,19 @@ rail opens it. Every field is optional; missing ones take their default.
 
 A malformed file is ignored rather than overwritten; the app keeps its current settings.
 
+Tasks live beside it in `tasks.json`.
+
+Usage prices come from a table shipped with the app. To price a new model, or correct a
+price, before a release does, add a `pricing.json` beside `settings.json`. Its entries
+win over the built-in ones, and it is read at startup:
+
+```jsonc
+{
+  "claude": [{ "match": "opus-6", "input": 5.0, "output": 25.0 }],   // USD per 1M tokens, substring match
+  "codex": [{ "model": "gpt-7", "input": 2.0, "cached": 0.2, "cacheWrite": 2.5, "output": 10.0 }]
+}
+```
+
 ## Not included
 
 - Command palette

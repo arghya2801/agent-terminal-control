@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  chartData,
+  sessionStats,
   monetary,
   formatTokens,
   formatUsd,
@@ -222,4 +224,46 @@ it('includes priced Codex usage in project, model, session, daily totals and CSV
   expect(result.bySession.find(s => s.key === 'codex:s1')?.cost).toBe(4.05);
   expect(result.byDay.reduce((n, d) => n + d.cost, 0)).toBe(6.05);
   expect(toCsv([codex], '2026-09-01', '2026-09-30', name)).toContain('"4.050000"');
+});
+
+describe('chartData', () => {
+  const d1 = hourToLocalDay('2026-09-10T12');
+  const d2 = hourToLocalDay('2026-09-11T12');
+  const opts = { metric: 'cost' as const, split: 'none' as const, cumulative: false };
+
+  it('stacks by model and folds past five series into Other', () => {
+    const rows = ['a', 'b', 'c', 'd', 'e', 'f'].map((model, i) => row({ model, costUsd: 10 - i }));
+    const c = chartData(rows, d1, d1 < d2 ? d2 : d1, { ...opts, split: 'model' }, name);
+    expect(c.series).toEqual(['a', 'b', 'c', 'd', 'Other']);
+    expect(c.buckets[0].values).toEqual([10, 9, 8, 7, 6 + 5]);
+    expect(c.buckets[0].total).toBe(45);
+  });
+
+  it('runs a cumulative total across days', () => {
+    const rows = [row({ costUsd: 2 }), row({ hour: '2026-09-11T12', costUsd: 3 })];
+    const c = chartData(rows, d1, d2, { ...opts, cumulative: true }, name);
+    expect(c.buckets.map((b) => b.total)).toEqual([2, 5]);
+  });
+
+  it('shows 24 hourly buckets for a single day', () => {
+    const c = chartData([row({ costUsd: 4 })], d1, d1, opts, name);
+    expect(c.buckets).toHaveLength(24);
+    expect(c.buckets.reduce((a, b) => a + b.total, 0)).toBe(4);
+  });
+});
+
+describe('sessionStats', () => {
+  it('totals one session across hours and models', () => {
+    const rows = [
+      row({ input: 10, cacheRead: 30, cacheWrite: 0, costUsd: 1 }),
+      row({ hour: '2026-09-10T14', model: 'claude-haiku-4-5', costUsd: 0.5, input: 10, cacheRead: 0, cacheWrite: 0 }),
+      row({ sessionId: 'other', costUsd: 99 }),
+    ];
+    const s = sessionStats(rows, 'claude:s1')!;
+    expect(s.cost).toBe(1.5);
+    expect(s.byModel.map((m) => m.model)).toEqual(['claude-opus-5', 'claude-haiku-4-5']);
+    expect(s.cacheShare).toBeCloseTo(30 / 50);
+    expect([s.firstHour, s.lastHour]).toEqual(['2026-09-10T12', '2026-09-10T14']);
+    expect(sessionStats(rows, 'codex:s1')).toBeNull();
+  });
 });

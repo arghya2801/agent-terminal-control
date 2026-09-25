@@ -4,6 +4,7 @@ pub mod cache;
 pub mod codex;
 pub mod codex_cost;
 pub mod cost;
+pub mod prices;
 pub mod project;
 pub mod session;
 pub mod watcher;

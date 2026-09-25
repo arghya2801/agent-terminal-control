@@ -591,7 +591,7 @@
     {#if page === 'settings'}
       <SettingsPanel onClose={() => (page = null)} />
     {:else if page === 'usage'}
-      <UsagePanel onClose={() => (page = null)} />
+      <UsagePanel onClose={() => (page = null)} sessionKey={activeSessionId} />
     {:else if page === 'shortcuts'}
       <ShortcutsPanel onClose={() => (page = null)} />
     {/if}
