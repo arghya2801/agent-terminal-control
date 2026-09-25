@@ -1,6 +1,6 @@
 import { samePath } from './paths';
 import { qualifiedSession, sessionKey } from './agents';
-import type { AgentProvider, Project, TabKey } from '../types';
+import type { AgentProvider, Project, SessionMeta, TabKey } from '../types';
 
 export interface TabRef {
   key: TabKey;
@@ -22,6 +22,11 @@ export function resolveSessions(tabs: TabRef[], projects: Project[]): Map<TabKey
     if (id) { out.set(tab.key, id); claimed.add(id); }
   }
   const sessions = projects.flatMap((project) => project.sessions.map((session) => ({ project, session })));
+  for (const tab of tabs) {
+    const bound = out.get(tab.key);
+    const moved = bound ? resumedInto(tab, bound, sessions.map(({ session }) => session), claimed) : null;
+    if (moved) { out.set(tab.key, moved); claimed.add(moved); }
+  }
   const candidates = new Map<TabKey, string[]>();
   for (const tab of tabs) {
     const provider = tab.provider ?? (tab.key.startsWith('claude:') ? 'claude' : null);
@@ -52,4 +57,21 @@ export function resolveSessions(tabs: TabRef[], projects: Project[]): Map<TabKey
     for (const [key, ids] of candidates) candidates.set(key, ids.filter((id) => !assigned.has(id)));
   }
   return out;
+}
+
+/**
+ * The session a tab switched to with `/resume` (#75), or null. It existed before the tab
+ * opened, so the launch rules never pick it. Taken only when exactly one other session of
+ * the tab's agent, in its directory and unclaimed, was written after the bound one; for
+ * Claude it must also carry the name in the tab's title when there is one.
+ */
+function resumedInto(tab: TabRef, bound: string, sessions: SessionMeta[], claimed: Set<string>): string | null {
+  const current = sessions.find((s) => sessionKey(s) === bound);
+  if (!current || !tab.provider || !tab.cwd) return null;
+  const later = sessions.filter((s) => s.provider === tab.provider && s.cwd && samePath(s.cwd, tab.cwd!) &&
+    !claimed.has(sessionKey(s)) && s.mtimeMs > current.mtimeMs && s.mtimeMs >= tab.startedAt &&
+    (tab.provider !== 'claude' || !tab.claudeName || s.label === tab.claudeName));
+  // ponytail: mtime order only; an agent run outside ATC in the same directory can look
+  // like a resume for Codex, which has no title name to check against.
+  return later.length === 1 ? sessionKey(later[0]) : null;
 }

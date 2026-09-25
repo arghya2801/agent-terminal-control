@@ -207,9 +207,12 @@ export function sidebarView(): 'sessions' | 'tasks' {
   return appState.settings?.ui.sidebarView === 'tasks' ? 'tasks' : 'sessions';
 }
 
-export async function setSidebarView(view: 'sessions' | 'tasks') {
+export function setSidebarView(view: 'sessions' | 'tasks') {
   if (!appState.settings || sidebarView() === view) return;
-  await saveSettings({ ...appState.settings, ui: { ...appState.settings.ui, sidebarView: view } });
+  // In place, so only what reads the view updates; a new settings object re-derived the
+  // whole sidebar on every switch (#117).
+  appState.settings.ui.sidebarView = view;
+  saveSettingsDebounced(appState.settings);
 }
 
 export function tasks(): Task[] {

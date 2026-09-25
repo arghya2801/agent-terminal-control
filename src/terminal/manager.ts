@@ -7,8 +7,8 @@
  *
  * - `term.onData` must be wired before `pty_spawn`. ConPTY stalls at startup until a
  *   terminal answers its cursor-position request, and xterm only answers if listening.
- * - Only the active tab may hold a WebGL context; WebView2 caps them at ~16 and
- *   silently kills the oldest beyond that.
+ * - At most WEBGL_TABS recently used tabs hold a WebGL context; WebView2 caps them at
+ *   ~16 and silently kills the oldest beyond that.
  */
 
 import { Terminal, type ITheme } from '@xterm/xterm';
@@ -85,7 +85,12 @@ export interface Tab {
 
 const tabs = new Map<TabKey, Tab>();
 let activeKey: TabKey | null = null;
-let webgl: WebglAddon | null = null;
+/** WebGL contexts by tab, least recently activated first. Kept across switches:
+ *  recreating one (and its glyph atlas) on every switch made switching lag (#117). */
+const webgl = new Map<TabKey, WebglAddon>();
+// ponytail: a fixed small cap under WebView2's ~16; make it adaptive only if split panes
+// ever need more visible at once.
+const WEBGL_TABS = 4;
 let wrapper: HTMLElement | null = null;
 /** Latest settings-driven appearance; theme.ts stays the fallback. */
 let termOptions = {
@@ -342,7 +347,8 @@ export function bindSessions(bindings: Map<TabKey, string>, sessions: SessionMet
   let changed = false;
   for (const tab of tabs.values()) {
     const id = bindings.get(tab.key);
-    if (id && !tab.boundSession) { tab.boundSession = id; changed = true; }
+    // Rebinds too: a /resume inside the tab moves it to another session (#75).
+    if (id && id !== tab.boundSession) { tab.boundSession = id; tab.codexSequence = null; changed = true; }
     if (tab.provider !== 'codex' || !tab.boundSession || tab.exited) continue;
     const session = sessions.find(s => `${s.provider}:${s.id}` === tab.boundSession);
     if (!session) continue;
@@ -448,6 +454,33 @@ export function focusActiveTerminal(): void {
   tab?.term.focus();
 }
 
+/** Give the tab a WebGL context, reusing its own, and retire the least recent past the cap. */
+function useWebgl(key: TabKey, term: Terminal) {
+  const had = webgl.get(key);
+  webgl.delete(key);
+  if (had) {
+    webgl.set(key, had);
+    return;
+  }
+  try {
+    const addon = new WebglAddon();
+    // Contexts are lost on OOM or system resume; fall back rather than render nothing.
+    addon.onContextLoss(() => {
+      addon.dispose();
+      if (webgl.get(key) === addon) webgl.delete(key);
+    });
+    term.loadAddon(addon);
+    webgl.set(key, addon);
+  } catch {
+    // Software rendering or RDP: the DOM renderer is correct, just slower.
+  }
+  for (const [old, addon] of webgl) {
+    if (webgl.size <= WEBGL_TABS) break;
+    addon.dispose();
+    webgl.delete(old);
+  }
+}
+
 export function activate(key: TabKey) {
   if (!tabs.has(key)) return;
   activeKey = key;
@@ -457,22 +490,8 @@ export function activate(key: TabKey) {
     Object.assign(t.container.style, paneStyle(t.key === key));
   }
 
-  // One WebGL context, on the active tab only.
   const tab = tabs.get(key)!;
-  webgl?.dispose();
-  webgl = null;
-  try {
-    const addon = new WebglAddon();
-    // Contexts are lost on OOM or system resume; fall back rather than render nothing.
-    addon.onContextLoss(() => {
-      addon.dispose();
-      if (webgl === addon) webgl = null;
-    });
-    tab.term.loadAddon(addon);
-    webgl = addon;
-  } catch {
-    // Software rendering or RDP: the DOM renderer is correct, just slower.
-  }
+  useWebgl(key, tab.term);
 
   tab.term.focus();
   // Find results are per-terminal, so follow the active tab.
@@ -492,10 +511,8 @@ export async function closeTab(key: TabKey) {
       // Already gone; closing the tab is still the right outcome.
     }
   }
-  if (activeKey === key) {
-    webgl?.dispose();
-    webgl = null;
-  }
+  webgl.get(key)?.dispose();
+  webgl.delete(key);
   tab.term.dispose();
   tab.container.remove();
   tabs.delete(key);
