@@ -22,6 +22,11 @@ export function ptyAck(id: string, bytes: number): Promise<void> {
   return invoke('pty_ack', { id, bytes });
 }
 
+/** A program running under the tab's shell, or null at a bare prompt. */
+export function ptyBusy(id: string): Promise<string | null> {
+  return invoke('pty_busy', { id });
+}
+
 export function ptyKill(id: string): Promise<void> {
   return invoke('pty_kill', { id });
 }

@@ -37,7 +37,7 @@
     focusActiveTerminal,
     getActiveKey,
     getTab,
-    isBusy,
+    busyWith,
     listTabs,
     mount as mountTerminals,
     onAttention,
@@ -302,14 +302,16 @@
    * Every close goes through here, button or chord. A tab at a bare prompt closes at
    * once; one with a live process asks first, naming what would be stopped.
    */
-  function requestClose(key: TabKey) {
+  async function requestClose(key: TabKey) {
     const tab = getTab(key);
     if (!tab) return;
-    if (!isBusy(key)) {
+    const running = await busyWith(key);
+    if (!running) {
       void closeTab(key);
       return;
     }
-    closing = { key, title: displayTitle(tab), what: tab.provider ? `${providerName(tab.provider)} session` : 'shell' };
+    const agent = tab.provider && /codex|claude|node/i.test(running);
+    closing = { key, title: displayTitle(tab), what: agent ? `${providerName(tab.provider!)} session` : running };
   }
 
   function finishClose(confirmed: boolean) {

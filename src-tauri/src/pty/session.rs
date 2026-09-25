@@ -133,6 +133,8 @@ pub struct PtySession {
     master: Mutex<Box<dyn MasterPty + Send>>,
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
+    /// The shell's process id, for asking what is running under it.
+    pub pid: Option<u32>,
     gate: Gate,
     pub stats: Arc<PtyStats>,
 }
@@ -172,6 +174,7 @@ impl PtySession {
         drop(pty.slave);
 
         let killer = child.clone_killer();
+        let pid = child.process_id();
         let reader = pty
             .master
             .try_clone_reader()
@@ -196,6 +199,7 @@ impl PtySession {
             master: Mutex::new(pty.master),
             writer,
             killer: Mutex::new(killer),
+            pid,
             gate,
             stats,
         };

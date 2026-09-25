@@ -49,6 +49,22 @@ pub fn command(
     provider: AgentProvider,
     session: Option<&str>,
 ) -> String {
+    build(
+        settings,
+        provider,
+        session,
+        crate::pty::procs::job_blocks_breakaway(),
+    )
+}
+
+/// `no_daemon`: run Codex standalone rather than have it fail to start its background
+/// server inside a Job Object that forbids breakaway (#118).
+fn build(
+    settings: &crate::settings::Settings,
+    provider: AgentProvider,
+    session: Option<&str>,
+    no_daemon: bool,
+) -> String {
     let (exe, args) = match provider {
         AgentProvider::Claude => (&settings.claude.command, &settings.claude.resume_args),
         AgentProvider::Codex => (&settings.codex.command, &settings.codex.resume_args),
@@ -59,6 +75,9 @@ pub fn command(
         format!("& {}", quote(exe))
     };
     let mut parts = vec![executable];
+    if provider == AgentProvider::Codex && no_daemon {
+        parts.push("--no-daemon".into());
+    }
     if let Some(id) = session {
         parts.extend(args.iter().map(|a| argument(&a.replace("{session}", id))));
     }
@@ -87,21 +106,32 @@ mod tests {
         let mut s = crate::settings::Settings::default();
         s.codex.command = "C:\\O'Brien\\codex.exe".into();
         s.codex.home_dir = Some("D:\\Codex home\\$literal".into());
-        assert_eq!(command(&s, AgentProvider::Codex, Some("id';$(bad)")), "$env:CODEX_HOME = 'D:\\Codex home\\$literal'; & 'C:\\O''Brien\\codex.exe' resume 'id'';$(bad)'");
+        assert_eq!(build(&s, AgentProvider::Codex, Some("id';$(bad)"), false), "$env:CODEX_HOME = 'D:\\Codex home\\$literal'; & 'C:\\O''Brien\\codex.exe' resume 'id'';$(bad)'");
         assert_eq!(
-            command(&s, AgentProvider::Claude, Some("abc")),
+            build(&s, AgentProvider::Claude, Some("abc"), false),
             "claude --resume abc"
         );
-        assert_eq!(command(&s, AgentProvider::Claude, None), "claude");
+        assert_eq!(build(&s, AgentProvider::Claude, None, false), "claude");
+    }
+
+    #[test]
+    fn codex_runs_standalone_when_the_host_job_forbids_breakaway() {
+        let s = crate::settings::Settings::default();
+        assert_eq!(
+            build(&s, AgentProvider::Codex, Some("abc"), true),
+            "codex --no-daemon resume abc"
+        );
+        assert_eq!(build(&s, AgentProvider::Claude, None, true), "claude");
     }
 
     #[test]
     fn simple_arguments_stay_readable_and_expressions_stay_literal() {
         assert_eq!(
-            command(
+            build(
                 &crate::settings::Settings::default(),
                 AgentProvider::Codex,
-                None
+                None,
+                false
             ),
             "codex"
         );

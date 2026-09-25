@@ -29,6 +29,11 @@ impl PtyRegistry {
         Ok(id)
     }
 
+    /// Name of a program running under the shell, or `None` at a bare prompt (#106).
+    pub fn busy_with(&self, id: &str) -> Result<Option<String>, PtyError> {
+        Ok(self.get(id)?.pid.and_then(super::procs::first_child))
+    }
+
     fn get(&self, id: &str) -> Result<Arc<PtySession>, PtyError> {
         self.sessions
             .lock()
