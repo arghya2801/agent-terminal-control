@@ -42,6 +42,12 @@ pub fn pty_kill(id: String, state: State<'_, AppState>) -> AppResult<()> {
     Ok(state.ptys.kill(&id)?)
 }
 
+/// What would be stopped by closing this tab: a child of its shell, if any.
+#[tauri::command]
+pub fn pty_busy(id: String, state: State<'_, AppState>) -> AppResult<Option<String>> {
+    Ok(state.ptys.busy_with(&id)?)
+}
+
 #[tauri::command]
 pub fn pty_stats(id: String, state: State<'_, AppState>) -> AppResult<StatsSnapshot> {
     Ok(state.ptys.stats(&id)?)

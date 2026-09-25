@@ -18,7 +18,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 
-import { Channel, ptyAck, ptyKill, ptyResize, ptySpawn, ptyWrite } from '../lib/ipc';
+import { Channel, ptyAck, ptyBusy, ptyKill, ptyResize, ptySpawn, ptyWrite } from '../lib/ipc';
 import { codexNewlineInput, isNativePaste, matchChord, type Action } from '../lib/keymap';
 import { decodeOsc52 } from '../lib/osc52';
 import type { Palette } from '../lib/theme';
@@ -533,9 +533,12 @@ async function writeClipboard(text: string) {
 }
 
 /** True when the tab has a live process, i.e. closing it would kill something. */
-export function isBusy(key: TabKey): boolean {
+/** What closing the tab would stop: a program under its shell, or null (#106). */
+export async function busyWith(key: TabKey): Promise<string | null> {
   const tab = tabs.get(key);
-  return !!tab && !!tab.ptyId && !tab.exited;
+  if (!tab?.ptyId || tab.exited) return null;
+  // Unknown is treated as busy: asking once too often beats killing a running agent.
+  return ptyBusy(tab.ptyId).catch(() => 'a program');
 }
 
 /** Resolves after the browser has laid out and painted at least once. */

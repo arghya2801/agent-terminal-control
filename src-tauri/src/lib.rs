@@ -49,6 +49,7 @@ pub fn run() {
             commands::pty_ack,
             commands::pty_kill,
             commands::pty_stats,
+            commands::pty_busy,
             commands::index_snapshot,
             commands::index_refresh,
             commands::settings_get,
