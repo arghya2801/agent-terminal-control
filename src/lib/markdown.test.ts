@@ -19,6 +19,16 @@ describe('renderMarkdown', () => {
     );
   });
 
+  it('keeps emphasis markers inside a URL out of the href (#92)', () => {
+    expect(md('[doc](https://a.b/x/*draft*/y) and **[b](https://a.b/**z**)**')).toBe(
+      '<p><a href="https://a.b/x/*draft*/y" target="_blank" rel="noopener noreferrer">doc</a> and ' +
+        '<strong><a href="https://a.b/**z**" target="_blank" rel="noopener noreferrer">b</a></strong></p>',
+    );
+    expect(md('[*it*](https://a.b)')).toBe(
+      '<p><a href="https://a.b" target="_blank" rel="noopener noreferrer"><em>it</em></a></p>',
+    );
+  });
+
   it('leaves code spans and fences literal', () => {
     expect(md('`**not bold**`')).toBe('<p><code>**not bold**</code></p>');
     expect(md('```ts\nconst a = 1;\n# not a heading\n```')).toBe(

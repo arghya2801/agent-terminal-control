@@ -11,6 +11,7 @@
     updateTask,
   } from '../lib/tasks';
   import { appState, saveTasks, taskUi, tasks } from '../lib/stores.svelte';
+  import { projectKey } from '../lib/paths';
   import type { Project, SessionMeta, Task, TaskState } from '../types';
   import type { SessionMark } from './SessionNode.svelte';
 
@@ -34,7 +35,7 @@
       (g) => g.tasks.length > 0,
     ),
   );
-  const manyRepos = $derived(new Set(all.map((t) => t.repo?.toLowerCase() ?? '')).size > 1);
+  const manyRepos = $derived(new Set(all.map((t) => (t.repo ? projectKey(t.repo) : ''))).size > 1);
 
   const live = (t: Task) => t.sessions.filter((k) => sessionMarks.has(k)).length;
 

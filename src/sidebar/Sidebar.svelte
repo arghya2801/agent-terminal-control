@@ -122,13 +122,14 @@
         label: 'New task from this session',
         sep: true,
         run: () => {
-          createTask({
+          const task = createTask({
             title: s.label,
             state: 'doing',
             repo: p.path,
             branches: s.gitBranch ? [s.gitBranch] : [],
-            sessions: [key],
           });
+          // Through linkSession, which moves the session off any task it was on (#88).
+          saveTasks(linkSession(tasks(), task.id, s));
           // Show it, already in rename, so the title can be fixed straight away.
           void setSidebarView('tasks');
         },

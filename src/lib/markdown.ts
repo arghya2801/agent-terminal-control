@@ -9,15 +9,24 @@
 const escape = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
+const emphasis = (s: string) =>
+  s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/(^|[^\w*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+
 function inline(s: string): string {
-  // Code spans first, parked so bold/italic/link rules cannot reach inside them.
-  const codes: string[] = [];
-  return s
-    .replace(/`([^`]+)`/g, (_, c) => `\u0000C${codes.push(`<code>${c}</code>`) - 1}\u0000`)
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/(^|[^\w*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
-    .replace(/\u0000C(\d+)\u0000/g, (_, i) => codes[Number(i)]);
+  // Code spans and links are parked first, so the emphasis rules cannot reach inside a
+  // code span or a URL (#92). Link text still gets emphasis.
+  const parked: string[] = [];
+  const park = (html: string) => `\u0000P${parked.push(html) - 1}\u0000`;
+  const restore = (t: string): string => t.replace(/\u0000P(\d+)\u0000/g, (_, i) => restore(parked[Number(i)]));
+  return restore(
+    emphasis(
+      s
+        .replace(/`([^`]+)`/g, (_, c) => park(`<code>${c}</code>`))
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, text, href) =>
+          park(`<a href="${href}" target="_blank" rel="noopener noreferrer">${emphasis(text)}</a>`),
+        ),
+    ),
+  );
 }
 
 export function renderMarkdown(src: string): string {
