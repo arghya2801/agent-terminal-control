@@ -192,8 +192,40 @@ pub fn open_settings_file(state: State<'_, AppState>) -> AppResult<()> {
     open_with_shell_handler(&path)
 }
 
+/// ShellExecuteW rather than `explorer <path>`: explorer splits its command line on
+/// commas, so a link like `https://maps/@51.5,-0.12,14z` opened the wrong thing (#92).
+#[cfg(windows)]
 fn open_with_shell_handler(path: &std::path::Path) -> AppResult<()> {
-    std::process::Command::new("explorer")
+    use windows::core::{w, HSTRING, PCWSTR};
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    let target = HSTRING::from(path.as_os_str());
+    let code = unsafe {
+        ShellExecuteW(
+            None,
+            w!("open"),
+            &target,
+            PCWSTR::null(),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    // Documented: anything above 32 is success.
+    if code.0 as isize > 32 {
+        Ok(())
+    } else {
+        Err(crate::error::AppError::Message(format!(
+            "could not open {} (shell error {})",
+            path.display(),
+            code.0 as isize
+        )))
+    }
+}
+
+#[cfg(not(windows))]
+fn open_with_shell_handler(path: &std::path::Path) -> AppResult<()> {
+    std::process::Command::new("xdg-open")
         .arg(path)
         .spawn()
         .map_err(crate::error::AppError::Io)?;
@@ -435,6 +467,7 @@ mod git_tests {
     fn only_plain_web_links_are_opened() {
         assert!(is_web_url("https://github.com/a/b?c=1&d=2"));
         assert!(is_web_url("HTTP://x.y"));
+        assert!(is_web_url("https://www.google.com/maps/@51.5,-0.12,14z"));
         for bad in [
             "file:///C:/Windows/System32/calc.exe",
             r"C:\Windows\notepad.exe",
