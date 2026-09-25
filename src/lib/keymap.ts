@@ -31,7 +31,9 @@ export type Action =
   | 'toggleTaskView'
   | 'toggleTaskPanel'
   | 'askAgent'
-  | 'showShortcuts';
+  | 'showShortcuts'
+  | 'toggleSplit'
+  | 'focusOtherPane';
 
 /** The subset of KeyboardEvent this needs, so tests require no DOM. */
 export interface ChordEvent {
@@ -88,6 +90,10 @@ const BINDINGS: Binding[] = [
   // it does not. Plain F1 is left alone: PSReadLine binds it to command help.
   { key: '?', ctrl: true, shift: true, action: 'showShortcuts' },
   { key: '/', ctrl: true, shift: true, action: 'showShortcuts' },
+  // Split panes (#21). Backslash reports as `|` with Shift held on a US layout.
+  { key: '|', ctrl: true, shift: true, action: 'toggleSplit' },
+  { key: '\\', ctrl: true, shift: true, action: 'toggleSplit' },
+  { key: 'o', ctrl: true, shift: true, action: 'focusOtherPane' },
 ];
 
 /**
@@ -101,6 +107,8 @@ const DESCRIPTIONS: Record<Action, { group: Group; label: string }> = {
   nextTab: { group: 'Tabs', label: 'Next tab' },
   prevTab: { group: 'Tabs', label: 'Previous tab' },
   renameTab: { group: 'Tabs', label: 'Rename tab' },
+  toggleSplit: { group: 'Tabs', label: 'Split into two panes, or back to one' },
+  focusOtherPane: { group: 'Tabs', label: 'Focus the other pane' },
   openAgentHere: { group: 'Launch', label: 'Open an agent in this tab’s project' },
   openShellHere: { group: 'Launch', label: 'Open a shell in this tab’s project' },
   askAgent: { group: 'Launch', label: 'Ask agent (scratch directory)' },

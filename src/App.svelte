@@ -47,6 +47,10 @@
     refit,
     renameTab,
     activate,
+    focusOtherPane,
+    isSplit,
+    splitWith,
+    unsplit,
     type AttentionReason,
     type Tab,
   } from './terminal/manager';
@@ -252,6 +256,22 @@
     }
   }
 
+  /** Split beside the next tab, opening a shell when there is no other (#21). */
+  async function toggleSplit() {
+    if (isSplit()) return unsplit();
+    const current = activeKey;
+    let other = tabs.find((t) => t.key !== current)?.key ?? null;
+    if (!other) {
+      // A new tab becomes the active one.
+      await newTab();
+      other = getActiveKey();
+    }
+    if (current && other && other !== current) {
+      activate(current);
+      splitWith(other);
+    }
+  }
+
   function newTab() {
     counter += 1;
     return guard(() => openTab(`plain:${counter}`, `pwsh ${counter}`, { cwd: null }));
@@ -438,6 +458,12 @@
         break;
       case 'askAgent':
         picker = { project: null };
+        break;
+      case 'toggleSplit':
+        void toggleSplit();
+        break;
+      case 'focusOtherPane':
+        focusOtherPane();
         break;
     }
   }

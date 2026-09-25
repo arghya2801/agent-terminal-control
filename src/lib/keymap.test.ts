@@ -221,3 +221,12 @@ describe('the shortcut help list', () => {
     expect(groups.map((g) => g.group)).toEqual(['Tabs', 'Launch', 'View', 'Pages', 'Debug']);
   });
 });
+
+describe('split pane chords (#21)', () => {
+  it('toggles on Ctrl+Shift+\ whatever the layout reports, and focuses across on Ctrl+Shift+O', () => {
+    expect(matchChord({ key: '|', ctrlKey: true, shiftKey: true })).toBe('toggleSplit');
+    expect(matchChord({ key: '\\', ctrlKey: true, shiftKey: true })).toBe('toggleSplit');
+    expect(matchChord({ key: 'O', ctrlKey: true, shiftKey: true })).toBe('focusOtherPane');
+    expect(matchChord({ key: 'o', ctrlKey: true, shiftKey: false })).toBeNull();
+  });
+});

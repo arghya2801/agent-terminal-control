@@ -1,9 +1,10 @@
 /**
  * Geometry for a stack of terminal panes.
  *
- * Every tab's terminal is absolutely positioned in one wrapper at identical size, so
- * dimensions are measured **once** against the wrapper and applied to all of them. That
- * is only correct because this app has no splits — every tab fills the same pane.
+ * Every tab's terminal is absolutely positioned in one wrapper. Unsplit, every tab fills
+ * it at identical size, so dimensions are measured **once** and applied to all of them.
+ * Split (#21), the wrapper holds two panes side by side, each showing one tab and each
+ * measured on its own.
  *
  * Inactive panes use `visibility: hidden`, never `display: none`. A `display: none`
  * element measures zero, and FitAddon would then push garbage dimensions into ConPTY.
@@ -67,14 +68,52 @@ export function debounce<T extends unknown[]>(
   return wrapped;
 }
 
-/** Styles for a pane, active or not. Kept here so the display/visibility rule lives in
- *  exactly one place. */
-export function paneStyle(active: boolean): Partial<CSSStyleDeclaration> {
+/** The tab shown in the left and right pane; the right is null when not split. */
+export type Panes<K> = [K | null, K | null];
+
+/** Where a tab sits: which pane, or null when hidden. */
+export function slotOf<K>(panes: Panes<K>, key: K): 0 | 1 | null {
+  return panes[0] === key ? 0 : panes[1] === key ? 1 : null;
+}
+
+/** Show `key` in the focused pane, or just focus the other pane if it is already there. */
+export function showIn<K>(panes: Panes<K>, focused: 0 | 1, key: K): { panes: Panes<K>; focused: 0 | 1 } {
+  const slot = slotOf(panes, key);
+  if (slot !== null) return { panes, focused: slot };
+  const next: Panes<K> = [...panes];
+  next[focused] = key;
+  return { panes: next, focused };
+}
+
+/** After `key` closed: refill its pane from `others` (tabs not on screen), or unsplit. */
+export function withoutTab<K>(panes: Panes<K>, focused: 0 | 1, key: K, others: K[]): { panes: Panes<K>; focused: 0 | 1 } {
+  const slot = slotOf(panes, key);
+  if (slot === null) return { panes, focused };
+  const spare = others.find((k) => k !== key && slotOf(panes, k) === null) ?? null;
+  if (spare !== null) {
+    const next: Panes<K> = [...panes];
+    next[slot] = spare;
+    return { panes: next, focused };
+  }
+  const left = slot === 0 ? panes[1] : panes[0];
+  return { panes: [left, null], focused: 0 };
+}
+
+/** Styles for a tab's container: which pane it fills, or hidden. Kept here so the
+ *  display/visibility rule lives in exactly one place. */
+export function paneStyle(slot: 0 | 1 | null, split = false, focused = false): Partial<CSSStyleDeclaration> {
+  const half = split && slot !== null;
   return {
     position: 'absolute',
-    inset: '0',
+    inset: !half ? '0' : slot === 0 ? '0 50% 0 0' : '0 0 0 50%',
+    borderLeft: half && slot === 1 ? '1px solid var(--border)' : '',
+    // The focused pane of a split is marked, so it is clear where typing goes. A border,
+    // not a shadow: the terminal's canvas paints over an inset shadow. Both halves carry
+    // one, so they measure the same.
+    borderTop: half ? `2px solid ${focused ? 'var(--accent)' : 'transparent'}` : '',
+    boxSizing: 'border-box',
     // NOT `display: none` — see the module comment.
-    visibility: active ? 'visible' : 'hidden',
-    zIndex: active ? '1' : '0',
+    visibility: slot !== null ? 'visible' : 'hidden',
+    zIndex: slot !== null ? '1' : '0',
   };
 }
