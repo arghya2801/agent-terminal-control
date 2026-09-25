@@ -1,20 +1,29 @@
 <script lang="ts">
   import { onMount, type Snippet } from 'svelte';
+  import { focusActiveTerminal } from '../terminal/manager';
 
   /** Full-pane overlay above the terminals, which stay mounted underneath. */
   let { title, onClose, children }: { title: string; onClose: () => void; children: Snippet } =
     $props();
 
+  let root: HTMLDivElement;
+
   onMount(() => {
+    // Take focus from the terminal: xterm stops Escape from propagating, so with focus
+    // left there the listener below never saw it (#105).
+    root.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      focusActiveTerminal();
+    };
   });
 </script>
 
-<div class="page">
+<div class="page" tabindex="-1" bind:this={root}>
   <header>
     <h1>{title}</h1>
     <button class="close" onclick={onClose} aria-label="Close" title="Close (Esc)">×</button>
@@ -32,6 +41,7 @@
     overflow-y: auto;
     background: var(--bg);
     scrollbar-color: var(--border) transparent;
+    outline: none;
   }
   header {
     position: sticky;
