@@ -52,6 +52,12 @@ jobs:
         with:
           workspaces: src-tauri -> target-e2e
 
+      # The server image ships Edge but not the standalone WebView2 runtime the app needs.
+      - name: Install WebView2 runtime
+        run: |
+          Invoke-WebRequest https://go.microsoft.com/fwlink/p/?LinkId=2124703 -OutFile webview2.exe
+          Start-Process webview2.exe -ArgumentList '/silent', '/install' -Wait
+
       - run: npm ci
       - run: cargo install tauri-driver --locked
       - run: npm run test:e2e
