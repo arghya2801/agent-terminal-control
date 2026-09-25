@@ -22,14 +22,21 @@
 
   // A primitive, so editing the task's other fields does not refetch the branch list.
   const repo = $derived(task?.repo ?? null);
-  let branches = $state<string[]>([]);
+  /** `undefined` while loading, `null` when the repo's branches could not be read. */
+  let branches = $state<string[] | null | undefined>(undefined);
+  const load = (r: string) => void branchesOf(r).then((b) => repo === r && (branches = b));
   $effect(() => {
     const current = repo;
-    branches = [];
-    if (current) void branchesOf(current).then((b) => repo === current && (branches = b));
+    branches = undefined;
+    if (current) load(current);
   });
-  /** Branches on the task that the repo no longer has: kept, greyed, still removable. */
-  const gone = $derived(task ? task.branches.filter((b) => !branches.includes(b)) : []);
+  // Fresh on every open, so a branch made in a terminal since is there (#91).
+  $effect(() => {
+    if (pickerOpen && repo) load(repo);
+  });
+  /** Branches on the task that the repo no longer has: kept, greyed, still removable.
+   *  Only judged against a list that loaded and has something in it (#91). */
+  const gone = $derived(task && branches?.length ? task.branches.filter((b) => !branches!.includes(b)) : []);
 
   /** Dismissed suggestions, by task. Deliberately not persisted. */
   let dismissed = $state<Record<number, string[]>>({});
@@ -140,8 +147,9 @@
             <span class="caret">▾</span>
           </summary>
           <div class="pop">
-            {#if branches.length === 0 && gone.length === 0}<div class="muted">No branches found. Is this a git repo?</div>{/if}
-            {#each branches as b (b)}
+            {#if branches === undefined}<div class="muted">Loading branches…</div>
+            {:else if !branches?.length && gone.length === 0}<div class="muted">No branches found. Is this a git repo?</div>{/if}
+            {#each branches ?? [] as b (b)}
               <label><input type="checkbox" checked={task.branches.includes(b)} onchange={(e) => toggleBranch(b, e.currentTarget.checked)} />{b}</label>
             {/each}
             {#each gone as b (b)}

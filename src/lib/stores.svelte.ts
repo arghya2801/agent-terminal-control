@@ -17,7 +17,6 @@ import {
   tasksGet,
   tasksSet,
 } from './ipc';
-import { projectKey } from './paths';
 import { newTask } from './tasks';
 import {
   anyExpanded,
@@ -146,21 +145,13 @@ export async function initStores() {
   await listen<Task[]>(EVENT_TASKS_UPDATED, (e) => (appState.tasks = e.payload));
 }
 
-/** Branch lists by repo, fetched when a picker first needs one. A rescan forgets them. */
-const branchCache = new Map<string, Promise<string[]>>();
-
-export function branchesOf(repo: string): Promise<string[]> {
-  const key = projectKey(repo);
-  let hit = branchCache.get(key);
-  if (!hit) {
-    hit = gitBranches(repo).catch(() => []);
-    branchCache.set(key, hit);
-  }
-  return hit;
+/** Local branches of `repo`, fetched fresh each time (it is cheap), so a branch made in
+ *  a terminal shows up. `null` when the fetch failed, which is not the same as none. */
+export function branchesOf(repo: string): Promise<string[] | null> {
+  return gitBranches(repo).catch(() => null);
 }
 
 export async function refresh(force = false) {
-  branchCache.clear();
   try {
     applySnapshot(await indexRefresh(force));
     appState.error = null;
