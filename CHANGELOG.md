@@ -19,6 +19,9 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ### Fixed
 - Saving the Settings page no longer overwrites task edits made while it was open. ([#86](https://github.com/arghya2801/agent-terminal-control/issues/86))
+- **New task from this session** no longer leaves the session linked to its old task too. ([#88](https://github.com/arghya2801/agent-terminal-control/issues/88))
+- The task branch picker fetches fresh each time it opens, and no longer flashes existing branches as deleted. ([#91](https://github.com/arghya2801/agent-terminal-control/issues/91))
+- Links in task notes open correctly when they contain commas or `*`. ([#92](https://github.com/arghya2801/agent-terminal-control/issues/92))
 - A task state that is not a string (`null`, a number) no longer resets every setting. ([#89](https://github.com/arghya2801/agent-terminal-control/issues/89))
 
 ## [0.3.0] - 2026-09-24
