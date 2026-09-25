@@ -22,6 +22,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - `playground/` is ignored by git. ([#96](https://github.com/arghya2801/agent-terminal-control/issues/96))
 
 ### Fixed
+- Switching tabs and sidebar views is faster. WebGL contexts are kept for recent tabs, and both sidebar views stay mounted. ([#117](https://github.com/arghya2801/agent-terminal-control/issues/117))
+- A session reached with `/resume` inside an open tab is linked to that tab, so the sidebar focuses it instead of opening a second tab. ([#75](https://github.com/arghya2801/agent-terminal-control/issues/75))
 - Shift+Enter and Ctrl+J insert a newline in Codex again instead of sending the prompt. ([#82](https://github.com/arghya2801/agent-terminal-control/issues/82))
 - Codex starts when ATC runs inside a Windows Job Object that forbids breakaway, such as IntelliJ's terminal. ATC launches it with `--no-daemon` there. ([#118](https://github.com/arghya2801/agent-terminal-control/issues/118))
 - A tab whose agent has exited closes without asking. A plain shell with something running under it now asks, and names what would be stopped. ([#106](https://github.com/arghya2801/agent-terminal-control/issues/106))
