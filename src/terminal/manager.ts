@@ -347,7 +347,8 @@ export function bindSessions(bindings: Map<TabKey, string>, sessions: SessionMet
   let changed = false;
   for (const tab of tabs.values()) {
     const id = bindings.get(tab.key);
-    if (id && !tab.boundSession) { tab.boundSession = id; changed = true; }
+    // Rebinds too: a /resume inside the tab moves it to another session (#75).
+    if (id && id !== tab.boundSession) { tab.boundSession = id; tab.codexSequence = null; changed = true; }
     if (tab.provider !== 'codex' || !tab.boundSession || tab.exited) continue;
     const session = sessions.find(s => `${s.provider}:${s.id}` === tab.boundSession);
     if (!session) continue;

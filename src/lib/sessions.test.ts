@@ -200,3 +200,43 @@ it('excludes conversations already present at launch even when they are updated'
   const p = project('D:\\Coding\\app', [session('old', { mtimeMs: T0 + 100 })]);
   expect(resolveSessions([claudeTab({ existingSessions: ['claude:old'] })], [p]).size).toBe(0);
 });
+
+describe('a /resume inside a tab (#75)', () => {
+  const tab = claudeTab({ key: 'claude:1' as TabKey, provider: 'claude', boundSession: 'claude:first' });
+
+  it('moves the tab to the older session written after its own', () => {
+    const projects = [project('D:\Coding\app', [
+      session('first', { mtimeMs: T0 + 10 }),
+      session('resumed', { mtimeMs: T0 + 50 }),
+    ])];
+    expect(resolveSessions([tab], projects).get(tab.key)).toBe('claude:resumed');
+  });
+
+  it('stays put while its own session is the latest', () => {
+    const projects = [project('D:\Coding\app', [
+      session('first', { mtimeMs: T0 + 50 }),
+      session('other', { mtimeMs: T0 + 10 }),
+    ])];
+    expect(resolveSessions([tab], projects).get(tab.key)).toBe('claude:first');
+  });
+
+  it('does not take a session another tab owns, or guess between two', () => {
+    const other = claudeTab({ key: 'claude:2' as TabKey, provider: 'claude', boundSession: 'claude:owned' });
+    const owned = [project('D:\Coding\app', [session('first', { mtimeMs: T0 + 10 }), session('owned', { mtimeMs: T0 + 50 })])];
+    expect(resolveSessions([tab, other], owned).get(tab.key)).toBe('claude:first');
+    const two = [project('D:\Coding\app', [
+      session('first', { mtimeMs: T0 + 10 }), session('a', { mtimeMs: T0 + 50 }), session('b', { mtimeMs: T0 + 60 }),
+    ])];
+    expect(resolveSessions([tab], two).get(tab.key)).toBe('claude:first');
+  });
+
+  it('follows the Claude title name when there is one', () => {
+    const named = { ...tab, claudeName: 'wanted' };
+    const projects = [project('D:\Coding\app', [
+      session('first', { mtimeMs: T0 + 10 }),
+      session('a', { mtimeMs: T0 + 50 }),
+      session('b', { mtimeMs: T0 + 60, label: 'wanted' }),
+    ])];
+    expect(resolveSessions([named], projects).get(tab.key)).toBe('claude:b');
+  });
+});
