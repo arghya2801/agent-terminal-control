@@ -93,6 +93,7 @@
   /** Until startup has reopened the saved tabs, saving would overwrite them. */
   let restoring = true;
 
+  let savedTabs = '';
   function saveTabs(all: Tab[]) {
     if (restoring) return;
     // Exited tabs are kept: they are still in the tab bar, and on quit every shell exits
@@ -106,7 +107,11 @@
     });
     try {
       const active = all.findIndex((t) => t.key === activeKey);
-      localStorage.setItem(TABS_KEY, JSON.stringify({ tabs, active }));
+      const text = JSON.stringify({ tabs, active });
+      // Every tab event lands here (titles change constantly); only real changes write.
+      if (text === savedTabs) return;
+      localStorage.setItem(TABS_KEY, text);
+      savedTabs = text;
     } catch {
       // Storage unavailable: tabs just are not restored next time.
     }

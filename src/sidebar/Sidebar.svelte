@@ -274,10 +274,13 @@
     />
   </div>
 
-  <div class="list">
-    {#if view === 'tasks'}
-      <TaskList {query} {sessionMarks} {onOpenSession} />
-    {:else if appState.loading}
+  <!-- Both views stay mounted and the hidden one is display:none, so switching does not
+       rebuild every project and session row (#117). -->
+  <div class="list" hidden={view !== 'tasks'}>
+    <TaskList {query} {sessionMarks} {onOpenSession} />
+  </div>
+  <div class="list" hidden={view === 'tasks'}>
+    {#if appState.loading}
       <div class="hint">scanning…</div>
     {:else if appState.error}
       <div class="hint err">{appState.error}</div>
