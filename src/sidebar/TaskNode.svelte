@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import InlineRename from '../lib/InlineRename.svelte';
+  import { reorderable } from '../lib/dragReorder';
   import type { Task } from '../types';
 
   let {
@@ -13,6 +15,7 @@
     onMenu,
     onRename,
     onRenameCancel,
+    onMove,
   }: {
     task: Task;
     /** Linked sessions that have a tab open. */
@@ -27,7 +30,24 @@
     onMenu: (e: MouseEvent, task: Task) => void;
     onRename: (name: string) => void;
     onRenameCancel: () => void;
+    /** Put task `from` where task `to` is; within one status group (#104). */
+    onMove: (from: number, to: number) => void;
   } = $props();
+
+  function onKey(e: KeyboardEvent) {
+    // Alt+Up/Down moves the task one place within its group.
+    if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rows = [...(e.currentTarget as HTMLElement).parentElement!.querySelectorAll<HTMLElement>(`[data-state="${task.state}"]`)];
+    const i = rows.indexOf(e.currentTarget as HTMLElement);
+    const other = rows[i + (e.key === 'ArrowUp' ? -1 : 1)];
+    if (!other) return;
+    onMove(task.id, Number(other.dataset.id));
+    // Moving the row re-inserts it, which drops focus; keep it on the task.
+    const id = task.id;
+    void tick().then(() => document.querySelector<HTMLElement>(`[data-row][data-id="${id}"]`)?.focus());
+  }
 
   const repoName = $derived(task.repo?.split(/[\\/]/).filter(Boolean).pop() ?? null);
 </script>
@@ -40,7 +60,11 @@
   <button
     class="task {task.state}"
     data-row
+    data-id={task.id}
+    data-state={task.state}
     tabindex="-1"
+    use:reorderable={{ id: String(task.id), group: `task-${task.state}`, onMove: (a, b) => onMove(Number(a), Number(b)) }}
+    onkeydown={onKey}
     class:selected
     onclick={() => onSelect(task)}
     ondblclick={() => onOpen(task)}
@@ -92,6 +116,9 @@
   .task.selected {
     background: color-mix(in srgb, var(--accent-strong) 16%, transparent);
     border-left-color: var(--accent);
+  }
+  .task:global(.drop-target) {
+    box-shadow: inset 0 2px 0 var(--accent);
   }
   .title {
     display: block;

@@ -27,7 +27,7 @@ export function enterList(e: FocusEvent, list: HTMLElement, last: HTMLElement | 
 
 export function listKeys(e: KeyboardEvent, list: HTMLElement, leave: { up: () => void; escape: () => void }) {
   // Keys typed into an inline rename belong to the input.
-  if ((e.target as HTMLElement).closest?.('input, textarea')) return;
+  if ((e.target as HTMLElement).closest?.('input, textarea') || e.altKey) return;
   const all = rows(list);
   const current = (e.target as HTMLElement).closest?.<HTMLElement>('[data-row]') ?? null;
   const i = current ? all.indexOf(current) : -1;
