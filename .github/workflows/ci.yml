@@ -34,30 +34,6 @@ jobs:
       - run: npm run test
       - run: npm run lint
 
-  # End-to-end tests (#97): the built app driven through tauri-driver and WebView2's
-  # WebDriver. A job of its own, since it needs a full app build.
-  e2e:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target-e2e
-
-      # The server image ships Edge but not the standalone WebView2 runtime the app needs.
-      - name: Install WebView2 runtime
-        run: |
-          Invoke-WebRequest https://go.microsoft.com/fwlink/p/?LinkId=2124703 -OutFile webview2.exe
-          Start-Process webview2.exe -ArgumentList '/silent', '/install' -Wait
-
-      - run: npm ci
-      - run: cargo install tauri-driver --locked
-      - run: npm run test:e2e
+# End-to-end tests (npm run test:e2e, #97) run locally only for now: on windows-latest the
+# app's WebView2 never starts under msedgedriver ("DevToolsActivePort file doesn't exist"),
+# with or without the standalone WebView2 runtime installed.
