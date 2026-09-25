@@ -11,9 +11,15 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - CI runs tests and lint on every pull request and push to `main`. ([#93](https://github.com/arghya2801/agent-terminal-control/issues/93))
 
 ### Changed
+- Tasks are stored in `tasks.json` beside `settings.json`. Existing tasks move over on first start. ([#99](https://github.com/arghya2801/agent-terminal-control/issues/99))
+- Changing a setting that does not affect the sidebar (font, zoom, theme, view) no longer restarts the transcript watcher or rescans. ([#87](https://github.com/arghya2801/agent-terminal-control/issues/87), [#100](https://github.com/arghya2801/agent-terminal-control/issues/100))
 - The release workflow uses the current majors of its actions and builds on Node 24. ([#94](https://github.com/arghya2801/agent-terminal-control/issues/94))
 - A bare `svelte-check` now checks the app, the same as `npm run check`. ([#95](https://github.com/arghya2801/agent-terminal-control/issues/95))
 - `playground/` is ignored by git. ([#96](https://github.com/arghya2801/agent-terminal-control/issues/96))
+
+### Fixed
+- Saving the Settings page no longer overwrites task edits made while it was open. ([#86](https://github.com/arghya2801/agent-terminal-control/issues/86))
+- A task state that is not a string (`null`, a number) no longer resets every setting. ([#89](https://github.com/arghya2801/agent-terminal-control/issues/89))
 
 ## [0.3.0] - 2026-09-24
 
