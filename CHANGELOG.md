@@ -7,6 +7,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ## [Unreleased]
 
 ### Added
+- Drag tabs to reorder them. ([#74](https://github.com/arghya2801/agent-terminal-control/issues/74))
+- Reorder tasks within a status group by dragging, or with Alt+Up/Down. ([#104](https://github.com/arghya2801/agent-terminal-control/issues/104))
 - Keyboard navigation in the sidebar. Down from the search box, or Tab, enters the list. Arrows move and expand, Enter opens, Shift+F10 opens the menu, and Esc goes back to the terminal. ([#103](https://github.com/arghya2801/agent-terminal-control/issues/103))
 - Usage chart: split by model or project, a running total, hourly bars for a single day, and a read-out of the hovered bar. ([#71](https://github.com/arghya2801/agent-terminal-control/issues/71))
 - Previous/next-day buttons on the Usage page, and clicking a bar shows that day. ([#76](https://github.com/arghya2801/agent-terminal-control/issues/76))
