@@ -17,7 +17,7 @@ src-tauri/target-*/
 !.env.example
 
 # --- dev playground (generated settings + cache) ---
-/playground/config/
+/playground/
 
 # --- misc ---
 *.log
