@@ -1,7 +1,7 @@
 {
-  "files": [],
-  "references": [
-    { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.node.json" }
-  ]
+  // Same as tsconfig.app.json, so tools that read the root config (a bare `svelte-check`,
+  // editors) check the app. It used to hold only project references, which made a bare
+  // `svelte-check` check almost nothing and still print 0 errors.
+  // tsconfig.node.json covers vite.config.ts on its own.
+  "extends": "./tsconfig.app.json"
 }
