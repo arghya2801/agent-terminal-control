@@ -33,3 +33,7 @@ jobs:
       - run: npm ci
       - run: npm run test
       - run: npm run lint
+
+# End-to-end tests (npm run test:e2e, #97) run locally only for now: on windows-latest the
+# app's WebView2 never starts under msedgedriver ("DevToolsActivePort file doesn't exist"),
+# with or without the standalone WebView2 runtime installed.

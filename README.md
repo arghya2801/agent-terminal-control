@@ -233,6 +233,7 @@ lossy.
 npm run test     # cargo test + vitest
 npm run lint     # cargo fmt, clippy, svelte-check
 npm run play     # run against fixtures, leaving real data alone
+npm run test:e2e # build the app and drive it through WebDriver (needs: cargo install tauri-driver --locked)
 ```
 
 `scripts/` contains helpers for regenerating the icon and fixtures, capturing the window,
