@@ -9,7 +9,8 @@
 import { localDay } from './costs';
 
 /** `null` days means all time. */
-export type Selection = { kind: 'preset'; days: number | null } | { kind: 'custom' };
+/** `day` is a single day stepped to with the arrows; it is not remembered. */
+export type Selection = { kind: 'preset'; days: number | null } | { kind: 'custom' } | { kind: 'day' };
 
 export interface Dates {
   from: string;
@@ -40,6 +41,13 @@ export function presetDates(days: number | null, now = new Date()): Dates {
   if (days === null) return { from: EPOCH, to };
   const span = clampDays(days);
   return { from: localDay(new Date(now.getTime() - (span - 1) * 86_400_000)), to };
+}
+
+/** `day` moved by `n` days, as `YYYY-MM-DD`. */
+export function shiftDay(day: string, n: number): string {
+  const d = new Date(`${day}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return localDay(d);
 }
 
 /** True when a preset button should read as the current selection. */

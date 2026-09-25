@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampDays, isActive, MAX_DAYS, parseSaved, presetDates } from './range';
+import { clampDays, isActive, MAX_DAYS, parseSaved, presetDates, shiftDay } from './range';
 
 const NOW = new Date(2026, 8, 19, 13, 30); // 2026-09-19, local
 
@@ -77,5 +77,12 @@ describe('parseSaved', () => {
     expect(parseSaved('[]')).toBeNull();
     expect(parseSaved('{"selection":{"kind":"wat"}}')).toBeNull();
     expect(parseSaved('{"from":"nope","to":"nope"}')).toBeNull();
+  });
+});
+
+describe('shiftDay', () => {
+  it('steps across month and year ends', () => {
+    expect(shiftDay('2026-09-30', 1)).toBe('2026-10-01');
+    expect(shiftDay('2026-01-01', -1)).toBe('2025-12-31');
   });
 });

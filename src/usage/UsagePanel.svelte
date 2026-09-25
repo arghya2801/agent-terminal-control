@@ -5,7 +5,7 @@
   import { save } from '@tauri-apps/plugin-dialog';
   import { claudeUsage, codexUsage, codexUsageStop, usageCosts, writeTextFile } from '../lib/ipc';
   import { appState } from '../lib/stores.svelte';
-  import { formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv } from '../lib/costs';
+  import { chartData, formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv, type Split } from '../lib/costs';
   import {
     clampDays,
     isActive,
@@ -13,6 +13,7 @@
     MIN_DAYS,
     parseSaved,
     presetDates,
+    shiftDay,
     type Dates,
     type Selection,
   } from '../lib/range';
@@ -172,6 +173,14 @@
     saveRange();
   }
 
+  /** One day, stepped from the one shown (or today). Not remembered: browsing. (#76) */
+  function showDay(day: string) {
+    const d = day > today ? today : day;
+    selection = { kind: 'day' };
+    from = to = d;
+  }
+  const stepDay = (n: number) => showDay(from === to ? shiftDay(from, n) : today);
+
   function applySpan(raw: number) {
     const days = clampDays(raw);
     spanDays = days;
@@ -188,7 +197,7 @@
     if (!saved) return;
     custom = saved.custom;
     if (saved.selection.kind === 'custom') useCustom();
-    else preset(saved.selection.days);
+    else if (saved.selection.kind === 'preset') preset(saved.selection.days);
   }
 
   function projectOf(key: string, path: string | null): { key: string; name: string } {
@@ -244,12 +253,22 @@
   const rankedModels = $derived([...summary.byModel].sort((a, b) => b[metric] - a[metric]));
   const rankedSessions = $derived([...summary.bySession].sort((a, b) => b[metric] - a[metric]));
   const metricTotal = $derived(metric === 'tokens' ? summary.tokens : summary.total);
-  // Start at the first day with usage for the selected metric.
-  const chartDays = $derived.by(() => {
-    const first = summary.byDay.findIndex((d) => d[metric] > 0);
-    return first < 0 ? [] : summary.byDay.slice(first);
-  });
-  const maxDay = $derived(Math.max(0, ...chartDays.map((d) => d[metric])));
+  let split = $state<Split>('none');
+  let cumulative = $state(false);
+  const chart = $derived(
+    chartData(filteredRows, from <= to ? from : to, from <= to ? to : from, { metric, split, cumulative }, projectOf),
+  );
+  const chartMax = $derived(Math.max(0, ...chart.buckets.map((b) => b.total)));
+  const chartHourly = $derived(from === to);
+  /** Bucket under the pointer, for the read-out above the chart. */
+  let hovered = $state<number | null>(null);
+  const shown = $derived(hovered === null ? null : chart.buckets[hovered]);
+  /** One series keeps the accent; a split takes the categorical slots in rank order. */
+  // ponytail: slots follow rank, so a range change can recolour a model; pin colours per
+  // name if people compare screenshots across ranges.
+  const color = (i: number) =>
+    chart.series.length === 1 ? 'var(--accent)' : chart.series[i] === 'Other' ? 'var(--series-other)' : `var(--series-${i + 1})`;
+  const fmt = (v: number) => (metric === 'tokens' ? `${formatTokens(v)} tokens` : formatUsd(v));
 
   onMount(() => {
     restoreRange();
@@ -363,7 +382,11 @@
   <div class="range">
     <label>From <input type="date" bind:value={from} max={today} onchange={pickedByHand} /></label>
     <label>To <input type="date" bind:value={to} max={today} onchange={pickedByHand} /></label>
-    <button class="btn" class:on={isActive(selection, 1)} onclick={() => preset(1)}>Today</button>
+    <span class="daystep">
+      <button class="btn" onclick={() => stepDay(-1)} aria-label="Previous day" title="Previous day">‹</button>
+      <button class="btn" class:on={isActive(selection, 1)} onclick={() => preset(1)}>Today</button>
+      <button class="btn" onclick={() => stepDay(1)} disabled={from === to && to >= today} aria-label="Next day" title="Next day">›</button>
+    </span>
     <button class="btn" class:on={isActive(selection, 7)} onclick={() => preset(7)}>7 days</button>
     <button class="btn" class:on={isActive(selection, 30)} onclick={() => preset(30)}>30 days</button>
     <button class="btn" class:on={isActive(selection, null)} onclick={() => preset(null)}>
@@ -412,17 +435,53 @@
       <span class="muted">{metric === 'tokens' ? `${monetary({cost: summary.total, partial: summary.partial, unavailable: summary.unavailable})} API cost estimate` : `${formatTokens(summary.tokens)} tokens`}</span>
     </div>
 
-    {#if chartDays.length > 0}
-      <div class="chart" role="img" aria-label={metric === 'tokens' ? 'Tokens per day' : 'Estimated cost per day'}>
-        {#each chartDays as d (d.day)}
-          <div class="bar-col" title="{d.day}: {metric === 'tokens' ? `${formatTokens(d.tokens)} tokens` : formatUsd(d.cost)}">
-            <div class="bar" style="height: {maxDay ? (d[metric] / maxDay) * 100 : 0}%"></div>
+    <div class="group" aria-label="Chart options">
+      <button class="btn" class:primary={!cumulative} onclick={() => (cumulative = false)}>{chartHourly ? 'Hourly' : 'Daily'}</button>
+      <button class="btn" class:primary={cumulative} onclick={() => (cumulative = true)}>Running total</button>
+      <span class="sep"></span>
+      <button class="btn" class:primary={split === 'none'} onclick={() => (split = 'none')}>Total</button>
+      <button class="btn" class:primary={split === 'model'} onclick={() => (split = 'model')}>By model</button>
+      <button class="btn" class:primary={split === 'project'} onclick={() => (split = 'project')}>By project</button>
+    </div>
+    {#if chart.buckets.length > 0}
+      <div class="readout muted" aria-live="polite">
+        {#if shown}
+          <strong>{shown.label}</strong> · {fmt(shown.total)}
+          {#if chart.series.length > 1}
+            {#each chart.series as name, i (name)}{#if shown.values[i] > 0} · {name} {fmt(shown.values[i])}{/if}{/each}
+          {/if}
+        {:else}
+          {chartHourly ? 'Hover an hour' : 'Hover a day for its total; click it to show that day'}
+        {/if}
+      </div>
+      <div class="chart" role="img" aria-label={`${cumulative ? 'Running total of' : ''} ${metric === 'tokens' ? 'tokens' : 'estimated cost'} per ${chartHourly ? 'hour' : 'day'}`}>
+        {#each chart.buckets as b, i (b.key)}
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+          <div
+            class="bar-col"
+            class:pick={!chartHourly}
+            onmouseenter={() => (hovered = i)}
+            onmouseleave={() => (hovered = null)}
+            onclick={() => !chartHourly && showDay(b.key)}
+          >
+            <div class="stack" style="height: {chartMax ? (b.total / chartMax) * 100 : 0}%">
+              {#each b.values as v, s (s)}
+                {#if v > 0}<div class="seg" style="flex-grow: {v}; background: {color(s)}"></div>{/if}
+              {/each}
+            </div>
           </div>
         {/each}
       </div>
       <div class="chart-axis muted">
-        <span>{chartDays[0].day}</span><span>{chartDays[chartDays.length - 1].day}</span>
+        <span>{chartHourly ? '00:00' : chart.buckets[0].key}</span><span>{chartHourly ? '23:00' : chart.buckets[chart.buckets.length - 1].key}</span>
       </div>
+      {#if chart.series.length > 1}
+        <ul class="legend">
+          {#each chart.series as name, i (name)}
+            <li><span class="swatch" style="background: {color(i)}"></span>{name}</li>
+          {/each}
+        </ul>
+      {/if}
     {/if}
 
     <div class="group">
@@ -616,6 +675,50 @@
     font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
+  /* Categorical slots from the dataviz reference palette, validated against every bundled
+     theme surface. light-dark() follows the color-scheme the theme sets on the root. */
+  .chart,
+  .legend {
+    --series-1: light-dark(#2a78d6, #3987e5);
+    --series-2: light-dark(#eb6834, #d95926);
+    --series-3: light-dark(#1baf7a, #199e70);
+    --series-4: light-dark(#eda100, #c98500);
+    --series-5: light-dark(#e87ba4, #d55181);
+    --series-other: var(--fg-faint);
+  }
+  .daystep {
+    display: inline-flex;
+    gap: 2px;
+  }
+  .sep {
+    width: 8px;
+  }
+  .readout {
+    min-height: 18px;
+    margin-bottom: 4px;
+  }
+  .readout strong {
+    color: var(--fg-bright);
+    font-weight: 600;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    margin: 0 0 16px;
+    padding: 0;
+    color: var(--fg-dim);
+    font-size: 12px;
+    list-style: none;
+  }
+  .swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 6px;
+    border-radius: 2px;
+    vertical-align: -1px;
+  }
   .chart {
     display: flex;
     align-items: flex-end;
@@ -630,14 +733,22 @@
     flex: 1;
     align-items: flex-end;
   }
-  .bar-col:hover .bar {
-    background: var(--accent);
+  .bar-col.pick {
+    cursor: pointer;
   }
-  .bar {
+  .bar-col:hover .stack {
+    opacity: 0.8;
+  }
+  .stack {
+    display: flex;
     width: 100%;
+    flex-direction: column-reverse;
+    gap: 2px;
+    overflow: hidden;
+    border-radius: 4px 4px 0 0;
+  }
+  .seg {
     min-height: 1px;
-    border-radius: 2px 2px 0 0;
-    background: var(--accent);
   }
   .chart-axis {
     display: flex;

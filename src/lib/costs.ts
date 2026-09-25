@@ -204,3 +204,66 @@ export function formatTokens(n: number): string {
 export function monetary(s: { cost: number; partial?: boolean; unavailable?: boolean }): string {
   return s.unavailable ? 'Unavailable' : `${formatUsd(s.cost)}${s.partial ? ' (partial)' : ''}`;
 }
+
+export type Split = 'none' | 'model' | 'project';
+
+export interface ChartData {
+  /** Series names in stack order, largest first; "Other" last when there are more. */
+  series: string[];
+  /** One per day, or per local hour when the range is a single day. */
+  buckets: { key: string; label: string; values: number[]; total: number }[];
+}
+
+/** Most series a chart stacks before folding the rest into "Other". */
+export const MAX_SERIES = 5;
+
+/**
+ * Bars for the spend chart (#71): per day, or per hour for a single day, optionally split
+ * by model or project, optionally as a running total. Daily bars start at the first day
+ * with usage.
+ */
+export function chartData(
+  rows: CostRow[],
+  from: string,
+  to: string,
+  opts: { metric: 'cost' | 'tokens'; split: Split; cumulative: boolean },
+  projectOf: (key: string, path: string | null) => { key: string; name: string },
+): ChartData {
+  const hourly = from === to;
+  const cells = new Map<string, Map<string, number>>();
+  const totals = new Map<string, number>();
+  for (const r of rows) {
+    const at = new Date(`${r.hour}:00:00Z`);
+    const day = localDay(at);
+    if (day < from || day > to) continue;
+    const bucket = hourly ? String(at.getHours()).padStart(2, '0') : day;
+    const name = opts.split === 'model' ? r.model : opts.split === 'project' ? projectOf(r.projectKey, r.projectPath).name : 'Total';
+    const v = opts.metric === 'cost' ? (r.costUsd ?? 0) : r.totalTokens;
+    const cell = cells.get(bucket) ?? new Map<string, number>();
+    cell.set(name, (cell.get(name) ?? 0) + v);
+    cells.set(bucket, cell);
+    totals.set(name, (totals.get(name) ?? 0) + v);
+  }
+
+  const ranked = [...totals].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k]) => k);
+  const fold = ranked.length > MAX_SERIES;
+  const kept = fold ? ranked.slice(0, MAX_SERIES - 1) : ranked;
+  const series = fold ? [...kept, 'Other'] : kept;
+  const slot = (name: string) => (kept.includes(name) ? kept.indexOf(name) : series.length - 1);
+
+  let keys: string[];
+  if (hourly) keys = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'));
+  else {
+    const used = [...cells.keys()].filter((k) => [...cells.get(k)!.values()].some((v) => v > 0)).sort();
+    keys = used.length ? daysBetween(used[0], to) : [];
+  }
+
+  const running = series.map(() => 0);
+  const buckets = keys.map((key) => {
+    const values = series.map(() => 0);
+    for (const [name, v] of cells.get(key) ?? []) if (totals.get(name)! > 0) values[slot(name)] += v;
+    if (opts.cumulative) values.forEach((v, i) => (values[i] = running[i] += v));
+    return { key, label: hourly ? `${from} ${key}:00` : key, values, total: values.reduce((a, b) => a + b, 0) };
+  });
+  return { series, buckets };
+}
