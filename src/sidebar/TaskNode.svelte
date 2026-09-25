@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import InlineRename from '../lib/InlineRename.svelte';
   import { reorderable } from '../lib/dragReorder';
   import type { Task } from '../types';
@@ -41,7 +42,11 @@
     const rows = [...(e.currentTarget as HTMLElement).parentElement!.querySelectorAll<HTMLElement>(`[data-state="${task.state}"]`)];
     const i = rows.indexOf(e.currentTarget as HTMLElement);
     const other = rows[i + (e.key === 'ArrowUp' ? -1 : 1)];
-    if (other) onMove(task.id, Number(other.dataset.id));
+    if (!other) return;
+    onMove(task.id, Number(other.dataset.id));
+    // Moving the row re-inserts it, which drops focus; keep it on the task.
+    const id = task.id;
+    void tick().then(() => document.querySelector<HTMLElement>(`[data-row][data-id="${id}"]`)?.focus());
   }
 
   const repoName = $derived(task.repo?.split(/[\\/]/).filter(Boolean).pop() ?? null);
