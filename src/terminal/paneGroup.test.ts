@@ -120,14 +120,14 @@ describe('debounce', () => {
 describe('paneStyle', () => {
   it('hides inactive panes without removing their layout box', () => {
     // The load-bearing assertion: `display: none` would make FitAddon measure zero.
-    const inactive = paneStyle(false);
+    const inactive = paneStyle(null);
     expect(inactive.visibility).toBe('hidden');
     expect(inactive.display).toBeUndefined();
   });
 
   it('shows and raises the active pane', () => {
-    const active = paneStyle(true);
+    const active = paneStyle(0);
     expect(active.visibility).toBe('visible');
-    expect(Number(active.zIndex)).toBeGreaterThan(Number(paneStyle(false).zIndex));
+    expect(Number(active.zIndex)).toBeGreaterThan(Number(paneStyle(null).zIndex));
   });
 });

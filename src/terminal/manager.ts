@@ -31,6 +31,10 @@ import {
   dimsChanged,
   isUsableDims,
   paneStyle,
+  showIn,
+  slotOf,
+  withoutTab,
+  type Panes,
   panesNeedingResize,
 } from './paneGroup';
 import {
@@ -85,7 +89,11 @@ export interface Tab {
 }
 
 const tabs = new Map<TabKey, Tab>();
+/** The focused tab: the one in the focused pane. */
 let activeKey: TabKey | null = null;
+/** What each pane shows; the right one only while split (#21). */
+let panes: Panes<TabKey> = [null, null];
+let focusedPane: 0 | 1 = 0;
 /** WebGL contexts by tab, least recently activated first. Kept across switches:
  *  recreating one (and its glyph atlas) on every switch made switching lag (#117). */
 const webgl = new Map<TabKey, WebglAddon>();
@@ -197,7 +205,11 @@ export async function openTab(
   if (!wrapper) throw new Error('terminal manager not mounted');
 
   const container = document.createElement('div');
-  Object.assign(container.style, paneStyle(false));
+  Object.assign(container.style, paneStyle(null));
+  // Clicking into the other half of a split focuses that pane.
+  container.addEventListener('focusin', () => {
+    if (activeKey !== key && slotOf(panes, key) !== null) activate(key);
+  });
   wrapper.appendChild(container);
 
   const term = new Terminal({
@@ -493,14 +505,47 @@ function useWebgl(key: TabKey, term: Terminal) {
   }
 }
 
+export function isSplit(): boolean {
+  return panes[1] !== null;
+}
+
+/** Place every tab's container in its pane, or hide it. */
+function layout() {
+  for (const t of tabs.values()) {
+    const slot = slotOf(panes, t.key);
+    Object.assign(t.container.style, paneStyle(slot, isSplit(), slot === focusedPane));
+  }
+}
+
+/** Show `key` beside the focused tab and focus it (#21). */
+export function splitWith(key: TabKey) {
+  if (!tabs.has(key) || !activeKey || key === activeKey) return;
+  panes = [activeKey, key];
+  focusedPane = 1;
+  activate(key);
+}
+
+/** Back to one pane, keeping the focused tab. */
+export function unsplit() {
+  if (!isSplit()) return;
+  panes = [activeKey, null];
+  focusedPane = 0;
+  layout();
+  scheduleFit();
+  notify();
+}
+
+export function focusOtherPane() {
+  const other = panes[focusedPane === 0 ? 1 : 0];
+  if (isSplit() && other) activate(other);
+}
+
 export function activate(key: TabKey) {
   if (!tabs.has(key)) return;
+  ({ panes, focused: focusedPane } = showIn(panes, focusedPane, key));
   activeKey = key;
   tabs.get(key)!.attention = false;
-
-  for (const t of tabs.values()) {
-    Object.assign(t.container.style, paneStyle(t.key === key));
-  }
+  layout();
 
   const tab = tabs.get(key)!;
   useWebgl(key, tab.term);
@@ -529,10 +574,15 @@ export async function closeTab(key: TabKey) {
   tab.container.remove();
   tabs.delete(key);
 
+  const wasShown = slotOf(panes, key) !== null;
+  ({ panes, focused: focusedPane } = withoutTab(panes, focusedPane, key, [...tabs.keys()]));
   if (activeKey === key) {
     activeKey = null;
-    const next = tabs.keys().next();
-    if (!next.done) activate(next.value);
+    const next = panes[focusedPane] ?? tabs.keys().next().value;
+    if (next) activate(next);
+  } else if (wasShown) {
+    layout();
+    scheduleFit();
   }
   notify();
 }
@@ -582,17 +632,25 @@ function measure(tab: Tab): Dims {
 }
 
 /**
- * All panes share the wrapper's geometry, so dimensions are measured once and applied
- * to every tab — correct here only because there are no splits.
+ * Unsplit, every tab shares the wrapper's geometry, so dimensions are measured once and
+ * applied to all of them. Split, each visible pane is measured on its own, and hidden
+ * tabs take the focused pane's size, since that is where they will appear.
  */
 const scheduleFit = debounce(() => {
   const active = activeKey ? tabs.get(activeKey) : null;
   if (!active) return;
 
   const dims = measure(active);
-  // Every pane shares the wrapper's geometry, but each tracks what it has actually been
-  // given -- so a newly opened tab is corrected even when nothing about the window moved.
-  for (const t of panesNeedingResize([...tabs.values()], dims)) {
+  if (isSplit()) {
+    for (const k of panes) {
+      const t = k ? tabs.get(k) : undefined;
+      if (t) applyDims(t, measure(t));
+    }
+  }
+  // Each tab tracks what it has actually been given -- so a newly opened tab is
+  // corrected even when nothing about the window moved.
+  const hidden = [...tabs.values()].filter((t) => !isSplit() || slotOf(panes, t.key) === null);
+  for (const t of panesNeedingResize(hidden, dims)) {
     applyDims(t, dims);
   }
 }, RESIZE_DEBOUNCE_MS);
