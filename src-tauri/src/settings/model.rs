@@ -20,7 +20,9 @@ pub struct Settings {
     pub terminal: TerminalSettings,
     pub claude: ClaudeSettings,
     pub codex: CodexSettings,
-    /// Local tasks, linked to branches and through them to sessions.
+    /// Read only to migrate tasks from 0.3.0, which kept them here. They live in
+    /// `tasks.json` now (`settings::tasks`), so this is never written back.
+    #[serde(skip_serializing)]
     pub tasks: Vec<Task>,
 }
 
@@ -278,9 +280,9 @@ mod tests {
             "unknown state falls back"
         );
         assert!(s.tasks[1].sessions.is_empty());
-        let text = serde_json::to_string(&s).unwrap();
+        let text = serde_json::to_string(&s.tasks).unwrap();
         assert!(text.contains(r#""state":"doing""#));
-        assert_eq!(serde_json::from_str::<Settings>(&text).unwrap(), s);
+        assert_eq!(serde_json::from_str::<Vec<Task>>(&text).unwrap(), s.tasks);
     }
 
     #[test]

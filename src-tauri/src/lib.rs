@@ -14,6 +14,7 @@ use state::AppState;
 
 pub const EVENT_INDEX_UPDATED: &str = "index://updated";
 pub const EVENT_SETTINGS_UPDATED: &str = "settings://updated";
+pub const EVENT_TASKS_UPDATED: &str = "tasks://updated";
 
 pub fn run() {
     // Must precede the first load, or an existing user gets factory defaults.
@@ -24,7 +25,14 @@ pub fn run() {
     if let settings::LoadOutcome::Invalid { error, .. } = &loaded {
         eprintln!("settings could not be parsed, using defaults: {error}");
     }
-    let settings = loaded.settings();
+    let mut settings = loaded.settings();
+    let tasks_path = settings::tasks::tasks_path();
+    if settings::tasks::migrate(&mut settings, &tasks_path) {
+        if let Err(e) = settings::save(&settings) {
+            eprintln!("moved tasks to tasks.json but could not rewrite settings.json: {e}");
+        }
+    }
+    let tasks = settings::tasks::load_or_back_up(&tasks_path);
     let cache_path = settings::config_dir()
         .join("cache")
         .join("session-index.v1.json");
@@ -32,7 +40,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
-        .manage(AppState::new(settings, cache_path))
+        .manage(AppState::new(settings, tasks, cache_path))
         .invoke_handler(tauri::generate_handler![
             commands::pty_spawn,
             commands::agent_command,
@@ -45,6 +53,8 @@ pub fn run() {
             commands::index_refresh,
             commands::settings_get,
             commands::settings_set,
+            commands::tasks_get,
+            commands::tasks_set,
             commands::open_in_explorer,
             commands::git_branches,
             commands::open_url,
@@ -61,6 +71,7 @@ pub fn run() {
         .setup(|app| {
             start_watcher(app.handle());
             start_settings_watcher(app.handle());
+            start_tasks_watcher(app.handle());
             disable_browser_accelerator_keys(app);
             Ok(())
         })
@@ -128,12 +139,7 @@ fn start_settings_watcher(app: &tauri::AppHandle) {
                 if next == state.settings.get() {
                     return;
                 }
-                state.settings.set(next.clone());
-                state.index.invalidate();
-                start_watcher(&handle);
-                if let Some(snap) = state.index.scan_if_changed(&state.settings.get(), false) {
-                    let _ = handle.emit(EVENT_INDEX_UPDATED, snap);
-                }
+                apply_settings(&handle, next.clone());
                 let _ = handle.emit(EVENT_SETTINGS_UPDATED, next);
             }
         }
@@ -146,6 +152,48 @@ fn start_settings_watcher(app: &tauri::AppHandle) {
                 .lock()
                 .expect("lock") = Some(w)
         }
+        Err(e) => eprintln!("could not watch {}: {e}", path.display()),
+    }
+}
+
+/// Store new settings and do only what the change needs (#87, #100): re-arm the
+/// transcript watcher when a watched directory moved, rescan when the sidebar projection
+/// may have. Anything else, a task-free font or view change, is just stored.
+pub(crate) fn apply_settings(app: &tauri::AppHandle, next: settings::Settings) {
+    let state = app.state::<AppState>();
+    let prev = state.settings.get();
+    state.settings.set(next.clone());
+    if settings::dirs_changed(&prev, &next) {
+        start_watcher(app);
+    }
+    if settings::projection_changed(&prev, &next) {
+        // The next scan must report even if its hash happens to match.
+        state.index.invalidate();
+        if let Some(snap) = state.index.scan_if_changed(&next, false) {
+            let _ = app.emit(EVENT_INDEX_UPDATED, snap);
+        }
+    }
+}
+
+/// `tasks.json` edited outside the app. Our own `tasks_set` writes wake this too; they
+/// match the store and stop at the comparison.
+fn start_tasks_watcher(app: &tauri::AppHandle) {
+    let path = settings::tasks::tasks_path();
+    let handle = app.clone();
+    let watched = path.clone();
+    let watcher = settings::watcher::watch(&path, move || {
+        let state = handle.state::<AppState>();
+        match settings::tasks::load_from(&watched) {
+            Err(e) => eprintln!("tasks.json is not valid JSON, keeping current tasks: {e}"),
+            Ok(next) if next != state.tasks.get() => {
+                state.tasks.set(next.clone());
+                let _ = handle.emit(EVENT_TASKS_UPDATED, next);
+            }
+            Ok(_) => {}
+        }
+    });
+    match watcher {
+        Ok(w) => *app.state::<AppState>().tasks_watcher.lock().expect("lock") = Some(w),
         Err(e) => eprintln!("could not watch {}: {e}", path.display()),
     }
 }
