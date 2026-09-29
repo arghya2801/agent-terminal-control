@@ -6,14 +6,31 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-29
+
+ATC now runs on a Go/Wails host instead of Rust/Tauri. The interface is the same Svelte and xterm.js app, and settings, tasks, session names and pinned projects carry over unchanged. The installer upgrades an existing 0.3.x install in place.
+
 ### Changed
-- The desktop host is now Go/Wails instead of Rust/Tauri. Backend builds are 7–60x faster and need about a fifth of the memory; settings, tasks and names keep their on-disk formats. Open tabs are not carried over from the Rust build, so reopen them once.
-- Zoom scales the terminal font instead of the rendered canvas, so terminals stay sharp and correctly sized at every zoom level.
+- The desktop host is rewritten in Go on Wails. Building ATC is 7–60x faster and needs about a fifth of the memory, which makes fixes much quicker to ship. Details and measurements are in [docs/WAILS-MIGRATION.md](docs/WAILS-MIGRATION.md).
+- Zoom scales the terminal font instead of the rendered page, so terminals stay sharp and correctly sized at every zoom level.
+- Developer tools open with `Ctrl+Shift+F12` in development builds.
 
 ### Fixed
 - An invalid `settings.json` is no longer overwritten with defaults when tasks move to `tasks.json`.
-- An idle terminal no longer wakes the app 125 times a second.
 - Subagent transcripts being written no longer trigger constant sidebar rescans, and a live session's transcript is no longer re-read from the top on every write.
+- Idle terminals no longer wake the app 125 times a second.
+- Very colourful or fast-redrawing output (TUIs, progress bars) is delivered in evenly sized pieces instead of occasional oversized bursts.
+- A terminal whose shell exited while its child processes were still writing no longer leaks a background reader.
+
+### Known differences from 0.3.x
+- Open tabs are not restored the first time 0.4.0 starts, because the new host keeps its own WebView profile. Reopen them once; later restarts restore them as before.
+- The window appears when the interface has loaded, a few seconds after launch, rather than showing an empty frame first.
+- ATC uses about 50 MB more memory than 0.3.x, and the executable is larger (12 MB instead of 5 MB).
+
+### For contributors
+- Building needs Go 1.26 and the Wails CLI 2.16 instead of Rust: `npm run desktop:dev`, `npm run desktop:build`, and `npm run desktop:package` for the installers. See the README.
+- Every Rust test was ported to Go, and the Rust implementation's output over the fixture corpus is kept as a contract the Go tests must match.
+- The release workflow checks that the tag matches the version in both `package.json` and `wails.json`.
 
 ## [0.3.1] - 2026-09-25
 
@@ -130,7 +147,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 First release.
 
-[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/arghya2801/agent-terminal-control/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.1.3...v0.2.0

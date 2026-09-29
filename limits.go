@@ -142,7 +142,7 @@ func (c *limitsClient) read(s core.Object) (any, error) {
 		}
 	}()
 	write := func(v any) error { return json.NewEncoder(stdin).Encode(v) }
-	if e = write(core.Object{"id": 1, "method": "initialize", "params": core.Object{"clientInfo": core.Object{"name": "atc", "title": "ATC", "version": "0.3.1"}}}); e != nil {
+	if e = write(core.Object{"id": 1, "method": "initialize", "params": core.Object{"clientInfo": core.Object{"name": "atc", "title": "ATC", "version": appVersion}}}); e != nil {
 		return nil, e
 	}
 	if _, e = limitResponse(ctx, messages, 1); e != nil {

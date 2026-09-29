@@ -52,6 +52,14 @@ func TestInvalidSettingsAreNeverOverwrittenByTaskMigration(t *testing.T) {
 		t.Fatalf("invalid settings were rewritten: %s", b)
 	}
 }
+func TestAppVersionComesFromWailsJSON(t *testing.T) {
+	b, _ := os.ReadFile("package.json")
+	var pkg struct{ Version string }
+	json.Unmarshal(b, &pkg)
+	if appVersion == "" || appVersion != pkg.Version {
+		t.Fatalf("wails.json says %q, package.json says %q", appVersion, pkg.Version)
+	}
+}
 func TestLinksAndCommands(t *testing.T) {
 	for _, url := range []string{"https://github.com/a/b?c=1&d=2", "HTTP://x.y", "https://www.google.com/maps/@51.5,-0.12,14z"} {
 		if !validURL(url) {

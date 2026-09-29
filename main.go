@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"log"
 	"path/filepath"
 
@@ -15,6 +16,18 @@ import (
 
 //go:embed all:dist
 var assets embed.FS
+
+//go:embed wails.json
+var wailsJSON []byte
+
+// appVersion comes from wails.json, which also stamps the EXE, so a release bumps it once.
+var appVersion = func() string {
+	var config struct {
+		Info struct{ ProductVersion string } `json:"info"`
+	}
+	_ = json.Unmarshal(wailsJSON, &config)
+	return config.Info.ProductVersion
+}()
 
 func main() {
 	app := NewApp(core.ConfigDir())
