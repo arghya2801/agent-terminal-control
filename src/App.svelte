@@ -15,7 +15,7 @@
     isPermissionGranted,
     requestPermission,
     sendNotification,
-  } from '@tauri-apps/plugin-notification';
+  } from './lib/desktop';
   import {
     adjustZoom,
     appState,

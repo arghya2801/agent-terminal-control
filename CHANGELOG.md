@@ -6,6 +6,15 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Changed
+- The desktop host is now Go/Wails instead of Rust/Tauri. Backend builds are 7–60x faster and need about a fifth of the memory; settings, tasks and names keep their on-disk formats. Open tabs are not carried over from the Rust build, so reopen them once.
+- Zoom scales the terminal font instead of the rendered canvas, so terminals stay sharp and correctly sized at every zoom level.
+
+### Fixed
+- An invalid `settings.json` is no longer overwritten with defaults when tasks move to `tasks.json`.
+- An idle terminal no longer wakes the app 125 times a second.
+- Subagent transcripts being written no longer trigger constant sidebar rescans, and a live session's transcript is no longer re-read from the top on every write.
+
 ## [0.3.1] - 2026-09-25
 
 ### Added

@@ -1,47 +1,30 @@
-// End-to-end tests (#97): drive the real app through tauri-driver and WebView2's
-// WebDriver, so no synthetic desktop input and no stolen focus.
-//
-//   npm run test:e2e              build a debug app with the frontend embedded, then test
-//   E2E_SKIP_BUILD=1 npm run test:e2e
-//
-// Needs `cargo install tauri-driver --locked`. The msedgedriver matching the installed
-// WebView2 is downloaded on first use.
+// Drive the desktop app through the WebView2 WebDriver protocol.
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { preparePlayground, root } from '../scripts/playground.mjs';
 
-const target = join(root, 'src-tauri', 'target-e2e');
-const app = join(target, 'debug', 'atc.exe');
-
+const app = process.env.E2E_APP || join(root, 'build/e2e/atc.exe');
 if (!process.env.E2E_SKIP_BUILD) {
-  // Own target dir: a running `npm run play` holds target/debug/atc.exe open.
-  execFileSync(process.execPath, [join(root, 'node_modules/@tauri-apps/cli/tauri.js'), 'build', '--debug', '--no-bundle'], {
-    cwd: root, stdio: 'inherit', env: { ...process.env, CARGO_TARGET_DIR: target },
-  });
+  execFileSync(process.execPath, [join(root, 'scripts/build.mjs')], { cwd: root, stdio: 'inherit' });
+  execFileSync(process.execPath, [join(root, 'scripts/build-e2e.mjs')], { cwd: root, stdio: 'inherit' });
 }
-
-/** The WebView2 runtime version; its WebDriver must match it exactly. */
-function webview2Version() {
+function webviewVersion() {
   const clients = String.raw`SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients`;
-  // The WebView2 runtime, then Edge itself, which some machines serve WebView2 from.
-  const keys = ['{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', '{56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}'];
-  for (const [hive, key] of keys.flatMap((k) => ['HKLM', 'HKCU'].map((h) => [h, `${clients}\\${k}`]))) {
-    try {
-      const out = execFileSync('reg', ['query', `${hive}\\${key}`, '/v', 'pv'], { encoding: 'utf8' });
-      const m = out.match(/pv\s+REG_SZ\s+([\d.]+)/);
-      if (m) return m[1];
-    } catch {
-      // Not installed in this hive.
+  for (const key of ['{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', '{56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}']) {
+    for (const hive of ['HKLM', 'HKCU']) {
+      try {
+        const text = execFileSync('reg', ['query', `${hive}\\${clients}\\${key}`, '/v', 'pv'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+        const match = text.match(/pv\s+REG_SZ\s+([\d.]+)/);
+        if (match) return match[1];
+      } catch {}
     }
   }
   throw new Error('WebView2 runtime not found');
 }
-
 async function edgeDriver() {
-  const version = webview2Version();
-  const dir = join(target, 'msedgedriver', version);
+  const version = webviewVersion();
+  const dir = join(root, 'build', 'webdriver', version);
   const exe = join(dir, 'msedgedriver.exe');
   if (existsSync(exe)) return exe;
   mkdirSync(dir, { recursive: true });
@@ -49,33 +32,34 @@ async function edgeDriver() {
   if (!res.ok) throw new Error(`msedgedriver ${version}: HTTP ${res.status}`);
   const zip = join(dir, 'driver.zip');
   writeFileSync(zip, Buffer.from(await res.arrayBuffer()));
-  execFileSync('powershell', ['-NoProfile', '-Command', `Expand-Archive -Force '${zip}' '${dir}'`]);
+  const quote = (s) => `'${s.replaceAll("'", "''")}'`;
+  execFileSync('powershell', ['-NoProfile', '-Command', `Expand-Archive -Force -LiteralPath ${quote(zip)} -DestinationPath ${quote(dir)}`], { windowsHide: true });
   return exe;
 }
-
-const config = join(tmpdir(), `atc-e2e-${process.pid}`);
-rmSync(config, { recursive: true, force: true });
-// Agents are swapped for a cmdlet that just echoes, so a test never starts a real one.
-const env = preparePlayground(config, {
-  claude: { command: 'Write-Output' },
-  codex: { command: 'Write-Output' },
-  ui: { restoreTabs: false, notifications: false },
-});
-
-const driver = spawn('tauri-driver', ['--native-driver', await edgeDriver()], {
-  stdio: 'inherit', env: { ...process.env, ...env },
-});
-driver.on('error', (e) => {
-  console.error(`could not start tauri-driver (cargo install tauri-driver --locked): ${e.message}`);
-  process.exit(1);
-});
-await new Promise((r) => setTimeout(r, 1500));
-
-const tests = spawn(process.execPath, ['--test', join(root, 'e2e', 'app.test.mjs')], {
-  stdio: 'inherit', env: { ...process.env, E2E_APP: app },
-});
-tests.on('exit', (code) => {
+mkdirSync(join(root, 'playground'), { recursive: true });
+// Screenshots and runtime memory samples land here; generated, ignored by Git.
+mkdirSync(join(root, 'benchmarks'), { recursive: true });
+const config = mkdtempSync(join(root, 'playground', 'e2e-'));
+const env = preparePlayground(config, { claude: { command: 'Write-Output' }, codex: { command: 'Write-Output' }, ui: { restoreTabs: false, notifications: false } });
+const driver = spawn(await edgeDriver(), ['--port=4444'], { stdio: 'inherit', windowsHide: true, env: { ...process.env, ...env, ATC_SHELL_NO_PROFILE: '1' } });
+const appChild = spawn(app, [], { stdio: 'inherit', windowsHide: false, env: { ...process.env, ...env, ATC_SHELL_NO_PROFILE: '1', WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=9224' } });
+let tests;
+const cleanup = async () => {
+  if (appChild.exitCode === null) await Promise.race([new Promise(r => appChild.once("exit", r)), new Promise(r => setTimeout(r, 2000))]);
+  try { execFileSync('taskkill.exe', ['/PID', String(appChild.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }); } catch {}
   driver.kill();
-  rmSync(config, { recursive: true, force: true });
-  process.exit(code ?? 1);
-});
+  // Only the exact throwaway fixture directory created by this invocation is removed.
+  if (resolve(config).startsWith(resolve(root, 'playground') + '\\')) { try { rmSync(config, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch { console.warn('Test profile retained:', config); } }
+};
+try {
+  for (let n = 0; n < 100; n++) {
+    try { if ((await fetch('http://127.0.0.1:4444/status')).ok) break; } catch {}
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  for (let n = 0; n < 150; n++) {
+    try { if ((await fetch('http://127.0.0.1:9224/json/version')).ok) break; } catch {}
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  tests = spawn(process.execPath, ['--test', ...(process.env.E2E_TEST ? ['--test-name-pattern', process.env.E2E_TEST] : []), join(root, 'e2e', 'app.test.mjs')], { stdio: 'inherit', windowsHide: true, env: { ...process.env, E2E_APP: app, E2E_CONFIG: config, E2E_HOST: 'wails', E2E_DEBUGGER: '127.0.0.1:9224', E2E_PID: String(appChild.pid) } });
+  process.exitCode = await new Promise((resolve, reject) => { tests.on('exit', (code) => resolve(code ?? 1)); tests.on('error', reject); });
+} finally { await cleanup(); }

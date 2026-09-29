@@ -1,12 +1,13 @@
-/** Typed wrappers over the Rust command surface. One place for every command name. */
+/** Typed wrappers over the Go command surface. One place for every command name. */
 
-import { Channel, invoke } from '@tauri-apps/api/core';
+import { Channel, invoke } from './desktop';
 import type { AgentProvider, CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot, Task } from '../types';
 
 export { Channel };
 
 export function ptySpawn(opts: SpawnOpts, onEvent: Channel<PtyEvent>): Promise<string> {
-  return invoke<string>('pty_spawn', { opts, onEvent });
+  onEvent.attach();
+  return invoke<string>('pty_spawn', { opts, channel: onEvent.name }).catch((error) => { onEvent.dispose(); throw error; });
 }
 
 export function ptyWrite(id: string, data: string): Promise<void> {
@@ -17,7 +18,7 @@ export function ptyResize(id: string, cols: number, rows: number): Promise<void>
   return invoke('pty_resize', { id, cols, rows });
 }
 
-/** Tells Rust the webview has parsed `bytes`, releasing backpressure. */
+/** Tells Go the webview has parsed `bytes`, releasing backpressure. */
 export function ptyAck(id: string, bytes: number): Promise<void> {
   return invoke('pty_ack', { id, bytes });
 }
@@ -73,7 +74,7 @@ export function gitBranches(path: string): Promise<string[]> {
   return invoke('git_branches', { path });
 }
 
-/** Devtools, re-added under our own chord after WebView2's F12 was disabled. */
+/** Compatibility command; Wails handles Ctrl+Shift+F12 natively in debug builds. */
 export function openDevtools(): Promise<void> {
   return invoke('open_devtools');
 }

@@ -22,18 +22,19 @@ jobs:
           node-version: 24
           cache: npm
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-go@v6
         with:
-          components: rustfmt, clippy
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
+          go-version-file: go.mod
+          cache: true
 
       - run: npm ci
-      - run: npm run test
+      # main.go embeds dist/, so the frontend must exist before Go compiles.
+      - run: npm run build
+      - run: npm run test:ts
+      - run: go test -race ./...
       - run: npm run lint
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+      - run: npm run desktop:build
 
-# End-to-end tests (npm run test:e2e, #97) run locally only for now: on windows-latest the
-# app's WebView2 never starts under msedgedriver ("DevToolsActivePort file doesn't exist"),
-# with or without the standalone WebView2 runtime installed.
+# End-to-end tests (npm run test:e2e, #97) drive native WebView2 windows with real input,
+# which needs an interactive Windows desktop, so they run locally only.

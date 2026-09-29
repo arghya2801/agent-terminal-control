@@ -1,0 +1,247 @@
+{
+  "costs": [
+    {
+      "cacheRead": 400,
+      "cacheWrite": 0,
+      "costUsd": null,
+      "hour": "2026-09-20T10",
+      "input": 600,
+      "model": "gpt-test",
+      "output": 100,
+      "projectKey": "d:\\coding\\game_tracker_app",
+      "projectPath": "D:\\Coding\\game_tracker_app",
+      "provider": "codex",
+      "reasoning": 40,
+      "sessionId": "desktop",
+      "totalTokens": 1100,
+      "unpriced": true
+    }
+  ],
+  "snapshot": {
+    "projects": [
+      {
+        "exists": true,
+        "key": "d:\\coding\\game_tracker_app",
+        "lastActiveMs": 1790192898438,
+        "name": "game_tracker_app",
+        "path": "D:\\Coding\\game_tracker_app",
+        "pinned": false,
+        "sessions": [
+          {
+            "activity": null,
+            "activitySequence": 0,
+            "createdAtMs": 1789898400000,
+            "cwd": "D:\\Coding\\game_tracker_app",
+            "file": "D:\\Coding\\claude-code-pseudo-gui\\fixtures/codex\\sessions\\desktop.jsonl",
+            "gitBranch": null,
+            "id": "desktop",
+            "label": "Desktop question",
+            "labelSource": "firstMessage",
+            "mtimeMs": 1790192898438,
+            "provider": "codex",
+            "size": 835
+          },
+          {
+            "activity": null,
+            "activitySequence": 0,
+            "createdAtMs": 1789898400000,
+            "cwd": "D:\\Coding\\game_tracker_app",
+            "file": "D:\\Coding\\claude-code-pseudo-gui\\fixtures/codex\\sessions\\editor.jsonl",
+            "gitBranch": null,
+            "id": "editor",
+            "label": "Editor question",
+            "labelSource": "firstMessage",
+            "mtimeMs": 1790192898438,
+            "provider": "codex",
+            "size": 288
+          },
+          {
+            "activity": "working",
+            "activitySequence": 1,
+            "createdAtMs": 1789898400000,
+            "cwd": "D:\\Coding\\game_tracker_app",
+            "file": "D:\\Coding\\claude-code-pseudo-gui\\fixtures/codex\\sessions\\2026\\09\\20\\rollout-current.jsonl",
+            "gitBranch": "feat/codex",
+            "id": "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa",
+            "label": "Renamed Codex session",
+            "labelSource": "agentName",
+            "mtimeMs": 1790192898436,
+            "provider": "codex",
+            "size": 775
+          },
+          {
+            "activity": null,
+            "activitySequence": 0,
+            "createdAtMs": null,
+            "cwd": "D:\\Coding\\game_tracker_app",
+            "file": "D:\\Coding\\claude-code-pseudo-gui\\fixtures/claude-projects\\D--Coding-game-tracker-app\\cccccccc-3333-4333-8333-cccccccccccc.jsonl",
+            "gitBranch": "main",
+            "id": "cccccccc-3333-4333-8333-cccccccccccc",
+            "label": "fix the scoreboard sort order please",
+            "labelSource": "firstMessage",
+            "mtimeMs": 1788555026610,
+            "provider": "claude",
+            "size": 18108
+          },
+          {
+            "activity": null,
+            "activitySequence": 0,
+            "createdAtMs": null,
+            "cwd": "D:\\Coding\\game_tracker_app",
+            "file": "D:\\Coding\\claude-code-pseudo-gui\\fixtures/claude-projects\\D--Coding-game-tracker-app\\bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb.jsonl",
+            "gitBranch": "feat/stats",
+            "id": "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb",
+            "label": "quiet-cuddling-lampson",
+            "labelSource": "slug",
+            "mtimeMs": 1788555026608,
+            "provider": "claude",
+            "size": 366
+          },
+          {
+            "activity": null,
+            "activitySequence": 0,
+            "createdAtMs": null,
+            "cwd": "D:\\Coding\\game_tracker_app",
+            "file": "D:\\Coding\\claude-code-pseudo-gui\\fixtures/claude-projects\\D--Coding-game-tracker-app\\aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa.jsonl",
+            "gitBranch": "main",
+            "id": "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa",
+            "label": "Game tracker professional grade",
+            "labelSource": "aiTitle",
+            "mtimeMs": 1788555026607,
+            "provider": "claude",
+            "size": 441
+          }
+        ]
+      },
+      {
+        "exists": true,
+        "key": "d:\\coding\\portfolio2",
+        "lastActiveMs": 1790192898438,
+        "name": "portfolio2",
+        "path": "D:\\Coding\\portfolio2",
+        "pinned": false,
+        "sessions": [
+          {
+            "activity": null,
+            "activitySequence": 0,
+            "createdAtMs": 1751328000000,
+            "cwd": "D:\\Coding\\portfolio2",
+            "file": "D:\\Coding\\claude-code-pseudo-gui\\fixtures/codex\\sessions\\legacy.jsonl",
+            "gitBranch": null,
+            "id": "legacy-id",
+            "label": "Legacy conversation",
+            "labelSource": "firstMessage",
+            "mtimeMs": 1790192898438,
+            "provider": "codex",
+            "size": 232
+          },
+          {
+            "activity": null,
+            "activitySequence": 0,
+            "createdAtMs": null,
+            "cwd": "D:\\Coding\\portfolio2",
+            "file": "D:\\Coding\\claude-code-pseudo-gui\\fixtures/claude-projects\\D--Coding-portfolio2\\1a1a1a1a-8888-4888-8888-1a1a1a1a1a1a.jsonl",
+            "gitBranch": "main",
+            "id": "1a1a1a1a-8888-4888-8888-1a1a1a1a1a1a",
+            "label": "Run Astro portfolio with pnpm",
+            "labelSource": "aiTitle",
+            "mtimeMs": 1788555026615,
+            "provider": "claude",
+            "size": 7100
+          },
+          {
+            "activity": null,
+            "activitySequence": 0,
+            "createdAtMs": null,
+            "cwd": "D:\\Coding\\portfolio2",
+            "file": "D:\\Coding\\claude-code-pseudo-gui\\fixtures/claude-projects\\D--Coding-portfolio2\\eeeeeeee-5555-4555-8555-eeeeeeeeeeee.jsonl",
+            "gitBranch": "main",
+            "id": "eeeeeeee-5555-4555-8555-eeeeeeeeeeee",
+            "label": "Portfolio refresh",
+            "labelSource": "aiTitle",
+            "mtimeMs": 1788555026614,
+            "provider": "claude",
+            "size": 2493
+          },
+          {
+            "activity": null,
+            "activitySequence": 0,
+            "createdAtMs": null,
+            "cwd": "D:\\Coding\\portfolio2",
+            "file": "D:\\Coding\\claude-code-pseudo-gui\\fixtures/claude-projects\\D--Coding-portfolio2\\dddddddd-4444-4444-8444-dddddddddddd.jsonl",
+            "gitBranch": "main",
+            "id": "dddddddd-4444-4444-8444-dddddddddddd",
+            "label": "dddddddd",
+            "labelSource": "uuid",
+            "mtimeMs": 1788555026612,
+            "provider": "claude",
+            "size": 300
+          }
+        ]
+      },
+      {
+        "exists": false,
+        "key": "d:\\coding\\deleted_project_xyz",
+        "lastActiveMs": 1788555026616,
+        "name": "deleted_project_xyz",
+        "path": "D:\\Coding\\deleted_project_xyz",
+        "pinned": false,
+        "sessions": [
+          {
+            "activity": null,
+            "activitySequence": 0,
+            "createdAtMs": null,
+            "cwd": "D:\\Coding\\deleted_project_xyz",
+            "file": "D:\\Coding\\claude-code-pseudo-gui\\fixtures/claude-projects\\D--Coding-deleted-project\\ffffffff-6666-4666-8666-ffffffffffff.jsonl",
+            "gitBranch": "main",
+            "id": "ffffffff-6666-4666-8666-ffffffffffff",
+            "label": "Long gone experiment",
+            "labelSource": "aiTitle",
+            "mtimeMs": 1788555026616,
+            "provider": "claude",
+            "size": 387
+          }
+        ]
+      },
+      {
+        "exists": false,
+        "key": "\u0000unknown",
+        "lastActiveMs": 1790192898438,
+        "name": "Unknown",
+        "path": null,
+        "pinned": false,
+        "sessions": [
+          {
+            "activity": null,
+            "activitySequence": 0,
+            "createdAtMs": 1789898400000,
+            "cwd": null,
+            "file": "D:\\Coding\\claude-code-pseudo-gui\\fixtures/codex\\sessions\\missing-cwd.jsonl",
+            "gitBranch": null,
+            "id": "missing",
+            "label": "missing",
+            "labelSource": "uuid",
+            "mtimeMs": 1790192898438,
+            "provider": "codex",
+            "size": 122
+          },
+          {
+            "activity": null,
+            "activitySequence": 0,
+            "createdAtMs": null,
+            "cwd": null,
+            "file": "D:\\Coding\\claude-code-pseudo-gui\\fixtures/claude-projects\\D--Coding-headless\\99999999-7777-4777-8777-999999999999.jsonl",
+            "gitBranch": null,
+            "id": "99999999-7777-4777-8777-999999999999",
+            "label": "99999999",
+            "labelSource": "uuid",
+            "mtimeMs": 1788555026620,
+            "provider": "claude",
+            "size": 687780
+          }
+        ]
+      }
+    ],
+    "sessionCount": 13
+  }
+}

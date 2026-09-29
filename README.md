@@ -65,13 +65,19 @@ not remove them; delete that folder by hand if you want them gone.
 ### From source
 
 ```
-npm install
-npm run tauri dev      # development
-npm run tauri build    # produces exe, msi and nsis installer
+go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+npm ci
+npm run desktop:dev      # Go reload + Vite HMR
+npm run desktop:build    # portable executable
+npm run desktop:package  # executable + MSI + NSIS installers
 ```
 
-Build output lands in `src-tauri/target/release/`, with the installers under
-`bundle/msi/` and `bundle/nsis/`.
+Requires Go 1.26 or later, Node 24, and WebView2. Packaging also requires NSIS and
+WiX Toolset 3.x. Output lands in `build/bin/`.
+
+The desktop host was ported from Rust/Tauri to Go/Wails, keeping the Svelte UI.
+See [the migration and performance report](docs/WAILS-MIGRATION.md) for measured
+build times, build resource use, runtime memory, validation, and migration details.
 
 ## Capabilities
 
@@ -161,7 +167,7 @@ untouched.
 | `Ctrl+,` | Settings |
 | `Ctrl+Shift+?` | Shortcut list |
 | `Ctrl+Shift+D` | PTY statistics overlay |
-| `Ctrl+Shift+I` | Developer tools (debug builds only) |
+| `Ctrl+Shift+F12` | Developer tools (debug builds only) |
 
 In the find bar: `Enter` next match, `Shift+Enter` previous, `Escape` close. Escape also
 closes the Usage, Settings and Shortcuts pages. In a Codex tab, `Shift+Enter` and `Ctrl+J`
@@ -273,8 +279,8 @@ unpriced, and totals containing them are marked partial.
 
 ## How it works
 
-Rust owns the PTY. Output is read on one thread, coalesced on an 8ms tick by another,
-and sent to the webview in chunks sized against Tauri's IPC threshold. The frontend
+Go owns the PTY. A reader goroutine feeds a bounded queue; a second goroutine
+coalesces output on an 8ms tick and sends it through Wails events. The frontend
 acknowledges bytes once xterm has parsed them, which applies backpressure to the shell
 rather than dropping output.
 
@@ -286,8 +292,10 @@ lossy. More in [ARCHITECTURE.md](ARCHITECTURE.md).
 ## Development
 
 ```
-npm run test     # cargo test + vitest
-npm run lint     # cargo fmt, clippy, svelte-check
+npm run build    # frontend assets, required before Go tests on a fresh checkout
+npm test         # Vitest + Go tests, including native ConPTY integration
+npm run lint     # go vet + svelte-check
+go test -race ./... # requires a C compiler compatible with Go
 npm run play     # run against fixtures, leaving real data alone
 npm run test:e2e # build the app and drive it through WebDriver
 ```
@@ -295,18 +303,18 @@ npm run test:e2e # build the app and drive it through WebDriver
 CI runs `test` and `lint` on every pull request. Releases are built by
 `.github/workflows/release.yml` from a `v*` tag, which leaves a draft release to publish.
 
-`npm run test:e2e` needs `cargo install tauri-driver --locked` once; it downloads the
-msedgedriver matching your WebView2 by itself, builds into `src-tauri/target-e2e`, and runs
-against a throwaway copy of the fixtures with the agent commands replaced by an echo. It
-runs locally only for now: WebView2 does not start under msedgedriver on GitHub's Windows
-runners.
+`npm run test:e2e` downloads the msedgedriver matching WebView2, builds a test-only
+executable in `build/e2e`, and drives the real desktop application. It uses throwaway
+fixtures and echo commands for the agents. It requires an interactive Windows desktop.
+The test loader enables a loopback debugging port in a local copy of its dependency;
+production binaries and the Go module cache are untouched.
 
 `scripts/` contains helpers for regenerating the icon and fixtures, capturing the window,
 and sending real keystrokes to the running app.
 
 ### Isolated playground
 
-For testing with your existing logins, histories and theme, use `npm run tauri dev`.
+For testing with your existing logins, histories and theme, use `npm run desktop:dev`.
 The playground is for synthetic discovery and UI tests: fixture IDs are not resumable CLI
 conversations, and its CLI homes start signed out. Playground tabs use separate saved
 state from normal development tabs.
