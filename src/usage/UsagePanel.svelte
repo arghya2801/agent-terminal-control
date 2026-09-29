@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { sessionKey, providerName } from '../lib/agents';
   import Page from '../lib/Page.svelte';
-  import { save } from '@tauri-apps/plugin-dialog';
+  import { save } from '../lib/desktop';
   import { claudeUsage, codexUsage, codexUsageStop, usageCosts, writeTextFile } from '../lib/ipc';
   import { appState } from '../lib/stores.svelte';
   import { chartData, sessionStats, formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv, type Split } from '../lib/costs';
@@ -232,8 +232,11 @@
   }
 
   let exportError = $state<string | null>(null);
+  let exporting = $state(false);
 
   async function exportCsv() {
+    if (exporting) return;
+    exporting = true;
     try {
       const path = await save({
         defaultPath: `atc-spend-${from}-to-${to}.csv`,
@@ -244,6 +247,8 @@
       exportError = null;
     } catch (e) {
       exportError = String(e);
+    } finally {
+      exporting = false;
     }
   }
 
@@ -448,7 +453,7 @@
     <button class="btn" onclick={loadCosts} disabled={costLoading}>
       {costLoading ? 'Scanning…' : 'Rescan'}
     </button>
-    <button class="btn" onclick={exportCsv} disabled={rows.length === 0}>Export CSV</button>
+    <button class="btn" onclick={exportCsv} disabled={exporting || rows.length === 0}>Export CSV</button>
   </div>
   {#if exportError}<p class="err">{exportError}</p>{/if}
 

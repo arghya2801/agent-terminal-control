@@ -6,8 +6,7 @@
  */
 
 import { migrateSessionNames } from './agents';
-import { listen } from '@tauri-apps/api/event';
-import { getCurrentWebview } from '@tauri-apps/api/webview';
+import { listen, frontendReady, setZoom } from './desktop';
 import {
   gitBranches,
   indexRefresh,
@@ -26,7 +25,7 @@ import {
   type Collapsed,
 } from './expansion';
 import { normalizeZoom, stepZoom } from './zoom';
-import { applyTerminalSettings, applyTheme, refit } from '../terminal/manager';
+import { applyTerminalSettings, applyTheme, setTerminalZoom } from '../terminal/manager';
 import { applyPalette, type Palette } from './theme';
 import { findTheme, loadThemes } from './themes';
 import type { IndexSnapshot, Settings, Task } from '../types';
@@ -99,24 +98,20 @@ function applySettings(s: Settings) {
   s.projects.sessionNames = migrateSessionNames(s.projects.sessionNames);
   applyTerminalSettings(s.terminal);
   applyThemeByName(s.ui.theme);
-  void applyZoom(s.ui.zoom);
+  applyZoom(s.ui.zoom);
 }
 
-async function applyZoom(value: number) {
+function applyZoom(value: number) {
   const z = normalizeZoom(value);
-  try {
-    await getCurrentWebview().setZoom(z);
-  } catch (e) {
-    appState.error = `zoom failed: ${e}`;
-    return;
-  }
+  setZoom(z);
   // Zoom changes the cell size, so the terminal must be re-measured or the shell keeps
   // wrapping at the old column count.
-  refit();
+  setTerminalZoom(z);
 }
 
 export async function initStores() {
   try {
+    await frontendReady();
     // Before settings are applied: the theme named there has to be findable.
     themeState.themes = await loadThemes();
     appState.settings = await settingsGet();
@@ -130,19 +125,19 @@ export async function initStores() {
     appState.loading = false;
   }
 
-  // Rust emits only when the rendered projection actually changed, so this is not a
+  // Go emits only when the rendered projection actually changed, so this is not a
   // firehose even while a session is being written to.
-  await listen<IndexSnapshot>(EVENT_INDEX_UPDATED, (e) => applySnapshot(e.payload));
+  await listen<IndexSnapshot>(EVENT_INDEX_UPDATED, applySnapshot);
 
-  // settings.json edited outside the app. Rust only emits when it genuinely differs
+  // settings.json edited outside the app. Go only emits when it genuinely differs
   // from what is loaded, so our own saves do not bounce back.
-  await listen<Settings>(EVENT_SETTINGS_UPDATED, (e) => {
-    appState.settings = e.payload;
-    applySettings(e.payload);
+  await listen<Settings>(EVENT_SETTINGS_UPDATED, (s) => {
+    appState.settings = s;
+    applySettings(s);
   });
 
   // tasks.json edited outside the app.
-  await listen<Task[]>(EVENT_TASKS_UPDATED, (e) => (appState.tasks = e.payload));
+  await listen<Task[]>(EVENT_TASKS_UPDATED, (t) => (appState.tasks = t));
 }
 
 /** Local branches of `repo`, fetched fresh each time (it is cheap), so a branch made in
@@ -256,7 +251,7 @@ export async function adjustZoom(direction: 1 | -1 | 0) {
     ...appState.settings,
     ui: { ...appState.settings.ui, zoom: next },
   });
-  await applyZoom(next);
+  applyZoom(next);
 }
 
 export function sidebarOpen(): boolean {

@@ -47,7 +47,7 @@ import {
   searchDecorations,
 } from './theme';
 
-/** Ack once this many unacked bytes accumulate. Matches the Rust backpressure window. */
+/** Ack once this many unacked bytes accumulate. Matches the Go backpressure window. */
 const ACK_BATCH = 64 * 1024;
 const RESIZE_DEBOUNCE_MS = 50;
 
@@ -84,7 +84,7 @@ export interface Tab {
   /** Dimensions applied to this terminal and its PTY. Per tab, not global: a new tab
    *  must be sized on arrival even though pane geometry is unchanged. */
   dims: Dims | null;
-  /** Bytes written but not yet acked to Rust, which releases backpressure. */
+  /** Bytes written but not yet acked to Go, which releases backpressure. */
   unacked: number;
 }
 
@@ -107,6 +107,11 @@ let termOptions = {
   fontSize: defaultFontSize,
   scrollback: defaultScrollback,
 };
+/** App zoom. The UI zooms with CSS `zoom`, which xterm cannot measure through (rows come
+ *  out wrong and the prompt drops below a blank band), so the terminal area cancels it
+ *  and scales its font instead. */
+let zoom = 1;
+const zoomedFontSize = () => termOptions.fontSize * zoom;
 /** Latest palette, so a tab opened after a theme change is born with the right colours. */
 let termTheme: ITheme = defaultTheme;
 let termPalette: Palette = defaultPalette;
@@ -181,6 +186,7 @@ export function onChord(fn: ChordListener): () => void {
 
 export function mount(el: HTMLElement) {
   wrapper = el;
+  el.style.zoom = String(1 / zoom);
   const ro = new ResizeObserver(scheduleFit);
   ro.observe(el);
   // Re-fit after fonts load, or the first measurement uses fallback metrics.
@@ -214,7 +220,7 @@ export async function openTab(
 
   const term = new Terminal({
     fontFamily: termOptions.fontFamily,
-    fontSize: termOptions.fontSize,
+    fontSize: zoomedFontSize(),
     theme: termTheme,
     scrollback: termOptions.scrollback,
     cursorBlink: true,
@@ -343,7 +349,7 @@ export async function openTab(
     if (msg.t === 'o') {
       // The callback fires once xterm has parsed the payload: the honest ack point.
       term.write(msg.d, () => {
-        tab.unacked += msg.d.length;
+        tab.unacked += new TextEncoder().encode(msg.d).byteLength;
         if (tab.unacked >= ACK_BATCH && tab.ptyId) {
           const n = tab.unacked;
           tab.unacked = 0;
@@ -411,9 +417,16 @@ export function applyTerminalSettings(s: TerminalSettings) {
   };
   for (const t of tabs.values()) {
     t.term.options.fontFamily = termOptions.fontFamily;
-    t.term.options.fontSize = termOptions.fontSize;
+    t.term.options.fontSize = zoomedFontSize();
     t.term.options.scrollback = termOptions.scrollback;
   }
+  refit();
+}
+
+export function setTerminalZoom(z: number) {
+  zoom = z;
+  if (wrapper) wrapper.style.zoom = String(1 / z);
+  for (const t of tabs.values()) t.term.options.fontSize = zoomedFontSize();
   refit();
 }
 

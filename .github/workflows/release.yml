@@ -1,11 +1,8 @@
 # Builds the Windows artefacts for a version tag and attaches them to a draft release.
 #
-# Releases were built by hand, which also meant a running atc.exe locking target/release.
-# Push a tag (`git tag v0.3.1 && git push origin v0.3.1`), then edit and publish the draft
-# this leaves behind.
-#
-# The binaries are unsigned, exactly as the hand-built ones were: no certificate is
-# available, so SmartScreen warns on first run either way.
+# Push a tag (`git tag v0.4.0 && git push origin v0.4.0`), then edit and publish the draft
+# this leaves behind. The binaries are unsigned: no certificate is available, so
+# SmartScreen warns on first run.
 name: Release
 
 on:
@@ -28,27 +25,42 @@ jobs:
           node-version: 24
           cache: npm
 
-      # Matches rust-version in src-tauri/Cargo.toml.
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-go@v6
         with:
-          workspaces: src-tauri
+          go-version-file: go.mod
+          cache: true
+
+      # Installer names come from package.json and EXE metadata from wails.json; a tag
+      # that disagrees with either would ship mislabelled artefacts.
+      - name: Check versions match the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(node -p "require('./package.json').version")
+          exe=$(node -p "require('./wails.json').info.productVersion")
+          [ "$tag" = "$pkg" ] && [ "$tag" = "$exe" ] || { echo "tag $tag, package.json $pkg, wails.json $exe"; exit 1; }
 
       - run: npm ci
+      # main.go embeds dist/, so the frontend must exist before Go compiles.
+      - run: npm run build
 
       # A release that fails its own tests is not worth publishing.
-      - run: npm run test
+      - run: npm test
+      - run: npm run lint
 
-      - run: npm run tauri build
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+      - run: choco install nsis wixtoolset -y --no-progress
+      - run: npm run desktop:package
 
+      # atc.exe is the portable build users expect alongside the installers.
       - uses: actions/upload-artifact@v7
         with:
           name: atc-windows
           path: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*-setup.exe
-            src-tauri/target/release/atc.exe
+            build/bin/atc.exe
+            build/bin/*-setup.exe
+            build/bin/*.msi
           if-no-files-found: error
 
       - name: Draft release
@@ -57,6 +69,6 @@ jobs:
         with:
           draft: true
           files: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*-setup.exe
-            src-tauri/target/release/atc.exe
+            build/bin/atc.exe
+            build/bin/*-setup.exe
+            build/bin/*.msi

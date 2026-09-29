@@ -59,7 +59,7 @@ const BINDINGS: Binding[] = [
   { key: 't', ctrl: true, shift: true, action: 'newTab' },
   { key: 'w', ctrl: true, shift: true, action: 'closeTab' },
   { key: 'd', ctrl: true, shift: true, action: 'toggleDebug' },
-  { key: 'i', ctrl: true, shift: true, action: 'toggleDevtools' },
+  { key: 'f12', ctrl: true, shift: true, action: 'toggleDevtools' },
   // Ctrl is what separates these from the Tab the shell needs for completion, and from
   // the Shift+Tab Claude Code uses to cycle permission modes.
   { key: 'tab', ctrl: true, shift: false, action: 'nextTab' },

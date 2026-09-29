@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
-// Tauri drives the dev server; it needs a fixed port and must not silently
+// Wails drives the dev server; it needs a fixed port and must not silently
 // fall back to another one, or the webview points at nothing.
 export default defineConfig({
   plugins: [svelte()],
@@ -15,15 +15,13 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
     watch: {
-      // src-tauri is rebuilt by cargo, not vite; watching it causes reload storms.
-      ignored: ['**/src-tauri/**', '**/playground/**', '**/fixtures/**'],
+      // Generated trees and test data change constantly; watching them causes reload storms.
+      ignored: ['**/playground/**', '**/fixtures/**', '**/build/**', '**/benchmarks/**', '**/wails-dev-work/**', '**/.wails-dev/**', '**/.go-cache/**'],
     },
   },
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.ts'],
-    // TS units land with terminal/paneGroup in phase 1; until then an empty run is
-    // a pass, not a failure. Rust carries the phase-0 test weight.
-    passWithNoTests: true,
+    passWithNoTests: false,
   },
 });

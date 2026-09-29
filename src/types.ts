@@ -1,6 +1,6 @@
 export type AgentProvider = 'claude' | 'codex';
 
-/** Mirrors the Rust types in src-tauri/src/pty. Keep the two in sync by hand. */
+/** Mirrors the Go types in src-tauri/src/pty. Keep the two in sync by hand. */
 
 /** Output and lifecycle share one ordered stream — see PtyEvent in session.rs. */
 export type PtyEvent =
