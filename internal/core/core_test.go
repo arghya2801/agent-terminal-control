@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -189,6 +190,16 @@ func TestRustFixtureContract(t *testing.T) {
 			}
 		}
 		walk(o)
+		// Recency order follows file mtimes, which a fresh checkout sets arbitrarily; the
+		// contract is the content. Ordering has its own tests in project_test.go.
+		byKey := func(list []any, key func(Object) string) {
+			sort.Slice(list, func(i, j int) bool { return key(Obj(list[i])) < key(Obj(list[j])) })
+		}
+		projects := Arr(Obj(Obj(o)["snapshot"])["projects"])
+		byKey(projects, func(p Object) string { return Str(p["key"]) })
+		for _, p := range projects {
+			byKey(Arr(Obj(p)["sessions"]), func(s Object) string { return Str(s["provider"]) + ":" + Str(s["id"]) })
+		}
 		return o
 	}
 	a, w := normalize(actual), normalize(expected)
