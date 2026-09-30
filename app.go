@@ -370,7 +370,7 @@ func (a *App) Invoke(command string, args core.Object) (any, error) {
 		if provider != "claude" && provider != "codex" {
 			return nil, fmt.Errorf("unknown provider: %s", provider)
 		}
-		return core.AgentCommand(s, provider, str("sessionId"), pty.JobBlocksBreakaway()), nil
+		return core.AgentCommand(s, provider, str("sessionId")), nil
 	case "pty_spawn":
 		var opts pty.Options
 		b, _ := json.Marshal(args["opts"])
