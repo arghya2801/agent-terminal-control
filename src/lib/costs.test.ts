@@ -8,8 +8,10 @@ import {
   hourToLocalDay,
   localDay,
   owningProject,
+  rollingAverage,
   summarize,
   toCsv,
+  weekHeatmap,
 } from './costs';
 import type { CostRow } from '../types';
 
@@ -249,6 +251,41 @@ describe('chartData', () => {
     const c = chartData([row({ costUsd: 4 })], d1, d1, opts, name);
     expect(c.buckets).toHaveLength(24);
     expect(c.buckets.reduce((a, b) => a + b.total, 0)).toBe(4);
+  });
+
+  it('splits tokens by kind in a fixed order and keeps each kind on its own colour', () => {
+    const c = chartData([row({ input: 5, output: 7, cacheWrite: 0, cacheRead: 100 })], d1, d1, { ...opts, metric: 'tokens', split: 'type' }, name);
+    expect(c.series).toEqual(['Input', 'Output', 'Cache read']);
+    // Cache write is empty, so Cache read keeps slot 3 rather than moving up to 2.
+    expect(c.slots).toEqual([0, 1, 3]);
+    expect(c.buckets.reduce((a, b) => a + b.total, 0)).toBe(112);
+  });
+
+  it('splits by provider, Claude before Codex whatever the amounts', () => {
+    const rows = [row({ costUsd: 1 }), row({ provider: 'codex', costUsd: 9 })];
+    const c = chartData(rows, d1, d1, { ...opts, split: 'provider' }, name);
+    expect(c.series).toEqual(['Claude', 'Codex']);
+    expect(c.slots).toEqual([0, 1]);
+  });
+});
+
+describe('rollingAverage', () => {
+  it('averages the trailing span, over fewer values at the start', () => {
+    expect(rollingAverage([2, 4, 6, 8], 3)).toEqual([2, 3, 4, 6]);
+  });
+});
+
+describe('weekHeatmap', () => {
+  it('buckets by local weekday, Monday first, and local hour', () => {
+    const r = row({ costUsd: 3 });
+    const at = new Date(`${r.hour}:00:00Z`);
+    const day = hourToLocalDay(r.hour);
+    const grid = weekHeatmap([r], day, day, 'cost');
+    expect(grid).toHaveLength(7);
+    expect(grid[(at.getDay() + 6) % 7][at.getHours()]).toBe(3);
+    expect(grid.flat().reduce((a, b) => a + b, 0)).toBe(3);
+    const next = hourToLocalDay('2026-09-11T12');
+    expect(weekHeatmap([r], next, next, 'cost').flat().every((v) => v === 0)).toBe(true);
   });
 });
 

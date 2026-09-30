@@ -133,8 +133,9 @@ build times, build resource use, runtime memory, validation, and migration detai
 - Claude and Codex plan limits, refreshed while the page is open
 - Local tokens and API-price estimates by provider, project, model and session, over any
   date range, with CSV export
-- A spend chart that splits by model or project, shows a running total, and goes hourly
-  for a single day; step day by day or click a bar
+- A spend chart that splits by model, project, provider or token type, shows a running
+  total or a 7-day average, and goes hourly for a single day; step day by day or click a bar
+- A weekday-by-hour heatmap of when the usage happened
 - The focused tab's session on its own: cost, tokens by model and cache share
 
 **Configuration**

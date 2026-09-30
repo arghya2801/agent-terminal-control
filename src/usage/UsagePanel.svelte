@@ -5,7 +5,7 @@
   import { save } from '../lib/desktop';
   import { claudeUsage, codexUsage, codexUsageStop, usageCosts, writeTextFile } from '../lib/ipc';
   import { appState } from '../lib/stores.svelte';
-  import { chartData, sessionStats, formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv, type Split } from '../lib/costs';
+  import { chartData, rollingAverage, sessionStats, formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv, weekHeatmap, type Split } from '../lib/costs';
   import {
     clampDays,
     isActive,
@@ -261,19 +261,32 @@
   const metricTotal = $derived(metric === 'tokens' ? summary.tokens : summary.total);
   let split = $state<Split>('none');
   let cumulative = $state(false);
+  let view = $state<'bars' | 'week'>('bars');
+  let showAverage = $state(false);
+  // Token kinds have no cost of their own, and one provider needs no provider split.
+  const activeSplit = $derived<Split>((split === 'type' && metric === 'cost') || (split === 'provider' && provider !== 'all') ? 'none' : split);
   const chart = $derived(
-    chartData(filteredRows, from <= to ? from : to, from <= to ? to : from, { metric, split, cumulative }, projectOf),
+    chartData(filteredRows, from <= to ? from : to, from <= to ? to : from, { metric, split: activeSplit, cumulative }, projectOf),
   );
   const chartMax = $derived(Math.max(0, ...chart.buckets.map((b) => b.total)));
   const chartHourly = $derived(from === to);
+  const canAverage = $derived(!chartHourly && !cumulative && chart.buckets.length >= 7);
+  const average = $derived(showAverage && canAverage ? rollingAverage(chart.buckets.map((b) => b.total)) : null);
   /** Bucket under the pointer, for the read-out above the chart. */
   let hovered = $state<number | null>(null);
   const shown = $derived(hovered === null ? null : chart.buckets[hovered]);
-  /** One series keeps the accent; a split takes the categorical slots in rank order. */
-  // ponytail: slots follow rank, so a range change can recolour a model; pin colours per
-  // name if people compare screenshots across ranges.
+  /** One series keeps the accent; a split takes the categorical slots chartData assigns. */
+  // ponytail: model and project slots follow rank, so a range change can recolour a model;
+  // pin colours per name if people compare screenshots across ranges.
   const color = (i: number) =>
-    chart.series.length === 1 ? 'var(--accent)' : chart.series[i] === 'Other' ? 'var(--series-other)' : `var(--series-${i + 1})`;
+    chart.series.length === 1 ? 'var(--accent)' : chart.series[i] === 'Other' ? 'var(--series-other)' : `var(--series-${chart.slots[i] + 1})`;
+
+  const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const week = $derived(weekHeatmap(filteredRows, from <= to ? from : to, from <= to ? to : from, metric));
+  const weekMax = $derived(Math.max(0, ...week.flat()));
+  /** Four steps of the accent over the surface: one hue, light to dark. */
+  const level = (v: number) => (v > 0 && weekMax ? Math.ceil((v / weekMax) * 4) : 0);
+  let hoveredCell = $state<{ day: number; hour: number } | null>(null);
   /** The focused tab's session, all time (#80). */
   const session = $derived(current ? sessionStats(rows, current) : null);
   const localTime = (hour: string) =>
@@ -472,25 +485,75 @@
     </div>
 
     <div class="group" aria-label="Chart options">
-      <button class="btn" class:primary={!cumulative} onclick={() => (cumulative = false)}>{chartHourly ? 'Hourly' : 'Daily'}</button>
-      <button class="btn" class:primary={cumulative} onclick={() => (cumulative = true)}>Running total</button>
-      <span class="sep"></span>
-      <button class="btn" class:primary={split === 'none'} onclick={() => (split = 'none')}>Total</button>
-      <button class="btn" class:primary={split === 'model'} onclick={() => (split = 'model')}>By model</button>
-      <button class="btn" class:primary={split === 'project'} onclick={() => (split = 'project')}>By project</button>
+      <button class="btn" class:primary={view === 'bars'} onclick={() => (view = 'bars')}>Over time</button>
+      <button class="btn" class:primary={view === 'week'} onclick={() => (view = 'week')}>By weekday and hour</button>
+      {#if view === 'bars'}
+        <span class="sep"></span>
+        <button class="btn" class:primary={!cumulative} onclick={() => (cumulative = false)}>{chartHourly ? 'Hourly' : 'Daily'}</button>
+        <button class="btn" class:primary={cumulative} onclick={() => (cumulative = true)}>Running total</button>
+        {#if canAverage}
+          <button class="btn" class:primary={showAverage} aria-pressed={showAverage} onclick={() => (showAverage = !showAverage)}>7-day average</button>
+        {/if}
+      {/if}
     </div>
-    {#if chart.buckets.length > 0}
+    {#if view === 'bars'}
+      <div class="group" aria-label="Split the chart">
+        <button class="btn" class:primary={activeSplit === 'none'} onclick={() => (split = 'none')}>Total</button>
+        <button class="btn" class:primary={activeSplit === 'model'} onclick={() => (split = 'model')}>By model</button>
+        <button class="btn" class:primary={activeSplit === 'project'} onclick={() => (split = 'project')}>By project</button>
+        {#if provider === 'all'}
+          <button class="btn" class:primary={activeSplit === 'provider'} onclick={() => (split = 'provider')}>By provider</button>
+        {/if}
+        {#if metric === 'tokens'}
+          <button class="btn" class:primary={activeSplit === 'type'} onclick={() => (split = 'type')}>By token type</button>
+        {/if}
+      </div>
+    {/if}
+    {#if view === 'week'}
+      <div class="readout muted" aria-live="polite">
+        {#if hoveredCell}
+          <strong>{WEEKDAYS[hoveredCell.day]} {String(hoveredCell.hour).padStart(2, '0')}:00</strong> · {fmt(week[hoveredCell.day][hoveredCell.hour])}
+        {:else}
+          Total per weekday and hour across the range, in local time. Hover a cell.
+        {/if}
+      </div>
+      <div class="heat" role="img" aria-label={`${metric === 'tokens' ? 'Tokens' : 'Estimated cost'} by weekday and hour`}>
+        <span></span>
+        {#each { length: 24 } as _, h (h)}<span class="heat-hour muted">{h % 6 === 0 ? String(h).padStart(2, '0') : ''}</span>{/each}
+        {#each week as hours, d (d)}
+          <span class="heat-day muted">{WEEKDAYS[d]}</span>
+          {#each hours as v, h (h)}
+            <span
+              class="cell l{level(v)}"
+              class:hot={hoveredCell?.day === d && hoveredCell?.hour === h}
+              role="presentation"
+              onmouseenter={() => (hoveredCell = { day: d, hour: h })}
+              onmouseleave={() => (hoveredCell = null)}
+            ></span>
+          {/each}
+        {/each}
+      </div>
+      <div class="heat-scale muted">
+        Less {#each [0, 1, 2, 3, 4] as l (l)}<span class="cell l{l}"></span>{/each} More
+      </div>
+    {:else if chart.buckets.length > 0}
       <div class="readout muted" aria-live="polite">
         {#if shown}
           <strong>{shown.label}</strong> · {fmt(shown.total)}
           {#if chart.series.length > 1}
             {#each chart.series as name, i (name)}{#if shown.values[i] > 0} · {name} {fmt(shown.values[i])}{/if}{/each}
           {/if}
+          {#if average && hovered !== null} · 7-day average {fmt(average[hovered])}{/if}
         {:else}
           {chartHourly ? 'Hover an hour' : 'Hover a day for its total; click it to show that day'}
         {/if}
       </div>
       <div class="chart" role="img" aria-label={`${cumulative ? 'Running total of' : ''} ${metric === 'tokens' ? 'tokens' : 'estimated cost'} per ${chartHourly ? 'hour' : 'day'}`}>
+        {#if average && chartMax}
+          <svg class="avg" viewBox="0 0 {average.length} {chartMax}" preserveAspectRatio="none" aria-hidden="true">
+            <polyline points={average.map((v, i) => `${i + 0.5},${chartMax - v}`).join(' ')} />
+          </svg>
+        {/if}
         {#each chart.buckets as b, i (b.key)}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
           <div
@@ -511,11 +574,14 @@
       <div class="chart-axis muted">
         <span>{chartHourly ? '00:00' : chart.buckets[0].key}</span><span>{chartHourly ? '23:00' : chart.buckets[chart.buckets.length - 1].key}</span>
       </div>
-      {#if chart.series.length > 1}
+      {#if chart.series.length > 1 || average}
         <ul class="legend">
-          {#each chart.series as name, i (name)}
-            <li><span class="swatch" style="background: {color(i)}"></span>{name}</li>
-          {/each}
+          {#if chart.series.length > 1}
+            {#each chart.series as name, i (name)}
+              <li><span class="swatch" style="background: {color(i)}"></span>{name}</li>
+            {/each}
+          {/if}
+          {#if average}<li><span class="swatch line"></span>7-day average</li>{/if}
         </ul>
       {/if}
     {/if}
@@ -761,12 +827,76 @@
     vertical-align: -1px;
   }
   .chart {
+    position: relative;
     display: flex;
     align-items: flex-end;
     gap: 2px;
     height: 110px;
     padding-bottom: 2px;
     border-bottom: 1px solid var(--border);
+  }
+  .avg {
+    position: absolute;
+    inset: 0 0 2px;
+    width: 100%;
+    height: calc(100% - 2px);
+    overflow: visible;
+    pointer-events: none;
+  }
+  .avg polyline {
+    fill: none;
+    stroke: var(--fg-bright);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+  .swatch.line {
+    height: 2px;
+    vertical-align: 3px;
+    background: var(--fg-bright);
+  }
+  .heat {
+    display: grid;
+    grid-template-columns: 32px repeat(24, 1fr);
+    gap: 2px;
+    align-items: center;
+    max-width: 640px;
+  }
+  .heat-hour,
+  .heat-day {
+    font-size: 10px;
+  }
+  .cell {
+    display: inline-block;
+    aspect-ratio: 1;
+    min-width: 10px;
+    border-radius: 2px;
+    background: var(--bg-surface);
+  }
+  .cell.l1 {
+    background: color-mix(in srgb, var(--accent) 30%, var(--bg-surface));
+  }
+  .cell.l2 {
+    background: color-mix(in srgb, var(--accent) 55%, var(--bg-surface));
+  }
+  .cell.l3 {
+    background: color-mix(in srgb, var(--accent) 80%, var(--bg-surface));
+  }
+  .cell.l4 {
+    background: var(--accent);
+  }
+  .cell.hot {
+    outline: 2px solid var(--fg-bright);
+  }
+  .heat-scale {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin: 8px 0 16px;
+    font-size: 11px;
+  }
+  .heat-scale .cell {
+    width: 10px;
   }
   .bar-col {
     display: flex;

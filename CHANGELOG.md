@@ -6,6 +6,10 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Added
+- The Usage chart splits by provider or by token type (input, output, cache write, cache read), and can draw a 7-day average over the daily bars. ([#27](https://github.com/arghya2801/agent-terminal-control/issues/27))
+- A weekday-by-hour heatmap on the Usage page shows when in the week the usage happens. ([#27](https://github.com/arghya2801/agent-terminal-control/issues/27))
+
 ### Changed
 - The installers ship Windows Terminal's ConPTY (`conpty.dll` and `OpenConsole.exe`), and ATC uses it when present. The ConPTY built into Windows swallowed colour queries, so Codex's prompt bar ignored the theme. ([#116](https://github.com/arghya2801/agent-terminal-control/issues/116), [#81](https://github.com/arghya2801/agent-terminal-control/issues/81))
 
