@@ -26,6 +26,7 @@
     onOpenSession,
     onNewShell,
     onNewAgent,
+    onNewChat,
   }: {
     activeKey: TabKey | null;
     activeSessionId: string | null;
@@ -38,19 +39,24 @@
     onOpenSession: (p: Project, s: SessionMeta) => void;
     onNewShell: (p: Project) => void;
     onNewAgent: (p: Project, provider: AgentProvider) => void;
+    onNewChat: () => void;
   } = $props();
 
   let refreshing = $state(false);
 
   const view = $derived(sidebarView());
   const openTasks = $derived(tasks().filter((t) => t.state !== 'done').length);
+  const scratchSessions = $derived(
+    appState.index.projects.filter((p) => p.kind).reduce((n, p) => n + p.sessions.length, 0),
+  );
 
   let query = $state('');
   let taskList = $state<HTMLElement>();
   let sessionList = $state<HTMLElement>();
+  let scratchList = $state<HTMLElement>();
   /** Row last focused in each list, where Tab back into it lands. */
   let lastRow: HTMLElement | null = null;
-  const visibleList = () => (view === 'tasks' ? taskList : sessionList);
+  const visibleList = () => (view === 'tasks' ? taskList : view === 'scratch' ? scratchList : sessionList);
   const search = () => document.getElementById('sidebar-search')?.focus();
   const leave = { up: search, escape: focusActiveTerminal };
 
@@ -89,7 +95,7 @@
         onclick={() => void setSidebarView('sessions')}
         title="Projects and sessions (Ctrl+Shift+K)"
       >
-        Sessions <span class="n">{appState.index.sessionCount}</span>
+        Sessions <span class="n">{appState.index.sessionCount - scratchSessions}</span>
       </button>
       <button
         role="tab"
@@ -99,10 +105,20 @@
       >
         Tasks <span class="n">{openTasks}</span>
       </button>
+      <button
+        role="tab"
+        aria-selected={view === 'scratch'}
+        onclick={() => void setSidebarView('scratch')}
+        title="Chats and scratch sessions (Ctrl+Shift+K)"
+      >
+        Scratch <span class="n">{scratchSessions}</span>
+      </button>
     </div>
     <div class="actions">
       {#if view === 'tasks'}
         <button class="icon" onclick={() => createTask({ repo: currentRepo })} title="New task" aria-label="New task">+</button>
+      {:else if view === 'scratch'}
+        <button class="icon" onclick={onNewChat} title="New chat with Claude or Codex" aria-label="New chat">+</button>
       {:else}
       <button
         class="icon"
@@ -129,9 +145,9 @@
     <input
       id="sidebar-search"
       type="search"
-      placeholder={view === 'tasks' ? 'Filter tasks' : 'Filter projects and sessions'}
+      placeholder={view === 'tasks' ? 'Filter tasks' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
       title="Filter by project, path, session name or branch (Ctrl+Shift+P)"
-      aria-label={view === 'tasks' ? 'Filter tasks' : 'Filter projects and sessions'}
+      aria-label={view === 'tasks' ? 'Filter tasks' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
       spellcheck="false"
       autocomplete="off"
       bind:value={query}
@@ -160,7 +176,7 @@
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
   <div
     class="list"
-    hidden={view === 'tasks'}
+    hidden={view !== 'sessions'}
     tabindex="0"
     role="group"
     aria-label="Projects and sessions"
@@ -181,12 +197,39 @@
       {onNewAgent}
     />
   </div>
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+  <div
+    class="list"
+    hidden={view !== 'scratch'}
+    tabindex="0"
+    role="group"
+    aria-label="Chats and scratch sessions"
+    bind:this={scratchList}
+    onfocus={(e) => scratchList && enterList(e, scratchList, lastRow)}
+    onfocusin={(e) => (lastRow = (e.target as HTMLElement).closest('[data-row]'))}
+    onkeydown={(e) => scratchList && listKeys(e, scratchList, leave)}
+  >
+    <SessionList
+      scratch
+      {query}
+      {activeKey}
+      {activeSessionId}
+      {openProjectKeys}
+      {sessionMarks}
+      {onOpenProject}
+      {onOpenSession}
+      {onNewShell}
+      {onNewAgent}
+    />
+  </div>
 
   <footer>
     {#if view === 'tasks'}
       {tasks().length} tasks · {openTasks} open
+    {:else if view === 'scratch'}
+      {scratchSessions} sessions
     {:else}
-      {appState.index.projects.length} projects · {appState.index.sessionCount} sessions
+      {appState.index.projects.filter((p) => !p.kind).length} projects · {appState.index.sessionCount - scratchSessions} sessions
     {/if}
   </footer>
 </div>

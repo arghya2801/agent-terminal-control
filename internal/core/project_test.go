@@ -111,8 +111,12 @@ func TestTheScratchDirectoryIsShownAsScratch(t *testing.T) {
 	os.MkdirAll(scratch, 0700)
 	s := Defaults()
 	Obj(s["claude"])["scratchDir"] = scratch
-	if n := projectsOf(BuildProjects([]Object{sess("a", scratch, 1)}, s))[0]["name"]; n != "Scratch" {
-		t.Fatal(n)
+	if p := projectsOf(BuildProjects([]Object{sess("a", scratch, 1)}, s))[0]; p["name"] != "Scratch" || p["kind"] != "scratch" {
+		t.Fatal(p)
+	}
+	chats := Chats(ConfigDir())
+	if p := projectsOf(BuildProjects([]Object{sess("b", chats, 1)}, s))[0]; p["name"] != "Chats" || p["kind"] != "chats" {
+		t.Fatal(p)
 	}
 	// An explicit rename still wins over the built-in name.
 	Obj(s["projects"])["names"] = Object{scratch: "Questions"}

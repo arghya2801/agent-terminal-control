@@ -184,6 +184,9 @@ func Scratch(s Object, config string) string {
 	}
 	return filepath.Join(config, "scratch")
 }
+
+// Chats is where ATC starts plain chat sessions (#135).
+func Chats(config string) string { return filepath.Join(config, "chats") }
 func Quote(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
 func Argument(s string) string {
 	if s == "" {

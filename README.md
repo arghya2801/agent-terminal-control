@@ -122,7 +122,8 @@ build times, build resource use, runtime memory, validation, and migration detai
   including a session reached with `/resume` inside a tab
 - Closing a tab asks only when something is still running in it, and names it
 - Windows notification when a background session finishes while ATC is not focused
-- Ask either agent outside any project, in a shared scratch directory
+- Ask either agent outside any project, in a shared scratch directory, or start a plain
+  chat with either. Both are listed in the sidebar's Scratch view, not among the projects
 - Search across scrollback with match counts
 - Themes for the whole app: ATC Dark, Nord, Rosé Pine, Catppuccin Mocha and Latte, plus
   your own
@@ -163,7 +164,7 @@ untouched.
 | `Ctrl+Shift+A` | Choose an agent in the shared scratch directory |
 | `Ctrl+Shift+B` | Show or hide the sidebar |
 | `Ctrl+Shift+P` | Filter projects and sessions |
-| `Ctrl+Shift+K` | Switch the sidebar between sessions and tasks |
+| `Ctrl+Shift+K` | Switch the sidebar between sessions, tasks and scratch |
 | `Ctrl+Shift+E` | Show or hide the task panel |
 | `Ctrl+Shift+F` | Find in terminal |
 | `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | Zoom in / out / reset |

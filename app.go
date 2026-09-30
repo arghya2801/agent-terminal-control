@@ -415,6 +415,9 @@ func (a *App) Invoke(command string, args core.Object) (any, error) {
 		return nil, nil
 	case "scratch_dir":
 		dir := core.Scratch(s, a.config)
+		if str("kind") == "chats" {
+			dir = core.Chats(a.config)
+		}
 		return dir, os.MkdirAll(dir, 0700)
 	case "list_themes":
 		out := []any{}
