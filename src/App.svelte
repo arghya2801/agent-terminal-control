@@ -311,6 +311,14 @@
     });
   }
 
+  /** A Claude session in the chats directory, for questions that belong to no project (#135). */
+  function newChat() {
+    return guard(async () => {
+      const cwd = await scratchDir('chats');
+      await newAgentIn({ key: projectKey(cwd), path: cwd, name: 'Chat', pinned: false, exists: true, lastActiveMs: 0, sessions: [] }, 'claude');
+    });
+  }
+
   function openSession(p: Project, s: SessionMeta) {
     const cwd = s.cwd ?? p.path;
     if (!cwd) return;
@@ -454,7 +462,7 @@
         break;
       case 'toggleTaskView':
         if (!sidebarOpen()) void toggleSidebar();
-        void setSidebarView(sidebarView() === 'tasks' ? 'sessions' : 'tasks');
+        void setSidebarView(({ sessions: 'tasks', tasks: 'scratch', scratch: 'sessions' } as const)[sidebarView()]);
         break;
       case 'askAgent':
         picker = { project: null };
@@ -614,6 +622,7 @@
         onOpenSession={openSession}
         onNewShell={newShellIn}
         onNewAgent={newAgentIn}
+        onNewChat={newChat}
       />
     {/if}
   </aside>

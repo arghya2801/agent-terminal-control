@@ -198,11 +198,14 @@ export const taskUi = $state({
   renaming: null as number | null,
 });
 
-export function sidebarView(): 'sessions' | 'tasks' {
-  return appState.settings?.ui.sidebarView === 'tasks' ? 'tasks' : 'sessions';
+export type SidebarView = 'sessions' | 'tasks' | 'scratch';
+
+export function sidebarView(): SidebarView {
+  const v = appState.settings?.ui.sidebarView;
+  return v === 'tasks' || v === 'scratch' ? v : 'sessions';
 }
 
-export function setSidebarView(view: 'sessions' | 'tasks') {
+export function setSidebarView(view: SidebarView) {
   if (!appState.settings || sidebarView() === view) return;
   // In place, so only what reads the view updates; a new settings object re-derived the
   // whole sidebar on every switch (#117).

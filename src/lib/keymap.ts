@@ -114,7 +114,7 @@ const DESCRIPTIONS: Record<Action, { group: Group; label: string }> = {
   askAgent: { group: 'Launch', label: 'Ask agent (scratch directory)' },
   toggleSidebar: { group: 'View', label: 'Show or hide the sidebar' },
   focusSearch: { group: 'View', label: 'Search projects and sessions' },
-  toggleTaskView: { group: 'View', label: 'Switch the sidebar between sessions and tasks' },
+  toggleTaskView: { group: 'View', label: 'Switch the sidebar between sessions, tasks and scratch' },
   toggleTaskPanel: { group: 'View', label: 'Show or hide the task panel' },
   find: { group: 'View', label: 'Find in the terminal' },
   zoomIn: { group: 'View', label: 'Zoom in' },

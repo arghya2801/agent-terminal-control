@@ -79,9 +79,9 @@ export function openDevtools(): Promise<void> {
   return invoke('open_devtools');
 }
 
-/** The directory "Ask Claude" runs in, created if missing. */
-export function scratchDir(): Promise<string> {
-  return invoke<string>('scratch_dir');
+/** The directory "Ask Claude" runs in, or with `chats` the one new chats run in; created if missing. */
+export function scratchDir(kind?: 'chats'): Promise<string> {
+  return invoke<string>('scratch_dir', { kind });
 }
 
 /** Writes text to a path the user picked in the save dialog. */

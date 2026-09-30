@@ -22,6 +22,7 @@
   /** The sidebar's Sessions view: projects, their sessions, and both context menus. */
   let {
     query,
+    scratch = false,
     activeKey,
     activeSessionId,
     openProjectKeys,
@@ -32,6 +33,8 @@
     onNewAgent,
   }: {
     query: string;
+    /** The Scratch view: only the scratch and chats directories, as fixed sections (#135). */
+    scratch?: boolean;
     activeKey: TabKey | null;
     activeSessionId: string | null;
     openProjectKeys: Set<string>;
@@ -175,48 +178,65 @@
   const searching = $derived(query.trim() !== '');
   // Grouped before filtering, so a query matching a parent's name keeps the sessions it
   // has adopted.
+  const mine = $derived(appState.index.projects.filter((p) => !!p.kind === scratch));
   const grouped = $derived(
-    appState.settings?.ui.groupSubfolders
-      ? groupSubfolders(appState.index.projects)
-      : appState.index.projects,
+    !scratch && appState.settings?.ui.groupSubfolders ? groupSubfolders(mine) : mine,
   );
   const shown = $derived(filterProjects(grouped, query));
+  const SECTIONS = [
+    { kind: 'chats', empty: 'No chats yet. Press + to start one.' },
+    { kind: 'scratch', empty: 'Nothing here yet. Ctrl+Shift+A asks an agent in the scratch directory.' },
+  ] as const;
   // While searching every match is shown: a hit hidden behind "show more" is no hit.
   const limit = $derived(searching ? Infinity : (appState.settings?.ui.sessionsPerProject ?? 15));
 </script>
+
+{#snippet node(project: Project, forceOpen: boolean)}
+  <ProjectNode
+    {project}
+    {limit}
+    {forceOpen}
+    groupByBranch={appState.settings?.ui.groupByBranch ?? false}
+    {sessionMarks}
+    {sessionTasks}
+    {activeKey}
+    {activeSessionId}
+    open={openProjectKeys.has(project.key)}
+    {renaming}
+    onRenameProject={(p, name) => p.path && void saveName('names', p.path, name)}
+    onRenameSession={(s, name) => void saveName('sessionNames', sessionKey(s), name)}
+    onRenameCancel={() => (renaming = null)}
+    {onOpenProject}
+    {onOpenSession}
+    onProjectMenu={projectMenu}
+    onSessionMenu={sessionMenu}
+  />
+{/snippet}
 
 {#if appState.loading}
   <div class="hint">scanning…</div>
 {:else if appState.error}
   <div class="hint err">{appState.error}</div>
-{:else if appState.index.projects.length === 0}
+{:else if scratch}
+  {#each SECTIONS as section (section.kind)}
+    {@const project = shown.find((p) => p.kind === section.kind)}
+    {#if project}
+      {@render node(project, true)}
+    {:else}
+      <div class="hint section">
+        <strong>{section.kind === 'chats' ? 'Chats' : 'Scratch'}</strong>
+        {searching && mine.some((p) => p.kind === section.kind) ? `Nothing matches “${query.trim()}”.` : section.empty}
+      </div>
+    {/if}
+  {/each}
+{:else if mine.length === 0}
   <div class="hint">
     No agent sessions found yet. Run <code>claude</code> or <code>codex</code> in a project and it will appear here.
   </div>
 {:else if shown.length === 0}
   <div class="hint">Nothing matches “{query.trim()}”.</div>
 {:else}
-  {#each shown as project (project.key)}
-    <ProjectNode
-      {project}
-      {limit}
-      forceOpen={searching}
-      groupByBranch={appState.settings?.ui.groupByBranch ?? false}
-      {sessionMarks}
-      {sessionTasks}
-      {activeKey}
-      {activeSessionId}
-      open={openProjectKeys.has(project.key)}
-      {renaming}
-      onRenameProject={(p, name) => p.path && void saveName('names', p.path, name)}
-      onRenameSession={(s, name) => void saveName('sessionNames', sessionKey(s), name)}
-      onRenameCancel={() => (renaming = null)}
-      {onOpenProject}
-      {onOpenSession}
-      onProjectMenu={projectMenu}
-      onSessionMenu={sessionMenu}
-    />
-  {/each}
+  {#each shown as project (project.key)}{@render node(project, searching)}{/each}
 {/if}
 
 {#if menu}
@@ -229,6 +249,16 @@
     color: var(--fg-faint);
     font-size: 11px;
     line-height: 1.5;
+  }
+  /* Lines up with a project row's name. */
+  .hint.section {
+    padding-left: 34px;
+  }
+  .hint strong {
+    display: block;
+    color: var(--fg);
+    font-size: 12px;
+    font-weight: 500;
   }
   .hint.err {
     color: var(--danger);

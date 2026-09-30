@@ -67,6 +67,8 @@ export interface Project {
   exists: boolean;
   lastActiveMs: number;
   sessions: SessionMeta[];
+  /** The scratch or chats directory, listed in the Scratch view rather than with projects. */
+  kind?: 'scratch' | 'chats';
 }
 
 export interface IndexSnapshot {
