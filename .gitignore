@@ -8,6 +8,7 @@ coverage/
 # --- go / wails ---
 /build/bin/
 /build/e2e/
+/build/conpty/
 /build/webdriver/
 /.go-cache/
 /wailsjs/

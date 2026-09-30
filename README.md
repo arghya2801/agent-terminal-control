@@ -38,8 +38,11 @@ Three downloads on the Releases page. Pick one.
 | `ATC_<version>_x64-setup.exe` | NSIS installer. Per-user, no admin prompt. Closes every running `atc.exe` before installing, portable copies included. |
 | `atc.exe` | The bare executable. No installer, no Start menu entry, no uninstaller. Put it anywhere and run it. |
 
-All three are the same application. The installers do nothing but place that
-executable, add a Start menu entry and register an uninstaller.
+All three are the same application. The installers place that executable, add a Start
+menu entry and register an uninstaller. They also install Windows Terminal's ConPTY
+(`conpty.dll` and `OpenConsole.exe`, MIT) next to it, which passes colour queries through
+to the terminal, so Codex's prompt bar matches the theme. The bare `atc.exe` uses the
+ConPTY built into Windows unless those two files sit beside it.
 
 ### Updating
 
