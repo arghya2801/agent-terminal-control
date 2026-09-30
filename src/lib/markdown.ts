@@ -1,5 +1,5 @@
 /**
- * Enough Markdown for task notes: headings, lists, `- [ ]` boxes, quotes, fences, inline
+ * Enough Markdown for the notes pad: headings, lists, `- [ ]` boxes, quotes, fences, inline
  * code, bold, italic and http(s) links. Not spec-compliant and does not need to be.
  *
  * The source is escaped before any tag is added, so the output is safe for `{@html}`:
@@ -36,6 +36,7 @@ export function renderMarkdown(src: string): string {
   );
 
   const out: string[] = [];
+  let boxes = 0;
   let list: 'ul' | 'ol' | null = null;
   const close = () => {
     if (list) out.push(`</${list}>`);
@@ -65,14 +66,18 @@ export function renderMarkdown(src: string): string {
     } else if ((m = raw.match(/^[-*]\s+(.*)$/))) {
       open('ul');
       const box = m[1].match(/^\[( |x|X)\]\s*(.*)$/);
+      // data-box numbers the boxes in source order, for toggleCheckbox.
       out.push(
         box
-          ? `<li class="check"><input type="checkbox" disabled${box[1] === ' ' ? '' : ' checked'}> ${inline(box[2])}</li>`
+          ? `<li class="check"><input type="checkbox" data-box="${boxes++}"${box[1] === ' ' ? '' : ' checked'}> ${inline(box[2])}</li>`
           : `<li>${inline(m[1])}</li>`,
       );
     } else if ((m = raw.match(/^\d+[.)]\s+(.*)$/))) {
       open('ol');
       out.push(`<li>${inline(m[1])}</li>`);
+    } else if (list && /^\s/.test(line)) {
+      // An indented line belongs to the item above it.
+      out.push(`<li class="sub">${inline(raw)}</li>`);
     } else {
       close();
       out.push(`<p>${inline(raw)}</p>`);
@@ -80,4 +85,18 @@ export function renderMarkdown(src: string): string {
   }
   close();
   return out.join('').replace(/\u0000F(\d+)\u0000/g, (_, i) => fences[Number(i)]);
+}
+
+/** `src` with its `n`th checkbox flipped, counting as renderMarkdown does (fences skipped). */
+export function toggleCheckbox(src: string, n: number): string {
+  let fenced = false;
+  let seen = 0;
+  return src
+    .split('\n')
+    .map((line) => {
+      if (/^\s*```/.test(line)) fenced = !fenced;
+      if (fenced || !/^\s*[-*]\s+\[( |x|X)\]/.test(line) || seen++ !== n) return line;
+      return line.replace(/\[( |x|X)\]/, (_, c: string) => (c === ' ' ? '[x]' : '[ ]'));
+    })
+    .join('\n');
 }
