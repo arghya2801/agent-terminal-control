@@ -20,7 +20,7 @@ import { moveItem } from '../lib/dragReorder';
 import '@xterm/xterm/css/xterm.css';
 
 import { Channel, ptyAck, ptyBusy, ptyKill, ptyResize, ptySpawn, ptyWrite } from '../lib/ipc';
-import { codexNewlineInput, isNativePaste, matchChord, type Action } from '../lib/keymap';
+import { isNativePaste, newlineInput, matchChord, type Action } from '../lib/keymap';
 import { decodeOsc52 } from '../lib/osc52';
 import type { Palette } from '../lib/theme';
 import { claudeTitle, usableTitle, type Activity } from '../lib/format';
@@ -245,13 +245,15 @@ export async function openTab(
     // Let the browser run its native paste, which xterm turns into a bracketed paste.
     // Otherwise Ctrl+V goes out as ^V, which Claude Code only reads as "paste an image".
     if (isNativePaste(e, term.modes.bracketedPasteMode)) return false;
-    const codexNewline = tab.provider === 'codex' ? codexNewlineInput(e) : null;
-    if (codexNewline !== null) {
+    // Codex gets a real Shift+Enter key record rather than LF: it reads Windows key
+    // events, and ConPTY turns LF into plain Enter, which submits (#82). A non-null
+    // activity means Claude is running, even if the user started it by hand.
+    const agent = tab.provider === 'codex' ? 'codex' : tab.activity !== null ? 'claude' : null;
+    const newline = newlineInput(e, agent);
+    if (newline !== null) {
       e.preventDefault();
       e.stopPropagation();
-      // A real Shift+Enter key record rather than LF: Codex reads Windows key events,
-      // and ConPTY turns LF, pasted or typed, into plain Enter, which submits (#82).
-      if (tab.ptyId) void ptyWrite(tab.ptyId, codexNewline);
+      if (tab.ptyId) void ptyWrite(tab.ptyId, newline);
       return false;
     }
     const action = matchChord(e);
