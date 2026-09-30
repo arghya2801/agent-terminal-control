@@ -478,8 +478,12 @@ func BuildProjects(sessions []Object, settings Object) Object {
 		}
 		order[Str(p["key"])] = number(pin["order"])
 	}
+	// Shown in the sidebar's Scratch view instead of among the projects.
 	if p := projects[PathKey(Resolve(Scratch(settings, ConfigDir())))]; p != nil {
-		p["name"] = "Scratch"
+		p["name"], p["kind"] = "Scratch", "scratch"
+	}
+	if p := projects[PathKey(Resolve(Chats(ConfigDir())))]; p != nil {
+		p["name"], p["kind"] = "Chats", "chats"
 	}
 	for path, n := range Obj(cfg["names"]) {
 		if p := projects[PathKey(Resolve(path))]; p != nil && strings.TrimSpace(Str(n)) != "" {
