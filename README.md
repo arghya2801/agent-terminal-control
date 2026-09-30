@@ -170,8 +170,8 @@ untouched.
 | `Ctrl+Shift+F12` | Developer tools (debug builds only) |
 
 In the find bar: `Enter` next match, `Shift+Enter` previous, `Escape` close. Escape also
-closes the Usage, Settings and Shortcuts pages. In a Codex tab, `Shift+Enter` and `Ctrl+J`
-insert a newline.
+closes the Usage, Settings and Shortcuts pages. In Claude Code and Codex, `Shift+Enter` and
+`Ctrl+J` insert a newline.
 
 ## Codex
 
@@ -197,9 +197,8 @@ Configure Codex in Settings or add this block to `settings.json`:
 `command` is an executable name or path, not a shell expression. Arguments are separate
 values, and ATC quotes them for PowerShell. The Codex home resolves from `codex.homeDir`,
 then `CODEX_HOME`, then `%USERPROFILE%\.codex`; discovery, launches, copied resume
-commands and limit requests all use it. When ATC runs inside a Windows job that forbids
-breakaway (for example, launched from an IDE terminal), it starts Codex with `--no-daemon`,
-since Codex's background server cannot start there.
+commands and limit requests all use it. ATC starts Codex with `--no-daemon`, since
+Codex's background server often fails to start under it.
 
 Codex plan limits come from the documented [`account/rateLimits/read` app-server API](https://developers.openai.com/codex/app-server).
 ATC starts `codex app-server` on demand, stops it after each request, and refreshes every
