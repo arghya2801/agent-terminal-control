@@ -205,13 +205,33 @@ export function monetary(s: { cost: number; partial?: boolean; unavailable?: boo
   return s.unavailable ? 'Unavailable' : `${formatUsd(s.cost)}${s.partial ? ' (partial)' : ''}`;
 }
 
-export type Split = 'none' | 'model' | 'project';
+/** `type` splits tokens by kind; rows carry no cost per kind, so it is tokens only. */
+export type Split = 'none' | 'model' | 'project' | 'provider' | 'type';
 
 export interface ChartData {
   /** Series names in stack order, largest first; "Other" last when there are more. */
   series: string[];
+  /** Palette slot per series. Fixed-order splits keep a colour per name across ranges. */
+  slots: number[];
   /** One per day, or per local hour when the range is a single day. */
   buckets: { key: string; label: string; values: number[]; total: number }[];
+}
+
+/** Splits with a known set of names, stacked and coloured in this order. */
+const FIXED: Partial<Record<Split, string[]>> = {
+  provider: ['Claude', 'Codex'],
+  type: ['Input', 'Output', 'Cache write', 'Cache read'],
+};
+
+function parts(r: CostRow, split: Split, metric: 'cost' | 'tokens', project: () => string): [string, number][] {
+  if (split === 'type') return [['Input', r.input], ['Output', r.output], ['Cache write', r.cacheWrite], ['Cache read', r.cacheRead]];
+  const v = metric === 'cost' ? (r.costUsd ?? 0) : r.totalTokens;
+  const name =
+    split === 'model' ? r.model
+    : split === 'project' ? project()
+    : split === 'provider' ? (r.provider === 'codex' ? 'Codex' : 'Claude')
+    : 'Total';
+  return [[name, v]];
 }
 
 /** Most series a chart stacks before folding the rest into "Other". */
@@ -237,18 +257,22 @@ export function chartData(
     const day = localDay(at);
     if (day < from || day > to) continue;
     const bucket = hourly ? String(at.getHours()).padStart(2, '0') : day;
-    const name = opts.split === 'model' ? r.model : opts.split === 'project' ? projectOf(r.projectKey, r.projectPath).name : 'Total';
-    const v = opts.metric === 'cost' ? (r.costUsd ?? 0) : r.totalTokens;
     const cell = cells.get(bucket) ?? new Map<string, number>();
-    cell.set(name, (cell.get(name) ?? 0) + v);
+    for (const [name, v] of parts(r, opts.split, opts.metric, () => projectOf(r.projectKey, r.projectPath).name)) {
+      cell.set(name, (cell.get(name) ?? 0) + v);
+      totals.set(name, (totals.get(name) ?? 0) + v);
+    }
     cells.set(bucket, cell);
-    totals.set(name, (totals.get(name) ?? 0) + v);
   }
 
-  const ranked = [...totals].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k]) => k);
+  const fixed = FIXED[opts.split];
+  const ranked = fixed
+    ? fixed.filter((k) => (totals.get(k) ?? 0) > 0)
+    : [...totals].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k]) => k);
   const fold = ranked.length > MAX_SERIES;
   const kept = fold ? ranked.slice(0, MAX_SERIES - 1) : ranked;
   const series = fold ? [...kept, 'Other'] : kept;
+  const slots = series.map((name, i) => (fixed ? fixed.indexOf(name) : i));
   const slot = (name: string) => (kept.includes(name) ? kept.indexOf(name) : series.length - 1);
 
   let keys: string[];
@@ -265,7 +289,28 @@ export function chartData(
     if (opts.cumulative) values.forEach((v, i) => (values[i] = running[i] += v));
     return { key, label: hourly ? `${from} ${key}:00` : key, values, total: values.reduce((a, b) => a + b, 0) };
   });
-  return { series, buckets };
+  return { series, slots, buckets };
+}
+
+/** Trailing mean over up to `span` buckets, so the line starts with the first bar. */
+export function rollingAverage(totals: number[], span = 7): number[] {
+  let sum = 0;
+  return totals.map((v, i) => {
+    sum += v - (i >= span ? totals[i - span] : 0);
+    return sum / Math.min(i + 1, span);
+  });
+}
+
+/** Usage per local weekday (Monday first) and hour, for the "when do I work" heatmap. */
+export function weekHeatmap(rows: CostRow[], from: string, to: string, metric: 'cost' | 'tokens'): number[][] {
+  const grid = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
+  for (const r of rows) {
+    const at = new Date(`${r.hour}:00:00Z`);
+    const day = localDay(at);
+    if (day < from || day > to) continue;
+    grid[(at.getDay() + 6) % 7][at.getHours()] += metric === 'cost' ? (r.costUsd ?? 0) : r.totalTokens;
+  }
+  return grid;
 }
 
 export interface SessionStats {
