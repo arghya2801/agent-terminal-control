@@ -37,6 +37,7 @@ Ordinary change events remain `index://updated`, `settings://updated`, and
 | `app.go` | Lifecycle, command dispatch, PTY registry, filesystem watching, migration |
 | `limits.go` | Claude subscription HTTP request and Codex stdio app-server limits |
 | `internal/pty/pty_windows.go` | Shell resolution, ConPTY, UTF-8 streaming, backpressure, process cleanup |
+| `internal/pty/conpty.go` | Loads the bundled `conpty.dll` beside the exe, else the inbox ConPTY |
 | `internal/core/settings.go` | Defaults, paths, atomic file persistence, command quoting |
 | `internal/core/validate.go` | Settings/task JSON validation and legacy defaults |
 | `internal/core/index.go` | Claude/Codex discovery, metadata, grouping, incremental disk cache |
@@ -45,7 +46,10 @@ Ordinary change events remain `index://updated`, `settings://updated`, and
 
 ## Terminal transport
 
-The native Windows implementation uses `x/sys/windows` ConPTY APIs. PowerShell 7 is
+The native Windows implementation uses ConPTY. When `conpty.dll` and `OpenConsole.exe`
+sit beside the exe, it uses them (Windows Terminal's newer ConPTY, fetched by
+`scripts/conpty.mjs` at build time); otherwise it uses the one built into Windows,
+which swallows OSC 10/11 colour queries. PowerShell 7 is
 preferred, with Windows PowerShell as fallback. User profiles load normally;
 `ATC_SHELL_NO_PROFILE=1` exists for deterministic tests. Launcher-only agent markers
 and `NO_COLOR` are removed from child environments. `TERM=xterm-256color` is set.

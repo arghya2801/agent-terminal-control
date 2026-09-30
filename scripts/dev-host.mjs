@@ -5,6 +5,8 @@ import { join, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { runWails } from './wails-cli.mjs';
 import { root } from './playground.mjs';
+import { ensureConpty } from './conpty.mjs';
+await ensureConpty();
 export function startDev(env = process.env, args = []) {
   if (!existsSync(join(root, 'node_modules/vite/bin/vite.js'))) throw new Error('Run npm ci first.');
   const stage = join(root, 'wails-dev-work');

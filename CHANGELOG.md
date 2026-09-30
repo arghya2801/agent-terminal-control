@@ -6,6 +6,9 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Changed
+- The installers ship Windows Terminal's ConPTY (`conpty.dll` and `OpenConsole.exe`), and ATC uses it when present. The ConPTY built into Windows swallowed colour queries, so Codex's prompt bar ignored the theme. ([#116](https://github.com/arghya2801/agent-terminal-control/issues/116), [#81](https://github.com/arghya2801/agent-terminal-control/issues/81))
+
 ### Fixed
 - Shift+Enter inserts a line break in Claude Code, as Ctrl+J does, instead of submitting.
 - Long task names wrap in the sidebar instead of being cut off. ([#131](https://github.com/arghya2801/agent-terminal-control/issues/131))
