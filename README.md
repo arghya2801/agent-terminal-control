@@ -123,7 +123,7 @@ build times, build resource use, runtime memory, validation, and migration detai
 - Closing a tab asks only when something is still running in it, and names it
 - Windows notification when a background session finishes while ATC is not focused
 - Ask either agent outside any project, in a shared scratch directory, or start a plain
-  Claude chat. Both are listed in the sidebar's Scratch view, not among the projects
+  chat with either. Both are listed in the sidebar's Scratch view, not among the projects
 - Search across scrollback with match counts
 - Themes for the whole app: ATC Dark, Nord, Rosé Pine, Catppuccin Mocha and Latte, plus
   your own

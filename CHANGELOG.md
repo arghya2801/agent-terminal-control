@@ -8,7 +8,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ### Added
 - The Usage chart splits by provider or by token type (input, output, cache write, cache read), and can draw a 7-day average over the daily bars. ([#27](https://github.com/arghya2801/agent-terminal-control/issues/27))
-- A Scratch view in the sidebar lists chats and scratch sessions apart from the projects. Its + starts a plain Claude chat in ATC's `chats` directory. ([#135](https://github.com/arghya2801/agent-terminal-control/issues/135))
+- A Scratch view in the sidebar lists chats and scratch sessions apart from the projects. Its + starts a plain Claude or Codex chat in ATC's `chats` directory. ([#135](https://github.com/arghya2801/agent-terminal-control/issues/135))
 - A weekday-by-hour heatmap on the Usage page shows when in the week the usage happens. ([#27](https://github.com/arghya2801/agent-terminal-control/issues/27))
 
 ### Changed

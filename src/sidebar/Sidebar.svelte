@@ -118,7 +118,7 @@
       {#if view === 'tasks'}
         <button class="icon" onclick={() => createTask({ repo: currentRepo })} title="New task" aria-label="New task">+</button>
       {:else if view === 'scratch'}
-        <button class="icon" onclick={onNewChat} title="New Claude chat" aria-label="New Claude chat">+</button>
+        <button class="icon" onclick={onNewChat} title="New chat with Claude or Codex" aria-label="New chat">+</button>
       {:else}
       <button
         class="icon"

@@ -299,23 +299,17 @@
     return guard(async () => openTab(key, p.name, { cwd: p.path, initialCommand: await agentCommand(provider) }, p.key, provider, existing));
   }
 
-  let picker = $state<{ project: Project | null } | null>(null);
+  /** No project: the scratch directory, or with `chats` the chats directory (#135). */
+  let picker = $state<{ project: Project | null; chats?: boolean } | null>(null);
   function finishPicker(provider?: AgentProvider) {
     const target = picker;
     picker = null;
     if (!provider || !target) { void tick().then(focusActiveTerminal); return; }
     if (target.project) { void newAgentIn(target.project, provider); return; }
     void guard(async () => {
-      const cwd = await scratchDir();
-      await newAgentIn({ key: projectKey(cwd), path: cwd, name: `Ask ${providerName(provider)}`, pinned: false, exists: true, lastActiveMs: 0, sessions: [] }, provider);
-    });
-  }
-
-  /** A Claude session in the chats directory, for questions that belong to no project (#135). */
-  function newChat() {
-    return guard(async () => {
-      const cwd = await scratchDir('chats');
-      await newAgentIn({ key: projectKey(cwd), path: cwd, name: 'Chat', pinned: false, exists: true, lastActiveMs: 0, sessions: [] }, 'claude');
+      const cwd = await scratchDir(target.chats ? 'chats' : undefined);
+      const name = target.chats ? `${providerName(provider)} chat` : `Ask ${providerName(provider)}`;
+      await newAgentIn({ key: projectKey(cwd), path: cwd, name, pinned: false, exists: true, lastActiveMs: 0, sessions: [] }, provider);
     });
   }
 
@@ -622,7 +616,7 @@
         onOpenSession={openSession}
         onNewShell={newShellIn}
         onNewAgent={newAgentIn}
-        onNewChat={newChat}
+        onNewChat={() => (picker = { project: null, chats: true })}
       />
     {/if}
   </aside>
