@@ -73,11 +73,11 @@ func TestCodexIndexAndSessionsAreRelevant(t *testing.T) {
 		t.Error("Codex config triggered a rescan")
 	}
 }
-func TestOnlyTheSettingsAndTasksFilesInTheConfigDirAreRelevant(t *testing.T) {
-	if !needed(configRoot+`\settings.json`, fsnotify.Write) || !needed(configRoot+`\TASKS.JSON`, fsnotify.Rename) {
-		t.Fatal("a settings or tasks save was ignored")
+func TestOnlyTheSettingsAndNotesFilesInTheConfigDirAreRelevant(t *testing.T) {
+	if !needed(configRoot+`\settings.json`, fsnotify.Write) || !needed(configRoot+`\NOTES.MD`, fsnotify.Rename) {
+		t.Fatal("a settings or notes save was ignored")
 	}
-	if needed(configRoot+`\index-go.json`, fsnotify.Write) || needed(configRoot+`\notes.txt`, fsnotify.Create) {
+	if needed(configRoot+`\index-go.json`, fsnotify.Write) || needed(configRoot+`\tasks.json`, fsnotify.Create) {
 		t.Fatal("an unrelated file in the config directory triggered a rescan")
 	}
 }
@@ -172,7 +172,7 @@ func TestWritingOrReplacingTheSettingsFileFires(t *testing.T) {
 	})
 }
 
-// --- settings/tasks.rs
+// --- retired tasks
 
 func TestAnExistingTasksFileAlwaysWinsOverLeftoversInSettings(t *testing.T) {
 	dir := t.TempDir()
@@ -181,18 +181,8 @@ func TestAnExistingTasksFileAlwaysWinsOverLeftoversInSettings(t *testing.T) {
 	core.Save(filepath.Join(dir, "settings.json"), core.Object{"tasks": []any{core.Object{"id": 9, "title": "leftover"}}})
 	a := NewApp(dir)
 	a.load()
-	if len(a.tasks) != 1 || core.Obj(a.tasks[0])["title"] != "t1" {
-		t.Fatal(a.tasks)
-	}
-}
-func TestTaskMigrationStripsTasksFromSettings(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("ATC_CONFIG_DIR", dir)
-	core.Save(filepath.Join(dir, "settings.json"), core.Object{"tasks": []any{core.Object{"id": 1, "title": "t1"}}, "ui": core.Object{"zoom": 1.5}})
-	NewApp(dir).load()
-	b, _ := os.ReadFile(filepath.Join(dir, "settings.json"))
-	if strings.Contains(string(b), "tasks") || !strings.Contains(string(b), "1.5") {
-		t.Fatal("settings.json stops carrying tasks and keeps the rest", string(b))
+	if a.notes != "- [ ] t1\n" {
+		t.Fatalf("%q", a.notes)
 	}
 }
 

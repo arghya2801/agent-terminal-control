@@ -16,29 +16,27 @@ import (
 	"atc/internal/core"
 )
 
-func TestLoadTasksMigrationAndMalformedBackup(t *testing.T) {
+func TestTasksMoveIntoNotesOnceAndStayOnDisk(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("ATC_CONFIG_DIR", dir)
-	core.Save(filepath.Join(dir, "settings.json"), core.Object{"ui": core.Object{"zoom": 1.5}, "tasks": []any{core.Object{"id": 1, "title": "keep me"}}})
+	tasks := `[{"id":1,"title":"keep me","state":"done"}]`
+	os.WriteFile(filepath.Join(dir, "tasks.json"), []byte(tasks), 0600)
 	a := NewApp(dir)
 	a.load()
-	if len(a.tasks) != 1 || core.Num(core.Obj(a.settings["ui"])["zoom"]) != 1.5 {
-		t.Fatal(a.tasks, a.settings)
+	if a.notes != "- [x] keep me\n" {
+		t.Fatalf("%q", a.notes)
 	}
-	b, _ := os.ReadFile(filepath.Join(dir, "settings.json"))
-	var old core.Object
-	_ = old
-	if string(b) == "" {
-		t.Fatal("missing settings")
+	if b, _ := os.ReadFile(filepath.Join(dir, "tasks.json")); string(b) != tasks {
+		t.Fatal("tasks.json was changed")
 	}
-	os.WriteFile(filepath.Join(dir, "tasks.json"), []byte("[{oops"), 0600)
+	// Once notes.md exists, it is the only source, even when emptied.
+	os.WriteFile(filepath.Join(dir, "notes.md"), nil, 0600)
 	a.load()
-	backup, e := os.ReadFile(filepath.Join(dir, "tasks.json.bad"))
-	if e != nil || string(backup) != "[{oops" || len(a.tasks) != 0 {
-		t.Fatal(string(backup), e)
+	if a.notes != "" {
+		t.Fatalf("tasks migrated twice: %q", a.notes)
 	}
 }
-func TestInvalidSettingsAreNeverOverwrittenByTaskMigration(t *testing.T) {
+func TestInvalidSettingsAreNeverRewrittenOnLoad(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("ATC_CONFIG_DIR", dir)
 	path := filepath.Join(dir, "settings.json")
@@ -128,29 +126,27 @@ func TestPersistenceReloadDoesNotLoseLatestSave(t *testing.T) {
 		}
 	}()
 	for i := 0; i < 20; i++ {
-		_, err := a.Invoke("tasks_set", core.Object{"tasks": []any{core.Object{"id": float64(1), "title": fmt.Sprintf("edit %d", i), "notes": fmt.Sprintf("note %d", i)}}})
-		if err != nil {
+		if _, err := a.Invoke("notes_set", core.Object{"text": fmt.Sprintf("note %d", i)}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	wg.Wait()
 	a.refreshFiles()
-	got, _ := a.Invoke("tasks_get", nil)
-	if core.Str(core.Obj(core.Arr(got)[0])["notes"]) != "note 19" {
+	if got, _ := a.Invoke("notes_get", nil); got != "note 19" {
 		t.Fatal(got)
 	}
-	os.WriteFile(filepath.Join(dir, "tasks.json"), []byte("{broken"), 0600)
+	// An edit made outside ATC is picked up.
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("from an editor"), 0600)
 	a.refreshFiles()
-	got, _ = a.Invoke("tasks_get", nil)
-	if core.Str(core.Obj(core.Arr(got)[0])["notes"]) != "note 19" {
-		t.Fatal("malformed external save replaced valid state", got)
+	if got, _ := a.Invoke("notes_get", nil); got != "from an editor" {
+		t.Fatal(got)
 	}
 }
 func TestHeadlessCommandsAndValidation(t *testing.T) {
 	dir := t.TempDir()
 	a := NewApp(dir)
 	a.load()
-	for _, command := range []string{"tasks_set", "settings_set"} {
+	for _, command := range []string{"notes_set", "settings_set"} {
 		if _, err := a.Invoke(command, nil); err == nil {
 			t.Fatalf("%s accepted missing payload", command)
 		}

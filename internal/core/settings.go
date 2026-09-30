@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -80,11 +81,16 @@ func LoadSettings(path string) (Object, error) {
 	return parsed, nil
 }
 func Save(path string, v any) error {
-	if e := os.MkdirAll(filepath.Dir(path), 0700); e != nil {
-		return e
-	}
 	b, e := json.MarshalIndent(v, "", "  ")
 	if e != nil {
+		return e
+	}
+	return WriteFile(path, b)
+}
+
+// WriteFile replaces path atomically.
+func WriteFile(path string, b []byte) error {
+	if e := os.MkdirAll(filepath.Dir(path), 0700); e != nil {
 		return e
 	}
 	f, e := os.CreateTemp(filepath.Dir(path), ".atc-*.tmp")
@@ -117,22 +123,36 @@ func Save(path string, v any) error {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
-func NormalizeTasks(v []any) []any {
-	if v == nil {
-		v = []any{}
+// LegacyNotes renders the retired tasks (tasks.json, else tasks left in settings.json) as a
+// markdown checklist for notes.md, each task's notes indented under it (#132).
+func LegacyNotes(config string) string {
+	var tasks []any
+	if b, e := os.ReadFile(filepath.Join(config, "tasks.json")); e == nil {
+		_ = json.Unmarshal(b, &tasks)
+	} else if b, e := os.ReadFile(filepath.Join(config, "settings.json")); e == nil {
+		var s Object
+		if json.Unmarshal(b, &s) == nil {
+			tasks = Arr(s["tasks"])
+		}
 	}
-	for _, item := range v {
+	var out strings.Builder
+	for _, item := range tasks {
 		t := Obj(item)
-		for k, d := range (Object{"id": 0, "title": "", "state": "todo", "repo": nil, "branches": []any{}, "notes": "", "sessions": []any{}}) {
-			if _, ok := t[k]; !ok {
-				t[k] = d
+		box, title := " ", strings.Join(strings.Fields(Str(t["title"])), " ")
+		if Str(t["state"]) == "done" {
+			box = "x"
+		}
+		if title == "" {
+			title = "Untitled"
+		}
+		fmt.Fprintf(&out, "- [%s] %s\n", box, title)
+		for _, line := range strings.Split(Str(t["notes"]), "\n") {
+			if strings.TrimSpace(line) != "" {
+				out.WriteString("  " + strings.TrimRight(line, "\r") + "\n")
 			}
 		}
-		if s := Str(t["state"]); s != "doing" && s != "done" {
-			t["state"] = "todo"
-		}
 	}
-	return v
+	return out.String()
 }
 // MigrateSettings copies settings.json from a pre-rename config folder. A copy, never a
 // move, and never over existing settings.
@@ -153,16 +173,6 @@ func MigrateSettings(legacy, current string) bool {
 func ProjectionChanged(prev, next Object, config string) bool {
 	same := func(k string) bool { a, _ := json.Marshal(prev[k]); b, _ := json.Marshal(next[k]); return string(a) == string(b) }
 	return !same("projects") || !same("codex") || Scratch(prev, config) != Scratch(next, config)
-}
-func LoadTasks(path string) ([]any, error) {
-	b, e := os.ReadFile(path)
-	if os.IsNotExist(e) {
-		return []any{}, nil
-	}
-	if e != nil {
-		return nil, e
-	}
-	return ParseTasks(b)
 }
 func Roots(s Object) (string, string) {
 	c := Str(Obj(s["projects"])["claudeProjectsDir"])

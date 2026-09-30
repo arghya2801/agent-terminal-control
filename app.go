@@ -27,15 +27,15 @@ type App struct {
 	config                  string
 	mu                      sync.Mutex
 	settings                core.Object
-	tasks                   []any
-	ptys                    map[string]*pty.Session
+	notes                   string
+	ptys                   map[string]*pty.Session
 	index                   core.Index
 	costs                   core.Costs
 	limits                  limitsClient
 	watcher                 *fsnotify.Watcher
 	cancel                  context.CancelFunc
 	lastIndex               string
-	lastSettings, lastTasks string
+	lastSettings            string
 }
 
 func NewApp(config string) *App {
@@ -90,30 +90,17 @@ func (a *App) load() {
 			}
 		}
 	}
-	var loadErr error
-	a.settings, loadErr = core.LoadSettings(path)
-	tasksPath := filepath.Join(a.config, "tasks.json")
-	// An invalid settings file loads as defaults: never migrate from it, or the save below overwrites it.
-	if _, e := os.Stat(tasksPath); loadErr == nil && os.IsNotExist(e) {
-		if b, e := os.ReadFile(path); e == nil {
-			var old core.Object
-			if json.Unmarshal(b, &old) == nil && len(core.Arr(old["tasks"])) > 0 {
-				if core.Save(tasksPath, core.NormalizeTasks(core.Arr(old["tasks"]))) == nil {
-					_ = core.Save(path, a.settings)
-				}
-			}
-		}
-	}
-	var e error
-	a.tasks, e = core.LoadTasks(tasksPath)
-	if e != nil {
-		if b, err := os.ReadFile(tasksPath); err == nil {
-			_ = os.WriteFile(tasksPath+".bad", b, 0600)
-		}
-		a.tasks = []any{}
-	}
+	a.settings, _ = core.LoadSettings(path)
 	a.lastSettings = jsonText(a.settings)
-	a.lastTasks = jsonText(a.tasks)
+	// Tasks were retired for notes.md (#132). Copy them over once; tasks.json stays on disk.
+	notes := filepath.Join(a.config, "notes.md")
+	if _, e := os.Stat(notes); os.IsNotExist(e) {
+		if text := core.LegacyNotes(a.config); text != "" {
+			_ = core.WriteFile(notes, []byte(text))
+		}
+	}
+	b, _ := os.ReadFile(notes)
+	a.notes = string(b)
 }
 func jsonText(v any) string { b, _ := json.Marshal(v); return string(b) }
 func (a *App) getSettings() core.Object {
@@ -224,7 +211,7 @@ func refreshNeeded(e fsnotify.Event, config, claude, codex string) bool {
 	}
 	onPathTo := func(root string) bool { r := core.PathKey(root); return r == p || strings.HasPrefix(r, p+`\`) }
 	structural := e.Has(fsnotify.Create) || e.Has(fsnotify.Remove) || e.Has(fsnotify.Rename)
-	if rest, ok := under(config); ok && (rest == "settings.json" || rest == "tasks.json") {
+	if rest, ok := under(config); ok && (rest == "settings.json" || rest == "notes.md") {
 		return true
 	}
 	if rest, ok := under(claude); ok && rest != "" {
@@ -255,17 +242,13 @@ func (a *App) refreshFiles() {
 			a.arm()
 		}
 	}
-	if t, e := core.LoadTasks(filepath.Join(a.config, "tasks.json")); e == nil {
+	if b, e := os.ReadFile(filepath.Join(a.config, "notes.md")); e == nil {
 		a.mu.Lock()
-		text := jsonText(t)
-		changed := text != a.lastTasks
-		if changed {
-			a.tasks = t
-			a.lastTasks = text
-		}
+		changed := string(b) != a.notes
+		a.notes = string(b)
 		a.mu.Unlock()
 		if changed {
-			a.emit("tasks://updated", t)
+			a.emit("notes://updated", string(b))
 		}
 	}
 	a.diskMu.Unlock()
@@ -338,27 +321,22 @@ func (a *App) Invoke(command string, args core.Object) (any, error) {
 			a.emit("index://updated", a.index.Scan(next, false))
 		}
 		return nil, nil
-	case "tasks_get":
+	case "notes_get":
 		a.mu.Lock()
 		defer a.mu.Unlock()
-		return core.Clone(a.tasks), nil
-	case "tasks_set":
+		return a.notes, nil
+	case "notes_set":
 		a.diskMu.Lock()
 		defer a.diskMu.Unlock()
-		data, err := json.Marshal(args["tasks"])
-		if err != nil {
-			return nil, err
+		text, ok := args["text"].(string)
+		if !ok {
+			return nil, fmt.Errorf("notes must be text")
 		}
-		tasks, err := core.ParseTasks(data)
-		if err != nil {
-			return nil, err
-		}
-		if e := core.Save(filepath.Join(a.config, "tasks.json"), tasks); e != nil {
+		if e := core.WriteFile(filepath.Join(a.config, "notes.md"), []byte(text)); e != nil {
 			return nil, e
 		}
 		a.mu.Lock()
-		a.tasks = tasks
-		a.lastTasks = jsonText(tasks)
+		a.notes = text
 		a.mu.Unlock()
 		return nil, nil
 	case "index_snapshot", "index_refresh":
