@@ -2,8 +2,8 @@
 
 A Windows terminal with one project tree for Claude Code and Codex sessions.
 Clicking a project opens a shell there; clicking a session resumes that conversation.
-Local tasks tie branches and sessions together, and a Usage page shows plan limits and
-what the work would have cost at API prices.
+An Open view lists every tab with its agent's state beside a notes pad, and a Usage page
+shows plan limits and what the work would have cost at API prices.
 
 Both CLIs run in ATC's own PowerShell and ConPTY terminals. Each CLI manages its own
 authentication, models, permissions and configuration.
@@ -26,7 +26,6 @@ behave normally.
 - PowerShell 7 (`pwsh`), falling back to Windows PowerShell
 - Claude Code or the Codex CLI for the corresponding agent features. Either can be
   absent without disabling shells or the other provider.
-- `git` on `PATH` for task branch lists
 
 ## Install
 
@@ -56,13 +55,13 @@ installed:
 - **`atc.exe`:** replace the file.
 
 Stick to one installer type. The MSI installs per machine and the setup exe per user,
-so switching between them leaves two separate installs. Settings and tasks are kept in
+so switching between them leaves two separate installs. Settings and notes are kept in
 every case. What changed in each version is in [CHANGELOG.md](CHANGELOG.md).
 
 The binaries are unsigned, so SmartScreen shows "Windows protected your PC" on first
 run. Click **More info**, then **Run anyway**.
 
-Settings, tasks and cache live in `%APPDATA%\Agent Terminal Control\`. Uninstalling does
+Settings, notes and cache live in `%APPDATA%\Agent Terminal Control\`. Uninstalling does
 not remove them; delete that folder by hand if you want them gone.
 
 ### From source
@@ -98,21 +97,18 @@ build times, build resource use, runtime memory, validation, and migration detai
   is waiting for you, blue when it finished in a background tab
 - Right-click a project: open Claude, Codex or a shell, rename, open in Explorer, copy
   path, pin/unpin
-- Right-click a session: rename, copy session id, copy resume command, open in Explorer,
-  make a task from it or link it to one
+- Right-click a session: rename, copy session id, copy resume command, open in Explorer
 - Full keyboard use: Down from the filter box (or Tab) enters the list, arrows move and
   expand, Enter opens, `Shift+F10` or the Menu key opens the context menu, Esc returns to
   the terminal
 - Drag the sidebar's edge to resize it; double-click to reset
 
-**Sidebar: tasks** (`Ctrl+Shift+K` switches views)
-- Local to-dos, grouped as In progress, To do and Done, optionally tied to a project and
-  its branches
-- Sessions that ran on a task's branches are suggested for linking; nothing is linked
-  automatically
-- A task panel (`Ctrl+Shift+E`) with status, project, a branch picker, linked sessions and
-  Markdown notes
-- Reorder within a group by dragging, or with `Alt+Up` / `Alt+Down`
+**Sidebar: open** (`Ctrl+Shift+K` switches views)
+- Every open tab in tab-bar order, with a dot for its state (working, needs you, idle),
+  the agent, the project and when it last printed anything; exited tabs are struck out
+- Click a row to switch to it, drag to reorder (the tab bar follows), middle-click to close
+- A notes pad under the list, stored as `notes.md`: raw Markdown while you type, rendered
+  when you click away, with checkboxes you can tick in place. Drag the divider to resize
 
 **Terminal**
 - Tabs, each a separate `pwsh` process, reopened on the next launch; drag to reorder
@@ -164,8 +160,7 @@ untouched.
 | `Ctrl+Shift+A` | Choose an agent in the shared scratch directory |
 | `Ctrl+Shift+B` | Show or hide the sidebar |
 | `Ctrl+Shift+P` | Filter projects and sessions |
-| `Ctrl+Shift+K` | Switch the sidebar between sessions, tasks and scratch |
-| `Ctrl+Shift+E` | Show or hide the task panel |
+| `Ctrl+Shift+K` | Switch the sidebar between sessions, open tabs and scratch |
 | `Ctrl+Shift+F` | Find in terminal |
 | `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | Zoom in / out / reset |
 | `Ctrl+Shift+U` | Usage and spend |
@@ -254,8 +249,9 @@ A malformed file is ignored rather than overwritten; the app keeps its current s
 
 Beside it:
 
-- **`tasks.json`** holds tasks. It is written by the app, but hand edits apply live. A file
-  that does not parse is copied to `tasks.json.bad` before anything overwrites it.
+- **`notes.md`** holds the notes pad. Edits made in another editor apply live. On first run
+  it is filled from `tasks.json`, if there is one; that file is left in place and no longer
+  read.
 - **`themes/`** takes extra themes as JSON files, in the shape Windows Terminal and VS Code
   terminal themes use (16 ANSI colours plus foreground, background, cursor and selection).
   A file named like a built-in theme replaces it.

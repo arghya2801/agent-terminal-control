@@ -1,7 +1,7 @@
 # Architecture
 
 ATC is a Windows Go/Wails application with a Svelte 5 and xterm.js frontend.
-Go owns ConPTY processes, transcript discovery, usage accounting, settings and tasks.
+Go owns ConPTY processes, transcript discovery, usage accounting, settings and notes.
 The frontend owns terminal rendering, navigation, search, and saved tab descriptions.
 The Go host replaced a Rust/Tauri one (0.3.1 and earlier). Its test suite was ported to
 Go, and its index and cost output over the fixture corpus is frozen in
@@ -11,7 +11,7 @@ Go, and its index and cost output over the fixture corpus is frozen in
 graph LR
   Shell[PowerShell / ConPTY] <--> PTY[internal/pty]
   PTY <-->|events + write/resize/ack| App[app.go: Invoke]
-  Files[transcripts + settings + tasks] <--> Core[internal/core]
+  Files[transcripts + settings + notes] <--> Core[internal/core]
   Core <--> App
   App <-->|Wails binding + events| Transport[src/lib/desktop.ts]
   Transport <--> UI[Svelte + xterm.js]
@@ -27,8 +27,8 @@ Command failures reject the frontend promise with a readable error.
 
 A PTY channel subscribes before spawning. Output uses `{t:"o", d}` and exit uses
 `{t:"x", code}` on its unique topic. The listener detaches on exit or failed spawn.
-Ordinary change events remain `index://updated`, `settings://updated`, and
-`tasks://updated`.
+Ordinary change events are `index://updated`, `settings://updated`, and
+`notes://updated`.
 
 ## Go modules
 
@@ -39,7 +39,7 @@ Ordinary change events remain `index://updated`, `settings://updated`, and
 | `internal/pty/pty_windows.go` | Shell resolution, ConPTY, UTF-8 streaming, backpressure, process cleanup |
 | `internal/pty/conpty.go` | Loads the bundled `conpty.dll` beside the exe, else the inbox ConPTY |
 | `internal/core/settings.go` | Defaults, paths, atomic file persistence, command quoting |
-| `internal/core/validate.go` | Settings/task JSON validation and legacy defaults |
+| `internal/core/validate.go` | Settings JSON validation and legacy defaults |
 | `internal/core/index.go` | Claude/Codex discovery, metadata, grouping, incremental disk cache |
 | `internal/core/costs.go` | Incremental token accounting, deduplication and pricing |
 | `internal/core/prices.json` | Baseline pricing, with config-directory overrides |
@@ -77,23 +77,24 @@ session IDs and rename keys represent Claude. Discovery groups canonical working
 directories, applies pinned projects and renamed labels, and excludes child/archived
 Codex sessions. Usage still includes child work attributed to its parent.
 
-The watcher covers settings/tasks, Claude project directories and Codex sessions/name
+The watcher covers `settings.json`, `notes.md`, Claude project directories and Codex sessions/name
 index. It watches existing ancestors when roots are absent and attaches new directories
 as they appear. Events debounce for 300 ms. A rendered projection suppresses irrelevant
 transcript growth events while preserving label, branch and activity changes.
 
-Settings and tasks retain the original JSON formats in
+Settings (`settings.json`) and the notes pad (`notes.md`) live in
 `%APPDATA%\Agent Terminal Control`, overridden by `ATC_CONFIG_DIR`. Legacy settings
-locations and embedded tasks migrate on load. Invalid tasks are backed up as
-`tasks.json.bad`; invalid external settings edits leave the current valid state intact.
-Atomic writes use unique temporary files and retry transient Windows sharing conflicts.
-A disk mutex serializes saves and watcher reloads. Own saves update the comparison
-snapshot without echoing an old task/settings object back into an active editor.
+locations migrate on load. Tasks were retired (#140): when `notes.md` does not exist yet,
+tasks from `tasks.json` (or left inside `settings.json`) are written into it once as a
+checklist, and `tasks.json` is not touched. Invalid external settings edits leave the
+current valid state intact. Atomic writes use unique temporary files and retry transient
+Windows sharing conflicts. A disk mutex serializes saves and watcher reloads. Own saves
+update the comparison snapshot, so they are not echoed back into an active editor.
 
 The Wails WebView2 profile is `webview-wails` under the config directory. Browser-stored
 state therefore survives Wails restarts and remains isolated in test profiles. Tauri's
 previous-origin localStorage is not imported; users reopen their tabs once after migration.
-Settings, tasks, project/session names, pins and transcript history remain available.
+Settings, project/session names, pins and transcript history remain available.
 
 ## Usage
 

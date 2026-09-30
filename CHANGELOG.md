@@ -7,6 +7,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ## [Unreleased]
 
 ### Added
+- An Open view in the sidebar lists every tab in tab-bar order, with its state (working, needs you, idle, exited), agent, project and last output time. Click to switch, drag to reorder, middle-click to close. ([#132](https://github.com/arghya2801/agent-terminal-control/issues/132))
+- A notes pad under the Open view, stored as `notes.md` in the config directory. It shows raw Markdown while editing and renders otherwise, with checkboxes you can tick in place. ([#140](https://github.com/arghya2801/agent-terminal-control/issues/140))
 - The Usage chart splits by provider or by token type (input, output, cache write, cache read), and can draw a 7-day average over the daily bars. ([#27](https://github.com/arghya2801/agent-terminal-control/issues/27))
 - A Scratch view in the sidebar lists chats and scratch sessions apart from the projects. Its + starts a plain Claude or Codex chat in ATC's `chats` directory. ([#135](https://github.com/arghya2801/agent-terminal-control/issues/135))
 - A weekday-by-hour heatmap on the Usage page shows when in the week the usage happens. ([#27](https://github.com/arghya2801/agent-terminal-control/issues/27))
@@ -14,9 +16,11 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ### Changed
 - The installers ship Windows Terminal's ConPTY (`conpty.dll` and `OpenConsole.exe`), and ATC uses it when present. The ConPTY built into Windows swallowed colour queries, so Codex's prompt bar ignored the theme. ([#116](https://github.com/arghya2801/agent-terminal-control/issues/116), [#81](https://github.com/arghya2801/agent-terminal-control/issues/81))
 
+### Removed
+- Tasks, the task panel and linked sessions. On first run, existing tasks are copied into `notes.md` as a checklist with their notes indented; `tasks.json` is left on disk. `Ctrl+Shift+E` goes back to the shell. ([#140](https://github.com/arghya2801/agent-terminal-control/issues/140))
+
 ### Fixed
 - Shift+Enter inserts a line break in Claude Code, as Ctrl+J does, instead of submitting.
-- Long task names wrap in the sidebar instead of being cut off. ([#131](https://github.com/arghya2801/agent-terminal-control/issues/131))
 - Codex always starts with `--no-daemon`, since its background server often failed to start. ([#133](https://github.com/arghya2801/agent-terminal-control/issues/133))
 
 ## [0.4.0] - 2026-09-29
