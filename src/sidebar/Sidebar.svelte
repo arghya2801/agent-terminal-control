@@ -1,25 +1,24 @@
 <script lang="ts">
   import SessionList from './SessionList.svelte';
-  import TaskList from './TaskList.svelte';
+  import OpenList from './OpenList.svelte';
+  import NotesPad from './NotesPad.svelte';
   import { focusActiveTerminal } from '../terminal/manager';
   import { enterList, listKeys, rows } from '../lib/roving';
   import {
     anyProjectExpanded,
     appState,
-    createTask,
     refresh,
     setSidebarView,
     sidebarView,
-    tasks,
     toggleAllProjects,
   } from '../lib/stores.svelte';
-  import type { AgentProvider, Project, SessionMeta, TabKey } from '../types';
+  import type { AgentProvider, Project, SessionMeta, TabKey, TabSummary } from '../types';
   import type { SessionMark } from './SessionNode.svelte';
 
   let {
     activeKey,
     activeSessionId,
-    currentRepo,
+    tabs,
     openProjectKeys,
     sessionMarks,
     onOpenProject,
@@ -27,11 +26,12 @@
     onNewShell,
     onNewAgent,
     onNewChat,
+    onNewTab,
+    onCloseTab,
   }: {
     activeKey: TabKey | null;
     activeSessionId: string | null;
-    /** Project root of the active tab, the default repo for a new task. */
-    currentRepo: string | null;
+    tabs: TabSummary[];
     openProjectKeys: Set<string>;
     /** Sessions with a live tab, by id. */
     sessionMarks: Map<string, SessionMark>;
@@ -40,23 +40,26 @@
     onNewShell: (p: Project) => void;
     onNewAgent: (p: Project, provider: AgentProvider) => void;
     onNewChat: () => void;
+    onNewTab: () => void;
+    onCloseTab: (key: TabKey) => void;
   } = $props();
 
   let refreshing = $state(false);
 
   const view = $derived(sidebarView());
-  const openTasks = $derived(tasks().filter((t) => t.state !== 'done').length);
+  const working = $derived(tabs.filter((t) => !t.exited && t.activity === 'working').length);
+  const waiting = $derived(tabs.filter((t) => !t.exited && t.activity !== 'working' && t.attention).length);
   const scratchSessions = $derived(
     appState.index.projects.filter((p) => p.kind).reduce((n, p) => n + p.sessions.length, 0),
   );
 
   let query = $state('');
-  let taskList = $state<HTMLElement>();
+  let openList = $state<HTMLElement>();
   let sessionList = $state<HTMLElement>();
   let scratchList = $state<HTMLElement>();
   /** Row last focused in each list, where Tab back into it lands. */
   let lastRow: HTMLElement | null = null;
-  const visibleList = () => (view === 'tasks' ? taskList : view === 'scratch' ? scratchList : sessionList);
+  const visibleList = () => (view === 'open' ? openList : view === 'scratch' ? scratchList : sessionList);
   const search = () => document.getElementById('sidebar-search')?.focus();
   const leave = { up: search, escape: focusActiveTerminal };
 
@@ -77,6 +80,36 @@
     void appState.indexRevision;
     return anyProjectExpanded();
   });
+
+  // The Open list's height; the notes pad takes the rest. Per machine, like the usage range.
+  const OPEN_HEIGHT_KEY = 'atc.openListHeight';
+  let openHeight = $state(200);
+  try {
+    openHeight = Number(localStorage.getItem(OPEN_HEIGHT_KEY)) || 200;
+  } catch {
+    // Storage unavailable: keep the default.
+  }
+  function setOpenHeight(h: number) {
+    openHeight = Math.max(60, Math.min(Math.round(h), window.innerHeight - 200));
+    try {
+      localStorage.setItem(OPEN_HEIGHT_KEY, String(openHeight));
+    } catch {
+      // Storage unavailable: the height just is not remembered.
+    }
+  }
+  function dragDivider(e: PointerEvent) {
+    const handle = e.currentTarget as HTMLElement;
+    const y0 = e.clientY;
+    const h0 = openHeight;
+    handle.setPointerCapture(e.pointerId);
+    const move = (m: PointerEvent) => setOpenHeight(h0 + m.clientY - y0);
+    const end = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', end);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', end);
+  }
 
   async function doRefresh() {
     refreshing = true;
@@ -99,11 +132,11 @@
       </button>
       <button
         role="tab"
-        aria-selected={view === 'tasks'}
-        onclick={() => void setSidebarView('tasks')}
-        title="Tasks (Ctrl+Shift+K)"
+        aria-selected={view === 'open'}
+        onclick={() => void setSidebarView('open')}
+        title="Open tabs and notes (Ctrl+Shift+K)"
       >
-        Tasks <span class="n">{openTasks}</span>
+        Open <span class="n">{tabs.length}</span>
       </button>
       <button
         role="tab"
@@ -115,8 +148,8 @@
       </button>
     </div>
     <div class="actions">
-      {#if view === 'tasks'}
-        <button class="icon" onclick={() => createTask({ repo: currentRepo })} title="New task" aria-label="New task">+</button>
+      {#if view === 'open'}
+        <button class="icon" onclick={onNewTab} title="New tab (Ctrl+Shift+T)" aria-label="New tab">+</button>
       {:else if view === 'scratch'}
         <button class="icon" onclick={onNewChat} title="New chat with Claude or Codex" aria-label="New chat">+</button>
       {:else}
@@ -145,9 +178,9 @@
     <input
       id="sidebar-search"
       type="search"
-      placeholder={view === 'tasks' ? 'Filter tasks' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
+      placeholder={view === 'open' ? 'Filter open tabs' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
       title="Filter by project, path, session name or branch (Ctrl+Shift+P)"
-      aria-label={view === 'tasks' ? 'Filter tasks' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
+      aria-label={view === 'open' ? 'Filter open tabs' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
       spellcheck="false"
       autocomplete="off"
       bind:value={query}
@@ -159,19 +192,41 @@
        rebuild every project and session row (#117). -->
   <!-- One tab stop per list; Up/Down move between rows (#103). The list only takes focus
        to hand it to a row, the roving-tabindex pattern, hence the ignores. -->
-  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-  <div
-    class="list"
-    hidden={view !== 'tasks'}
-    tabindex="0"
-    role="group"
-    aria-label="Tasks"
-    bind:this={taskList}
-    onfocus={(e) => taskList && enterList(e, taskList, lastRow)}
-    onfocusin={(e) => (lastRow = (e.target as HTMLElement).closest('[data-row]'))}
-    onkeydown={(e) => taskList && listKeys(e, taskList, leave)}
-  >
-    <TaskList {query} {sessionMarks} {onOpenSession} />
+  <div class="open" hidden={view !== 'open'}>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+    <div
+      class="list open-list"
+      style="height: {openHeight}px"
+      tabindex="0"
+      role="group"
+      aria-label="Open tabs"
+      bind:this={openList}
+      onfocus={(e) => openList && enterList(e, openList, lastRow)}
+      onfocusin={(e) => (lastRow = (e.target as HTMLElement).closest('[data-row]'))}
+      onkeydown={(e) => openList && listKeys(e, openList, leave)}
+    >
+      <OpenList {tabs} {activeKey} {query} onClose={onCloseTab} />
+    </div>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+    <div
+      class="divider"
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Resize the notes"
+      aria-valuenow={openHeight}
+      tabindex="0"
+      title="Drag to resize"
+      onpointerdown={dragDivider}
+      onkeydown={(e) => {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          setOpenHeight(openHeight + (e.key === 'ArrowUp' ? -20 : 20));
+        }
+      }}
+    >
+      Notes <em>notes.md</em>
+    </div>
+    <NotesPad />
   </div>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
   <div
@@ -224,8 +279,8 @@
   </div>
 
   <footer>
-    {#if view === 'tasks'}
-      {tasks().length} tasks · {openTasks} open
+    {#if view === 'open'}
+      {tabs.length} open · {working} working · {waiting} need you
     {:else if view === 'scratch'}
       {scratchSessions} sessions
     {:else}
@@ -322,6 +377,45 @@
   .search input:focus {
     border-color: var(--accent);
     outline: none;
+  }
+  .open {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+  }
+  .open[hidden] {
+    display: none;
+  }
+  .open-list {
+    flex: none;
+  }
+  .divider {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    height: 26px;
+    padding: 0 10px;
+    border-top: 1px solid var(--border);
+    color: var(--fg-faint);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: row-resize;
+    user-select: none;
+  }
+  .divider:hover,
+  .divider:focus-visible {
+    border-top-color: var(--accent);
+    outline: none;
+  }
+  .divider em {
+    font-style: normal;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
   }
   .list {
     flex: 1;

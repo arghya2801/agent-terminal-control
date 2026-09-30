@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -254,40 +253,6 @@ func TestTheThemeOrderIsStable(t *testing.T) {
 		t.Fatal(s)
 	}
 }
-func TestListsLocalBranchesAndIsEmptyOutsideARepo(t *testing.T) {
-	if _, e := exec.LookPath("git"); e != nil {
-		t.Skip("git is not installed")
-	}
-	a := NewApp(t.TempDir())
-	a.load()
-	dir := t.TempDir()
-	branches := func(path string) []string {
-		v, e := a.Invoke("git_branches", core.Object{"path": path})
-		if e != nil {
-			t.Fatal(e)
-		}
-		b := v.([]string)
-		sort.Strings(b)
-		return b
-	}
-	if b := branches(dir); len(b) != 0 {
-		t.Fatal(b)
-	}
-	if b := branches(filepath.Join(dir, "missing")); len(b) != 0 {
-		t.Fatal(b)
-	}
-	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"commit", "-q", "--allow-empty", "-m", "x"}, {"branch", "feat/tasks"}} {
-		cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"}, args...)...)
-		cmd.Dir = dir
-		if out, e := cmd.CombinedOutput(); e != nil {
-			t.Fatal(args, string(out))
-		}
-	}
-	if b := branches(dir); !reflect.DeepEqual(b, []string{"feat/tasks", "main"}) {
-		t.Fatal(b)
-	}
-}
-
 // --- pty/registry.rs
 
 func TestUnknownTerminalIdsAreReportedNotPanickedOn(t *testing.T) {

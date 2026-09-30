@@ -51,35 +51,11 @@ describe('ATC', () => {
     await browser.waitUntil(async () => (await browser.$$('.tab')).length >= 1);
   });
 
-  it('creates a task and links a session to it', async () => {
-    await (await browser.$('button[role="tab"]*=Tasks')).click();
-    await (await browser.$('button[aria-label="New task"]')).click();
-    // The new task opens in rename.
-    // It takes focus itself; typed rather than setValue, which holds on to an element the
-    // list may re-render.
-    await (await browser.$('input.rename')).waitForDisplayed();
-    await browser.keys([Key.Ctrl, 'a']);
-    await browser.keys('E2E task');
-    await browser.keys(Key.Enter);
-    await (await byText('button', 'E2E task')).waitForDisplayed();
-
-    await (await browser.$('button[role="tab"]*=Sessions')).click();
-    await (await byText('button', 'fix the scoreboard')).click({ button: 'right' });
-    await (await browser.$('.menu').$('button*=E2E task')).click();
-
-    await (await browser.$('button[role="tab"]*=Tasks')).click();
-    // Re-queried each time: the row re-renders when the link is saved.
-    const row = async () => (await byText('button', 'E2E task')).getText();
-    await browser
-      // A linked session with a tab open reads "1 open" rather than "1 session".
-      .waitUntil(async () => /\b1 (session|open)\b/.test(await row()))
-      .catch(async () => assert.fail(`the session was not linked; the task reads ${JSON.stringify(await row())}`));
-  });
-
-  it('opens the task panel', async () => {
-    await (await byText('button', 'E2E task')).click();
-    await chord('e');
-    await (await browser.$('aside[aria-label="Task details"]')).waitForDisplayed();
+  it('lists the open tabs in the Open view, the active one selected', async () => {
+    await (await browser.$('button[role="tab"]*=Open')).click();
+    const active = await browser.$('.open-list .row.active');
+    await active.waitForDisplayed();
+    assert.equal((await browser.$$('.open-list .row')).length, (await browser.$$('.tab')).length);
   });
 
   it('opens the Usage page and closes it with Escape', async () => {
@@ -97,7 +73,7 @@ describe('ATC', () => {
 
 const configFile = (name) => join(process.env.E2E_CONFIG, name);
 const readSettings = () => JSON.parse(readFileSync(configFile('settings.json'), 'utf8'));
-const readTasks = () => JSON.parse(readFileSync(configFile('tasks.json'), 'utf8'));
+const readNotes = () => { try { return readFileSync(configFile('notes.md'), 'utf8'); } catch { return ''; } };
 async function settingsPage() { await (await browser.$('button[aria-label="Settings"]')).click(); await (await browser.$('h1=Settings')).waitForDisplayed(); }
 async function shellCommand(command) { await browser.pause(900); await browser.keys(command); await browser.keys(Key.Enter); }
 async function findOutput(text) {
@@ -111,15 +87,15 @@ function sampleRuntime(label) {
 }
 
 describe('desktop behaviour', () => {
-  it('edits task status and Markdown notes and persists them', async () => {
-    const panel = await browser.$('aside[aria-label="Task details"]'); await panel.waitForDisplayed();
-    await (await panel.$('button=In progress')).click();
-    await (await panel.$('.md')).click();
-    await (await panel.$('textarea.notes')).setValue('**Keep this note**\n\nA persisted task.');
+  it('edits Markdown notes, ticks a box and persists both', async () => {
+    await (await browser.$('button[role="tab"]*=Open')).click();
+    await (await browser.$('.notes .md')).click();
+    await (await browser.$('.notes textarea')).setValue('- [ ] **Keep this note**');
     await browser.keys(Key.Escape);
-    await (await panel.$('strong=Keep this note')).waitForDisplayed();
-    await browser.waitUntil(() => readTasks().some((t) => t.title === 'E2E task' && t.state === 'doing' && t.notes.includes('Keep this note')));
-    await (await panel.$('button[aria-label="Hide panel"]')).click();
+    await (await browser.$('.notes strong=Keep this note')).waitForDisplayed();
+    await browser.waitUntil(() => readNotes().includes('- [ ] **Keep this note**'));
+    await (await browser.$('.notes input[data-box="0"]')).click();
+    await browser.waitUntil(() => readNotes().includes('- [x] **Keep this note**'));
   });
   it('filters sessions by label and resets the filter', async () => {
     await (await browser.$('button[role="tab"]*=Sessions')).click();
@@ -195,11 +171,10 @@ describe('desktop behaviour', () => {
     assert.equal(readFileSync(configFile('settings.json'), 'utf8'), '{ broken');
     writeFileSync(configFile('settings.json'), JSON.stringify(settings));
   });
-  it('applies an external task edit live', async () => {
-    const tasks = readTasks(); tasks.push({ id: 999, title: 'Written outside ATC', state: 'todo', repo: null, branches: [], notes: '', sessions: [] });
-    writeFileSync(configFile('tasks.json'), JSON.stringify(tasks));
-    await (await browser.$('button[role="tab"]*=Tasks')).click();
-    await (await byText('button', 'Written outside ATC')).waitForDisplayed();
+  it('applies an external notes edit live', async () => {
+    writeFileSync(configFile('notes.md'), `${readNotes()}\n- [ ] Written outside ATC\n`);
+    await (await browser.$('button[role="tab"]*=Open')).click();
+    await (await browser.$('.notes li*=Written outside ATC')).waitForDisplayed();
     await (await browser.$('button[role="tab"]*=Sessions')).click();
   });
   it('discovers and renames a transcript added while running', async () => {
@@ -276,35 +251,6 @@ describe('desktop behaviour', () => {
   });
 
 
-  it('loads Git branches into a task and refreshes newly created branches', async () => {
-    const repo = configFile('projects/game_tracker_app');
-    const git = (...args) => execFileSync('git', ['-C', repo, ...args], { windowsHide: true, stdio: 'pipe' });
-    git('init'); git('-c','user.name=ATC Test','-c','user.email=atc@example.invalid','commit','--allow-empty','-m','Fixture'); git('branch','e2e-first');
-    await (await browser.$('button[role="tab"]*=Tasks')).click();
-    await (await byText('button','E2E task')).click(); await chord('e');
-    const panel = await browser.$('aside[aria-label="Task details"]'); await panel.waitForDisplayed();
-    await (await browser.$('#task-repo')).selectByAttribute('value',repo);
-    const picker = await panel.$('details.picker');
-    if (!(await picker.getAttribute('open'))) await (await picker.$('summary')).click();
-    const first = await picker.$('label*=e2e-first'); await first.waitForDisplayed(); await first.click();
-    await browser.waitUntil(() => readTasks().some(t => t.title === 'E2E task' && t.branches.includes('e2e-first')));
-    await (await picker.$('summary')).click(); git('branch','e2e-second'); await (await picker.$('summary')).click();
-    await (await picker.$('label*=e2e-second')).waitForDisplayed();
-    await (await panel.$('button[aria-label="Hide panel"]')).click();
-    await (await browser.$('button[role="tab"]*=Sessions')).click();
-  });
-  it('deletes a task only after confirmation', async () => {
-    await (await browser.$('button[role="tab"]*=Tasks')).click();
-    await (await byText('button','Written outside ATC')).click({button:'right'});
-    await (await browser.$('.menu').$('button=Delete task')).click();
-    await (await browser.$('[role="alertdialog"]')).waitForDisplayed();
-    await browser.keys(Key.Escape); assert.ok(readTasks().some(t=>t.id===999));
-    await (await byText('button','Written outside ATC')).click({button:'right'});
-    await (await browser.$('.menu').$('button=Delete task')).click();
-    await (await browser.$('[role="alertdialog"] .confirm')).click();
-    await browser.waitUntil(()=>!readTasks().some(t=>t.id===999));
-    await (await browser.$('button[role="tab"]*=Sessions')).click();
-  });
   it('reorders tabs with an actual pointer drag', async () => {
     const tabs=await browser.$$('.tab'); const first=await tabs[0].getAttribute('data-tab-key');
     await tabs[0].dragAndDrop(tabs[tabs.length-1]);
@@ -333,7 +279,7 @@ describe('desktop behaviour', () => {
     await browser.waitUntil(() => { try { return readFileSync(file,'utf8').includes('codex'); } catch { return false; } }, { timeoutMsg: 'Export did not produce provider CSV data' });
     await browser.keys(Key.Escape);
   });
-  it('persists tabs, custom names, tasks and settings across a page reload', async () => {
+  it('persists tabs, custom names, notes and settings across a page reload', async () => {
     const settings = readSettings(); settings.ui.restoreTabs = true;
     writeFileSync(configFile('settings.json'), JSON.stringify(settings));
     await browser.pause(700);
@@ -342,8 +288,8 @@ describe('desktop behaviour', () => {
     await browser.waitUntil(async () => (await browser.$$('.tab')).length === count, { timeout: 15000 });
     await (await byText('button', 'Behaviour shell')).waitForDisplayed();
     await (await byText('button', 'Portfolio renamed')).waitForDisplayed();
-    await (await browser.$('button[role="tab"]*=Tasks')).click();
-    await (await byText('button', 'E2E task')).waitForDisplayed();
+    await (await browser.$('button[role="tab"]*=Open')).click();
+    await (await browser.$('.notes strong=Keep this note')).waitForDisplayed();
     await (await browser.$('button[role="tab"]*=Sessions')).click();
     await (await byText('button', 'Behaviour shell')).click();
     await shellCommand("Write-Output ('RESTORED_' + 'SHELL')"); await findOutput('RESTORED_SHELL');

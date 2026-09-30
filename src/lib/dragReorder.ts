@@ -1,8 +1,8 @@
 /**
- * Drag to reorder, shared by tabs (#74) and tasks (#104). Pointer events rather than HTML5
- * drag and drop: Tauri's window-level file drop handling swallows HTML5 drags in WebView2,
- * and turning it off would let a dropped file navigate the window. Items only drop onto
- * items of the same group, so a tab cannot land in the task list.
+ * Drag to reorder, shared by the tab bar (#74) and the Open view (#132). Pointer events
+ * rather than HTML5 drag and drop: Tauri's window-level file drop handling swallows HTML5
+ * drags in WebView2, and turning it off would let a dropped file navigate the window.
+ * Items only drop onto items of the same group.
  */
 
 /** `list` with the item at `from` moved to where `to` is. */

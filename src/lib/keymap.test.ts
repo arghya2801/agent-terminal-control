@@ -28,8 +28,9 @@ describe('matchChord', () => {
     expect(matchChord(ctrlShift('R'))).toBe('renameTab');
     expect(matchChord(ctrlShift('U'))).toBe('openUsage');
     expect(matchChord(ctrlShift('P'))).toBe('focusSearch');
-    expect(matchChord(ctrlShift('K'))).toBe('toggleTaskView');
-    expect(matchChord(ctrlShift('E'))).toBe('toggleTaskPanel');
+    expect(matchChord(ctrlShift('K'))).toBe('switchSidebarView');
+    // Released with the task panel; the shell gets Ctrl+Shift+E back.
+    expect(matchChord(ctrlShift('E'))).toBeNull();
     expect(matchChord(ctrlShift('A'))).toBe('askAgent');
     expect(matchChord(press(',', { ctrlKey: true }))).toBe('openSettings');
   });

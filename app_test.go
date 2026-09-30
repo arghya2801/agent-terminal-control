@@ -170,10 +170,6 @@ func TestHeadlessCommandsAndValidation(t *testing.T) {
 	if err != nil || len(core.Arr(v)) != 1 {
 		t.Fatal(v, err)
 	}
-	v, err = a.Invoke("git_branches", core.Object{"path": filepath.Join(dir, "missing")})
-	if err != nil || len(v.([]string)) != 0 {
-		t.Fatal(v, err)
-	}
 }
 func TestClaudeUsageHonorsIsolatedHome(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())

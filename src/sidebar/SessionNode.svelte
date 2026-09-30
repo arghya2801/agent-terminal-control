@@ -17,7 +17,6 @@
     active = false,
     mark = null,
     showBranch = true,
-    task = null,
     renaming = false,
     onRename,
     onRenameCancel,
@@ -31,8 +30,6 @@
     mark?: SessionMark | null;
     /** Off under a branch sub-header, which already says it. */
     showBranch?: boolean;
-    /** The task this session is linked to. */
-    task?: { id: number; title: string } | null;
     renaming?: boolean;
     onRename: (name: string) => void;
     onRenameCancel: () => void;
@@ -90,7 +87,6 @@
         {session.gitBranch}
       </span>
     {/if}
-    {#if task}<span class="task" title="Linked to {task.title}">• task {task.id}</span>{/if}
     <span class="age">{mark ? 'open' : age}</span>
   </span>
 </button>
@@ -191,9 +187,5 @@
   }
   .age {
     color: var(--fg-faint);
-  }
-  .task {
-    color: var(--fg-dim);
-    white-space: nowrap;
   }
 </style>

@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"atc/internal/core"
@@ -408,22 +406,6 @@ func (a *App) Invoke(command string, args core.Object) (any, error) {
 			var palette any
 			if e == nil && json.Unmarshal(b, &palette) == nil {
 				out = append(out, core.Object{"stem": strings.TrimSuffix(f.Name(), filepath.Ext(f.Name())), "palette": palette})
-			}
-		}
-		return out, nil
-	case "git_branches":
-		out := []string{}
-		if !core.IsDir(str("path")) {
-			return out, nil
-		}
-		cmd := exec.Command("git", "branch", "--format=%(refname:short)")
-		cmd.Dir = str("path")
-		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		if b, e := cmd.Output(); e == nil {
-			for _, line := range strings.Split(string(b), "\n") {
-				if line = strings.TrimSpace(line); line != "" {
-					out = append(out, line)
-				}
 			}
 		}
 		return out, nil

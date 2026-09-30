@@ -1,7 +1,7 @@
 /** Typed wrappers over the Go command surface. One place for every command name. */
 
 import { Channel, invoke } from './desktop';
-import type { AgentProvider, CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot, Task } from '../types';
+import type { AgentProvider, CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot } from '../types';
 
 export { Channel };
 
@@ -52,12 +52,12 @@ export function settingsSet(settings: Settings): Promise<void> {
   return invoke('settings_set', { settings });
 }
 
-export function tasksGet(): Promise<Task[]> {
-  return invoke<Task[]>('tasks_get');
+export function notesGet(): Promise<string> {
+  return invoke<string>('notes_get');
 }
 
-export function tasksSet(tasks: Task[]): Promise<void> {
-  return invoke('tasks_set', { tasks });
+export function notesSet(text: string): Promise<void> {
+  return invoke('notes_set', { text });
 }
 
 export function openInExplorer(path: string): Promise<void> {
@@ -67,11 +67,6 @@ export function openInExplorer(path: string): Promise<void> {
 /** Open an http(s) link in the default browser. */
 export function openUrl(url: string): Promise<void> {
   return invoke('open_url', { url });
-}
-
-/** Local branches of the repo at `path`; empty when it is not one. */
-export function gitBranches(path: string): Promise<string[]> {
-  return invoke('git_branches', { path });
 }
 
 /** Compatibility command; Wails handles Ctrl+Shift+F12 natively in debug builds. */
