@@ -69,13 +69,10 @@ func TestAgentQuoting(t *testing.T) {
 	s := Defaults()
 	Obj(s["codex"])["command"] = `C:\O'Brien\codex.exe`
 	Obj(s["codex"])["homeDir"] = `D:\Codex home\$literal`
-	got := AgentCommand(s, "codex", "id';$(bad)", false)
-	want := `$env:CODEX_HOME = 'D:\Codex home\$literal'; & 'C:\O''Brien\codex.exe' resume 'id'';$(bad)'`
+	got := AgentCommand(s, "codex", "id';$(bad)")
+	want := `$env:CODEX_HOME = 'D:\Codex home\$literal'; & 'C:\O''Brien\codex.exe' --no-daemon resume 'id'';$(bad)'`
 	if got != want {
 		t.Fatalf("%q != %q", got, want)
-	}
-	if AgentCommand(Defaults(), "codex", "abc", true) != "codex --no-daemon resume abc" {
-		t.Fatal("missing no-daemon")
 	}
 }
 func TestFixtureDiscovery(t *testing.T) {

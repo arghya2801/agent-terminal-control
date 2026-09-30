@@ -210,14 +210,14 @@ export function isNativePaste(e: ChordEvent, bracketedPaste: boolean): boolean {
 export const SHIFT_ENTER = '\x1b[13;28;13;1;16;1_\x1b[13;28;13;0;16;1_';
 
 /**
- * Codex binds Shift+Enter to insert a newline, but xterm/WebView2 can collapse it to
- * ordinary Enter. Ctrl+J is ATC's alternate spelling for the same action.
+ * xterm sends Shift+Enter as plain Enter, which submits. For Codex, Shift+Enter and
+ * Ctrl+J become a Shift+Enter key record. For Claude, Shift+Enter becomes the LF that
+ * Ctrl+J already sends.
  */
-export function codexNewlineInput(e: ChordEvent): string | null {
-  if (e.type !== undefined && e.type !== 'keydown') return null;
+export function newlineInput(e: ChordEvent, agent: 'codex' | 'claude' | null): string | null {
+  if (!agent || (e.type !== undefined && e.type !== 'keydown')) return null;
   if (e.altKey || e.metaKey) return null;
-  const matches =
-    (e.key.toLowerCase() === 'j' && e.ctrlKey && !e.shiftKey) ||
-    (e.key === 'Enter' && !e.ctrlKey && e.shiftKey);
-  return matches ? SHIFT_ENTER : null;
+  const shiftEnter = e.key === 'Enter' && !e.ctrlKey && e.shiftKey;
+  if (agent === 'claude') return shiftEnter ? '\n' : null;
+  return shiftEnter || (e.key.toLowerCase() === 'j' && e.ctrlKey && !e.shiftKey) ? SHIFT_ENTER : null;
 }

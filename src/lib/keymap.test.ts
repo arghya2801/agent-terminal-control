@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SHIFT_ENTER, chordLabel, codexNewlineInput, isNativePaste, matchChord, shortcutGroups, type ChordEvent } from './keymap';
+import { SHIFT_ENTER, chordLabel, isNativePaste, newlineInput, matchChord, shortcutGroups, type ChordEvent } from './keymap';
 
 const press = (key: string, mods: Partial<ChordEvent> = {}): ChordEvent => ({
   key,
@@ -168,19 +168,28 @@ describe('isNativePaste', () => {
   });
 });
 
-describe('codexNewlineInput', () => {
-  it('maps Ctrl+J and Shift+Enter to a Shift+Enter key record', () => {
-    expect(codexNewlineInput(press('j', { ctrlKey: true }))).toBe(SHIFT_ENTER);
-    expect(codexNewlineInput(press('Enter', { shiftKey: true }))).toBe(SHIFT_ENTER);
+describe('newlineInput', () => {
+  it('maps Ctrl+J and Shift+Enter to a Shift+Enter key record for Codex', () => {
+    expect(newlineInput(press('j', { ctrlKey: true }), 'codex')).toBe(SHIFT_ENTER);
+    expect(newlineInput(press('Enter', { shiftKey: true }), 'codex')).toBe(SHIFT_ENTER);
     // Key down then key up of VK_RETURN with SHIFT_PRESSED, in win32-input-mode.
     expect(SHIFT_ENTER).toBe('\x1b[13;28;13;1;16;1_\x1b[13;28;13;0;16;1_');
   });
 
-  it('does not turn plain Enter or modified near-misses into newlines', () => {
-    expect(codexNewlineInput(press('Enter'))).toBeNull();
-    expect(codexNewlineInput(press('j', { ctrlKey: true, shiftKey: true }))).toBeNull();
-    expect(codexNewlineInput(press('j', { ctrlKey: true, altKey: true }))).toBeNull();
-    expect(codexNewlineInput(press('j', { ctrlKey: true, type: 'keyup' }))).toBeNull();
+  it('maps Shift+Enter to LF for Claude and leaves Ctrl+J to xterm', () => {
+    expect(newlineInput(press('Enter', { shiftKey: true }), 'claude')).toBe('\n');
+    expect(newlineInput(press('j', { ctrlKey: true }), 'claude')).toBeNull();
+  });
+
+  it('leaves plain shells and near-misses alone', () => {
+    expect(newlineInput(press('Enter', { shiftKey: true }), null)).toBeNull();
+    for (const agent of ['codex', 'claude'] as const) {
+      expect(newlineInput(press('Enter'), agent)).toBeNull();
+      expect(newlineInput(press('Enter', { shiftKey: true, ctrlKey: true }), agent)).toBeNull();
+      expect(newlineInput(press('Enter', { shiftKey: true, type: 'keyup' }), agent)).toBeNull();
+    }
+    expect(newlineInput(press('j', { ctrlKey: true, shiftKey: true }), 'codex')).toBeNull();
+    expect(newlineInput(press('j', { ctrlKey: true, altKey: true }), 'codex')).toBeNull();
   });
 });
 

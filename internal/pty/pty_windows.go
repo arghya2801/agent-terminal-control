@@ -412,12 +412,6 @@ func KillTree(pid uint32) {
 	}
 	kill(pid)
 }
-func JobBlocksBreakaway() bool {
-	var info windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION
-	e := windows.QueryInformationJobObject(0, windows.JobObjectExtendedLimitInformation, uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)), nil)
-	return e == nil && info.BasicLimitInformation.LimitFlags&(windows.JOB_OBJECT_LIMIT_BREAKAWAY_OK|windows.JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK) == 0
-}
-
 var nextID atomic.Uint64
 
 func ID() string { return fmt.Sprintf("pty-%d", nextID.Add(1)) }

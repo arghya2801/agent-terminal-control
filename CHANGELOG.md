@@ -6,6 +6,11 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Fixed
+- Shift+Enter inserts a line break in Claude Code, as Ctrl+J does, instead of submitting.
+- Long task names wrap in the sidebar instead of being cut off. ([#131](https://github.com/arghya2801/agent-terminal-control/issues/131))
+- Codex always starts with `--no-daemon`, since its background server often failed to start. ([#133](https://github.com/arghya2801/agent-terminal-control/issues/133))
+
 ## [0.4.0] - 2026-09-29
 
 ATC now runs on a Go/Wails host instead of Rust/Tauri. The interface is the same Svelte and xterm.js app, and settings, tasks, session names and pinned projects carry over unchanged. The installer upgrades an existing 0.3.x install in place.

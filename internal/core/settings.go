@@ -196,14 +196,15 @@ func Argument(s string) string {
 	}
 	return s
 }
-func AgentCommand(s Object, provider, session string, noDaemon bool) string {
+// Codex always runs with --no-daemon: its background server often fails to start under ATC (#133).
+func AgentCommand(s Object, provider, session string) string {
 	cfg := Obj(s[provider])
 	exe := Str(cfg["command"])
 	if exe != "claude" && exe != "codex" {
 		exe = "& " + Quote(exe)
 	}
 	parts := []string{exe}
-	if provider == "codex" && noDaemon {
+	if provider == "codex" {
 		parts = append(parts, "--no-daemon")
 	}
 	if session != "" {

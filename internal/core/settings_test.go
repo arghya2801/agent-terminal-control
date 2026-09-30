@@ -80,25 +80,25 @@ func TestCommandsQuotePathsIdsAndHomeAsLiteralPowerShellArguments(t *testing.T) 
 	Obj(s["codex"])["command"] = `C:\O'Brien\codex.exe`
 	Obj(s["codex"])["homeDir"] = `D:\Codex home\$literal`
 	for _, c := range []struct{ provider, session, want string }{
-		{"codex", "id';$(bad)", `$env:CODEX_HOME = 'D:\Codex home\$literal'; & 'C:\O''Brien\codex.exe' resume 'id'';$(bad)'`},
+		{"codex", "id';$(bad)", `$env:CODEX_HOME = 'D:\Codex home\$literal'; & 'C:\O''Brien\codex.exe' --no-daemon resume 'id'';$(bad)'`},
 		{"claude", "abc", "claude --resume abc"},
 		{"claude", "", "claude"},
 	} {
-		if got := AgentCommand(s, c.provider, c.session, false); got != c.want {
+		if got := AgentCommand(s, c.provider, c.session); got != c.want {
 			t.Errorf("%q != %q", got, c.want)
 		}
 	}
 }
-func TestCodexRunsStandaloneWhenTheHostJobForbidsBreakaway(t *testing.T) {
-	if got := AgentCommand(Defaults(), "codex", "abc", true); got != "codex --no-daemon resume abc" {
+func TestCodexAlwaysRunsStandalone(t *testing.T) {
+	if got := AgentCommand(Defaults(), "codex", "abc"); got != "codex --no-daemon resume abc" {
 		t.Fatal(got)
 	}
-	if got := AgentCommand(Defaults(), "claude", "", true); got != "claude" {
+	if got := AgentCommand(Defaults(), "claude", ""); got != "claude" {
 		t.Fatal(got)
 	}
 }
 func TestSimpleArgumentsStayReadableAndExpressionsStayLiteral(t *testing.T) {
-	if got := AgentCommand(Defaults(), "codex", "", false); got != "codex" {
+	if got := AgentCommand(Defaults(), "codex", ""); got != "codex --no-daemon" {
 		t.Fatal(got)
 	}
 	if Argument("0199-abc") != "0199-abc" {
