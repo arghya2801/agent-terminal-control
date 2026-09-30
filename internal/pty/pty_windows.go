@@ -108,11 +108,11 @@ func Start(args []string, opts Options, emit func(Event)) (*Session, error) {
 			s.input.Close()
 			s.output.Close()
 			if s.console != 0 {
-				windows.ClosePseudoConsole(s.console)
+				releaseConsole(s.console)
 			}
 		}
 	}()
-	if e := windows.CreatePseudoConsole(windows.Coord{X: dimension(opts.Cols), Y: dimension(opts.Rows)}, inRead, outWrite, 0, &s.console); e != nil {
+	if e := createConsole(windows.Coord{X: dimension(opts.Cols), Y: dimension(opts.Rows)}, inRead, outWrite, &s.console); e != nil {
 		return nil, e
 	}
 	attrs, e := windows.NewProcThreadAttributeList(1)
@@ -320,7 +320,7 @@ func (s *Session) closeConsole() {
 	s.console = 0
 	s.mu.Unlock()
 	if h != 0 {
-		windows.ClosePseudoConsole(h)
+		releaseConsole(h)
 	}
 }
 func (s *Session) cleanup() {
@@ -345,7 +345,7 @@ func (s *Session) Resize(cols, rows int) error {
 	if s.console == 0 {
 		return fmt.Errorf("terminal has exited")
 	}
-	return windows.ResizePseudoConsole(s.console, windows.Coord{X: dimension(cols), Y: dimension(rows)})
+	return resizeConsole(s.console, windows.Coord{X: dimension(cols), Y: dimension(rows)})
 }
 func (s *Session) Ack(n uint64) {
 	s.mu.Lock()
