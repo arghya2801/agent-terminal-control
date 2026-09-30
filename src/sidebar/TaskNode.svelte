@@ -122,10 +122,8 @@
   }
   .title {
     display: block;
-    overflow: hidden;
     color: var(--fg-bright);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
   .done .title {
     color: var(--fg-dim);
