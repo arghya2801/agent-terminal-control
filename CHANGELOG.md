@@ -23,6 +23,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ### Fixed
 - Shift+Enter inserts a line break in Claude Code, as Ctrl+J does, instead of submitting.
 - Codex always starts with `--no-daemon`, since its background server often failed to start. ([#133](https://github.com/arghya2801/agent-terminal-control/issues/133))
+- Codex plan limits wait up to 30 s per step instead of 15 s, which a cold `codex app-server` could exceed on a busy machine, and a failure now names the step that timed out.
 - Usage bars for days under $1 (or under one token) drew short instead of to scale.
 
 ## [0.4.0] - 2026-09-29
