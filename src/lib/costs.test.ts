@@ -304,6 +304,8 @@ describe('usageBlocks', () => {
       ['08', 3, 3],
     ]);
     expect(blocks[2].end - blocks[2].start).toBe(5 * 3_600_000);
+    expect(blocks.some((b) => b.partial)).toBe(false);
+    expect(usageBlocks([row({ costUsd: null })], hourToLocalDay('2026-09-10T12'), hourToLocalDay('2026-09-10T12'))[0].partial).toBe(true);
   });
 });
 

@@ -337,6 +337,8 @@ export interface UsageBlock {
   end: number;
   tokens: number;
   cost: number;
+  /** Some usage in the block has no price, so `cost` leaves it out. */
+  partial: boolean;
   /** Hours inside the block that had usage. */
   activeHours: number;
 }
@@ -346,21 +348,24 @@ const HOUR_MS = 3_600_000;
 /** Usage grouped into 5-hour windows like Claude's session limit, newest first. Rows are
  *  per hour, so a block's edges are only accurate to the hour. */
 export function usageBlocks(rows: CostRow[], from: string, to: string): UsageBlock[] {
-  const hours = new Map<number, { tokens: number; cost: number }>();
+  const hours = new Map<number, { tokens: number; cost: number; partial: boolean }>();
   for (const r of rows) {
     if (hourToLocalDay(r.hour) < from || hourToLocalDay(r.hour) > to) continue;
     const t = Date.parse(`${r.hour}:00:00Z`);
-    const h = hours.get(t) ?? { tokens: 0, cost: 0 };
+    const h = hours.get(t) ?? { tokens: 0, cost: 0, partial: false };
     h.tokens += r.totalTokens;
     h.cost += r.costUsd ?? 0;
+    h.partial ||= r.costUsd === null || r.unpriced;
     hours.set(t, h);
   }
   const blocks: UsageBlock[] = [];
   for (const t of [...hours.keys()].sort((a, b) => a - b)) {
     let b = blocks[blocks.length - 1];
-    if (!b || t >= b.end) blocks.push((b = { start: t, end: t + 5 * HOUR_MS, tokens: 0, cost: 0, activeHours: 0 }));
-    b.tokens += hours.get(t)!.tokens;
-    b.cost += hours.get(t)!.cost;
+    if (!b || t >= b.end) blocks.push((b = { start: t, end: t + 5 * HOUR_MS, tokens: 0, cost: 0, partial: false, activeHours: 0 }));
+    const h = hours.get(t)!;
+    b.tokens += h.tokens;
+    b.cost += h.cost;
+    b.partial ||= h.partial;
     b.activeHours++;
   }
   return blocks.reverse();
