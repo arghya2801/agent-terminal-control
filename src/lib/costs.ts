@@ -313,6 +313,99 @@ export function weekHeatmap(rows: CostRow[], from: string, to: string, metric: '
   return grid;
 }
 
+/** Share of input tokens served from the prompt cache, per local day from the first day
+ *  with usage; null on days with no input. */
+export function cacheHitRate(rows: CostRow[], from: string, to: string): { day: string; rate: number | null }[] {
+  const read = new Map<string, number>();
+  const fed = new Map<string, number>();
+  for (const r of rows) {
+    const day = hourToLocalDay(r.hour);
+    if (day < from || day > to) continue;
+    fed.set(day, (fed.get(day) ?? 0) + r.input + r.cacheRead + r.cacheWrite);
+    read.set(day, (read.get(day) ?? 0) + r.cacheRead);
+  }
+  if (!fed.size) return [];
+  return daysBetween([...fed.keys()].sort()[0], to).map((day) => {
+    const f = fed.get(day) ?? 0;
+    return { day, rate: f ? (read.get(day) ?? 0) / f : null };
+  });
+}
+
+export interface UsageBlock {
+  /** Epoch ms. A block runs five hours from its first hour with usage. */
+  start: number;
+  end: number;
+  tokens: number;
+  cost: number;
+  /** Some usage in the block has no price, so `cost` leaves it out. */
+  partial: boolean;
+  /** Hours inside the block that had usage. */
+  activeHours: number;
+}
+
+const HOUR_MS = 3_600_000;
+
+/** Usage grouped into 5-hour windows like Claude's session limit, newest first. Rows are
+ *  per hour, so a block's edges are only accurate to the hour. */
+export function usageBlocks(rows: CostRow[], from: string, to: string): UsageBlock[] {
+  const hours = new Map<number, { tokens: number; cost: number; partial: boolean }>();
+  for (const r of rows) {
+    if (hourToLocalDay(r.hour) < from || hourToLocalDay(r.hour) > to) continue;
+    const t = Date.parse(`${r.hour}:00:00Z`);
+    const h = hours.get(t) ?? { tokens: 0, cost: 0, partial: false };
+    h.tokens += r.totalTokens;
+    h.cost += r.costUsd ?? 0;
+    h.partial ||= r.costUsd === null || r.unpriced;
+    hours.set(t, h);
+  }
+  const blocks: UsageBlock[] = [];
+  for (const t of [...hours.keys()].sort((a, b) => a - b)) {
+    let b = blocks[blocks.length - 1];
+    if (!b || t >= b.end) blocks.push((b = { start: t, end: t + 5 * HOUR_MS, tokens: 0, cost: 0, partial: false, activeHours: 0 }));
+    const h = hours.get(t)!;
+    b.tokens += h.tokens;
+    b.cost += h.cost;
+    b.partial ||= h.partial;
+    b.activeHours++;
+  }
+  return blocks.reverse();
+}
+
+/** Usage per local day across all rows, for the activity calendar. */
+export function dailyTotals(rows: CostRow[], metric: 'cost' | 'tokens'): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const r of rows) {
+    const day = hourToLocalDay(r.hour);
+    out.set(day, (out.get(day) ?? 0) + (metric === 'cost' ? (r.costUsd ?? 0) : r.totalTokens));
+  }
+  return out;
+}
+
+/** Days with usage and streaks of consecutive ones. The current streak may end yesterday:
+ *  today is not over yet. */
+export function streaks(days: Iterable<string>, today: string): { active: number; current: number; longest: number } {
+  const set = new Set(days);
+  const prev = (d: string) => {
+    const x = new Date(`${d}T00:00:00`);
+    x.setDate(x.getDate() - 1);
+    return localDay(x);
+  };
+  let longest = 0;
+  for (const d of set) {
+    if (set.has(prev(d))) continue;
+    let n = 0;
+    for (let x = d; set.has(x); n++) {
+      const next = new Date(`${x}T00:00:00`);
+      next.setDate(next.getDate() + 1);
+      x = localDay(next);
+    }
+    longest = Math.max(longest, n);
+  }
+  let current = 0;
+  for (let d = set.has(today) ? today : prev(today); set.has(d); d = prev(d)) current++;
+  return { active: set.size, current, longest };
+}
+
 export interface SessionStats {
   cost: number;
   tokens: number;

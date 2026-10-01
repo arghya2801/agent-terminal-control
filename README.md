@@ -133,6 +133,11 @@ build times, build resource use, runtime memory, validation, and migration detai
 - A spend chart that splits by model, project, provider or token type, shows a running
   total or a 7-day average, and goes hourly for a single day; step day by day or click a bar
 - A weekday-by-hour heatmap of when the usage happened
+- Share mode: split bars at 100%, to compare the mix between days
+- A year calendar of daily usage with active days and streaks
+- 5-hour blocks: usage in windows like Claude's session limit, each with active hours,
+  tokens and cost
+- Cache hit rate: the daily share of input tokens read from the prompt cache
 - The focused tab's session on its own: cost, tokens by model and cache share
 
 **Configuration**

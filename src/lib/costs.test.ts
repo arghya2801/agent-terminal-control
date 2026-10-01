@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cacheHitRate,
   chartData,
+  dailyTotals,
+  streaks,
+  usageBlocks,
   sessionStats,
   monetary,
   formatTokens,
@@ -272,6 +276,56 @@ describe('chartData', () => {
 describe('rollingAverage', () => {
   it('averages the trailing span, over fewer values at the start', () => {
     expect(rollingAverage([2, 4, 6, 8], 3)).toEqual([2, 3, 4, 6]);
+  });
+});
+
+describe('cacheHitRate', () => {
+  it('divides cache reads by all input, per day, null on idle days', () => {
+    const day = hourToLocalDay('2026-09-10T12');
+    const next = hourToLocalDay('2026-09-12T12');
+    const rates = cacheHitRate(
+      [row({ input: 10, cacheWrite: 10, cacheRead: 80 }), row({ hour: '2026-09-12T12', input: 50, cacheWrite: 0, cacheRead: 50 })],
+      day,
+      next,
+    );
+    expect(rates.map((r) => r.rate)).toEqual([0.8, null, 0.5]);
+  });
+});
+
+describe('usageBlocks', () => {
+  it('starts a block at the first hour with usage and a new one five hours later', () => {
+    const hours = ['2026-09-10T08', '2026-09-10T09', '2026-09-10T12', '2026-09-10T13', '2026-09-10T20'];
+    const rows = hours.map((hour) => row({ hour, costUsd: 1 }));
+    const blocks = usageBlocks(rows, hourToLocalDay('2026-09-09T12'), hourToLocalDay('2026-09-11T12'));
+    // 08–13 holds 08, 09 and 12; 13 starts the next block; 20 is a third. Newest first.
+    expect(blocks.map((b) => [new Date(b.start).toISOString().slice(11, 13), b.activeHours, b.cost])).toEqual([
+      ['20', 1, 1],
+      ['13', 1, 1],
+      ['08', 3, 3],
+    ]);
+    expect(blocks[2].end - blocks[2].start).toBe(5 * 3_600_000);
+    expect(blocks.some((b) => b.partial)).toBe(false);
+    expect(usageBlocks([row({ costUsd: null })], hourToLocalDay('2026-09-10T12'), hourToLocalDay('2026-09-10T12'))[0].partial).toBe(true);
+  });
+});
+
+describe('streaks', () => {
+  it('counts active days, the longest run and a current run that may end yesterday', () => {
+    const days = ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-08', '2026-09-09'];
+    expect(streaks(days, '2026-09-10')).toEqual({ active: 5, current: 2, longest: 3 });
+    expect(streaks(days, '2026-09-09')).toEqual({ active: 5, current: 2, longest: 3 });
+    expect(streaks(days, '2026-09-12').current).toBe(0);
+  });
+
+  it('runs across a month end', () => {
+    expect(streaks(['2026-08-31', '2026-09-01'], '2026-09-01').longest).toBe(2);
+  });
+});
+
+describe('dailyTotals', () => {
+  it('sums each local day', () => {
+    const totals = dailyTotals([row({ costUsd: 2 }), row({ costUsd: 3 })], 'cost');
+    expect(totals.get(hourToLocalDay('2026-09-10T12'))).toBe(5);
   });
 });
 

@@ -12,6 +12,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - The Usage chart splits by provider or by token type (input, output, cache write, cache read), and can draw a 7-day average over the daily bars. ([#27](https://github.com/arghya2801/agent-terminal-control/issues/27))
 - A Scratch view in the sidebar lists chats and scratch sessions apart from the projects. Its + starts a plain Claude or Codex chat in ATC's `chats` directory. ([#135](https://github.com/arghya2801/agent-terminal-control/issues/135))
 - A weekday-by-hour heatmap on the Usage page shows when in the week the usage happens. ([#27](https://github.com/arghya2801/agent-terminal-control/issues/27))
+- More Usage views: a year calendar with active days and streaks, 5-hour blocks like Claude's session limit, the daily cache hit rate, and a Share mode that draws split bars at 100%. ([#27](https://github.com/arghya2801/agent-terminal-control/issues/27))
 
 ### Changed
 - The installers ship Windows Terminal's ConPTY (`conpty.dll` and `OpenConsole.exe`), and ATC uses it when present. The ConPTY built into Windows swallowed colour queries, so Codex's prompt bar ignored the theme. ([#116](https://github.com/arghya2801/agent-terminal-control/issues/116), [#81](https://github.com/arghya2801/agent-terminal-control/issues/81))
@@ -22,6 +23,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ### Fixed
 - Shift+Enter inserts a line break in Claude Code, as Ctrl+J does, instead of submitting.
 - Codex always starts with `--no-daemon`, since its background server often failed to start. ([#133](https://github.com/arghya2801/agent-terminal-control/issues/133))
+- Usage bars for days under $1 (or under one token) drew short instead of to scale.
 
 ## [0.4.0] - 2026-09-29
 

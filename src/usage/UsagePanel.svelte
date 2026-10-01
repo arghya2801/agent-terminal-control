@@ -5,7 +5,7 @@
   import { save } from '../lib/desktop';
   import { claudeUsage, codexUsage, codexUsageStop, usageCosts, writeTextFile } from '../lib/ipc';
   import { appState } from '../lib/stores.svelte';
-  import { chartData, rollingAverage, sessionStats, formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv, weekHeatmap, type Split } from '../lib/costs';
+  import { cacheHitRate, chartData, dailyTotals, hourToLocalDay, rollingAverage, sessionStats, streaks, usageBlocks, formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv, weekHeatmap, type Split, type UsageBlock } from '../lib/costs';
   import {
     clampDays,
     isActive,
@@ -261,8 +261,10 @@
   const metricTotal = $derived(metric === 'tokens' ? summary.tokens : summary.total);
   let split = $state<Split>('none');
   let cumulative = $state(false);
-  let view = $state<'bars' | 'week'>('bars');
+  let view = $state<'bars' | 'week' | 'calendar' | 'blocks' | 'cache'>('bars');
   let showAverage = $state(false);
+  /** 100% stacked bars, so the mix stays readable when totals swing. */
+  let share = $state(false);
   // Token kinds have no cost of their own, and one provider needs no provider split.
   const activeSplit = $derived<Split>((split === 'type' && metric === 'cost') || (split === 'provider' && provider !== 'all') ? 'none' : split);
   const chart = $derived(
@@ -270,8 +272,10 @@
   );
   const chartMax = $derived(Math.max(0, ...chart.buckets.map((b) => b.total)));
   const chartHourly = $derived(from === to);
-  const canAverage = $derived(!chartHourly && !cumulative && chart.buckets.length >= 7);
+  const asShare = $derived(share && chart.series.length > 1);
+  const canAverage = $derived(!chartHourly && !cumulative && !asShare && chart.buckets.length >= 7);
   const average = $derived(showAverage && canAverage ? rollingAverage(chart.buckets.map((b) => b.total)) : null);
+  const pct = (v: number, of: number) => `${of ? Math.round((v / of) * 100) : 0}%`;
   /** Bucket under the pointer, for the read-out above the chart. */
   let hovered = $state<number | null>(null);
   const shown = $derived(hovered === null ? null : chart.buckets[hovered]);
@@ -285,8 +289,63 @@
   const week = $derived(weekHeatmap(filteredRows, from <= to ? from : to, from <= to ? to : from, metric));
   const weekMax = $derived(Math.max(0, ...week.flat()));
   /** Four steps of the accent over the surface: one hue, light to dark. */
-  const level = (v: number) => (v > 0 && weekMax ? Math.ceil((v / weekMax) * 4) : 0);
+  const level = (v: number, max: number) => (v > 0 && max ? Math.ceil((v / max) * 4) : 0);
   let hoveredCell = $state<{ day: number; hour: number } | null>(null);
+
+  // Activity calendar: the last 53 weeks, Monday first, whatever the range.
+  const dayTotals = $derived(dailyTotals(filteredRows, metric));
+  const calendar = $derived.by(() => {
+    const d = new Date(`${today}T00:00:00`);
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - 52 * 7);
+    return Array.from({ length: 53 }, () =>
+      Array.from({ length: 7 }, () => {
+        const day = localDay(d);
+        d.setDate(d.getDate() + 1);
+        return day;
+      }),
+    );
+  });
+  const calendarMax = $derived(Math.max(0, ...calendar.flat().map((d) => dayTotals.get(d) ?? 0)));
+  const streak = $derived(streaks([...dayTotals].filter(([, v]) => v > 0).map(([d]) => d), today));
+  const monthLabel = (week: string[]) =>
+    Number(week[0].slice(8)) <= 7 ? new Date(`${week[0]}T00:00:00`).toLocaleString(undefined, { month: 'short' }) : '';
+  let hoveredDay = $state<string | null>(null);
+
+  // 5-hour blocks within the range.
+  const blocks = $derived(usageBlocks(filteredRows, from <= to ? from : to, from <= to ? to : from));
+  const blockValue = (b: UsageBlock) => (metric === 'tokens' ? b.tokens : b.cost);
+  const blockMax = $derived(Math.max(0, ...blocks.map(blockValue)));
+  const BLOCKS_SHOWN = 50;
+  const blockWindow = (b: UsageBlock) =>
+    `${new Date(b.start).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} – ${new Date(b.end).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
+
+  // Cache hit rate per day within the range.
+  const rates = $derived(cacheHitRate(filteredRows, from <= to ? from : to, from <= to ? to : from));
+  /** The line, split where a day had no input so gaps stay gaps. */
+  const rateLines = $derived.by(() => {
+    const lines: string[] = [];
+    let line: string[] = [];
+    rates.forEach((r, i) => {
+      if (r.rate === null) {
+        if (line.length) lines.push(line.join(' '));
+        line = [];
+      } else line.push(`${i + 0.5},${100 - r.rate * 100}`);
+    });
+    if (line.length) lines.push(line.join(' '));
+    return lines;
+  });
+  const overallRate = $derived.by(() => {
+    let read = 0;
+    let fed = 0;
+    for (const r of filteredRows) {
+      const day = hourToLocalDay(r.hour);
+      if (day < (from <= to ? from : to) || day > (from <= to ? to : from)) continue;
+      read += r.cacheRead;
+      fed += r.input + r.cacheRead + r.cacheWrite;
+    }
+    return fed ? read / fed : null;
+  });
+  let hoveredRate = $state<number | null>(null);
   /** The focused tab's session, all time (#80). */
   const session = $derived(current ? sessionStats(rows, current) : null);
   const localTime = (hour: string) =>
@@ -487,15 +546,22 @@
     <div class="group" aria-label="Chart options">
       <button class="btn" class:primary={view === 'bars'} onclick={() => (view = 'bars')}>Over time</button>
       <button class="btn" class:primary={view === 'week'} onclick={() => (view = 'week')}>By weekday and hour</button>
-      {#if view === 'bars'}
-        <span class="sep"></span>
+      <button class="btn" class:primary={view === 'calendar'} onclick={() => (view = 'calendar')}>Calendar</button>
+      <button class="btn" class:primary={view === 'blocks'} onclick={() => (view = 'blocks')}>5-hour blocks</button>
+      <button class="btn" class:primary={view === 'cache'} onclick={() => (view = 'cache')}>Cache hit rate</button>
+    </div>
+    {#if view === 'bars'}
+      <div class="group" aria-label="Bar options">
         <button class="btn" class:primary={!cumulative} onclick={() => (cumulative = false)}>{chartHourly ? 'Hourly' : 'Daily'}</button>
         <button class="btn" class:primary={cumulative} onclick={() => (cumulative = true)}>Running total</button>
+        {#if chart.series.length > 1}
+          <button class="btn" class:primary={share} aria-pressed={share} onclick={() => (share = !share)}>Share</button>
+        {/if}
         {#if canAverage}
           <button class="btn" class:primary={showAverage} aria-pressed={showAverage} onclick={() => (showAverage = !showAverage)}>7-day average</button>
         {/if}
-      {/if}
-    </div>
+      </div>
+    {/if}
     {#if view === 'bars'}
       <div class="group" aria-label="Split the chart">
         <button class="btn" class:primary={activeSplit === 'none'} onclick={() => (split = 'none')}>Total</button>
@@ -524,7 +590,7 @@
           <span class="heat-day muted">{WEEKDAYS[d]}</span>
           {#each hours as v, h (h)}
             <span
-              class="cell l{level(v)}"
+              class="cell l{level(v, weekMax)}"
               class:hot={hoveredCell?.day === d && hoveredCell?.hour === h}
               role="presentation"
               onmouseenter={() => (hoveredCell = { day: d, hour: h })}
@@ -536,12 +602,99 @@
       <div class="heat-scale muted">
         Less {#each [0, 1, 2, 3, 4] as l (l)}<span class="cell l{l}"></span>{/each} More
       </div>
+    {:else if view === 'calendar'}
+      <div class="readout muted" aria-live="polite">
+        {#if hoveredDay}
+          <strong>{hoveredDay}</strong> · {fmt(dayTotals.get(hoveredDay) ?? 0)}
+        {:else}
+          {streak.active} active {streak.active === 1 ? 'day' : 'days'} · current streak {streak.current} · longest {streak.longest}. The last year, whatever the range; click a day to show it.
+        {/if}
+      </div>
+      <div class="calendar" role="img" aria-label={`${metric === 'tokens' ? 'Tokens' : 'Estimated cost'} per day over the last year`}>
+        <div class="cal-days muted"><span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span><span></span></div>
+        {#each calendar as days (days[0])}
+          <div class="cal-week">
+            <span class="cal-month muted">{monthLabel(days)}</span>
+            {#each days as day (day)}
+              {#if day > today}
+                <span class="cell future"></span>
+              {:else}
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <span
+                  class="cell l{level(dayTotals.get(day) ?? 0, calendarMax)}"
+                  class:hot={hoveredDay === day}
+                  role="presentation"
+                  onmouseenter={() => (hoveredDay = day)}
+                  onmouseleave={() => (hoveredDay = null)}
+                  onclick={() => showDay(day)}
+                ></span>
+              {/if}
+            {/each}
+          </div>
+        {/each}
+      </div>
+      <div class="heat-scale muted">
+        Less {#each [0, 1, 2, 3, 4] as l (l)}<span class="cell l{l}"></span>{/each} More
+      </div>
+    {:else if view === 'blocks'}
+      <p class="muted">
+        Usage in 5-hour windows, each starting at its first activity, like Claude's session limit. Usage is
+        recorded per hour, so the edges are approximate.
+      </p>
+      {#if blocks.length === 0}
+        <p class="muted">No usage in this range.</p>
+      {:else}
+        <table class="blocks">
+          <thead>
+            <tr><th>Window</th><th class="num">Active hours</th><th class="num">Tokens</th><th class="num">Cost</th><th></th></tr>
+          </thead>
+          <tbody>
+            {#each blocks.slice(0, BLOCKS_SHOWN) as b (b.start)}
+              <tr>
+                <td>{blockWindow(b)}{#if Date.now() < b.end}<span class="now">now</span>{/if}</td>
+                <td class="num">{b.activeHours}</td>
+                <td class="num">{formatTokens(b.tokens)}</td>
+                <td class="num">{monetary({ cost: b.cost, partial: b.partial, unavailable: b.partial && b.cost === 0 })}</td>
+                <td class="bar-cell"><span class="hbar" style="width: {blockMax ? (blockValue(b) / blockMax) * 100 : 0}%"></span></td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        {#if blocks.length > BLOCKS_SHOWN}<p class="muted">Showing the newest {BLOCKS_SHOWN} of {blocks.length} blocks.</p>{/if}
+      {/if}
+    {:else if view === 'cache'}
+      <div class="readout muted" aria-live="polite">
+        {#if hoveredRate !== null && rates[hoveredRate]}
+          <strong>{rates[hoveredRate].day}</strong> ·
+          {rates[hoveredRate].rate === null ? 'no input' : `${Math.round(rates[hoveredRate].rate! * 100)}% from cache`}
+        {:else}
+          {overallRate === null ? 'No input in this range.' : `${Math.round(overallRate * 100)}% of input tokens came from the prompt cache across the range.`}
+        {/if}
+      </div>
+      {#if rates.length > 0}
+        <div class="chart rate" role="img" aria-label="Share of input tokens read from the prompt cache, per day">
+          <span class="rate-label muted" style="top: 2px">100%</span>
+          <span class="rate-label muted" style="top: calc(50% + 2px)">50%</span>
+          <svg viewBox="0 0 {rates.length} 100" preserveAspectRatio="none" aria-hidden="true">
+            {#each [25, 50, 75] as y (y)}<line class="grid" x1="0" x2={rates.length} y1={y} y2={y} />{/each}
+            {#each rateLines as points (points)}<polyline points={points} />{/each}
+            {#if hoveredRate !== null}<line class="cross" x1={hoveredRate + 0.5} x2={hoveredRate + 0.5} y1="0" y2="100" />{/if}
+          </svg>
+          {#each rates as r, i (r.day)}
+            <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+            <div class="hit" onmouseenter={() => (hoveredRate = i)} onmouseleave={() => (hoveredRate = null)} onclick={() => showDay(r.day)}>
+              {#if r.rate !== null}<span class="rate-dot" class:hot={hoveredRate === i} style="bottom: {r.rate * 100}%"></span>{/if}
+            </div>
+          {/each}
+        </div>
+        <div class="chart-axis muted"><span>{rates[0].day}</span><span>{rates[rates.length - 1].day}</span></div>
+      {/if}
     {:else if chart.buckets.length > 0}
       <div class="readout muted" aria-live="polite">
         {#if shown}
           <strong>{shown.label}</strong> · {fmt(shown.total)}
           {#if chart.series.length > 1}
-            {#each chart.series as name, i (name)}{#if shown.values[i] > 0} · {name} {fmt(shown.values[i])}{/if}{/each}
+            {#each chart.series as name, i (name)}{#if shown.values[i] > 0} · {name} {asShare ? pct(shown.values[i], shown.total) : fmt(shown.values[i])}{/if}{/each}
           {/if}
           {#if average && hovered !== null} · 7-day average {fmt(average[hovered])}{/if}
         {:else}
@@ -563,9 +716,10 @@
             onmouseleave={() => (hovered = null)}
             onclick={() => !chartHourly && showDay(b.key)}
           >
-            <div class="stack" style="height: {chartMax ? (b.total / chartMax) * 100 : 0}%">
+            <div class="stack" style="height: {asShare ? (b.total ? 100 : 0) : chartMax ? (b.total / chartMax) * 100 : 0}%">
               {#each b.values as v, s (s)}
-                {#if v > 0}<div class="seg" style="flex-grow: {v}; background: {color(s)}"></div>{/if}
+                <!-- Grow weights summing to 100: below 1 in total, flex fills only that fraction of the bar. -->
+                {#if v > 0}<div class="seg" style="flex-grow: {(v / b.total) * 100}; background: {color(s)}"></div>{/if}
               {/each}
             </div>
           </div>
@@ -897,6 +1051,108 @@
   }
   .heat-scale .cell {
     width: 10px;
+  }
+  .calendar {
+    display: flex;
+    gap: 2px;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .cal-days,
+  .cal-week {
+    display: grid;
+    grid-template-rows: 14px repeat(7, 10px);
+    gap: 2px;
+  }
+  /* Fixed width: a month label overflows into the next weeks rather than widening its own. */
+  .cal-week {
+    grid-template-columns: 10px;
+  }
+  .cal-days {
+    padding-right: 4px;
+    font-size: 9px;
+    line-height: 10px;
+  }
+  .cal-week .cell {
+    width: 10px;
+    min-width: 10px;
+    height: 10px;
+    cursor: pointer;
+  }
+  .cal-week .cell.future {
+    visibility: hidden;
+  }
+  .cal-month {
+    overflow: visible;
+    font-size: 9px;
+    white-space: nowrap;
+  }
+  .blocks .now {
+    margin-left: 6px;
+    color: var(--accent);
+    font-size: 11px;
+  }
+  .bar-cell {
+    width: 30%;
+  }
+  .hbar {
+    display: block;
+    height: 6px;
+    border-radius: 0 3px 3px 0;
+    background: var(--accent);
+  }
+  .chart.rate {
+    gap: 0;
+  }
+  .chart.rate svg {
+    position: absolute;
+    inset: 0 0 2px;
+    width: 100%;
+    height: calc(100% - 2px);
+    overflow: visible;
+    pointer-events: none;
+  }
+  .chart.rate polyline {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+  .chart.rate .grid {
+    stroke: var(--border);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+  .chart.rate .cross {
+    stroke: var(--fg-faint);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+  .rate-label {
+    position: absolute;
+    left: 0;
+    font-size: 10px;
+  }
+  .hit {
+    position: relative;
+    flex: 1;
+    height: 100%;
+    cursor: pointer;
+  }
+  .rate-dot {
+    position: absolute;
+    left: 50%;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    transform: translate(-50%, 50%);
+  }
+  .rate-dot.hot {
+    width: 10px;
+    height: 10px;
+    box-shadow: 0 0 0 2px var(--bg);
   }
   .bar-col {
     display: flex;
