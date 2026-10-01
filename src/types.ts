@@ -71,6 +71,18 @@ export interface Project {
   kind?: 'scratch' | 'chats';
 }
 
+/** What the tab bar and the Open view show for a tab. */
+export interface TabSummary {
+  key: TabKey;
+  provider: AgentProvider | null;
+  title: string;
+  exited: boolean;
+  attention: boolean;
+  /** Claude's or Codex's state; null for a plain shell. */
+  activity: 'working' | 'idle' | 'interrupted' | null;
+  projectKey: string | null;
+}
+
 export interface IndexSnapshot {
   projects: Project[];
   sessionCount: number;
@@ -107,21 +119,6 @@ export interface Settings {
   claude: { command: string; resumeArgs: string[]; scratchDir: string | null };
 }
 
-export type TaskState = 'todo' | 'doing' | 'done';
-
-/** Mirrors `Task` in src-tauri/src/settings/model.rs. Stored in tasks.json. */
-export interface Task {
-  id: number;
-  title: string;
-  state: TaskState;
-  /** Project root, or null for a to-do that belongs to no repo. */
-  repo: string | null;
-  branches: string[];
-  /** Markdown source. */
-  notes: string;
-  /** Linked sessions as `provider:id`. */
-  sessions: string[];
-}
 
 export interface TerminalSettings {
   fontFamily: string;

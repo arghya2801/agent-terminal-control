@@ -13,7 +13,6 @@
     limit,
     forceOpen = false,
     groupByBranch = false,
-    sessionTasks,
     sessionMarks,
     activeKey,
     activeSessionId,
@@ -34,8 +33,6 @@
     /** Sub-headers per git branch. The "show more" limit stays per project. */
     groupByBranch?: boolean;
     sessionMarks: Map<string, SessionMark>;
-    /** Linked task by session key. */
-    sessionTasks: Map<string, { id: number; title: string }>;
     activeKey: TabKey | null;
     /** Session whose tab is focused, already resolved from the tab. */
     activeSessionId: string | null;
@@ -119,7 +116,6 @@
           active={sessionKey(session) === activeSessionId}
           mark={sessionMarks.get(sessionKey(session)) ?? null}
           showBranch={!groupByBranch}
-          task={sessionTasks.get(sessionKey(session)) ?? null}
           renaming={renaming === `s:${sessionKey(session)}`}
           onRename={(name) => onRenameSession(session, name)}
           onRenameCancel={onRenameCancel}

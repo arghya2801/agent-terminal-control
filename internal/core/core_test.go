@@ -57,14 +57,6 @@ func TestMalformedSettingsPreserved(t *testing.T) {
 		t.Fatal("file overwritten")
 	}
 }
-func TestTaskStateTolerance(t *testing.T) {
-	for _, state := range []any{nil, 42, true, Object{}, []any{}, "blocked"} {
-		task := Obj(NormalizeTasks([]any{Object{"state": state}})[0])
-		if task["state"] != "todo" || task["branches"] == nil || task["sessions"] == nil {
-			t.Fatal(task)
-		}
-	}
-}
 func TestAgentQuoting(t *testing.T) {
 	s := Defaults()
 	Obj(s["codex"])["command"] = `C:\O'Brien\codex.exe`

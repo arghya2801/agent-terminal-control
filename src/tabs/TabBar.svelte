@@ -5,10 +5,10 @@
   import InlineRename from '../lib/InlineRename.svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import { revealPosition, tabWheelDelta } from './scroll';
-  import type { AgentProvider, TabKey } from '../types';
+  import type { TabKey, TabSummary } from '../types';
 
   let { tabs, activeKey, onNew, onClose, renaming = $bindable(null) }: {
-    tabs: { key: TabKey; provider: AgentProvider | null; title: string; exited: boolean; attention: boolean }[];
+    tabs: TabSummary[];
     activeKey: TabKey | null;
     onNew: () => void;
     /** Asks first when something is still running in the tab. */

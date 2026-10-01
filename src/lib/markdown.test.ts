@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { renderMarkdown as md } from './markdown';
+import { renderMarkdown as md, toggleCheckbox } from './markdown';
 
 describe('renderMarkdown', () => {
   it('renders the block types notes use', () => {
@@ -7,9 +7,21 @@ describe('renderMarkdown', () => {
     expect(md('- a\n- b\n\n1. one\n2) two')).toBe('<ul><li>a</li><li>b</li></ul><ol><li>one</li><li>two</li></ol>');
     expect(md('> quoted')).toBe('<blockquote>quoted</blockquote>');
     expect(md('- [ ] todo\n- [x] done')).toBe(
-      '<ul><li class="check"><input type="checkbox" disabled> todo</li>' +
-        '<li class="check"><input type="checkbox" disabled checked> done</li></ul>',
+      '<ul><li class="check"><input type="checkbox" data-box="0"> todo</li>' +
+        '<li class="check"><input type="checkbox" data-box="1" checked> done</li></ul>',
     );
+    expect(md('- [ ] task\n  its note\nafter')).toBe(
+      '<ul><li class="check"><input type="checkbox" data-box="0"> task</li><li class="sub">its note</li></ul><p>after</p>',
+    );
+  });
+
+  it('flips the nth checkbox in the source, skipping fenced code', () => {
+    const src = '- [ ] a\n```\n- [ ] not a box\n```\n  * [X] b';
+    expect(toggleCheckbox(src, 0)).toBe(src.replace('- [ ] a', '- [x] a'));
+    expect(toggleCheckbox(src, 1)).toBe(src.replace('* [X] b', '* [ ] b'));
+    expect(toggleCheckbox(src, 2)).toBe(src);
+    // The numbering matches what renderMarkdown puts in data-box.
+    expect(md(src)).toContain('data-box="1" checked> b');
   });
 
   it('renders inline code, bold, italic and links', () => {

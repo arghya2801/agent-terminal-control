@@ -72,6 +72,8 @@ export interface Tab {
   projectKey: string | null;
   /** When the tab was opened. Identifies which session Claude went on to create. */
   startedAt: number;
+  /** When output last arrived, for the Open view. Not reactive: read on the view's tick. */
+  lastOutputAt: number;
   /** Directory the shell started in; null for the default. Kept to reopen the tab. */
   cwd: string | null;
   term: Terminal;
@@ -297,6 +299,7 @@ export async function openTab(
     attention: false,
     projectKey,
     startedAt: Date.now(),
+    lastOutputAt: Date.now(),
     cwd: opts.cwd ?? null,
     term,
     fit,
@@ -349,6 +352,7 @@ export async function openTab(
   const channel = new Channel<PtyEvent>();
   channel.onmessage = (msg) => {
     if (msg.t === 'o') {
+      tab.lastOutputAt = Date.now();
       // The callback fires once xterm has parsed the payload: the honest ack point.
       term.write(msg.d, () => {
         tab.unacked += new TextEncoder().encode(msg.d).byteLength;

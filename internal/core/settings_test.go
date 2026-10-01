@@ -267,19 +267,21 @@ func TestSettingsRoundTripThroughJSONInCamelCase(t *testing.T) {
 		t.Fatal(back, e)
 	}
 }
-func TestTasksRoundTripAndTolerateHandEdits(t *testing.T) {
-	tasks, e := ParseTasks([]byte(`[{"id":3,"title":"t","state":"doing","branches":["main"]},{"id":4,"state":"blocked"}]`))
-	if e != nil {
-		t.Fatal(e)
+func TestRetiredTasksBecomeAChecklist(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "tasks.json"), []byte(`[{"title":"ship\n it","state":"done","notes":"line one\r\n\nline two"},{"state":"doing"},{"title":"todo"}]`), 0600)
+	want := "- [x] ship it\n  line one\n  line two\n- [ ] Untitled\n- [ ] todo\n"
+	if got := LegacyNotes(dir); got != want {
+		t.Fatalf("%q", got)
 	}
-	first, second := Obj(tasks[0]), Obj(tasks[1])
-	if first["state"] != "doing" || first["repo"] != nil || second["state"] != "todo" || len(Arr(second["sessions"])) != 0 {
-		t.Fatal(tasks)
+	// Without tasks.json, tasks left in settings.json from before tasks.json existed.
+	other := t.TempDir()
+	os.WriteFile(filepath.Join(other, "settings.json"), []byte(`{"tasks":[{"title":"old"}]}`), 0600)
+	if got := LegacyNotes(other); got != "- [ ] old\n" {
+		t.Fatalf("%q", got)
 	}
-	b, _ := json.Marshal(tasks)
-	back, e := ParseTasks(b)
-	if e != nil || !strings.Contains(string(b), `"state":"doing"`) || !reflect.DeepEqual(Clone(back), Clone(tasks)) {
-		t.Fatal(string(b), e)
+	if LegacyNotes(t.TempDir()) != "" {
+		t.Fatal("notes from nothing")
 	}
 }
 func TestTheScratchDirectoryDefaultsUnderTheConfigDirectory(t *testing.T) {
@@ -290,19 +292,5 @@ func TestTheScratchDirectoryDefaultsUnderTheConfigDirectory(t *testing.T) {
 	Obj(s["claude"])["scratchDir"] = "  "
 	if Scratch(s, `D:\cfg`) != `D:\cfg\scratch` {
 		t.Fatal("blank means default")
-	}
-}
-
-// --- settings/tasks.rs
-
-func TestAMissingTasksFileIsAnEmptyListAndTasksRoundTrip(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "tasks.json")
-	if got, e := LoadTasks(p); e != nil || len(got) != 0 {
-		t.Fatal(got, e)
-	}
-	tasks := NormalizeTasks([]any{Object{"id": 1.0, "title": "t1"}, Object{"id": 2.0, "title": "t2"}})
-	Save(p, tasks)
-	if got, e := LoadTasks(p); e != nil || !reflect.DeepEqual(Clone(got), Clone(tasks)) {
-		t.Fatal(got, e)
 	}
 }

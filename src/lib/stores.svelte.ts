@@ -8,15 +8,13 @@
 import { migrateSessionNames } from './agents';
 import { listen, frontendReady, setZoom } from './desktop';
 import {
-  gitBranches,
   indexRefresh,
   indexSnapshot,
   settingsGet,
   settingsSet,
-  tasksGet,
-  tasksSet,
+  notesGet,
+  notesSet,
 } from './ipc';
-import { newTask } from './tasks';
 import {
   anyExpanded,
   isExpandedIn,
@@ -28,11 +26,11 @@ import { normalizeZoom, stepZoom } from './zoom';
 import { applyTerminalSettings, applyTheme, setTerminalZoom } from '../terminal/manager';
 import { applyPalette, type Palette } from './theme';
 import { findTheme, loadThemes } from './themes';
-import type { IndexSnapshot, Settings, Task } from '../types';
+import type { IndexSnapshot, Settings } from '../types';
 
 const EVENT_INDEX_UPDATED = 'index://updated';
 const EVENT_SETTINGS_UPDATED = 'settings://updated';
-const EVENT_TASKS_UPDATED = 'tasks://updated';
+const EVENT_NOTES_UPDATED = 'notes://updated';
 /** Holding a zoom key should not write settings.json on every step. */
 const SETTINGS_SAVE_DEBOUNCE_MS = 400;
 
@@ -41,8 +39,8 @@ const SETTINGS_SAVE_DEBOUNCE_MS = 400;
 export const appState = $state({
   index: { projects: [], sessionCount: 0 } as IndexSnapshot,
   settings: null as Settings | null,
-  /** Stored in tasks.json, apart from settings, so neither can overwrite the other. */
-  tasks: [] as Task[],
+  /** notes.md, the Open view's notes pad (#132). */
+  notes: '',
   loading: true,
   error: null as string | null,
   /** Bumped on every applied snapshot, so the debug overlay can show whether the
@@ -116,7 +114,7 @@ export async function initStores() {
     themeState.themes = await loadThemes();
     appState.settings = await settingsGet();
     applySettings(appState.settings);
-    appState.tasks = await tasksGet();
+    appState.notes = await notesGet();
     applySnapshot(await indexSnapshot());
     appState.error = null;
   } catch (e) {
@@ -136,14 +134,8 @@ export async function initStores() {
     applySettings(s);
   });
 
-  // tasks.json edited outside the app.
-  await listen<Task[]>(EVENT_TASKS_UPDATED, (t) => (appState.tasks = t));
-}
-
-/** Local branches of `repo`, fetched fresh each time (it is cheap), so a branch made in
- *  a terminal shows up. `null` when the fetch failed, which is not the same as none. */
-export function branchesOf(repo: string): Promise<string[] | null> {
-  return gitBranches(repo).catch(() => null);
+  // notes.md edited outside the app.
+  await listen<string>(EVENT_NOTES_UPDATED, (t) => (appState.notes = t));
 }
 
 export async function refresh(force = false) {
@@ -190,19 +182,12 @@ function saveSettingsDebounced(next: Settings) {
   }, SETTINGS_SAVE_DEBOUNCE_MS);
 }
 
-/** Which task the panel shows and whether it is open. Not persisted. */
-export const taskUi = $state({
-  selected: null as number | null,
-  panelOpen: false,
-  /** Task whose title is being edited in the sidebar. */
-  renaming: null as number | null,
-});
-
-export type SidebarView = 'sessions' | 'tasks' | 'scratch';
+export type SidebarView = 'sessions' | 'open' | 'scratch';
 
 export function sidebarView(): SidebarView {
   const v = appState.settings?.ui.sidebarView;
-  return v === 'tasks' || v === 'scratch' ? v : 'sessions';
+  // "tasks" is the view Open replaced.
+  return v === 'open' || v === 'tasks' ? 'open' : v === 'scratch' ? 'scratch' : 'sessions';
 }
 
 export function setSidebarView(view: SidebarView) {
@@ -213,32 +198,18 @@ export function setSidebarView(view: SidebarView) {
   saveSettingsDebounced(appState.settings);
 }
 
-export function tasks(): Task[] {
-  return appState.tasks;
-}
+let notesTimer: ReturnType<typeof setTimeout> | undefined;
 
-/** Add a task at the top of the list, select it and start renaming it. */
-export function createTask(fields: Partial<Task> = {}): Task {
-  const task = newTask(tasks(), fields);
-  saveTasks([task, ...tasks()]);
-  taskUi.selected = task.id;
-  taskUi.renaming = task.id;
-  return task;
-}
-
-let tasksTimer: ReturnType<typeof setTimeout> | undefined;
-
-/** Structural edits save at once; `debounced` is for typing, such as notes. */
-export function saveTasks(next: Task[], debounced = false) {
-  appState.tasks = next;
-  if (tasksTimer !== undefined) clearTimeout(tasksTimer);
+/** Typing saves after a pause; `now` is for blur and checkbox clicks. */
+export function saveNotes(text: string, now = false) {
+  appState.notes = text;
+  if (notesTimer !== undefined) clearTimeout(notesTimer);
   const write = () => {
-    tasksTimer = undefined;
-    // Whatever is current when the burst ends, not what started it.
-    void tasksSet(appState.tasks).catch((e) => (appState.error = String(e)));
+    notesTimer = undefined;
+    void notesSet(appState.notes).catch((e) => (appState.error = String(e)));
   };
-  tasksTimer = debounced ? setTimeout(write, SETTINGS_SAVE_DEBOUNCE_MS) : undefined;
-  if (!debounced) write();
+  if (now) write();
+  else notesTimer = setTimeout(write, SETTINGS_SAVE_DEBOUNCE_MS);
 }
 
 export function currentZoom(): number {

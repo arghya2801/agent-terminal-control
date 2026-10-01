@@ -7,7 +7,6 @@
   import Sidebar from './sidebar/Sidebar.svelte';
   import FindBar from './terminal/FindBar.svelte';
   import SettingsPanel from './settings/SettingsPanel.svelte';
-  import TaskPanel from './tasks/TaskPanel.svelte';
   import UsagePanel from './usage/UsagePanel.svelte';
   import ShortcutsPanel from './settings/ShortcutsPanel.svelte';
   import ConfirmDialog from './lib/ConfirmDialog.svelte';
@@ -26,8 +25,6 @@
     toggleSidebar,
     setSidebarView,
     sidebarView,
-    taskUi,
-    tasks,
   } from './lib/stores.svelte';
   import {
     bindSessions,
@@ -60,11 +57,11 @@
   import { projectKey } from './lib/paths';
   import { resolveSessions, type TabRef } from './lib/sessions';
   import { zoomLabel } from './lib/zoom';
-  import type { AgentProvider, Project, SessionMeta, TabKey } from './types';
+  import type { AgentProvider, Project, SessionMeta, TabKey, TabSummary } from './types';
   import type { SessionMark } from './sidebar/SessionNode.svelte';
 
   let wrapper: HTMLDivElement;
-  let tabs = $state<{ key: TabKey; provider: AgentProvider | null; title: string; exited: boolean; attention: boolean }[]>([]);
+  let tabs = $state<TabSummary[]>([]);
   let activeKey = $state<TabKey | null>(null);
   let openProjectKeys = $state<Set<string>>(new Set());
   let tabSessions = $state<(TabRef & { activity: SessionMark; exited: boolean })[]>([]);
@@ -224,6 +221,8 @@
       title: displayTitle(t),
       exited: t.exited,
       attention: t.attention,
+      activity: t.activity,
+      projectKey: t.projectKey,
     }));
     const nextActive = getActiveKey();
     // Picking a tab means the user wants the terminal, not the page covering it.
@@ -373,10 +372,6 @@
   }
 
   /** The sidebar project the focused tab belongs to, if it has one. */
-  const TASK_PANEL_WIDTH = 320;
-
-  // Tab keys and the index are both reactive, so this follows the active tab.
-  const currentRepo = $derived(activeProject()?.path ?? null);
 
   function activeProject(): Project | undefined {
     const key = activeKey ? getTab(activeKey)?.projectKey : null;
@@ -450,13 +445,9 @@
       case 'focusSearch':
         void focusSearch();
         break;
-      case 'toggleTaskPanel':
-        taskUi.panelOpen = !taskUi.panelOpen;
-        if (taskUi.panelOpen && taskUi.selected === null) taskUi.selected = tasks()[0]?.id ?? null;
-        break;
-      case 'toggleTaskView':
+      case 'switchSidebarView':
         if (!sidebarOpen()) void toggleSidebar();
-        void setSidebarView(({ sessions: 'tasks', tasks: 'scratch', scratch: 'sessions' } as const)[sidebarView()]);
+        void setSidebarView(({ sessions: 'open', open: 'scratch', scratch: 'sessions' } as const)[sidebarView()]);
         break;
       case 'askAgent':
         picker = { project: null };
@@ -512,13 +503,12 @@
   $effect(() => {
     void open;
     void width;
-    void taskUi.panelOpen;
     const t = setTimeout(refit, 180);
     return () => clearTimeout(t);
   });
 </script>
 
-<div class="app" style="--panel: {open ? width : 0}px; --tasks: {taskUi.panelOpen ? TASK_PANEL_WIDTH : 0}px">
+<div class="app" style="--panel: {open ? width : 0}px">
   <nav class="rail">
     <button
       class="rail-btn"
@@ -609,7 +599,6 @@
       <Sidebar
         {activeKey}
         {activeSessionId}
-        {currentRepo}
         {openProjectKeys}
         {sessionMarks}
         onOpenProject={openProject}
@@ -617,6 +606,9 @@
         onNewShell={newShellIn}
         onNewAgent={newAgentIn}
         onNewChat={() => (picker = { project: null, chats: true })}
+        {tabs}
+        onNewTab={newTab}
+        onCloseTab={requestClose}
       />
     {/if}
   </aside>
@@ -654,18 +646,13 @@
       </div>
     {/if}
   </section>
-
-  <!-- Its own column: it pushes the terminal narrower and never covers it. -->
-  <div class="task-panel">
-    {#if taskUi.panelOpen}<TaskPanel {sessionMarks} onOpenSession={openSession} />{/if}
-  </div>
 </div>
 
 <style>
   .app {
     display: grid;
     height: 100%;
-    grid-template-columns: 44px var(--panel) 1fr var(--tasks);
+    grid-template-columns: 44px var(--panel) 1fr;
   }
   .rail {
     display: flex;
@@ -722,11 +709,6 @@
   .resize:hover,
   .resize.dragging {
     background: color-mix(in srgb, var(--accent) 40%, transparent);
-  }
-  .task-panel {
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
   }
   .main {
     position: relative;

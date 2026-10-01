@@ -6,16 +6,7 @@
   import { filterProjects } from '../lib/filter';
   import { groupSubfolders } from '../lib/group';
   import { isPinned, togglePinned } from '../lib/pinned';
-  import { inRepo, linkSession, taskForSession, unlinkSession } from '../lib/tasks';
-  import {
-    appState,
-    createTask,
-    refresh,
-    saveSettings,
-    saveTasks,
-    setSidebarView,
-    tasks,
-  } from '../lib/stores.svelte';
+  import { appState, refresh, saveSettings } from '../lib/stores.svelte';
   import type { AgentProvider, Project, SessionMeta, TabKey } from '../types';
   import type { SessionMark } from './SessionNode.svelte';
 
@@ -109,45 +100,6 @@
     };
   }
 
-  function taskItems(p: Project, s: SessionMeta): MenuItem[] {
-    const key = sessionKey(s);
-    const dir = s.cwd ?? p.path;
-    const linked = taskForSession(tasks(), key);
-    const items: MenuItem[] = [
-      {
-        label: 'New task from this session',
-        sep: true,
-        run: () => {
-          const task = createTask({
-            title: s.label,
-            state: 'doing',
-            repo: p.path,
-            branches: s.gitBranch ? [s.gitBranch] : [],
-          });
-          // Through linkSession, which moves the session off any task it was on (#88).
-          saveTasks(linkSession(tasks(), task.id, s));
-          // Show it, already in rename, so the title can be fixed straight away.
-          void setSidebarView('tasks');
-        },
-      },
-    ];
-    // Tasks in this session's repo, and to-dos with no repo.
-    const fits = tasks().filter(
-      (t) => t.state !== 'done' && t.id !== linked?.id && (!t.repo || inRepo(t.repo, dir)),
-    );
-    if (fits.length) items.push({ label: linked ? 'Move to task' : 'Link to task' });
-    for (const t of fits.slice(0, 8)) {
-      items.push({ label: t.title, run: () => saveTasks(linkSession(tasks(), t.id, s)) });
-    }
-    if (linked) {
-      items.push({
-        label: `Unlink from task ${linked.id}`,
-        run: () => saveTasks(unlinkSession(tasks(), linked.id, key)),
-      });
-    }
-    return items;
-  }
-
   function sessionMenu(e: MouseEvent, p: Project, s: SessionMeta) {
     e.preventDefault();
     const dir = s.cwd ?? p.path;
@@ -166,14 +118,9 @@
           disabled: !dir,
           run: () => dir && void openInExplorer(dir),
         },
-        ...taskItems(p, s),
       ],
     };
   }
-
-  const sessionTasks = $derived(
-    new Map(tasks().flatMap((t) => t.sessions.map((k) => [k, { id: t.id, title: t.title }] as const))),
-  );
 
   const searching = $derived(query.trim() !== '');
   // Grouped before filtering, so a query matching a parent's name keeps the sessions it
@@ -198,7 +145,6 @@
     {forceOpen}
     groupByBranch={appState.settings?.ui.groupByBranch ?? false}
     {sessionMarks}
-    {sessionTasks}
     {activeKey}
     {activeSessionId}
     open={openProjectKeys.has(project.key)}
