@@ -88,7 +88,7 @@ func (c *limitsClient) read(s core.Object) (any, error) {
 		}
 		return nil, fmt.Errorf("Codex `%s` not found", exe)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*limitWait)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, path, "app-server")
 	if strings.EqualFold(filepath.Ext(path), ".cmd") || strings.EqualFold(filepath.Ext(path), ".bat") {
@@ -146,7 +146,7 @@ func (c *limitsClient) read(s core.Object) (any, error) {
 		return nil, e
 	}
 	if _, e = limitResponse(ctx, messages, 1); e != nil {
-		return nil, e
+		return nil, fmt.Errorf("starting Codex: %w", e)
 	}
 	if e = write(core.Object{"method": "initialized"}); e != nil {
 		return nil, e
@@ -154,17 +154,26 @@ func (c *limitsClient) read(s core.Object) (any, error) {
 	if e = write(core.Object{"id": 2, "method": "account/rateLimits/read"}); e != nil {
 		return nil, e
 	}
-	return limitResponse(ctx, messages, 2)
+	v, e := limitResponse(ctx, messages, 2)
+	if e != nil {
+		return nil, fmt.Errorf("reading Codex limits: %w", e)
+	}
+	return v, nil
 }
+
+// limitWait is how long each app-server reply may take. A cold `codex app-server` usually
+// answers in a few seconds, but took over 15 s while the machine was short of memory.
+const limitWait = 30 * time.Second
+
 func limitResponse(ctx context.Context, messages <-chan core.Object, id float64) (any, error) {
-	timer := time.NewTimer(15 * time.Second)
+	timer := time.NewTimer(limitWait)
 	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil, fmt.Errorf("Codex app-server response unavailable: %w", ctx.Err())
 		case <-timer.C:
-			return nil, fmt.Errorf("Codex app-server response unavailable: timeout")
+			return nil, fmt.Errorf("Codex app-server response unavailable: no reply within %v", limitWait)
 		case v, ok := <-messages:
 			if !ok {
 				return nil, fmt.Errorf("Codex app-server response unavailable: closed")
