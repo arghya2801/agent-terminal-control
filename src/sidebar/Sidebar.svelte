@@ -302,11 +302,11 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 10px 8px;
+    padding: 10px 8px 8px;
     color: var(--fg-faint);
     font-size: 10px;
     font-weight: 600;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
   }
   .actions {
@@ -315,10 +315,11 @@
   }
   .views {
     display: flex;
-    gap: 10px;
+    gap: 8px;
   }
   .views button {
     padding: 0 0 3px;
+    white-space: nowrap;
     border: none;
     border-bottom: 2px solid transparent;
     background: transparent;
