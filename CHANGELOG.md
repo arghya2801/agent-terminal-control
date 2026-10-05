@@ -6,6 +6,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-05
+
 ### Added
 - An Open view in the sidebar lists every tab in tab-bar order, with its state (working, needs you, idle, exited), agent, project and last output time. Click to switch, drag to reorder, middle-click to close. ([#132](https://github.com/arghya2801/agent-terminal-control/issues/132))
 - A notes pad under the Open view, stored as `notes.md` in the config directory. It shows raw Markdown while editing and renders otherwise, with checkboxes you can tick in place. ([#140](https://github.com/arghya2801/agent-terminal-control/issues/140))
