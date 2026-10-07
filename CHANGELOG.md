@@ -11,6 +11,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Tabs in the tab bar show the same state dot as the sidebar: working, needs you, interrupted or idle, for Claude and Codex. ([#149](https://github.com/arghya2801/agent-terminal-control/issues/149))
 
 ### Changed
+- The Claude / Codex picker is a compact sheet at the top of the window. It names the project and path it starts in. Press 1 or 2, or use the arrows and Enter. Esc or a click outside cancels.
 - The sidebar opens on the Open view for new installs. ([#146](https://github.com/arghya2801/agent-terminal-control/issues/146))
 
 ### Fixed
