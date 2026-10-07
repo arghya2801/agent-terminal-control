@@ -49,6 +49,26 @@ export function usableTitle(title: string): string | null {
 
 export type Activity = 'working' | 'idle' | 'interrupted';
 
+/** A live tab's state: what the agent is doing, or just "open" before it says. */
+export type SessionMark = Activity | 'open' | 'attention';
+export type TabMark = SessionMark | 'exited';
+
+/** One rule for every place a tab's state shows, so they never disagree (#148). */
+export function markTitle(mark: TabMark, agent: string): string {
+  return {
+    working: `${agent} is working`,
+    idle: `${agent} is waiting for you`,
+    interrupted: `${agent} was interrupted`,
+    attention: 'Finished in the background: needs your attention',
+    open: 'Open in a tab',
+    exited: 'Exited',
+  }[mark];
+}
+
+export function tabMark(t: { exited: boolean; attention: boolean; activity: Activity | null }): TabMark {
+  return t.exited ? 'exited' : t.attention ? 'attention' : (t.activity ?? 'open');
+}
+
 /**
  * What Claude Code's terminal title says about the session. It prefixes the title with
  * `✳` when idle and alternates `◐`/`◑` while working; older builds spun braille dots.

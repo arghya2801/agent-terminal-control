@@ -6,7 +6,7 @@
   import { shortenPath } from '../lib/format';
   import { branchGroups } from '../lib/branchGroups';
   import type { Project, SessionMeta, TabKey } from '../types';
-  import type { SessionMark } from './SessionNode.svelte';
+  import type { SessionMark } from '../lib/format';
 
   let {
     project,

@@ -4,6 +4,9 @@
   import { reorderable } from '../lib/dragReorder';
   import InlineRename from '../lib/InlineRename.svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
+  import StatusDot from '../lib/StatusDot.svelte';
+  import { providerName } from '../lib/agents';
+  import { markTitle, tabMark } from '../lib/format';
   import { revealPosition, tabWheelDelta } from './scroll';
   import type { TabKey, TabSummary } from '../types';
 
@@ -97,6 +100,7 @@
         />
       </div>
     {:else}
+    {@const mark = tabMark(tab)}
     <button
       class="tab"
       class:active={tab.key === activeKey}
@@ -109,7 +113,7 @@
       onauxclick={(e) => { if (e.button === 1) close(e, tab.key); }}
       title="{tab.title} (double-click or Ctrl+Shift+R to rename)"
     >
-      {#if tab.attention}<span class="attention" title="Needs your attention"></span>{/if}
+      {#if mark !== 'open' && mark !== 'exited'}<StatusDot {mark} title={markTitle(mark, providerName(tab.provider ?? 'claude'))} />{/if}
       {#if tab.provider}<ProviderIcon provider={tab.provider} />{/if}
       <span class="label">{tab.title}</span>
       <span class="close" role="button" tabindex="-1"
@@ -175,14 +179,6 @@
   .tab:global(.drop-target) { box-shadow: inset 2px 0 0 var(--accent); }
   .tab.exited .label { text-decoration: line-through; opacity: 0.6; }
   .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .attention {
-    flex-shrink: 0;
-    width: 7px;
-    height: 7px;
-    margin-right: -2px;
-    border-radius: 50%;
-    background: var(--accent);
-  }
   .close {
     padding: 0 4px;
     border-radius: 4px;

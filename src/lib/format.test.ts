@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { claudeTitle, formatMatches, relativeTime, shortenPath, usableTitle } from './format';
+import { claudeTitle, formatMatches, relativeTime, shortenPath, tabMark, usableTitle } from './format';
 
 const NOW = 1_700_000_000_000;
 const MIN = 60_000;
@@ -96,5 +96,15 @@ describe('claudeTitle', () => {
     expect(claudeTitle(String.raw`C:\Program Files\PowerShell\7\pwsh.exe`)).toBeNull();
     expect(claudeTitle('vim notes.txt')).toBeNull();
     expect(claudeTitle('✳')).toBeNull();
+  });
+});
+
+describe('tabMark', () => {
+  const t = (o: Partial<Parameters<typeof tabMark>[0]>) => tabMark({ exited: false, attention: false, activity: null, ...o });
+  it('ranks exited, then attention, then the activity', () => {
+    expect(t({ exited: true, attention: true, activity: 'working' })).toBe('exited');
+    expect(t({ attention: true, activity: 'working' })).toBe('attention');
+    expect(t({ activity: 'interrupted' })).toBe('interrupted');
+    expect(t({})).toBe('open');
   });
 });
