@@ -20,7 +20,7 @@ import { moveItem } from '../lib/dragReorder';
 import '@xterm/xterm/css/xterm.css';
 
 import { Channel, ptyAck, ptyBusy, ptyKill, ptyResize, ptySpawn, ptyWrite } from '../lib/ipc';
-import { isNativePaste, newlineInput, matchChord, type Action } from '../lib/keymap';
+import { isCopy, isNativePaste, newlineInput, matchChord, type Action } from '../lib/keymap';
 import { decodeOsc52 } from '../lib/osc52';
 import type { Palette } from '../lib/theme';
 import { claudeTitle, usableTitle, type Activity } from '../lib/format';
@@ -30,6 +30,7 @@ import {
   debounce,
   dimsChanged,
   isUsableDims,
+  nearestFirst,
   paneStyle,
   showIn,
   slotOf,
@@ -247,6 +248,13 @@ export async function openTab(
     // Let the browser run its native paste, which xterm turns into a bracketed paste.
     // Otherwise Ctrl+V goes out as ^V, which Claude Code only reads as "paste an image".
     if (isNativePaste(e, term.modes.bracketedPasteMode)) return false;
+    if (isCopy(e, term.hasSelection())) {
+      e.preventDefault();
+      e.stopPropagation();
+      void writeClipboard(term.getSelection());
+      term.clearSelection();
+      return false;
+    }
     // Codex gets a real Shift+Enter key record rather than LF: it reads Windows key
     // events, and ConPTY turns LF into plain Enter, which submits (#82). A non-null
     // activity means Claude is running, even if the user started it by hand.
@@ -591,13 +599,14 @@ export async function closeTab(key: TabKey) {
   webgl.delete(key);
   tab.term.dispose();
   tab.container.remove();
+  const nearest = nearestFirst([...tabs.keys()], key);
   tabs.delete(key);
 
   const wasShown = slotOf(panes, key) !== null;
-  ({ panes, focused: focusedPane } = withoutTab(panes, focusedPane, key, [...tabs.keys()]));
+  ({ panes, focused: focusedPane } = withoutTab(panes, focusedPane, key, nearest));
   if (activeKey === key) {
     activeKey = null;
-    const next = panes[focusedPane] ?? tabs.keys().next().value;
+    const next = panes[focusedPane] ?? nearest[0];
     if (next) activate(next);
   } else if (wasShown) {
     layout();
@@ -623,7 +632,7 @@ async function writeClipboard(text: string) {
   try {
     await navigator.clipboard.writeText(text);
   } catch (e) {
-    console.warn('OSC 52 clipboard write failed', e);
+    console.warn('Clipboard write failed', e);
   }
 }
 
