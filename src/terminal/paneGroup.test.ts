@@ -3,6 +3,7 @@ import {
   debounce,
   dimsChanged,
   isUsableDims,
+  nearestFirst,
   paneStyle,
   panesNeedingResize,
 } from './paneGroup';
@@ -129,5 +130,14 @@ describe('paneStyle', () => {
     const active = paneStyle(0);
     expect(active.visibility).toBe('visible');
     expect(Number(active.zIndex)).toBeGreaterThan(Number(paneStyle(null).zIndex));
+  });
+});
+
+describe('nearestFirst', () => {
+  it('puts the right neighbour first, then the left', () => {
+    expect(nearestFirst(['a', 'b', 'c', 'd'], 'b')).toEqual(['c', 'd', 'a']);
+  });
+  it('falls back to the left neighbour when closing the last tab', () => {
+    expect(nearestFirst(['a', 'b', 'c'], 'c')).toEqual(['b', 'a']);
   });
 });

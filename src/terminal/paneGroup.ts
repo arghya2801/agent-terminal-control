@@ -99,6 +99,12 @@ export function withoutTab<K>(panes: Panes<K>, focused: 0 | 1, key: K, others: K
   return { panes: [left, null], focused: 0 };
 }
 
+/** The other tabs, nearest to `key` first, the right neighbour before the left, as browsers do. */
+export function nearestFirst<K>(order: K[], key: K): K[] {
+  const i = order.indexOf(key);
+  return [...order.slice(i + 1), ...order.slice(0, i).reverse()];
+}
+
 /** Styles for a tab's container: which pane it fills, or hidden. Kept here so the
  *  display/visibility rule lives in exactly one place. */
 export function paneStyle(slot: 0 | 1 | null, split = false, focused = false): Partial<CSSStyleDeclaration> {
