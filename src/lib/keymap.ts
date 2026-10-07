@@ -183,6 +183,14 @@ export function matchChord(e: ChordEvent): Action | null {
 }
 
 /**
+ * Ctrl+C or Ctrl+Shift+C over a selection copies it, as in Windows Terminal. With nothing
+ * selected, Ctrl+C stays ^C.
+ */
+export function isCopy(e: ChordEvent, hasSelection: boolean): boolean {
+  return hasSelection && e.type === 'keydown' && e.key.toLowerCase() === 'c' && e.ctrlKey && !e.altKey && !e.metaKey;
+}
+
+/**
  * Plain Ctrl+V while the program has bracketed paste on (Claude Code does, PSReadLine
  * does not). Such a key is left to the browser's native paste instead of becoming ^V.
  */

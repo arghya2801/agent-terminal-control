@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SHIFT_ENTER, chordLabel, isNativePaste, newlineInput, matchChord, shortcutGroups, type ChordEvent } from './keymap';
+import { SHIFT_ENTER, chordLabel, isCopy, isNativePaste, newlineInput, matchChord, shortcutGroups, type ChordEvent } from './keymap';
 
 const press = (key: string, mods: Partial<ChordEvent> = {}): ChordEvent => ({
   key,
@@ -150,6 +150,16 @@ describe('matchChord', () => {
     // The window listener passes real events; callers constructing their own may not.
     const { type: _omitted, ...noType } = ctrlShift('B');
     expect(matchChord(noType)).toBe('toggleSidebar');
+  });
+});
+
+describe('isCopy', () => {
+  it('copies Ctrl+C and Ctrl+Shift+C only over a selection', () => {
+    expect(isCopy(press('c', { ctrlKey: true }), true)).toBe(true);
+    expect(isCopy(ctrlShift('C'), true)).toBe(true);
+    expect(isCopy(press('c', { ctrlKey: true }), false)).toBe(false);
+    expect(isCopy(press('c', { ctrlKey: true, type: 'keyup' }), true)).toBe(false);
+    expect(isCopy(press('c'), true)).toBe(false);
   });
 });
 
