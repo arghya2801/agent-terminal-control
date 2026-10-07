@@ -6,6 +6,10 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Fixed
+- Ctrl+C or Ctrl+Shift+C copies the terminal selection. With nothing selected, Ctrl+C still interrupts. ([#145](https://github.com/arghya2801/agent-terminal-control/issues/145))
+- Closing a tab activates the tab to its right, or the one to its left when it was the last, instead of the first tab. ([#147](https://github.com/arghya2801/agent-terminal-control/issues/147))
+
 ## [0.4.1] - 2026-10-05
 
 ### Added
