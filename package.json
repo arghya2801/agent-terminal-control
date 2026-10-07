@@ -22,6 +22,12 @@
     "desktop:package": "node scripts/package.mjs"
   },
   "dependencies": {
+    "@milkdown/core": "7.22.2",
+    "@milkdown/plugin-history": "7.22.2",
+    "@milkdown/plugin-listener": "7.22.2",
+    "@milkdown/preset-commonmark": "7.22.2",
+    "@milkdown/preset-gfm": "7.22.2",
+    "@milkdown/utils": "7.22.2",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/addon-search": "0.16.0",
     "@xterm/addon-unicode11": "0.9.0",
