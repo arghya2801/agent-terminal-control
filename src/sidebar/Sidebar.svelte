@@ -2,6 +2,7 @@
   import SessionList from './SessionList.svelte';
   import OpenList from './OpenList.svelte';
   import NotesPad from './NotesPad.svelte';
+  import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import { focusActiveTerminal } from '../terminal/manager';
   import { enterList, listKeys, rows } from '../lib/roving';
   import {
@@ -26,6 +27,7 @@
     onNewShell,
     onNewAgent,
     onNewChat,
+    onPickAgent,
     onNewTab,
     onCloseTab,
   }: {
@@ -40,11 +42,14 @@
     onNewShell: (p: Project) => void;
     onNewAgent: (p: Project, provider: AgentProvider) => void;
     onNewChat: () => void;
+    /** Asks Claude or Codex, then starts it in the project (#146). */
+    onPickAgent: (p: Project) => void;
     onNewTab: () => void;
     onCloseTab: (key: TabKey) => void;
   } = $props();
 
   let refreshing = $state(false);
+  let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
 
   const view = $derived(sidebarView());
   const working = $derived(tabs.filter((t) => tabMark(t) === 'working').length);
@@ -204,6 +209,11 @@
       onfocus={(e) => openList && enterList(e, openList, lastRow)}
       onfocusin={(e) => (lastRow = (e.target as HTMLElement).closest('[data-row]'))}
       onkeydown={(e) => openList && listKeys(e, openList, leave)}
+      oncontextmenu={(e) => {
+        e.preventDefault();
+        const items = appState.index.projects.filter((p) => p.path && p.exists).map((p) => ({ label: p.name, run: () => onPickAgent(p) }));
+        menu = { x: e.clientX, y: e.clientY, items: [{ label: 'New agent in…' }, ...items] };
+      }}
     >
       <OpenList {tabs} {activeKey} {query} onClose={onCloseTab} />
     </div>
@@ -228,6 +238,9 @@
     </div>
     <NotesPad />
   </div>
+  {#if menu}
+    <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => (menu = null)} />
+  {/if}
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
   <div
     class="list"

@@ -606,6 +606,7 @@
         onNewShell={newShellIn}
         onNewAgent={newAgentIn}
         onNewChat={() => (picker = { project: null, chats: true })}
+        onPickAgent={(p) => (picker = { project: p })}
         {tabs}
         onNewTab={newTab}
         onCloseTab={requestClose}
@@ -629,7 +630,14 @@
     {#if showDebug}
       <DebugOverlay {activeKey} />
     {/if}
-    {#if picker}<ProviderPicker onPick={finishPicker} onCancel={() => finishPicker()} />{/if}
+    {#if picker}
+      <ProviderPicker
+        title={picker.project ? `New agent in ${picker.project.name}` : picker.chats ? 'New chat' : 'Ask an agent'}
+        detail={picker.project?.path ?? null}
+        onPick={finishPicker}
+        onCancel={() => finishPicker()}
+      />
+    {/if}
     {#if closing}
       <ConfirmDialog
         confirmLabel="Close tab"
