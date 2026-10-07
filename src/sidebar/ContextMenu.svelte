@@ -38,7 +38,7 @@
     const rect = el.getBoundingClientRect();
     clamped = {
       left: Math.min(x, window.innerWidth - rect.width - 8),
-      top: Math.min(y, window.innerHeight - rect.height - 8),
+      top: Math.max(8, Math.min(y, window.innerHeight - rect.height - 8)),
     };
 
     // Capture phase, so a click anywhere dismisses before it activates something else.
@@ -109,6 +109,8 @@
     min-width: 168px;
     /* Session names can be long; they truncate rather than widen the menu. */
     max-width: 320px;
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
     padding: 4px;
     border: 1px solid var(--border);
     border-radius: 8px;

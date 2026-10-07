@@ -27,7 +27,7 @@
     onNewShell,
     onNewAgent,
     onNewChat,
-    onOpenFolder,
+    onPickAgent,
     onNewTab,
     onCloseTab,
   }: {
@@ -42,7 +42,8 @@
     onNewShell: (p: Project) => void;
     onNewAgent: (p: Project, provider: AgentProvider) => void;
     onNewChat: () => void;
-    onOpenFolder: () => void;
+    /** Asks Claude or Codex, then starts it in the project (#146). */
+    onPickAgent: (p: Project) => void;
     onNewTab: () => void;
     onCloseTab: (key: TabKey) => void;
   } = $props();
@@ -210,7 +211,8 @@
       onkeydown={(e) => openList && listKeys(e, openList, leave)}
       oncontextmenu={(e) => {
         e.preventDefault();
-        menu = { x: e.clientX, y: e.clientY, items: [{ label: 'Open folder…', run: onOpenFolder }] };
+        const items = appState.index.projects.filter((p) => p.path && p.exists).map((p) => ({ label: p.name, run: () => onPickAgent(p) }));
+        menu = { x: e.clientX, y: e.clientY, items: [{ label: 'New agent in…' }, ...items] };
       }}
     >
       <OpenList {tabs} {activeKey} {query} onClose={onCloseTab} />

@@ -444,9 +444,6 @@ func (a *App) Invoke(command string, args core.Object) (any, error) {
 		}
 		path, e := wr.SaveFileDialog(a.ctx, wr.SaveDialogOptions{DefaultFilename: core.Str(opts["defaultPath"]), Filters: filters})
 		return core.Nullable(path), e
-	case "pick_folder":
-		path, e := wr.OpenDirectoryDialog(a.ctx, wr.OpenDialogOptions{Title: "Open folder"})
-		return core.Nullable(path), e
 	case "notification_permission":
 		return wr.CheckNotificationAuthorization(a.ctx)
 	case "notification_request":

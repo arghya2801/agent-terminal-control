@@ -53,7 +53,7 @@
   } from './terminal/manager';
   import { matchChord, type Action } from './lib/keymap';
   import { parseSavedTabs, type SavedTab } from './lib/restore';
-  import { agentCommand, openDevtools, pickFolder, scratchDir } from './lib/ipc';
+  import { agentCommand, openDevtools, scratchDir } from './lib/ipc';
   import { projectKey } from './lib/paths';
   import { resolveSessions, type TabRef } from './lib/sessions';
   import { zoomLabel } from './lib/zoom';
@@ -310,15 +310,6 @@
       const name = target.chats ? `${providerName(provider)} chat` : `Ask ${providerName(provider)}`;
       await newAgentIn({ key: projectKey(cwd), path: cwd, name, pinned: false, exists: true, lastActiveMs: 0, sessions: [] }, provider);
     });
-  }
-
-  /** Open view's right-click (#146): pick any folder, then Claude or Codex in it. */
-  async function openFolder() {
-    const path = await pickFolder();
-    if (!path) return;
-    const key = projectKey(path);
-    const name = path.split(/[\\/]/).at(-1) || path;
-    picker = { project: appState.index.projects.find((p) => p.key === key) ?? { key, path, name, pinned: false, exists: true, lastActiveMs: 0, sessions: [] } };
   }
 
   function openSession(p: Project, s: SessionMeta) {
@@ -615,7 +606,7 @@
         onNewShell={newShellIn}
         onNewAgent={newAgentIn}
         onNewChat={() => (picker = { project: null, chats: true })}
-        onOpenFolder={() => void guard(openFolder)}
+        onPickAgent={(p) => (picker = { project: p })}
         {tabs}
         onNewTab={newTab}
         onCloseTab={requestClose}

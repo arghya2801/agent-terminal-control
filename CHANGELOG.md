@@ -7,7 +7,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ## [Unreleased]
 
 ### Added
-- Right-click the Open view's tab list and pick Open folder… to start Claude or Codex in any folder. ([#146](https://github.com/arghya2801/agent-terminal-control/issues/146))
+- Right-click the Open view's tab list to pick a project, then Claude or Codex, and start it there. ([#146](https://github.com/arghya2801/agent-terminal-control/issues/146))
 - Tabs in the tab bar show the same state dot as the sidebar: working, needs you, interrupted or idle, for Claude and Codex. ([#149](https://github.com/arghya2801/agent-terminal-control/issues/149))
 
 ### Changed
