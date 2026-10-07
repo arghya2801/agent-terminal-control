@@ -41,7 +41,7 @@ func Defaults() Object {
 	return Object{
 		"version":  1,
 		"projects": Object{"claudeProjectsDir": nil, "pinned": []any{}, "names": Object{}, "sessionNames": Object{}},
-		"ui":       Object{"sidebarWidth": 260, "sidebarOpen": true, "sessionsPerProject": 15, "zoom": 1.0, "notifications": true, "restoreTabs": true, "theme": "ATC Dark", "groupSubfolders": false, "groupByBranch": false, "sidebarView": "sessions"},
+		"ui":       Object{"sidebarWidth": 260, "sidebarOpen": true, "sessionsPerProject": 15, "zoom": 1.0, "notifications": true, "restoreTabs": true, "theme": "ATC Dark", "groupSubfolders": false, "groupByBranch": false, "sidebarView": "open"},
 		"terminal": Object{"fontFamily": "\"FiraCode Nerd Font Mono\", \"Cascadia Mono\", Consolas, monospace", "fontSize": 13, "scrollback": 10000},
 		"claude":   Object{"command": "claude", "resumeArgs": []any{"--resume", "{session}"}, "scratchDir": nil},
 		"codex":    Object{"command": "codex", "resumeArgs": []any{"resume", "{session}"}, "homeDir": nil},

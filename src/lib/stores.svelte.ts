@@ -186,8 +186,7 @@ export type SidebarView = 'sessions' | 'open' | 'scratch';
 
 export function sidebarView(): SidebarView {
   const v = appState.settings?.ui.sidebarView;
-  // "tasks" is the view Open replaced.
-  return v === 'open' || v === 'tasks' ? 'open' : v === 'scratch' ? 'scratch' : 'sessions';
+  return v === 'sessions' ? 'sessions' : v === 'scratch' ? 'scratch' : 'open';
 }
 
 export function setSidebarView(view: SidebarView) {
