@@ -6,7 +6,11 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Added
+- Tabs in the tab bar show the same state dot as the sidebar: working, needs you, interrupted or idle, for Claude and Codex. ([#149](https://github.com/arghya2801/agent-terminal-control/issues/149))
+
 ### Fixed
+- The Open view's dots match the Sessions view: needs-you wins over working, and interrupted and not-yet-reported tabs no longer show as idle. ([#148](https://github.com/arghya2801/agent-terminal-control/issues/148))
 - Ctrl+C or Ctrl+Shift+C copies the terminal selection. With nothing selected, Ctrl+C still interrupts. ([#145](https://github.com/arghya2801/agent-terminal-control/issues/145))
 - Closing a tab activates the tab to its right, or the one to its left when it was the last, instead of the first tab. ([#147](https://github.com/arghya2801/agent-terminal-control/issues/147))
 
