@@ -7,7 +7,11 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ## [Unreleased]
 
 ### Added
+- Right-click the Open view's tab list and pick Open folder… to start Claude or Codex in any folder. ([#146](https://github.com/arghya2801/agent-terminal-control/issues/146))
 - Tabs in the tab bar show the same state dot as the sidebar: working, needs you, interrupted or idle, for Claude and Codex. ([#149](https://github.com/arghya2801/agent-terminal-control/issues/149))
+
+### Changed
+- The sidebar opens on the Open view for new installs. ([#146](https://github.com/arghya2801/agent-terminal-control/issues/146))
 
 ### Fixed
 - The Open view's dots match the Sessions view: needs-you wins over working, and interrupted and not-yet-reported tabs no longer show as idle. ([#148](https://github.com/arghya2801/agent-terminal-control/issues/148))
