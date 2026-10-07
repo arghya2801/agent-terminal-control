@@ -2,7 +2,9 @@
   import { onMount } from 'svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import { reorderable } from '../lib/dragReorder';
-  import { relativeTime } from '../lib/format';
+  import { markTitle, relativeTime, tabMark } from '../lib/format';
+  import { providerName } from '../lib/agents';
+  import StatusDot from '../lib/StatusDot.svelte';
   import { appState } from '../lib/stores.svelte';
   import { activate, getTab, moveTab } from '../terminal/manager';
   import type { TabKey, TabSummary } from '../types';
@@ -24,9 +26,6 @@
   });
 
   const projectName = (key: string | null) => (key ? appState.index.projects.find((p) => p.key === key)?.name ?? '' : '');
-  const status = (t: TabSummary) =>
-    t.exited ? 'exited' : t.activity === 'working' ? 'working' : t.attention ? 'attention' : 'idle';
-  const LABEL = { working: 'Working', attention: 'Needs you', idle: 'Idle', exited: 'Exited' };
 
   const shown = $derived.by(() => {
     const q = query.trim().toLowerCase();
@@ -40,7 +39,7 @@
   <div class="hint">Nothing matches “{query.trim()}”.</div>
 {/if}
 {#each shown as tab (tab.key)}
-  {@const s = status(tab)}
+  {@const s = markTitle(tabMark(tab), providerName(tab.provider ?? 'claude'))}
   <button
     class="row"
     class:active={tab.key === activeKey}
@@ -51,9 +50,9 @@
     onclick={() => activate(tab.key)}
     onmousedown={(e) => { if (e.button === 1) e.preventDefault(); }}
     onauxclick={(e) => { if (e.button === 1) onClose(tab.key); }}
-    title="{tab.title} · {LABEL[s]} (middle-click to close)"
+    title="{tab.title} · {s} (middle-click to close)"
   >
-    <span class="dot {s}" aria-label={LABEL[s]}></span>
+    <StatusDot mark={tabMark(tab)} title={s} />
     <span class="icon">{#if tab.provider}<ProviderIcon provider={tab.provider} />{:else}›_{/if}</span>
     <span class="text">{tab.title}{#if projectName(tab.projectKey)}<small>{projectName(tab.projectKey)}</small>{/if}</span>
     <time>{relativeTime(getTab(tab.key)?.lastOutputAt ?? 0, now)}</time>
@@ -95,32 +94,6 @@
   .row.exited .text {
     opacity: 0.6;
     text-decoration: line-through;
-  }
-  .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-  }
-  .dot.working {
-    background: var(--warn);
-    animation: pulse 1.2s ease-in-out infinite;
-  }
-  .dot.attention {
-    background: var(--accent);
-  }
-  .dot.idle {
-    box-sizing: border-box;
-    border: 1px solid var(--fg-faint);
-  }
-  @keyframes pulse {
-    50% {
-      opacity: 0.3;
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .dot.working {
-      animation: none;
-    }
   }
   .icon {
     color: var(--fg-faint);

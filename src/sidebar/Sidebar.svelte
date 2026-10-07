@@ -13,7 +13,7 @@
     toggleAllProjects,
   } from '../lib/stores.svelte';
   import type { AgentProvider, Project, SessionMeta, TabKey, TabSummary } from '../types';
-  import type { SessionMark } from './SessionNode.svelte';
+  import { tabMark, type SessionMark } from '../lib/format';
 
   let {
     activeKey,
@@ -47,8 +47,8 @@
   let refreshing = $state(false);
 
   const view = $derived(sidebarView());
-  const working = $derived(tabs.filter((t) => !t.exited && t.activity === 'working').length);
-  const waiting = $derived(tabs.filter((t) => !t.exited && t.activity !== 'working' && t.attention).length);
+  const working = $derived(tabs.filter((t) => tabMark(t) === 'working').length);
+  const waiting = $derived(tabs.filter((t) => tabMark(t) === 'attention').length);
   const scratchSessions = $derived(
     appState.index.projects.filter((p) => p.kind).reduce((n, p) => n + p.sessions.length, 0),
   );

@@ -8,7 +8,7 @@
   import { isPinned, togglePinned } from '../lib/pinned';
   import { appState, refresh, saveSettings } from '../lib/stores.svelte';
   import type { AgentProvider, Project, SessionMeta, TabKey } from '../types';
-  import type { SessionMark } from './SessionNode.svelte';
+  import type { SessionMark } from '../lib/format';
 
   /** The sidebar's Sessions view: projects, their sessions, and both context menus. */
   let {

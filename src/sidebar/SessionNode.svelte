@@ -1,12 +1,8 @@
-<script lang="ts" module>
-  /** A session with a live tab: what Claude is doing, or just "open" before it says. */
-  export type SessionMark = 'working' | 'idle' | 'interrupted' | 'open' | 'attention';
-</script>
-
 <script lang="ts">
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import { providerName } from '../lib/agents';
-  import { relativeTime } from '../lib/format';
+  import { markTitle, relativeTime, type SessionMark } from '../lib/format';
+  import StatusDot from '../lib/StatusDot.svelte';
   import { subfolderLabel } from '../lib/group';
   import InlineRename from '../lib/InlineRename.svelte';
   import type { SessionMeta } from '../types';
@@ -66,18 +62,7 @@
     ? `Resume ${session.label}\n${session.id}`
     : 'This session did not record a working directory, so it cannot be resumed'}
 >
-  {#if mark}
-    <span
-      class="mark {mark}"
-      title={{
-        working: `${providerName(session.provider)} is working`,
-        idle: `${providerName(session.provider)} is waiting for you`,
-        interrupted: `${providerName(session.provider)} was interrupted`,
-        attention: 'Finished in the background: needs your attention',
-        open: 'Open in a tab',
-      }[mark]}
-    ></span>
-  {/if}
+  {#if mark}<span class="mark"><StatusDot {mark} title={markTitle(mark, providerName(session.provider))} /></span>{/if}
   <ProviderIcon provider={session.provider} />
   <span class="label">{session.label}</span>
   <span class="meta">
@@ -142,29 +127,8 @@
     position: absolute;
     top: 50%;
     left: 27px;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
+    display: flex;
     transform: translateY(-50%);
-  }
-  .mark.open {
-    box-shadow: inset 0 0 0 1px var(--fg-faint);
-  }
-  .mark.idle {
-    background: var(--ok);
-  }
-  .mark.attention {
-    background: var(--accent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 27%, transparent);
-  }
-  .mark.working {
-    background: var(--warn);
-    animation: pulse 1.2s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    50% {
-      opacity: 0.35;
-    }
   }
   .meta {
     display: flex;

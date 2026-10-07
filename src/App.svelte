@@ -58,7 +58,7 @@
   import { resolveSessions, type TabRef } from './lib/sessions';
   import { zoomLabel } from './lib/zoom';
   import type { AgentProvider, Project, SessionMeta, TabKey, TabSummary } from './types';
-  import type { SessionMark } from './sidebar/SessionNode.svelte';
+  import type { SessionMark } from './lib/format';
 
   let wrapper: HTMLDivElement;
   let tabs = $state<TabSummary[]>([]);
