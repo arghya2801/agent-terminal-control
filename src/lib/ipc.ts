@@ -79,6 +79,11 @@ export function scratchDir(kind?: 'chats'): Promise<string> {
   return invoke<string>('scratch_dir', { kind });
 }
 
+/** The folder the user picked, or null when they cancelled. */
+export function pickFolder(): Promise<string | null> {
+  return invoke('pick_folder');
+}
+
 /** Writes text to a path the user picked in the save dialog. */
 export function writeTextFile(path: string, contents: string): Promise<void> {
   return invoke('write_text_file', { path, contents });
