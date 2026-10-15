@@ -184,13 +184,24 @@ func TestABadUserPriceFileKeepsTheDefaults(t *testing.T) {
 		t.Fatal("a bad pricing.json changed the defaults")
 	}
 }
+func TestDownloadedPricesReplaceTheBuiltInTable(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "prices-latest.json"), []byte(`{"claude":[],"codex":[{"model":"gpt-9","input":7,"cached":0.7,"output":9}]}`), 0600)
+	if p := prices(dir); Num(priceFor(p, "codex", "gpt-9")["input"]) != 7 || priceFor(p, "codex", "gpt-5.5") != nil {
+		t.Fatal(p["codex"])
+	}
+	os.WriteFile(filepath.Join(dir, "prices-latest.json"), []byte("{ nope"), 0600)
+	if !reflect.DeepEqual(prices(dir), prices(t.TempDir())) {
+		t.Fatal("a bad download changed the defaults")
+	}
+}
 
 // --- codex_cost.rs
 
 func TestEstimatesCachedInputWritesAndOutputWithoutDoubleCountingReasoning(t *testing.T) {
 	rates := prices(t.TempDir())
 	row := Object{"input": int64(100000), "cacheRead": int64(800000), "cacheWrite": int64(100000), "output": int64(20000), "reasoning": int64(10000)}
-	for model, want := range map[string]float64{"gpt-6-astra": 4.05, "gpt-6-astra-2026-09-01": 4.05, "gpt-6-sol": 0.81, "gpt-6-luna-2026-09-22": 0.0405, "gpt-5.5": 1.5} {
+	for model, want := range map[string]float64{"gpt-6-astra": 4.05, "gpt-6-astra-2026-09-01": 4.05, "gpt-6-sol": 0.81, "gpt-6.1-sol": 0.73,"gpt-6-luna-2026-09-22": 0.0405, "gpt-5.5": 1.5} {
 		row["model"] = model
 		priceCodexRow(row, rates)
 		if row["costUsd"] == nil || math.Abs(Num(row["costUsd"])-want) > 1e-10 {
