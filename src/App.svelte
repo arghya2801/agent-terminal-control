@@ -46,6 +46,8 @@
     activate,
     focusOtherPane,
     isSplit,
+    sendText,
+    toggleMosaic,
     splitWith,
     unsplit,
     type AttentionReason,
@@ -223,6 +225,7 @@
       attention: t.attention,
       activity: t.activity,
       projectKey: t.projectKey,
+      since: t.markSince,
     }));
     const nextActive = getActiveKey();
     // Picking a tab means the user wants the terminal, not the page covering it.
@@ -286,6 +289,22 @@
     if (!p.path) return;
     counter += 1;
     return guard(() => openTab(`plain:${counter}`, p.name, { cwd: p.path }, p.key));
+  }
+
+  /**
+   * Start an agent on `task` without leaving the current tab. The new tab has to be shown
+   * for a frame to spawn at its real size, then focus goes back.
+   */
+  function dispatch(p: Project, provider: AgentProvider, task: string) {
+    if (!p.path) return;
+    counter += 1;
+    const key: TabKey = `agent:${provider}:${counter}`;
+    const back = activeKey;
+    const quoted = `'${task.replaceAll("'", "''")}'`;
+    return guard(async () => {
+      await openTab(key, task.slice(0, 40), { cwd: p.path, initialCommand: `${await agentCommand(provider)} ${quoted}` }, p.key, provider, knownSessions());
+      if (back) activate(back);
+    });
   }
 
   function knownSessions(): string[] { return appState.index.projects.flatMap(p => p.sessions.map(sessionKey)); }
@@ -458,6 +477,9 @@
       case 'focusOtherPane':
         focusOtherPane();
         break;
+      case 'toggleMosaic':
+        toggleMosaic();
+        break;
     }
   }
 
@@ -610,6 +632,8 @@
         {tabs}
         onNewTab={newTab}
         onCloseTab={requestClose}
+        onDispatch={dispatch}
+        onBroadcast={(keys, text) => keys.forEach((k) => sendText(k, text))}
       />
     {/if}
   </aside>
@@ -728,9 +752,38 @@
      share its geometry and can be measured once. */
   .panes {
     position: relative;
+    overflow: hidden;
     flex: 1;
     min-height: 0;
     padding: 6px 0 0 8px;
+  }
+  /* The mosaic's tile names. Tiles are scaled down, so the label is scaled up to match. */
+  .panes :global([data-tile])::after {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 10;
+    padding: calc(4px * var(--tile-scale)) calc(8px * var(--tile-scale));
+    background: var(--bg-chrome);
+    color: var(--fg-bright);
+    content: attr(data-tile);
+    font-size: calc(12px * var(--tile-scale));
+  }
+  .panes :global([data-mark='attention'])::after {
+    background: var(--accent);
+    color: var(--bg);
+  }
+  .panes :global([data-mark='working'])::after {
+    background: var(--warn);
+    color: var(--bg);
+  }
+  .panes :global([data-mark='idle'])::after {
+    background: var(--ok);
+    color: var(--bg);
+  }
+  .panes :global([data-mark='interrupted'])::after {
+    background: var(--danger);
+    color: var(--bg);
   }
   .error {
     position: absolute;

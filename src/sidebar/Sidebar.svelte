@@ -30,6 +30,8 @@
     onPickAgent,
     onNewTab,
     onCloseTab,
+    onDispatch,
+    onBroadcast,
   }: {
     activeKey: TabKey | null;
     activeSessionId: string | null;
@@ -46,6 +48,8 @@
     onPickAgent: (p: Project) => void;
     onNewTab: () => void;
     onCloseTab: (key: TabKey) => void;
+    onDispatch: (p: Project, provider: AgentProvider, task: string) => void;
+    onBroadcast: (keys: TabKey[], text: string) => void;
   } = $props();
 
   let refreshing = $state(false);
@@ -215,7 +219,7 @@
         menu = { x: e.clientX, y: e.clientY, items: [{ label: 'New agent in…' }, ...items] };
       }}
     >
-      <OpenList {tabs} {activeKey} {query} onClose={onCloseTab} />
+      <OpenList {tabs} {activeKey} {query} onClose={onCloseTab} {onDispatch} {onBroadcast} />
     </div>
     <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
     <div
