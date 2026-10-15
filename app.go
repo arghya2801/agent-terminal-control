@@ -43,6 +43,7 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx, a.cancel = context.WithCancel(ctx)
 	a.load()
 	_ = os.MkdirAll(a.config, 0700)
+	go core.RefreshPrices(a.config)
 	a.watcher, _ = fsnotify.NewWatcher()
 	if a.watcher != nil {
 		a.arm()
