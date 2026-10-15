@@ -6,22 +6,25 @@
   import { providerName } from '../lib/agents';
   import StatusDot from '../lib/StatusDot.svelte';
   import { appState } from '../lib/stores.svelte';
-  import { activate, getTab, moveTab } from '../terminal/manager';
+  import { peekLine, stateWord, triageOrder } from '../lib/triage';
+  import { activate, moveTab, outputHistory, screenLines } from '../terminal/manager';
   import type { TabKey, TabSummary } from '../types';
 
-  /** The sidebar's Open view: every tab in tab-bar order (#132). */
-  let { tabs, activeKey, query, onClose }: {
+  /** The sidebar's Open view: every tab, most urgent first, or in tab-bar order (#132). */
+  let { tabs, activeKey, query, triage, onClose }: {
     tabs: TabSummary[];
     activeKey: TabKey | null;
     query: string;
+    /** Needs-you first. Off, the tab bar's order, which dragging changes. */
+    triage: boolean;
     /** Asks first when something is still running in the tab. */
     onClose: (key: TabKey) => void;
   } = $props();
 
-  // Last-output times are read from the tabs on this tick rather than on every chunk.
+  // Screen text and output history are read on this tick rather than on every chunk.
   let now = $state(Date.now());
   onMount(() => {
-    const timer = setInterval(() => (now = Date.now()), 15_000);
+    const timer = setInterval(() => (now = Date.now()), 5_000);
     return () => clearInterval(timer);
   });
 
@@ -29,8 +32,16 @@
 
   const shown = $derived.by(() => {
     const q = query.trim().toLowerCase();
-    return q ? tabs.filter((t) => `${t.title} ${projectName(t.projectKey)}`.toLowerCase().includes(q)) : tabs;
+    const hits = q ? tabs.filter((t) => `${t.title} ${projectName(t.projectKey)}`.toLowerCase().includes(q)) : tabs;
+    return triage ? triageOrder(hits.map((t) => ({ ...t, mark: tabMark(t) }))) : hits;
   });
+
+  /** A 30-bar sparkline path, one bar per 10 s, scaled so a trickle stays short. */
+  function spark(key: TabKey, _tick: number): string {
+    const h = outputHistory(key);
+    const top = Math.max(4096, ...h);
+    return h.map((v, i) => (v ? `M${i * 2 + 0.5} 10V${10 - Math.max(1, (v / top) * 10)}` : '')).join('');
+  }
 </script>
 
 {#if tabs.length === 0}
@@ -39,23 +50,27 @@
   <div class="hint">Nothing matches “{query.trim()}”.</div>
 {/if}
 {#each shown as tab (tab.key)}
-  {@const s = markTitle(tabMark(tab), providerName(tab.provider ?? 'claude'))}
+  {@const mark = tabMark(tab)}
+  {@const s = markTitle(mark, providerName(tab.provider ?? 'claude'))}
+  {@const peek = peekLine((void now, screenLines(tab.key)))}
   <button
-    class="row"
+    class="row {mark}"
     class:active={tab.key === activeKey}
     class:exited={tab.exited}
     data-row
     tabindex="-1"
-    use:reorderable={{ id: tab.key, group: 'open', onMove: (from, to) => moveTab(from as TabKey, to as TabKey) }}
+    use:reorderable={{ id: tab.key, group: 'open', onMove: (from, to) => !triage && moveTab(from as TabKey, to as TabKey) }}
     onclick={() => activate(tab.key)}
     onmousedown={(e) => { if (e.button === 1) e.preventDefault(); }}
     onauxclick={(e) => { if (e.button === 1) onClose(tab.key); }}
     title="{tab.title} · {s} (middle-click to close)"
   >
-    <StatusDot mark={tabMark(tab)} title={s} />
+    <StatusDot {mark} title={s} />
     <span class="icon">{#if tab.provider}<ProviderIcon provider={tab.provider} />{:else}›_{/if}</span>
     <span class="text">{tab.title}{#if projectName(tab.projectKey)}<small>{projectName(tab.projectKey)}</small>{/if}</span>
-    <time>{relativeTime(getTab(tab.key)?.lastOutputAt ?? 0, now)}</time>
+    <time>{stateWord(mark)} {relativeTime(tab.since, now)}</time>
+    {#if peek}<span class="peek">{peek}</span>{/if}
+    <svg class="spark" viewBox="0 0 60 10" preserveAspectRatio="none" aria-hidden="true"><path d={spark(tab.key, now)} /></svg>
   </button>
 {/each}
 
@@ -68,7 +83,8 @@
   .row {
     display: grid;
     grid-template-columns: 10px 16px 1fr auto;
-    gap: 6px;
+    column-gap: 6px;
+    row-gap: 1px;
     align-items: center;
     width: 100%;
     padding: 5px 10px;
@@ -114,7 +130,35 @@
   }
   time {
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: 10px;
     font-variant-numeric: tabular-nums;
+  }
+  .attention time {
+    color: var(--accent);
+  }
+  .peek {
+    grid-column: 3 / 4;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--fg-faint);
+    font-family: ui-monospace, monospace;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .attention .peek {
+    color: var(--fg);
+  }
+  .spark {
+    grid-column: 4;
+    grid-row: 2;
+    justify-self: end;
+    width: 60px;
+    height: 10px;
+    stroke: var(--fg-faint);
+    stroke-width: 1.5;
+  }
+  .working .spark {
+    stroke: var(--warn);
   }
 </style>

@@ -58,7 +58,8 @@
   import { resolveSessions, type TabRef } from './lib/sessions';
   import { zoomLabel } from './lib/zoom';
   import type { AgentProvider, Project, SessionMeta, TabKey, TabSummary } from './types';
-  import type { SessionMark } from './lib/format';
+  import { tabMark, type SessionMark } from './lib/format';
+  import { nextWaiting } from './lib/triage';
 
   let wrapper: HTMLDivElement;
   let tabs = $state<TabSummary[]>([]);
@@ -223,6 +224,7 @@
       attention: t.attention,
       activity: t.activity,
       projectKey: t.projectKey,
+      since: t.markSince,
     }));
     const nextActive = getActiveKey();
     // Picking a tab means the user wants the terminal, not the page covering it.
@@ -458,6 +460,11 @@
       case 'focusOtherPane':
         focusOtherPane();
         break;
+      case 'jumpWaiting': {
+        const next = nextWaiting(tabs.map((t) => ({ ...t, mark: tabMark(t) })), activeKey);
+        if (next) activate(next.key);
+        break;
+      }
     }
   }
 

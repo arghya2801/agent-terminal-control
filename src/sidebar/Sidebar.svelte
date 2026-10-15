@@ -86,6 +86,22 @@
     return anyProjectExpanded();
   });
 
+  // Needs-you first by default; off gives back the tab bar's order and dragging.
+  let triage = $state(true);
+  try {
+    triage = localStorage.getItem('atc.openTriage') !== '0';
+  } catch {
+    // Storage unavailable: keep the default.
+  }
+  function toggleTriage() {
+    triage = !triage;
+    try {
+      localStorage.setItem('atc.openTriage', triage ? '1' : '0');
+    } catch {
+      // Storage unavailable: the choice just is not remembered.
+    }
+  }
+
   // The Open list's height; the notes pad takes the rest. Per machine, like the usage range.
   const OPEN_HEIGHT_KEY = 'atc.openListHeight';
   let openHeight = $state(200);
@@ -154,6 +170,14 @@
     </div>
     <div class="actions">
       {#if view === 'open'}
+        <button
+          class="icon"
+          class:on={triage}
+          onclick={toggleTriage}
+          title={triage ? 'Sorted: needs you first. Click for tab order' : 'Tab order. Click to sort needs you first'}
+          aria-label="Sort needs you first"
+          aria-pressed={triage}
+        >⇅</button>
         <button class="icon" onclick={onNewTab} title="New tab (Ctrl+Shift+T)" aria-label="New tab">+</button>
       {:else if view === 'scratch'}
         <button class="icon" onclick={onNewChat} title="New chat with Claude or Codex" aria-label="New chat">+</button>
@@ -215,7 +239,7 @@
         menu = { x: e.clientX, y: e.clientY, items: [{ label: 'New agent in…' }, ...items] };
       }}
     >
-      <OpenList {tabs} {activeKey} {query} onClose={onCloseTab} />
+      <OpenList {tabs} {activeKey} {query} {triage} onClose={onCloseTab} />
     </div>
     <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
     <div
@@ -364,6 +388,9 @@
   }
   .icon:hover {
     background: var(--bg-surface);
+    color: var(--accent);
+  }
+  .icon.on {
     color: var(--accent);
   }
   .icon.spin {
