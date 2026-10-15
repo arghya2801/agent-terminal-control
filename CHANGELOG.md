@@ -6,6 +6,12 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Changed
+- Model prices update from the repository at launch, so a new model no longer waits for a release. Offline, the built-in table is used.
+
+### Fixed
+- Usage prices Codex `gpt-6.1-sol` sessions instead of marking them unpriced.
+
 ## [0.4.2] - 2026-10-07
 
 ### Added

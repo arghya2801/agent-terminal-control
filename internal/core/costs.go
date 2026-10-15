@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -48,9 +49,30 @@ func newRow(provider, hour, id, cwd, model string) Object {
 	}
 	return Object{"provider": provider, "hour": hour, "sessionId": id, "projectKey": key, "projectPath": Nullable(cwd), "model": model, "input": int64(0), "output": int64(0), "cacheWrite": int64(0), "cacheRead": int64(0), "reasoning": int64(0), "totalTokens": int64(0), "costUsd": nil, "unpriced": false}
 }
+const pricesURL = "https://raw.githubusercontent.com/arghya2801/agent-terminal-control/main/internal/core/prices.json"
+
+// RefreshPrices caches the table from main, so a new model needs a commit, not a release.
+// ponytail: fetched once per launch, add a timer if the app stays open for weeks.
+func RefreshPrices(config string) {
+	c := http.Client{Timeout: 15 * time.Second}
+	res, e := c.Get(pricesURL)
+	if e != nil {
+		return
+	}
+	defer res.Body.Close()
+	b, e := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	var p Object
+	if e != nil || res.StatusCode != http.StatusOK || json.Unmarshal(b, &p) != nil || len(Arr(p["codex"])) == 0 || len(Arr(p["claude"])) == 0 {
+		return
+	}
+	_ = WriteFile(filepath.Join(config, "prices-latest.json"), b)
+}
 func prices(config string) Object {
 	var p Object
-	_ = json.Unmarshal(defaultPrices, &p)
+	if b, e := os.ReadFile(filepath.Join(config, "prices-latest.json")); e != nil || json.Unmarshal(b, &p) != nil {
+		p = nil
+		_ = json.Unmarshal(defaultPrices, &p)
+	}
 	b, e := os.ReadFile(filepath.Join(config, "pricing.json"))
 	if e == nil {
 		var custom Object
