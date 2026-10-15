@@ -23,7 +23,7 @@ import { Channel, ptyAck, ptyBusy, ptyKill, ptyResize, ptySpawn, ptyWrite } from
 import { isCopy, isNativePaste, newlineInput, matchChord, type Action } from '../lib/keymap';
 import { decodeOsc52 } from '../lib/osc52';
 import type { Palette } from '../lib/theme';
-import { claudeTitle, usableTitle, type Activity } from '../lib/format';
+import { claudeTitle, tabMark, usableTitle, type Activity, type TabMark } from '../lib/format';
 import { cycleIndex } from './cycle';
 import type { AgentProvider, SessionMeta, Dims, PtyEvent, SpawnOpts, TabKey, TerminalSettings } from '../types';
 import {
@@ -89,7 +89,16 @@ export interface Tab {
   dims: Dims | null;
   /** Bytes written but not yet acked to Go, which releases backpressure. */
   unacked: number;
+  /** The state the sidebar shows, and since when: "waiting 12m", and who waited longest. */
+  mark: TabMark;
+  markSince: number;
+  /** Output bytes per BUCKET_MS, oldest first, ending at `bucketAt`. */
+  buckets: number[];
+  bucketAt: number;
 }
+
+const BUCKET_MS = 10_000;
+const BUCKETS = 30;
 
 const tabs = new Map<TabKey, Tab>();
 /** The focused tab: the one in the focused pane. */
@@ -150,7 +159,43 @@ export function onChange(fn: Listener): () => void {
   return () => listeners.delete(fn);
 }
 function notify() {
+  const now = Date.now();
+  for (const t of tabs.values()) {
+    const mark = tabMark(t);
+    if (mark !== t.mark) {
+      t.mark = mark;
+      t.markSince = now;
+    }
+  }
   for (const l of listeners) l();
+}
+
+/** Shift the output history up to `now`, so silence reads as zeros. */
+function roll(tab: Tab, now: number) {
+  const at = Math.floor(now / BUCKET_MS);
+  for (let i = Math.min(BUCKETS, at - tab.bucketAt); i > 0; i--) {
+    tab.buckets.shift();
+    tab.buckets.push(0);
+  }
+  tab.bucketAt = at;
+}
+
+/** Output bytes per 10 s over the last 5 minutes, oldest first. */
+export function outputHistory(key: TabKey): number[] {
+  const tab = tabs.get(key);
+  if (!tab) return [];
+  roll(tab, Date.now());
+  return [...tab.buckets];
+}
+
+/** The rows on screen in a tab, as text. */
+export function screenLines(key: TabKey): string[] {
+  const tab = tabs.get(key);
+  if (!tab) return [];
+  const b = tab.term.buffer.active;
+  const lines: string[] = [];
+  for (let y = b.baseY; y < b.baseY + tab.term.rows; y++) lines.push(b.getLine(y)?.translateToString(true) ?? '');
+  return lines;
 }
 
 /** Put tab `from` where tab `to` is (#74). The Map's order is the tab bar's order. */
@@ -318,6 +363,10 @@ export async function openTab(
     exitCode: null,
     dims: null,
     unacked: 0,
+    mark: 'open',
+    markSince: Date.now(),
+    buckets: new Array(BUCKETS).fill(0),
+    bucketAt: Math.floor(Date.now() / BUCKET_MS),
   };
   tabs.set(key, tab);
 
@@ -361,6 +410,8 @@ export async function openTab(
   channel.onmessage = (msg) => {
     if (msg.t === 'o') {
       tab.lastOutputAt = Date.now();
+      roll(tab, tab.lastOutputAt);
+      tab.buckets[BUCKETS - 1] += msg.d.length;
       // The callback fires once xterm has parsed the payload: the honest ack point.
       term.write(msg.d, () => {
         tab.unacked += new TextEncoder().encode(msg.d).byteLength;

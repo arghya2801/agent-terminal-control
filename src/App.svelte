@@ -3,6 +3,8 @@
   import ProviderPicker from './lib/ProviderPicker.svelte';
   import { providerName, sessionKey } from './lib/agents';
   import TabBar from './tabs/TabBar.svelte';
+  import RailAgents from './tabs/RailAgents.svelte';
+  import Switcher from './tabs/Switcher.svelte';
   import DebugOverlay from './debug/DebugOverlay.svelte';
   import Sidebar from './sidebar/Sidebar.svelte';
   import FindBar from './terminal/FindBar.svelte';
@@ -58,7 +60,8 @@
   import { resolveSessions, type TabRef } from './lib/sessions';
   import { zoomLabel } from './lib/zoom';
   import type { AgentProvider, Project, SessionMeta, TabKey, TabSummary } from './types';
-  import type { SessionMark } from './lib/format';
+  import { tabMark, type SessionMark } from './lib/format';
+  import { triageOrder } from './lib/triage';
 
   let wrapper: HTMLDivElement;
   let tabs = $state<TabSummary[]>([]);
@@ -223,6 +226,7 @@
       attention: t.attention,
       activity: t.activity,
       projectKey: t.projectKey,
+      since: t.markSince,
     }));
     const nextActive = getActiveKey();
     // Picking a tab means the user wants the terminal, not the page covering it.
@@ -355,8 +359,44 @@
     input?.select();
   }
 
+  /**
+   * Ctrl+Shift+J held: the waiting agents, most urgent first, and which one is showing.
+   * Each press shows the next; releasing Ctrl or Shift stays there, like Alt+Tab.
+   */
+  let switcher = $state<{ keys: TabKey[]; i: number } | null>(null);
+  function flipWaiting() {
+    if (switcher) {
+      switcher.i = (switcher.i + 1) % switcher.keys.length;
+    } else {
+      const waiting = triageOrder(tabs.map((t) => ({ ...t, mark: tabMark(t) })))
+        .filter((t) => t.key !== activeKey && ['attention', 'interrupted', 'idle'].includes(t.mark));
+      if (waiting.length === 0) return;
+      switcher = { keys: waiting.map((t) => t.key), i: 0 };
+    }
+    activate(switcher.keys[switcher.i]);
+  }
+
+  /** Focus mode: background agents queue up silently for 20 minutes, then report at once. */
+  const QUIET_MS = 20 * 60_000;
+  let quiet = $state(false);
+  let held = 0;
+  let quietTimer: ReturnType<typeof setTimeout> | undefined;
+  function toggleQuiet() {
+    clearTimeout(quietTimer);
+    quiet = !quiet;
+    if (quiet) quietTimer = setTimeout(toggleQuiet, QUIET_MS);
+    else if (held > 0) {
+      sendNotification({ title: 'Focus mode ended', body: `${held} agent${held === 1 ? '' : 's'} finished while you were focused.` });
+      held = 0;
+    }
+  }
+
   /** Windows notification for a background tab, only while ATC itself is not focused. */
   async function notifyAttention(title: string, provider: AgentProvider | null, reason: AttentionReason) {
+    if (quiet) {
+      held += 1;
+      return;
+    }
     if (document.hasFocus() || appState.settings?.ui.notifications === false) return;
     try {
       let granted = await isPermissionGranted();
@@ -458,6 +498,9 @@
       case 'focusOtherPane':
         focusOtherPane();
         break;
+      case 'jumpWaiting':
+        flipWaiting();
+        break;
     }
   }
 
@@ -486,7 +529,11 @@
       e.preventDefault();
       runAction(action);
     };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (switcher && (!e.ctrlKey || !e.shiftKey)) switcher = null;
+    };
     window.addEventListener('keydown', onKey);
+    window.addEventListener('keyup', onKeyUp);
     window.addEventListener('resize', refit);
 
     return () => {
@@ -494,6 +541,7 @@
       offChord();
       offAttention();
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('resize', refit);
     };
   });
@@ -544,7 +592,17 @@
     >
       $
     </button>
-    <div class="spacer"></div>
+    <RailAgents {tabs} {activeKey} {quiet} onClose={requestClose} />
+    <button
+      class="rail-btn small"
+      class:on={quiet}
+      onclick={toggleQuiet}
+      title={quiet ? 'Focus mode: notifications are held. Click to end' : 'Focus mode: hold notifications for 20 minutes'}
+      aria-label="Focus mode"
+      aria-pressed={quiet}
+    >
+      ☾
+    </button>
     {#if currentZoom() !== 1}
       <button
         class="rail-btn zoom"
@@ -617,6 +675,9 @@
   <section class="main">
     <TabBar {tabs} {activeKey} onNew={newTab} onClose={requestClose} bind:renaming={renamingTab} />
     <div class="panes" bind:this={wrapper}></div>
+    {#if switcher}
+      <Switcher tabs={switcher.keys.flatMap((k) => tabs.filter((t) => t.key === k))} selected={switcher.keys[switcher.i]} />
+    {/if}
     {#if page === 'settings'}
       <SettingsPanel onClose={() => (page = null)} />
     {:else if page === 'usage'}
@@ -667,7 +728,8 @@
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    padding-top: 8px;
+    min-height: 0;
+    padding: 8px 0;
     border-right: 1px solid var(--border);
     background: var(--bg-chrome);
   }
@@ -697,9 +759,6 @@
     padding: 0 4px;
     color: var(--accent);
     font-size: 10px;
-  }
-  .spacer {
-    flex: 1;
   }
   .panel {
     position: relative;

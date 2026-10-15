@@ -32,7 +32,8 @@ export type Action =
   | 'askAgent'
   | 'showShortcuts'
   | 'toggleSplit'
-  | 'focusOtherPane';
+  | 'focusOtherPane'
+  | 'jumpWaiting';
 
 /** The subset of KeyboardEvent this needs, so tests require no DOM. */
 export interface ChordEvent {
@@ -92,6 +93,7 @@ const BINDINGS: Binding[] = [
   { key: '|', ctrl: true, shift: true, action: 'toggleSplit' },
   { key: '\\', ctrl: true, shift: true, action: 'toggleSplit' },
   { key: 'o', ctrl: true, shift: true, action: 'focusOtherPane' },
+  { key: 'j', ctrl: true, shift: true, action: 'jumpWaiting' },
 ];
 
 /**
@@ -107,6 +109,7 @@ const DESCRIPTIONS: Record<Action, { group: Group; label: string }> = {
   renameTab: { group: 'Tabs', label: 'Rename tab' },
   toggleSplit: { group: 'Tabs', label: 'Split into two panes, or back to one' },
   focusOtherPane: { group: 'Tabs', label: 'Focus the other pane' },
+  jumpWaiting: { group: 'Tabs', label: 'Flip through waiting agents (hold Ctrl+Shift, press J again for the next)' },
   openAgentHere: { group: 'Launch', label: 'Open an agent in this tab’s project' },
   openShellHere: { group: 'Launch', label: 'Open a shell in this tab’s project' },
   askAgent: { group: 'Launch', label: 'Ask agent (scratch directory)' },
