@@ -6,6 +6,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-10-15
+
 ### Changed
 - Model prices update from the repository at launch, so a new model no longer waits for a release. Offline, the built-in table is used.
 
@@ -191,7 +193,8 @@ ATC now runs on a Go/Wails host instead of Rust/Tauri. The interface is the same
 
 First release.
 
-[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.3.1...v0.4.0
