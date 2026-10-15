@@ -2,6 +2,7 @@
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import { providerName } from '../lib/agents';
   import { markTitle, relativeTime, type SessionMark } from '../lib/format';
+  import { stateWord } from '../lib/triage';
   import StatusDot from '../lib/StatusDot.svelte';
   import { subfolderLabel } from '../lib/group';
   import InlineRename from '../lib/InlineRename.svelte';
@@ -12,6 +13,9 @@
     projectPath,
     active = false,
     mark = null,
+    since = null,
+    parked = false,
+    cost = 0,
     showBranch = true,
     renaming = false,
     onRename,
@@ -24,6 +28,11 @@
     projectPath: string | null;
     active?: boolean;
     mark?: SessionMark | null;
+    /** When the live tab entered `mark`. */
+    since?: number | null;
+    parked?: boolean;
+    /** Spend in USD; hidden under a cent. */
+    cost?: number;
     /** Off under a branch sub-header, which already says it. */
     showBranch?: boolean;
     renaming?: boolean;
@@ -72,7 +81,12 @@
         {session.gitBranch}
       </span>
     {/if}
-    <span class="age">{mark ? 'open' : age}</span>
+    {#if cost >= 0.01}<span class="cost" class:high={cost >= 5}>${cost < 10 ? cost.toFixed(2) : cost.toFixed(0)}</span>{/if}
+    {#if mark && since}
+      <span class="age live">{stateWord(mark)} {relativeTime(since)}</span>
+    {:else}
+      <span class="age">{parked ? 'parked' : age}</span>
+    {/if}
   </span>
 </button>
 {/if}
@@ -151,5 +165,15 @@
   }
   .age {
     color: var(--fg-faint);
+  }
+  .age.live {
+    color: var(--fg);
+  }
+  .cost {
+    color: var(--fg-faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .cost.high {
+    color: var(--warn);
   }
 </style>

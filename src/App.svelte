@@ -64,7 +64,7 @@
   let tabs = $state<TabSummary[]>([]);
   let activeKey = $state<TabKey | null>(null);
   let openProjectKeys = $state<Set<string>>(new Set());
-  let tabSessions = $state<(TabRef & { activity: SessionMark; exited: boolean })[]>([]);
+  let tabSessions = $state<(TabRef & { activity: SessionMark; exited: boolean; since: number })[]>([]);
 
   /** Which sidebar session each tab is showing. See `resolveSessions` for how. */
   const tabToSession = $derived(resolveSessions(tabSessions, appState.index.projects));
@@ -79,6 +79,28 @@
     }
     return marks;
   });
+
+  /** When each live session entered its state, for "waiting 4m" on its row. */
+  const sessionSince = $derived(new Map(tabSessions.flatMap((t) => {
+    const id = tabToSession.get(t.key);
+    return id && !t.exited ? [[id, t.since] as const] : [];
+  })));
+
+  /** Live tabs the index has no session row for yet: shells, and agents still starting. */
+  const unbound = $derived(tabs.filter((t) => !t.exited && !tabToSession.has(t.key)));
+
+  /**
+   * Sessions whose tab was closed to save a process. Their row stays, marked, and
+   * clicking it resumes. Auto-parks agents idle and seen for PARK_MS.
+   */
+  let parked = $state(new Set<string>());
+  const PARK_MS = 30 * 60_000;
+  function park(sessionId: string) {
+    const key = [...tabToSession].find(([, id]) => id === sessionId)?.[0];
+    if (!key) return;
+    parked = new Set(parked).add(sessionId);
+    void closeTab(key);
+  }
 
   /** The sidebar row to highlight: the session the focused tab is showing. */
   const activeSessionId = $derived(activeKey ? (tabToSession.get(activeKey) ?? null) : null);
@@ -223,6 +245,7 @@
       attention: t.attention,
       activity: t.activity,
       projectKey: t.projectKey,
+      since: t.markSince,
     }));
     const nextActive = getActiveKey();
     // Picking a tab means the user wants the terminal, not the page covering it.
@@ -242,6 +265,7 @@
       startedAt: t.startedAt,
       activity: t.attention ? 'attention' : (t.activity ?? 'open'),
       exited: t.exited,
+      since: t.markSince,
     }));
     saveTabs(all);
   }
@@ -316,6 +340,10 @@
     const cwd = s.cwd ?? p.path;
     if (!cwd) return;
     // A fresh launch already bound to this conversation is reused too.
+    if (parked.has(sessionKey(s))) {
+      parked.delete(sessionKey(s));
+      parked = new Set(parked);
+    }
     const existing = listTabs().find(t => t.boundSession === sessionKey(s));
     if (existing) { activate(existing.key); return; }
     return guard(async () => openTab(`session:${sessionKey(s)}`, s.label,
@@ -486,6 +514,13 @@
       e.preventDefault();
       runAction(action);
     };
+    const parker = setInterval(() => {
+      const cutoff = Date.now() - PARK_MS;
+      for (const t of listTabs()) {
+        const id = tabToSession.get(t.key);
+        if (id && t.key !== getActiveKey() && t.mark === 'idle' && t.markSince < cutoff) park(id);
+      }
+    }, 60_000);
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', refit);
 
@@ -493,6 +528,7 @@
       off();
       offChord();
       offAttention();
+      clearInterval(parker);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', refit);
     };
@@ -601,6 +637,10 @@
         {activeSessionId}
         {openProjectKeys}
         {sessionMarks}
+        {sessionSince}
+        {unbound}
+        {parked}
+        onPark={park}
         onOpenProject={openProject}
         onOpenSession={openSession}
         onNewShell={newShellIn}

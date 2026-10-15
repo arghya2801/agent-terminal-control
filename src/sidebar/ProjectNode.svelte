@@ -1,11 +1,12 @@
 <script lang="ts">
   import { sessionKey } from '../lib/agents';
   import SessionNode from './SessionNode.svelte';
+  import LiveRow from './LiveRow.svelte';
   import InlineRename from '../lib/InlineRename.svelte';
   import { isExpanded, toggleExpanded } from '../lib/stores.svelte';
   import { shortenPath } from '../lib/format';
   import { branchGroups } from '../lib/branchGroups';
-  import type { Project, SessionMeta, TabKey } from '../types';
+  import type { Project, SessionMeta, TabKey, TabSummary } from '../types';
   import type { SessionMark } from '../lib/format';
 
   let {
@@ -14,6 +15,10 @@
     forceOpen = false,
     groupByBranch = false,
     sessionMarks,
+    sessionSince,
+    parked,
+    costs,
+    liveTabs,
     activeKey,
     activeSessionId,
     open: hasTab,
@@ -33,6 +38,11 @@
     /** Sub-headers per git branch. The "show more" limit stays per project. */
     groupByBranch?: boolean;
     sessionMarks: Map<string, SessionMark>;
+    sessionSince: Map<string, number>;
+    parked: Set<string>;
+    costs: Map<string, number>;
+    /** Live tabs in this project that have no session row yet. */
+    liveTabs: TabSummary[];
     activeKey: TabKey | null;
     /** Session whose tab is focused, already resolved from the tab. */
     activeSessionId: string | null;
@@ -51,8 +61,11 @@
   let showAll = $state(false);
 
   const open = $derived(forceOpen || isExpanded(project.key));
-  const visible = $derived(showAll ? project.sessions : project.sessions.slice(0, limit));
-  const hidden = $derived(project.sessions.length - visible.length);
+  // Live sessions lead and never count against the limit; collapsed, only they show.
+  const live = $derived(project.sessions.filter((s) => sessionMarks.has(sessionKey(s))));
+  const rest = $derived(project.sessions.filter((s) => !sessionMarks.has(sessionKey(s))));
+  const visible = $derived(open ? [...live, ...(showAll ? rest : rest.slice(0, limit))] : live);
+  const hidden = $derived(open ? project.sessions.length - visible.length : 0);
   const launchable = $derived(project.path !== null && project.exists);
   const projectActive = $derived(activeKey === `project:${project.key}`);
 </script>
@@ -107,14 +120,18 @@
     </button>
   </div>
 
-  {#if open}
+  {#if open || live.length > 0 || liveTabs.length > 0}
     <div class="sessions">
+      {#each liveTabs as tab (tab.key)}<LiveRow {tab} active={tab.key === activeKey} />{/each}
       {#snippet row(session: SessionMeta)}
         <SessionNode
           {session}
           projectPath={project.path}
           active={sessionKey(session) === activeSessionId}
           mark={sessionMarks.get(sessionKey(session)) ?? null}
+          since={sessionSince.get(sessionKey(session)) ?? null}
+          parked={parked.has(sessionKey(session))}
+          cost={costs.get(sessionKey(session)) ?? 0}
           showBranch={!groupByBranch}
           renaming={renaming === `s:${sessionKey(session)}`}
           onRename={(name) => onRenameSession(session, name)}
@@ -134,7 +151,7 @@
       {#if hidden > 0}
         <button class="more" data-row tabindex="-1" onclick={() => (showAll = true)}>show {hidden} more</button>
       {/if}
-      {#if project.sessions.length === 0}
+      {#if open && project.sessions.length === 0}
         <div class="empty">no sessions yet</div>
       {/if}
     </div>

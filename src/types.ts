@@ -81,6 +81,8 @@ export interface TabSummary {
   /** Claude's or Codex's state; null for a plain shell. */
   activity: 'working' | 'idle' | 'interrupted' | null;
   projectKey: string | null;
+  /** When the tab entered its current state. */
+  since: number;
 }
 
 export interface IndexSnapshot {

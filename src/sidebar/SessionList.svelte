@@ -7,7 +7,7 @@
   import { groupSubfolders } from '../lib/group';
   import { isPinned, togglePinned } from '../lib/pinned';
   import { appState, refresh, saveSettings } from '../lib/stores.svelte';
-  import type { AgentProvider, Project, SessionMeta, TabKey } from '../types';
+  import type { AgentProvider, Project, SessionMeta, TabKey, TabSummary } from '../types';
   import type { SessionMark } from '../lib/format';
 
   /** The sidebar's Sessions view: projects, their sessions, and both context menus. */
@@ -18,6 +18,11 @@
     activeSessionId,
     openProjectKeys,
     sessionMarks,
+    sessionSince,
+    unbound,
+    parked,
+    costs,
+    onPark,
     onOpenProject,
     onOpenSession,
     onNewShell,
@@ -31,6 +36,11 @@
     openProjectKeys: Set<string>;
     /** Sessions with a live tab, by id. */
     sessionMarks: Map<string, SessionMark>;
+    sessionSince: Map<string, number>;
+    unbound: TabSummary[];
+    parked: Set<string>;
+    costs: Map<string, number>;
+    onPark: (sessionId: string) => void;
     onOpenProject: (p: Project) => void;
     onOpenSession: (p: Project, s: SessionMeta) => void;
     onNewShell: (p: Project) => void;
@@ -107,6 +117,9 @@
       x: e.clientX,
       y: e.clientY,
       items: [
+        ...(sessionMarks.has(sessionKey(s))
+          ? [{ label: 'Park (close the tab, keep the row)', run: () => onPark(sessionKey(s)) }]
+          : []),
         { label: 'Rename…', run: () => (renaming = `s:${sessionKey(s)}`) },
         { label: 'Copy session id', run: () => void copy(s.id) },
         {
@@ -129,7 +142,11 @@
   const grouped = $derived(
     !scratch && appState.settings?.ui.groupSubfolders ? groupSubfolders(mine) : mine,
   );
-  const shown = $derived(filterProjects(grouped, query));
+  // Projects with a live tab come first, in their usual order among themselves.
+  const shown = $derived.by(() => {
+    const hits = filterProjects(grouped, query);
+    return [...hits.filter((p) => openProjectKeys.has(p.key)), ...hits.filter((p) => !openProjectKeys.has(p.key))];
+  });
   const SECTIONS = [
     { kind: 'chats', empty: 'No chats yet. Press + to start one.' },
     { kind: 'scratch', empty: 'Nothing here yet. Ctrl+Shift+A asks an agent in the scratch directory.' },
@@ -145,6 +162,10 @@
     {forceOpen}
     groupByBranch={appState.settings?.ui.groupByBranch ?? false}
     {sessionMarks}
+    {sessionSince}
+    {parked}
+    {costs}
+    liveTabs={unbound.filter((t) => t.projectKey === project.key)}
     {activeKey}
     {activeSessionId}
     open={openProjectKeys.has(project.key)}
