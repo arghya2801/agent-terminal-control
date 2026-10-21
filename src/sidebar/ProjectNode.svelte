@@ -152,6 +152,7 @@
     align-items: stretch;
     gap: 2px;
     padding-right: 6px;
+    transition: background-color var(--fast);
   }
   .row:hover {
     background: var(--bg-hover);

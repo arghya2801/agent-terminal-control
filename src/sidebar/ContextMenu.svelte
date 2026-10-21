@@ -27,6 +27,8 @@
   let clamped = $state<{ left: number; top: number } | null>(null);
   // Nudged back inside the window when opened near an edge.
   const pos = $derived(clamped ?? { left: x, top: y });
+  // Grows out of the corner nearest the cursor, which is not the top-left once nudged.
+  const origin = $derived(`${pos.top < y ? 'bottom' : 'top'} ${pos.left < x ? 'right' : 'left'}`);
 
   function choose(item: MenuItem) {
     if (item.disabled || !item.run) return;
@@ -76,7 +78,7 @@
 <div
   class="menu"
   bind:this={el}
-  style="left: {pos.left}px; top: {pos.top}px"
+  style="left: {pos.left}px; top: {pos.top}px; transform-origin: {origin}"
   role="menu"
   tabindex="-1"
 >
@@ -117,7 +119,6 @@
     background: var(--bg-chrome);
     box-shadow: var(--shadow-pop);
     animation: atc-pop 110ms var(--ease-out);
-    transform-origin: top left;
   }
   .item {
     display: block;

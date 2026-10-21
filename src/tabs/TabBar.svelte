@@ -188,8 +188,12 @@
     height: 2px;
     border-radius: 0 0 2px 2px;
     content: '';
+    transform: scaleX(0);
+    transition: transform var(--enter) var(--ease-out);
   }
   .tab.active::before { background: var(--accent); }
+  .tab.active::before,
+  .tab.working::before { transform: scaleX(1); }
   .tab.working::before {
     background: linear-gradient(90deg, transparent 30%, var(--warn) 50%, transparent 70%) 0 0 / 200% 100%;
     animation: sweep 1.4s linear infinite;

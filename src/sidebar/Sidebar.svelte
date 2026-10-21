@@ -330,10 +330,10 @@
     gap: 10px;
   }
   .views button {
-    padding: 0 0 3px;
+    position: relative;
+    padding: 0 0 4px;
     white-space: nowrap;
     border: none;
-    border-bottom: 2px solid transparent;
     background: transparent;
     color: var(--fg-faint);
     font: inherit;
@@ -343,8 +343,22 @@
     color: var(--fg);
   }
   .views button[aria-selected='true'] {
-    border-bottom-color: var(--accent);
     color: var(--fg-bright);
+  }
+  .views button::after {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--accent);
+    content: '';
+    transform: scaleX(0);
+    transition: transform var(--enter) var(--ease-out);
+  }
+  .views button[aria-selected='true']::after {
+    transform: scaleX(1);
   }
   .views .n {
     margin-left: 1px;
@@ -395,6 +409,11 @@
   .search input:focus {
     border-color: var(--accent);
     outline: none;
+  }
+  /* Both stay mounted and toggle display, which restarts this on every view switch. */
+  .open,
+  .list:not(.open-list) {
+    animation: atc-fade 120ms var(--ease-out);
   }
   .open {
     display: flex;

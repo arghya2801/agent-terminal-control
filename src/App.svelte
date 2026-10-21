@@ -700,7 +700,7 @@
     color: var(--accent);
   }
   /* Flush with the window edge, so the open page reads as attached to its button. */
-  .rail-btn.on::before {
+  .rail-btn::before {
     position: absolute;
     top: 7px;
     bottom: 7px;
@@ -709,6 +709,11 @@
     border-radius: 0 2px 2px 0;
     background: var(--accent);
     content: '';
+    transform: scaleY(0);
+    transition: transform var(--enter) var(--ease-out);
+  }
+  .rail-btn.on::before {
+    transform: scaleY(1);
   }
   .rail-btn.zoom {
     width: auto;

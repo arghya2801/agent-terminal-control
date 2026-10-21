@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { sessionKey, providerName } from '../lib/agents';
   import Page from '../lib/Page.svelte';
+  import Icon from '../lib/Icon.svelte';
   import { save } from '../lib/desktop';
   import { claudeUsage, codexUsage, codexUsageStop, usageCosts, writeTextFile } from '../lib/ipc';
   import { appState } from '../lib/stores.svelte';
@@ -790,7 +791,7 @@
             <tr>
               <td>
                 <button class="expand" onclick={() => toggleProject(p.key)} aria-expanded={expanded.has(p.key)}>
-                  <span class="twisty" class:open={expanded.has(p.key)}>▸</span>{p.name}
+                  <span class="twisty" class:open={expanded.has(p.key)}><Icon name="chevron" size={12} /></span>{p.name}
                   <span class="muted">{sessions.length} session{sessions.length === 1 ? '' : 's'}</span>
                 </button>
               </td>
@@ -894,6 +895,7 @@
     height: 100%;
     border-radius: 4px;
     background: var(--accent);
+    transition: width 240ms var(--ease-out);
   }
   .fill.hot {
     background: var(--warn);
@@ -1173,6 +1175,7 @@
     gap: 2px;
     overflow: hidden;
     border-radius: 4px 4px 0 0;
+    transition: height 200ms var(--ease-out), opacity var(--fast);
   }
   .seg {
     min-height: 1px;
@@ -1216,13 +1219,14 @@
     cursor: pointer;
   }
   .twisty {
-    display: inline-block;
     color: var(--fg-faint);
-    font-size: 9px;
-    transition: transform 0.12s;
+    transition: transform 120ms var(--ease-out);
   }
   .twisty.open {
     transform: rotate(90deg);
+  }
+  tr.session {
+    animation: atc-rise var(--enter) var(--ease-out);
   }
   tr.session td:first-child {
     padding-left: 26px;
