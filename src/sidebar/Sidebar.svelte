@@ -4,7 +4,7 @@
   import NotesPad from './NotesPad.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import Icon from '../lib/Icon.svelte';
-  import { activate, focusActiveTerminal, splitWith } from '../terminal/manager';
+  import { activate, focusActiveTerminal, getTab, splitWith } from '../terminal/manager';
   import { enterList, listKeys, rows } from '../lib/roving';
   import {
     anyProjectExpanded,
@@ -33,6 +33,8 @@
     onAsk,
     onNewTab,
     onCloseTab,
+    onRenameTab,
+    onDispatch,
   }: {
     activeKey: TabKey | null;
     activeSessionId: string | null;
@@ -52,6 +54,9 @@
     onAsk: (provider: AgentProvider) => void;
     onNewTab: () => void;
     onCloseTab: (key: TabKey) => void;
+    onRenameTab: (key: TabKey) => void;
+    /** Starts an agent on a task in the background. */
+    onDispatch: (p: Project, provider: AgentProvider, task: string) => void;
   } = $props();
 
   let refreshing = $state(false);
@@ -91,6 +96,21 @@
     void appState.indexRevision;
     return anyProjectExpanded();
   });
+
+  // --- task box: Enter starts an agent on the task and stays where you are.
+  const projects = $derived(appState.index.projects.filter((p) => p.path && p.exists));
+  let task = $state('');
+  let taskAgent = $state<AgentProvider>('claude');
+  let taskProject = $state('');
+  function startTask(e: SubmitEvent) {
+    e.preventDefault();
+    // Default to the focused tab's project, so "do X" lands where you are working.
+    const here = activeKey ? getTab(activeKey)?.projectKey : null;
+    const p = projects.find((p) => p.key === (taskProject || here)) ?? projects[0];
+    if (!task.trim() || !p) return;
+    onDispatch(p, taskAgent, task.trim());
+    task = '';
+  }
 
   // The Open list's height; the notes pad takes the rest. Per machine, like the usage range.
   const OPEN_HEIGHT_KEY = 'atc.openListHeight';
@@ -204,6 +224,19 @@
   <!-- One tab stop per list; Up/Down move between rows (#103). The list only takes focus
        to hand it to a row, the roving-tabindex pattern, hence the ignores. -->
   <div class="open" hidden={view !== 'open'}>
+    <form class="task" onsubmit={startTask}>
+      <input bind:value={task} placeholder="Give an agent a task, Enter to start" aria-label="Task" spellcheck="false" autocomplete="off" />
+      <div class="where">
+        <select bind:value={taskProject} aria-label="Project">
+          <option value="">This tab's project</option>
+          {#each projects as p (p.key)}<option value={p.key}>{p.name}</option>{/each}
+        </select>
+        <select bind:value={taskAgent} aria-label="Agent">
+          <option value="claude">Claude</option>
+          <option value="codex">Codex</option>
+        </select>
+      </div>
+    </form>
     <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
     <div
       class="list open-list"
@@ -222,6 +255,7 @@
         if (key) {
           menu = { x: e.clientX, y: e.clientY, items: [
             { label: 'Go to tab', icon: 'terminal', disabled: key === activeKey, run: () => activate(key) },
+            { label: 'Rename…', icon: 'pencil', run: () => onRenameTab(key) },
             { label: 'Split beside the current tab', icon: 'split', disabled: key === activeKey, run: () => splitWith(key) },
             { label: 'Close tab', icon: 'close', sep: true, run: () => onCloseTab(key) },
           ] };
@@ -412,7 +446,22 @@
   .search {
     padding: 0 8px 8px;
   }
-  .search input {
+  .task {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0 8px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .where {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px;
+  }
+  .search input,
+  .task input,
+  .task select {
+    min-width: 0;
     width: 100%;
     box-sizing: border-box;
     padding: 4px 8px;
@@ -423,7 +472,14 @@
     font: inherit;
     font-size: 12px;
   }
-  .search input:focus {
+  .task select {
+    padding: 2px 4px;
+    color: var(--fg-dim);
+    font-size: 11px;
+  }
+  .search input:focus,
+  .task input:focus,
+  .task select:focus {
     border-color: var(--accent);
     outline: none;
   }
