@@ -6,6 +6,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-21
+
 ### Changed
 - One set of line icons replaces the mixed symbols in the sidebar, tab bar and find bar.
 - The focused tab has an accent line on its top edge. While an agent works, a light sweeps along that edge. A dot that needs you rings twice when it lands.
@@ -230,7 +232,8 @@ ATC now runs on a Go/Wails host instead of Rust/Tauri. The interface is the same
 
 First release.
 
-[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.0...v0.4.1
