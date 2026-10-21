@@ -118,7 +118,7 @@
     border-radius: 8px;
     background: var(--bg-chrome);
     box-shadow: var(--shadow-pop);
-    animation: atc-pop 110ms var(--ease-out);
+    animation: atc-pop 160ms var(--ease-out);
   }
   .item {
     display: block;

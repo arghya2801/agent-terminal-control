@@ -25,7 +25,7 @@
   /* Not from the palette: motion and elevation are the same in every theme. */
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --fast: 90ms;
-  --enter: 150ms;
+  --enter: 200ms;
   --shadow-pop: 0 10px 32px rgb(0 0 0 / 0.35), 0 1px 3px rgb(0 0 0 / 0.2);
   font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
   font-size: 13px;
@@ -71,10 +71,13 @@ button {
   from { opacity: 0; }
 }
 @keyframes atc-pop {
-  from { opacity: 0; transform: scale(0.97); }
+  from { opacity: 0; transform: scale(0.94); }
 }
 @keyframes atc-rise {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(8px); }
+}
+@keyframes atc-drop {
+  from { opacity: 0; transform: translateY(-8px); }
 }
 
 @media (prefers-reduced-motion: reduce) {

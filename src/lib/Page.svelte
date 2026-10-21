@@ -42,7 +42,6 @@
     overflow-y: auto;
     background: var(--bg);
     outline: none;
-    animation: atc-rise var(--enter) var(--ease-out);
   }
   header {
     position: sticky;
@@ -77,6 +76,7 @@
     color: var(--fg-bright);
   }
   .body {
+    animation: atc-rise var(--enter) var(--ease-out);
     max-width: 880px;
     padding: 4px 24px 40px;
   }

@@ -53,7 +53,7 @@
   let showAll = $state(false);
   // A filter opens every match at once; only a click on one project animates.
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const expand = $derived({ duration: forceOpen || reduced ? 0 : 140 });
+  const expand = $derived({ duration: forceOpen || reduced ? 0 : 180 });
 
   const open = $derived(forceOpen || isExpanded(project.key));
   const visible = $derived(showAll ? project.sessions : project.sessions.slice(0, limit));

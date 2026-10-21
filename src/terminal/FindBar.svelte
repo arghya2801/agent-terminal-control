@@ -85,7 +85,7 @@
     border-radius: 8px;
     background: var(--bg-chrome);
     box-shadow: var(--shadow-pop);
-    animation: atc-rise var(--enter) var(--ease-out);
+    animation: atc-drop var(--enter) var(--ease-out);
   }
   .find:focus-within {
     border-color: color-mix(in srgb, var(--accent) 60%, var(--border));

@@ -410,11 +410,6 @@
     border-color: var(--accent);
     outline: none;
   }
-  /* Both stay mounted and toggle display, which restarts this on every view switch. */
-  .open,
-  .list:not(.open-list) {
-    animation: atc-fade 120ms var(--ease-out);
-  }
   .open {
     display: flex;
     flex: 1;

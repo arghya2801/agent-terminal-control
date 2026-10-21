@@ -93,7 +93,7 @@
   // --- restore tabs on launch
   const TABS_KEY = import.meta.env.VITE_ATC_PLAYGROUND === '1' ? 'atc.playground.tabs' : 'atc.tabs';
   /** Until startup has reopened the saved tabs, saving would overwrite them. */
-  let restoring = $state(true);
+  let restoring = true;
 
   let savedTabs = '';
   function saveTabs(all: Tab[]) {
@@ -509,8 +509,7 @@
   });
 </script>
 
-<!-- The sidebar only animates once restore has spawned its tabs at their real width. -->
-<div class="app" class:animate={!restoring && dragWidth === null} style="--panel: {open ? width : 0}px">
+<div class="app" style="--panel: {open ? width : 0}px">
   <nav class="rail">
     <button
       class="rail-btn"
@@ -663,9 +662,6 @@
     display: grid;
     height: 100%;
     grid-template-columns: 44px var(--panel) 1fr;
-  }
-  .app.animate {
-    transition: grid-template-columns 160ms var(--ease-out);
   }
   .rail {
     display: flex;

@@ -194,9 +194,11 @@
   .tab.active::before { background: var(--accent); }
   .tab.active::before,
   .tab.working::before { transform: scaleX(1); }
+  /* Three times the line's width, so the highlight starts and ends fully off it and the
+     loop has no visible jump. */
   .tab.working::before {
-    background: linear-gradient(90deg, transparent 30%, var(--warn) 50%, transparent 70%) 0 0 / 200% 100%;
-    animation: sweep 1.4s linear infinite;
+    background: linear-gradient(90deg, transparent 40%, var(--warn) 50%, transparent 60%) 0 0 / 300% 100%;
+    animation: sweep 1.6s ease-in-out infinite;
   }
   @keyframes sweep {
     from { background-position: 100% 0; }
