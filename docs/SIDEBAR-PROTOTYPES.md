@@ -11,6 +11,13 @@ four and combine them on one branch, then open one PR.
 | `proto/sidebar-one-list` | One list instead of three views | `c8dce34`, `0326c89` |
 | `proto/sidebar-mission` | Mosaic, broadcast, task box | `b3c1240` |
 
+## Chosen direction: inbox
+
+`docs/inbox-mockup.html` is a working mockup of the direction picked from these
+prototypes: the triage Open view with section headers, reply in place, the task box,
+broadcast and mosaic, and no tab bar. Open it in a browser. A comment at the top of the
+file says what to build and which branch each piece already exists on.
+
 ## Pick list
 
 Tick what to keep, then combine. Each item names the branch it lives on.

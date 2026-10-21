@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ATC inbox mockup</title>
+<!--
+  Inbox: the sidebar direction picked from the prototypes in SIDEBAR-PROTOTYPES.md.
+  Open this file in a browser. The agents are scripted and the clock runs fast.
+
+  What to build, and where each piece already exists:
+
+  1. Open view sorted by who needs you, with time in state, peek line and output graph.
+     Built on proto/sidebar-triage: src/lib/triage.ts (triageOrder, stateWord, peekLine),
+     src/terminal/manager.ts (Tab.mark, Tab.markSince, outputHistory, screenLines),
+     src/sidebar/OpenList.svelte. In the inbox the sort is always on (no toggle).
+  2. Section headers over the sorted rows: "Waiting on you" (attention, interrupted, idle),
+     "Working", "Shells", each with a count. New. Rows are already in triage order, so a
+     header goes wherever the group changes (see inbox() below).
+  3. Reply in place. New. A waiting agent row shows up to three lines of its peek and a
+     Reply button. Reply opens an input under the row; Enter types the text plus Enter into
+     that tab without activating it (sendText(key, text) on proto/sidebar-mission's
+     manager.ts). Esc closes the input.
+  4. Task box at the top of the Open view: prompt, project ("This tab's project" by
+     default) and agent. Enter starts the agent in the background and keeps the current
+     tab. proto/sidebar-mission: OpenList.svelte and dispatch() in App.svelte.
+  5. Ctrl+click rows to pick them; a bar at the bottom of the list sends one line to every
+     picked tab. proto/sidebar-mission: OpenList.svelte, onBroadcast in App.svelte.
+  6. Ctrl+Shift+J jumps to the agent that has waited longest (jumpWaiting, triage branch).
+     Ctrl+Shift+G shows every tab at once (toggleMosaic, mosaicLayout, mission branch).
+     The mockup uses Alt+J and Alt+G because the browser keeps Ctrl+Shift+J.
+  7. No tab bar. A pane header replaces TabBar: sidebar toggle, the shown tab's status dot,
+     icon and title, then "project, branch, state time", a close button, then the new-tab
+     split button, UsageChip and the more menu. These are the start, afterTabs and end
+     snippets App.svelte already passes to TabBar on main.
+
+  Open questions for the build: split view needs an entry point without the tab bar
+  ("Split beside the current tab" is already in the Open view row menu on main); drag
+  reordering goes away with the always-on sort.
+
+  Not part of the design, only the mockup: the scripted agents, the clock, the static usage
+  chip and the Notes pad contents.
+-->
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0b0d10;
+    --fg: #d6dae0;
+    --bg-chrome: #14171c;
+    --bg-surface: #21262d;
+    --bg-hover: #1c2027;
+    --border: #232830;
+    --fg-bright: #e6edf3;
+    --fg-dim: #8b949e;
+    --fg-faint: #6e7681;
+    --accent: #539bf5;
+    --accent-strong: #1f6feb;
+    --danger: #f47067;
+    --warn: #daaa3f;
+    --ok: #3fb950;
+    --info: #b083f0;
+    --claude: #d97757;
+    --desk: #08101d;
+    --desk-a: #1d3f78;
+    --desk-b: #0e5161;
+    --frame: color-mix(in srgb, var(--fg-bright) 9%, transparent);
+    --glass-chrome: color-mix(in srgb, var(--bg-chrome) 70%, transparent);
+    --glass-bg: color-mix(in srgb, var(--bg) 75%, transparent);
+    --shadow-pop: 0 10px 32px rgb(0 0 0 / 0.35), 0 1px 3px rgb(0 0 0 / 0.2);
+    --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --fast: 75ms;
+    --enter: 160ms;
+    --ui: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --display: 'Segoe UI Variable Display', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --mono: 'Cascadia Mono', 'Cascadia Code', Consolas, ui-monospace, 'SF Mono', monospace;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--desk); }
+  body {
+    margin: 0;
+    padding: 14px 16px 28px;
+    color: var(--fg);
+    font: 13px/1.4 var(--ui);
+    background:
+      radial-gradient(55% 45% at 15% 25%, color-mix(in srgb, var(--desk-a) 75%, transparent), transparent 70%),
+      radial-gradient(45% 55% at 88% 78%, color-mix(in srgb, var(--desk-b) 70%, transparent), transparent 70%),
+      var(--desk);
+    background-attachment: fixed;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+  button { transition: background-color var(--fast), color var(--fast), border-color var(--fast), opacity var(--fast); }
+  .ic { display: block; flex: none; }
+
+  /* page bar */
+  .top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; max-width: 1560px; margin: 0 auto 14px; }
+  .brand { color: var(--fg-bright); font: 600 18px/1.2 var(--display); }
+  .brand small { display: block; margin-top: 2px; color: var(--fg-dim); font: 400 12px/1.3 var(--ui); }
+  .clock { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; color: var(--fg-dim); font-size: 12px; }
+  .seg { display: flex; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--glass-bg); }
+  .seg button { padding: 3px 9px; border: 0; border-radius: 6px; background: transparent; color: var(--fg-dim); font-variant-numeric: tabular-nums; cursor: pointer; }
+  .seg button[aria-pressed='true'] { background: var(--bg-surface); color: var(--fg-bright); }
+  .pbtn { padding: 4px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--glass-bg); color: var(--fg); cursor: pointer; }
+  .pbtn:hover { border-color: var(--fg-faint); color: var(--fg-bright); }
+
+  /* stage */
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; max-width: 1560px; margin: 0 auto; }
+  @media (min-width: 1240px) { .stage { grid-template-columns: minmax(0, 1fr) 300px; } }
+  .winwrap { overflow-x: auto; border-radius: 10px; }
+  .win { position: relative; display: flex; min-width: 900px; height: clamp(560px, calc(100vh - 120px), 840px); flex-direction: column; overflow: hidden; border: 1px solid var(--frame); border-radius: 10px; background: color-mix(in srgb, var(--bg-chrome) 55%, transparent); box-shadow: 0 24px 64px rgb(0 0 0 / 0.5); backdrop-filter: blur(40px) saturate(1.4); }
+  .cap { display: flex; flex: none; align-items: center; height: 30px; padding-left: 12px; color: var(--fg-dim); font-size: 12px; }
+  .cap .ctl { display: flex; margin-left: auto; }
+  .cap .ctl span { display: grid; place-items: center; width: 44px; height: 30px; }
+  .body { display: flex; flex: 1; min-height: 0; }
+  .main { position: relative; display: flex; flex: 1; min-width: 0; flex-direction: column; }
+
+  /* sidebar */
+  .side { display: flex; flex: none; width: 272px; min-height: 0; flex-direction: column; border-right: 1px solid var(--border); background: var(--glass-bg); }
+  .sh { display: flex; align-items: center; justify-content: space-between; padding: 10px 8px 8px 10px; color: var(--fg-faint); font-size: 12px; font-weight: 600; }
+  .views { display: flex; gap: 10px; }
+  .views button { position: relative; padding: 0 0 4px; border: none; background: transparent; color: var(--fg-faint); font-weight: 600; white-space: nowrap; cursor: pointer; }
+  .views button:hover { color: var(--fg); }
+  .views button[aria-selected='true'] { color: var(--fg-bright); }
+  .views button::after { position: absolute; right: 0; bottom: 0; left: 0; height: 2px; border-radius: 1px; background: var(--accent); content: ''; transform: scaleX(0); transition: transform var(--enter) var(--ease-out); }
+  .views button[aria-selected='true']::after { transform: scaleX(1); }
+  .views .n { margin-left: 1px; color: var(--fg-faint); font-weight: 400; font-variant-numeric: tabular-nums; }
+  .ib { display: grid; width: 22px; height: 22px; place-items: center; border: none; border-radius: 4px; background: transparent; color: var(--fg-faint); cursor: pointer; }
+  .ib:hover { background: var(--bg-hover); color: var(--fg-bright); }
+  .search { padding: 0 8px 8px; }
+  .search input, .dispatch input, .dispatch select, .broadcast input { width: 100%; min-width: 0; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg-bright); font-size: 12px; }
+  .search input:focus, .dispatch input:focus, .dispatch select:focus, .broadcast input:focus { border-color: var(--accent); outline: none; }
+  .list { position: relative; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .hint { margin: 0; padding: 10px 12px; color: var(--fg-faint); font-size: 11px; line-height: 1.5; }
+  .section { padding: 10px 10px 4px; color: var(--fg-faint); font-size: 11px; }
+  .section .n { margin-left: 2px; font-variant-numeric: tabular-nums; }
+  .divider { display: flex; flex: none; align-items: center; justify-content: space-between; height: 26px; padding: 0 10px; border-top: 1px solid var(--border); color: var(--fg-dim); font-size: 12px; font-weight: 600; }
+  .divider em { color: var(--fg-faint); font-size: 11px; font-style: normal; font-weight: 400; }
+  .notes { flex: none; height: 92px; padding: 6px 10px; border: 0; background: transparent; color: var(--fg); font: 12px/1.45 var(--mono); resize: none; outline: none; }
+  .sf { padding: 6px 10px; border-top: 1px solid var(--border); color: var(--fg-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+  .dot { display: inline-block; flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; }
+  .dot.open { box-shadow: inset 0 0 0 1px var(--fg-faint); }
+  .dot.idle { background: var(--ok); }
+  .dot.interrupted { background: var(--danger); }
+  .dot.attention { background: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 27%, transparent); animation: ping 0.9s var(--ease-out) 2; }
+  .dot.working { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.35; } }
+  @keyframes ping { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent); } to { box-shadow: 0 0 0 7px transparent; } }
+
+  /* inbox rows */
+  .orow { display: grid; grid-template-columns: 10px 16px minmax(0, 1fr) auto; column-gap: 6px; row-gap: 1px; align-items: center; width: 100%; padding: 5px 10px; border: none; background: transparent; color: var(--fg-dim); font-size: 12px; text-align: left; cursor: pointer; }
+  .orow:hover { background: var(--bg-hover); color: var(--fg); }
+  .orow.active { background: color-mix(in srgb, var(--accent-strong) 16%, transparent); color: var(--fg-bright); }
+  .orow.picked { background: color-mix(in srgb, var(--warn) 10%, transparent); box-shadow: inset 3px 0 0 var(--warn); }
+  .oic { display: grid; place-items: center; color: var(--fg-faint); }
+  .otext { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .otext small { margin-left: 6px; color: var(--fg-faint); font-size: 11px; }
+  .orow time { color: var(--fg-faint); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .orow.attention time { color: var(--accent); }
+  .peek { grid-column: 3 / 4; min-width: 0; overflow: hidden; color: var(--fg-faint); font: 10px/1.4 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+  .orow.attention .peek { color: var(--fg); }
+  .spark { grid-column: 4; grid-row: 2; justify-self: end; width: 60px; height: 10px; fill: none; stroke: var(--fg-faint); stroke-width: 1.5; }
+  .orow.working .spark { stroke: var(--warn); }
+  .orow.wait .peek { grid-column: 3 / 5; display: -webkit-box; overflow: hidden; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+  .orow.wait .spark { display: none; }
+  .rbtn { display: block; margin: -2px 0 6px 42px; padding: 1px 8px; border: 1px solid var(--border); border-radius: 5px; background: transparent; color: var(--accent); font-size: 11px; cursor: pointer; }
+  .rbtn:hover { border-color: var(--accent); }
+  .reply { padding: 0 10px 8px 42px; }
+  .reply input { width: 100%; padding: 4px 8px; border: 1px solid var(--accent); border-radius: 6px; background: var(--bg); color: var(--fg-bright); font-size: 12px; outline: none; }
+
+  .dispatch { display: flex; flex-direction: column; gap: 4px; padding: 0 8px 8px; border-bottom: 1px solid var(--border); }
+  .dispatch .where { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; }
+  .dispatch select { padding: 2px 4px; color: var(--fg-dim); font-size: 11px; }
+  .broadcast { position: sticky; bottom: 0; display: flex; gap: 4px; padding: 6px 8px; border-top: 1px solid var(--warn); background: var(--bg-chrome); }
+  .broadcast button { border: none; background: transparent; color: var(--fg-faint); cursor: pointer; }
+
+  .menu { position: fixed; z-index: 50; min-width: 200px; padding: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-chrome); box-shadow: var(--shadow-pop); }
+  .menu button { display: flex; width: 100%; align-items: center; gap: 8px; padding: 5px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--fg); font-size: 12px; text-align: left; cursor: pointer; }
+  .menu button:hover { background: color-mix(in srgb, var(--accent-strong) 22%, transparent); color: var(--fg-bright); }
+
+  /* pane header, in place of the tab bar */
+  .bar { display: flex; flex: none; align-items: center; gap: 2px; height: 34px; padding: 0 6px; border-bottom: 1px solid var(--border); background: var(--glass-chrome); }
+  .bb { display: flex; align-items: center; gap: 4px; height: 26px; padding: 0 5px; border: none; border-radius: 6px; background: transparent; color: var(--fg-dim); cursor: pointer; }
+  .bb:hover { background: var(--bg-hover); color: var(--fg-bright); }
+  .bb.on { color: var(--accent); }
+  .pt { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 0 6px; overflow: hidden; color: var(--fg-bright); font-size: 12px; white-space: nowrap; }
+  .pt b { font-weight: 600; }
+  .pt .dim { overflow: hidden; color: var(--fg-faint); text-overflow: ellipsis; }
+  .newsplit { display: flex; margin-left: 4px; border-radius: 6px; }
+  .newsplit:hover { background: var(--bg-hover); }
+  .newsplit .bb:last-child { padding: 0 3px; }
+  .grow { flex: 1; }
+  .chip { display: flex; align-items: center; gap: 6px; padding: 0 8px; color: var(--fg-dim); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .meter { position: relative; width: 36px; height: 4px; overflow: hidden; border-radius: 2px; background: var(--bg-surface); }
+  .meter i { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: var(--ok); }
+
+  /* terminal */
+  .panes { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--bg); }
+  .empty { margin: 0; padding: 24px; color: var(--fg-faint); }
+  .term { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 8px 6px 8px 14px; background: var(--bg); color: var(--fg); font: 13px/1.4 var(--mono); }
+  .scroller { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .ln { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .ln.user { margin: 8px 0 4px; padding: 0 6px; background: color-mix(in srgb, var(--fg) 6%, transparent); color: var(--fg-dim); }
+  .ln .bul { color: var(--fg-bright); }
+  .ln .bul.ok { color: var(--ok); }
+  .ln b { color: var(--fg-bright); font-weight: 600; }
+  .ln.out, .ln.dim, .dim { color: var(--fg-faint); }
+  .ln.err { color: var(--danger); }
+  .ln.say { margin-top: 4px; color: var(--fg-bright); }
+  .ln.sh { display: flex; }
+  .ps { color: var(--info); white-space: pre; }
+  .status { margin-top: 8px; color: var(--claude); }
+  .status.codex { color: var(--fg-dim); }
+  .status .spin { display: inline-block; animation: spin 2.4s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .box { display: flex; align-items: center; margin-top: 8px; padding: 3px 8px; border: 1px solid var(--fg-faint); border-radius: 6px; }
+  .cbox { display: flex; align-items: center; margin-top: 8px; padding: 6px 8px; background: color-mix(in srgb, var(--fg) 5%, transparent); }
+  .tin { flex: 1; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: var(--fg-bright); font: inherit; }
+  .hintline { padding: 2px 8px 0; color: var(--fg-faint); font-size: 12px; }
+
+  /* mosaic: full-size panes scaled down, as mosaicLayout does on the mission branch */
+  .tile { position: absolute; inset: 0; transform-origin: 0 0; box-shadow: inset 0 0 0 calc(1px * var(--s)) var(--border); cursor: pointer; }
+  .tile > .term { pointer-events: none; }
+  .tile::after { position: absolute; top: 0; left: 0; z-index: 2; padding: calc(4px * var(--s)) calc(8px * var(--s)); background: var(--bg-chrome); color: var(--fg-bright); content: attr(data-tile); font: 600 calc(12px * var(--s)) / 1.3 var(--ui); }
+  .tile[data-mark='attention']::after { background: var(--accent); color: var(--bg); }
+  .tile[data-mark='working']::after { background: var(--warn); color: var(--bg); }
+  .tile[data-mark='idle']::after { background: var(--ok); color: var(--bg); }
+  .tile[data-mark='interrupted']::after { background: var(--danger); color: var(--bg); }
+
+  .corner { position: absolute; right: 12px; bottom: 12px; z-index: 25; display: flex; max-width: min(60%, 360px); flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; }
+  .toast { display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-chrome); box-shadow: var(--shadow-pop); color: var(--fg-dim); font-size: 12px; text-align: left; pointer-events: auto; cursor: pointer; }
+  .toast b { color: var(--fg-bright); font-weight: 600; }
+
+  /* guide */
+  .guide { max-width: 62ch; }
+  .guide h2 { margin: 0; color: var(--fg-bright); font: 600 22px/1.2 var(--display); }
+  .guide p { margin: 12px 0; color: var(--fg-dim); line-height: 1.55; }
+  .guide h3 { margin: 18px 0 6px; color: var(--fg-bright); font-size: 13px; font-weight: 600; }
+  .guide ul { display: grid; gap: 9px; margin: 0; padding-left: 18px; line-height: 1.5; }
+  .guide .fine { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--frame); font-size: 12px; }
+  kbd { padding: 0 5px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; background: var(--bg-surface); color: var(--fg-bright); font: 11px/1.6 var(--ui); white-space: nowrap; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="module">
+import { html, render, useEffect, useLayoutEffect, useReducer, useRef } from 'https://cdn.jsdelivr.net/npm/htm@3.1.1/preact/standalone.module.js';
+
+const MIN = 60_000, HOUR = 60 * MIN, DAY = 24 * HOUR;
+const BUCKET = 10_000, BUCKETS = 30;
+// Same order as URGENCY in src/lib/triage.ts.
+const URGENCY = { attention: 0, interrupted: 1, idle: 2, working: 3, open: 4, exited: 5 };
+const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const trunc = (s, n = 40) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
+
+const subs = new Set();
+const emit = () => subs.forEach((f) => f());
+let W = null;
+
+const FILES = {
+  'billing-api': ['src/auth/session.ts', 'src/auth/cookies.ts', 'src/routes/login.ts', 'test/auth.test.ts'],
+  atc: ['src/usage/UsagePanel.svelte', 'src/lib/ipc.ts', 'internal/usage/export.go', 'e2e/app.test.mjs'],
+  infra: ['jobs/nightly.yaml', 'queue/worker.go', 'queue/retry.go'],
+  'mobile-app': ['package.json', 'src/screens/Settings.tsx', 'src/theme.ts'],
+  'docs-site': ['content/install.md', 'astro.config.mjs'],
+};
+const WORDS = ['SameSite', 'redirectTo', 'exportCsv', 'retryPolicy', 'useTheme', 'onResize'];
+const ANSWERS = [
+  () => 'Done. The tests pass and the change is committed on the branch. Should I open a pull request?',
+  (f) => `I found two ways to do this. One keeps the old function in ${f}, the other is simpler but changes every caller. Which do you want?`,
+  (f) => `Finished. I left a TODO in ${f} where the spec is unclear. Want me to ask about it in the issue?`,
+];
+
+// ---------- state ----------
+// tabMark() in src/lib/format.ts; `since` is Tab.markSince on the triage branch.
+const mark = (t) => (t.exited ? 'exited' : t.attention ? 'attention' : t.activity);
+function touch(t) {
+  const m = mark(t);
+  if (m !== t.m) { t.m = m; t.since = W.now; }
+}
+function newTabObj(o) {
+  const t = {
+    key: `t${++W.seq}`, exited: false, attention: false, activity: 'open', provider: null, project: null, branch: 'main',
+    cwd: '', lines: [], buckets: Array(BUCKETS).fill(0), bucketAt: W.now - (W.now % BUCKET), workLeft: 0, nextLine: 5000,
+    lastOut: W.now, answer: null, ...o,
+  };
+  t.m = mark(t);
+  t.since = W.now;
+  return t;
+}
+
+const PROJECTS = [
+  { key: 'billing-api', name: 'billing-api', path: 'C:\\code\\billing-api' },
+  { key: 'atc', name: 'atc', path: 'C:\\code\\atc' },
+  { key: 'infra', name: 'infra', path: 'C:\\code\\infra' },
+  { key: 'mobile-app', name: 'mobile-app', path: 'C:\\code\\mobile-app' },
+  { key: 'docs-site', name: 'docs-site', path: 'C:\\code\\docs-site' },
+];
+
+function seed() {
+  const now = Date.now();
+  W = {
+    now, seq: 0, speed: W?.speed ?? 10, paused: false, tabs: [], activeKey: null, toasts: [], toastSeq: 0,
+    mosaic: false, picked: new Set(), sidebarOpen: true, view: 'open', query: '', menu: null, focusTerm: false,
+    task: '', taskProject: '', taskAgent: 'claude', line: '', replying: null,
+    notes: '- billing-api: decide on the Safari test\n- ask about retry backoff in infra\n',
+  };
+  const T = (o, ago, outAgo = 0) => {
+    const t = newTabObj(o);
+    t.since = now - ago;
+    t.lastOut = now - outAgo;
+    if (t.activity === 'working') t.buckets = t.buckets.map(() => rnd(0, 3600));
+    return t;
+  };
+  W.tabs = [
+    T({ provider: 'claude', project: 'billing-api', branch: 'fix/safari-redirect', title: 'Fix login redirect loop', cwd: 'C:\\code\\billing-api', activity: 'idle', attention: true, lines: [
+      ['user', '> The login page loops back to /login on Safari. Find out why and fix it.'],
+      ['tool', 'Read(src/auth/session.ts)'], ['out', 'Read 142 lines'],
+      ['tool', 'Grep("SameSite")'], ['out', 'Found 3 files'],
+      ['tool', 'Edit(src/auth/cookies.ts)'], ['out', 'Updated with 4 additions and 1 removal'],
+      ['tool', 'Bash(npm test -- auth)'], ['out', '23 passed, 1 failed'],
+      ['say', 'The cookie fix works in Chrome and Firefox. The Safari test still fails because it runs with third-party cookies blocked. Should I mark it Safari-only and skip it in CI?'],
+    ] }, 12 * MIN, 12 * MIN),
+    T({ provider: 'claude', project: 'atc', branch: 'feat/usage-export', title: 'Add CSV export to usage', cwd: 'C:\\code\\atc', activity: 'working', workLeft: 4 * MIN, nextLine: 4000,
+      answer: 'Done. The usage page has an Export CSV button, and the Go side writes one row per session. Should I add it to the usage chip menu too?', lines: [
+      ['user', '> Add a CSV export button to the usage page'],
+      ['tool', 'Read(src/usage/UsagePanel.svelte)'], ['out', 'Read 295 lines'],
+      ['tool', 'Read(internal/usage/usage.go)'], ['out', 'Read 188 lines'],
+    ] }, 3 * MIN),
+    T({ provider: 'claude', project: 'atc', branch: 'test/e2e-tabs', title: 'Write e2e tests for tabs', cwd: 'C:\\code\\atc', activity: 'working', workLeft: 70_000, nextLine: 3000,
+      answer: 'I added 6 e2e tests for opening, renaming and closing tabs. The rename one is flaky because the input mounts a frame late. Add a wait, or change the component?', lines: [
+      ['user', '> Write e2e tests for opening, renaming and closing tabs'],
+      ['tool', 'Read(e2e/app.test.mjs)'], ['out', 'Read 410 lines'],
+      ['tool', 'Edit(e2e/app.test.mjs)'], ['out', 'Updated with 88 additions and 2 removals'],
+    ] }, 8 * MIN),
+    T({ provider: 'codex', project: 'infra', branch: 'feat/queue-jobs', title: 'Move cron jobs onto the queue', cwd: 'C:\\code\\infra', activity: 'idle', lines: [
+      ['user', '› Move the nightly cron jobs onto the job queue'],
+      ['tool', 'Explored jobs/nightly.yaml'], ['tool', 'Edited queue/worker.go'], ['out', '+64 -12'],
+      ['say', 'Moved 6 jobs. Two of them need a retry policy. Do you want a fixed 30 s backoff or exponential?'],
+    ] }, 26 * MIN, 26 * MIN),
+    T({ provider: 'claude', project: 'mobile-app', branch: 'chore/deps', title: 'Bump dependencies', cwd: 'C:\\code\\mobile-app', activity: 'interrupted', lines: [
+      ['user', '> Bump all dependencies and fix whatever breaks'],
+      ['tool', 'Bash(npx npm-check-updates -u)'], ['out', 'Upgraded 31 packages'],
+      ['tool', 'Bash(npm run build)'], ['err', 'Interrupted by user'],
+    ] }, 5 * MIN, 5 * MIN),
+    T({ title: 'pwsh', project: 'docs-site', cwd: 'C:\\code\\docs-site', lines: [
+      ['dim', 'PowerShell 7.4.6'], ['sh', 'PS C:\\code\\docs-site> git status'], ['out', 'On branch main'], ['out', 'nothing to commit, working tree clean'],
+    ] }, 40 * MIN, 40 * MIN),
+    T({ title: 'pwsh', cwd: 'C:\\Users\\dev', lines: [['dim', 'PowerShell 7.4.6']] }, 2 * HOUR, 2 * HOUR),
+  ];
+  W.activeKey = W.tabs[1].key;
+}
+
+// ---------- simulation (mockup only) ----------
+// outputHistory() on the triage branch: bytes per 10 s over 5 minutes.
+function roll(t) {
+  const n = Math.floor((W.now - t.bucketAt) / BUCKET);
+  if (n <= 0) return;
+  if (n >= BUCKETS) t.buckets.fill(0);
+  else { t.buckets.splice(0, n); t.buckets.push(...Array(n).fill(0)); }
+  t.bucketAt += n * BUCKET;
+}
+function toolLines(t) {
+  const f = pick(FILES[t.project] ?? FILES.atc);
+  const cx = t.provider === 'codex';
+  return pick([
+    () => [['tool', cx ? `Read ${f}` : `Read(${f})`], ['out', `Read ${rnd(40, 400)} lines`]],
+    () => [['tool', cx ? `Edited ${f}` : `Edit(${f})`], ['out', cx ? `+${rnd(1, 30)} -${rnd(0, 9)}` : `Updated with ${rnd(1, 30)} additions and ${rnd(0, 9)} removals`]],
+    () => [['tool', cx ? `Searched for ${pick(WORDS)}` : `Grep("${pick(WORDS)}")`], ['out', `Found ${rnd(1, 9)} files`]],
+    () => [['tool', cx ? 'Ran npm test' : 'Bash(npm test)'], ['out', `${rnd(40, 260)} passed`]],
+  ])();
+}
+function step(d) {
+  W.now += d;
+  for (const t of W.tabs) {
+    roll(t);
+    if (t.activity !== 'working' || t.exited) continue;
+    t.buckets[BUCKETS - 1] += Math.round((d / 1000) * rnd(200, 2600));
+    t.lastOut = W.now;
+    t.workLeft -= d;
+    t.nextLine -= d;
+    if (t.nextLine <= 0) { t.lines.push(...toolLines(t)); t.nextLine = rnd(10, 30) * 1000; }
+    if (t.workLeft <= 0) finish(t);
+  }
+}
+function advance(d) {
+  for (let left = d; left > 0; left -= 5000) step(Math.min(left, 5000));
+  emit();
+}
+// The app's flagAttention: working to idle in a background tab.
+function finish(t) {
+  t.activity = 'idle';
+  t.lines.push(['say', t.answer ?? pick(ANSWERS)(pick(FILES[t.project] ?? FILES.atc))]);
+  t.answer = null;
+  if (t.key !== W.activeKey || W.mosaic) { t.attention = true; notify(t); }
+  touch(t);
+}
+
+// ---------- actions ----------
+const activeTab = () => W.tabs.find((t) => t.key === W.activeKey);
+const pname = (p) => (p === 'claude' ? 'Claude' : p === 'codex' ? 'Codex' : 'Shell');
+const projectName = (k) => PROJECTS.find((p) => p.key === k)?.name ?? '';
+const triageOrder = (tabs) => [...tabs].sort((a, b) => URGENCY[a.m] - URGENCY[b.m] || a.since - b.since);
+
+function activate(key) {
+  const t = W.tabs.find((x) => x.key === key);
+  if (!t) return;
+  W.activeKey = key;
+  t.attention = false;
+  touch(t);
+  W.mosaic = false;
+  W.focusTerm = true;
+  emit();
+}
+function closeTab(key) {
+  const i = W.tabs.findIndex((t) => t.key === key);
+  if (i < 0) return;
+  W.tabs.splice(i, 1);
+  W.picked.delete(key);
+  if (W.replying === key) W.replying = null;
+  if (W.activeKey === key) {
+    W.activeKey = null;
+    const n = W.tabs[Math.min(i, W.tabs.length - 1)];
+    if (n) activate(n.key);
+  }
+  emit();
+}
+function newTab(kind = 'shell', pk = activeTab()?.project ?? null) {
+  const p = PROJECTS.find((x) => x.key === pk);
+  const cwd = p?.path ?? 'C:\\Users\\dev';
+  const o = kind === 'shell'
+    ? { title: 'pwsh', project: p?.key ?? null, cwd, lines: [['dim', 'PowerShell 7.4.6']] }
+    : { provider: kind, project: p?.key ?? null, title: pname(kind), fresh: true, cwd, activity: 'idle',
+        lines: kind === 'claude' ? [['dim', '✻ Welcome to Claude Code'], ['dim', `  cwd: ${cwd}`]] : [['dim', '>_ OpenAI Codex'], ['dim', `  directory: ${cwd}`]] };
+  const t = newTabObj(o);
+  W.tabs.push(t);
+  activate(t.key);
+}
+// sendText(key, text) on the mission branch: the text, then Enter, into that tab's PTY.
+function sendLine(t, text) {
+  if (!t.provider) {
+    t.lines.push(['sh', `PS ${t.cwd}> ${text}`]);
+    if (text.trim()) t.lines.push(['out', '(mockup: commands do not run here)']);
+  } else {
+    if (!text.trim()) return;
+    t.lines.push(['user', `${t.provider === 'codex' ? '›' : '>'} ${text}`]);
+    if (t.fresh) { t.title = trunc(text); t.fresh = false; }
+    if (t.activity !== 'working') { t.activity = 'working'; t.workLeft = rnd(90, 300) * 1000; t.nextLine = 3000; t.answer = null; }
+  }
+  t.lastOut = W.now;
+  t.attention = false;
+  touch(t);
+  emit();
+}
+function interrupt(t) {
+  t.activity = 'interrupted';
+  t.lines.push(['err', 'Interrupted by user']);
+  touch(t);
+  emit();
+}
+// dispatch() in the mission branch's App.svelte: opens the agent on the prompt, keeps the current tab.
+function dispatch(pk, provider, task) {
+  const p = PROJECTS.find((x) => x.key === pk);
+  W.tabs.push(newTabObj({ provider, project: p.key, title: trunc(task), cwd: p.path, activity: 'working',
+    workLeft: rnd(100, 240) * 1000, nextLine: 2500, lines: [['user', `${provider === 'codex' ? '›' : '>'} ${task}`]] }));
+  emit();
+}
+function toast(o) {
+  const id = ++W.toastSeq;
+  W.toasts = [...W.toasts.filter((x) => !o.key || x.key !== o.key), { id, ...o }].slice(-3);
+  setTimeout(() => { W.toasts = W.toasts.filter((x) => x.id !== id); emit(); }, 6000);
+}
+const notify = (t) => toast({ key: t.key, title: t.title, body: `${pname(t.provider)} finished and is waiting for you.` });
+// nextWaiting() in src/lib/triage.ts.
+function jump() {
+  const n = triageOrder(W.tabs).find((t) => t.key !== W.activeKey && URGENCY[t.m] <= URGENCY.idle);
+  if (n) return activate(n.key);
+  toast({ title: 'No agent is waiting', body: 'Nothing needs you right now.' });
+  emit();
+}
+function toggleMosaic() {
+  if (W.tabs.length < 2) return;
+  W.mosaic = !W.mosaic;
+  emit();
+}
+function openMenu(e, items) {
+  e.preventDefault();
+  e.stopPropagation();
+  W.menu = { x: Math.min(e.clientX, innerWidth - 220), y: e.clientY, items };
+  emit();
+}
+
+// ---------- formatting ----------
+// relativeTime() and stateWord() in the app.
+function relTime(ms) {
+  const d = W.now - ms;
+  if (d < MIN) return 'now';
+  if (d < HOUR) return `${Math.floor(d / MIN)}m`;
+  if (d < DAY) return `${Math.floor(d / HOUR)}h`;
+  return `${Math.floor(d / DAY)}d`;
+}
+const stateWord = (m) => ({ attention: 'waiting', interrupted: 'stopped', idle: 'idle', working: 'working', open: '', exited: 'exited' })[m];
+function markTitle(t) {
+  const a = pname(t.provider);
+  return { working: `${a} is working`, idle: `${a} is waiting for you`, interrupted: `${a} was interrupted`,
+    attention: 'Finished in the background: needs your attention', open: 'Open in a tab', exited: 'Exited' }[t.m];
+}
+// peekLine() in the app reads the screen and skips TUI chrome; here it is the last line.
+const peek = (t) => { const l = t.lines[t.lines.length - 1]; return l ? l[1] : ''; };
+function spark(t) {
+  const top = Math.max(4096, ...t.buckets);
+  return t.buckets.map((v, i) => (v ? `M${i * 2 + 0.5} 10V${(10 - Math.max(1, (v / top) * 10)).toFixed(1)}` : '')).join('');
+}
+function dur(ms) {
+  const s = Math.floor(ms / 1000), m = Math.floor(s / 60);
+  return m ? `${m}m ${s % 60}s` : `${s}s`;
+}
+const mid = (e) => { if (e.button === 1) e.preventDefault(); };
+
+// ---------- pieces ----------
+// Paths from src/lib/Icon.svelte.
+const PATHS = {
+  sidebar: 'M3.75 2.75h8.5a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2h-8.5a2 2 0 0 1-2-2v-6.5a2 2 0 0 1 2-2zM6.25 2.75v10.5',
+  plus: 'M8 3v10M3 8h10',
+  more: 'M3.5 7.25a.75.75 0 1 1 0 1.5.75.75 0 1 1 0-1.5zM8 7.25a.75.75 0 1 1 0 1.5.75.75 0 1 1 0-1.5zM12.5 7.25a.75.75 0 1 1 0 1.5.75.75 0 1 1 0-1.5z',
+  chevronDown: 'M3.5 6 8 10.5 12.5 6',
+  terminal: 'M2.75 3.25h10.5a1 1 0 0 1 1 1v7.5a1 1 0 0 1-1 1H2.75a1 1 0 0 1-1-1v-7.5a1 1 0 0 1 1-1zM4.75 6.5l2 1.75-2 1.75M8.5 10h2.75',
+  close: 'M4.5 4.5l7 7M11.5 4.5l-7 7',
+  min: 'M3.5 8h9',
+  max: 'M3.75 3.75h8.5v8.5h-8.5z',
+};
+const Icon = ({ n, s = 16 }) => html`<svg class="ic" width=${s} height=${s} viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${PATHS[n]} /></svg>`;
+const STAR = 'M8 1.75c.5 3.6 2.65 5.75 6.25 6.25-3.6.5-5.75 2.65-6.25 6.25-.5-3.6-2.65-5.75-6.25-6.25 3.6-.5 5.75-2.65 6.25-6.25z';
+function Prov({ p, s = 14 }) {
+  if (p === 'claude') return html`<svg class="ic" width=${s} height=${s} viewBox="0 0 16 16" aria-label="Claude"><path d=${STAR} fill="var(--claude)" /></svg>`;
+  if (p === 'codex') return html`<svg class="ic" width=${s} height=${s} viewBox="0 0 16 16" fill="none" stroke="var(--fg-dim)" stroke-width="1.4" stroke-linejoin="round" aria-label="Codex"><path d="M8 1.9l5.3 3.05v6.1L8 14.1l-5.3-3.05v-6.1z" /><path d="M6 6.5l1.75 1.5L6 9.5" /></svg>`;
+  return html`<${Icon} n="terminal" s=${s - 2} />`;
+}
+const Dot = ({ m }) => html`<span class=${`dot ${m}`} aria-hidden="true"></span>`;
+
+function Line({ l, cx }) {
+  const [k, t] = l;
+  if (k === 'tool') return html`<div class="ln"><span class="bul ok">${cx ? '•' : '●'}</span> <b>${t}</b></div>`;
+  if (k === 'out') return html`<div class="ln out">${cx ? '  └ ' : '  ⎿  '}${t}</div>`;
+  if (k === 'err') return html`<div class="ln err">${cx ? '  └ ' : '  ⎿  '}${t}</div>`;
+  if (k === 'say') return html`<div class="ln say"><span class="bul">${cx ? '•' : '●'}</span> ${t}</div>`;
+  if (k === 'sh') { const i = t.indexOf('> ') + 2; return html`<div class="ln"><span class="ps">${t.slice(0, i)}</span>${t.slice(i)}</div>`; }
+  return html`<div class=${`ln ${k}`}>${t}</div>`;
+}
+
+const VERBS = ['Pondering', 'Reading', 'Editing', 'Running tests', 'Thinking'];
+function Terminal({ t, tile }) {
+  const sc = useRef(), inp = useRef(), seen = useRef(-1);
+  const live = t.key === W.activeKey && !tile;
+  useLayoutEffect(() => {
+    if (!sc.current || seen.current === t.lines.length) return;
+    seen.current = t.lines.length;
+    sc.current.scrollTop = sc.current.scrollHeight;
+  });
+  useEffect(() => { if (live && W.focusTerm && inp.current) { W.focusTerm = false; inp.current.focus({ preventScroll: true }); } });
+  const onKey = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); const v = e.currentTarget.value; e.currentTarget.value = ''; sendLine(t, v); }
+    else if (e.key === 'Escape' && t.activity === 'working') interrupt(t);
+  };
+  const input = html`<input ref=${inp} class="tin" aria-label=${`Type into ${t.title}`} spellcheck="false" autocomplete="off" tabindex=${tile ? -1 : 0} onKeyDown=${onKey} />`;
+  const cx = t.provider === 'codex';
+  return html`<div class="term">
+    <div class="scroller" ref=${sc}>
+      ${t.lines.map((l, i) => html`<${Line} key=${i} l=${l} cx=${cx} />`)}
+      ${!t.provider && html`<div class="ln sh"><span class="ps">PS ${t.cwd}> </span>${input}</div>`}
+    </div>
+    ${t.provider && t.activity === 'working' && (cx
+      ? html`<div class="status codex">• Working (${dur(W.now - t.since)} • esc to interrupt)</div>`
+      : html`<div class="status"><span class="spin">✻</span> ${VERBS[Math.floor(W.now / 9000) % VERBS.length]}… <span class="dim">(${dur(W.now - t.since)} · esc to interrupt)</span></div>`)}
+    ${t.provider && (cx
+      ? html`<div class="cbox"><span class="dim">› </span>${input}</div><div class="hintline">⏎ send   esc interrupt</div>`
+      : html`<div class="box"><span class="dim">> </span>${input}</div><div class="hintline">? for shortcuts</div>`)}
+  </div>`;
+}
+
+const NewSplit = () => html`<div class="newsplit">
+  <button class="bb" onClick=${() => newTab()} title="New shell (Ctrl+Shift+T)" aria-label="New shell"><${Icon} n="plus" /></button>
+  <button class="bb" title="New shell, Claude or Codex" aria-label="New shell, Claude or Codex" onClick=${(e) => openMenu(e, [
+    { label: 'New shell', icon: 'terminal', run: () => newTab('shell') },
+    { label: 'New Claude', prov: 'claude', run: () => newTab('claude') },
+    { label: 'New Codex', prov: 'codex', run: () => newTab('codex') },
+  ])}><${Icon} n="chevronDown" s=${12} /></button>
+</div>`;
+
+/** In place of TabBar: the sidebar list does the switching, this names what is shown. */
+function PaneHeader() {
+  const t = activeTab();
+  const facts = t ? [projectName(t.project), t.branch !== 'main' && t.branch, stateWord(t.m) && `${stateWord(t.m)} ${relTime(t.since)}`].filter(Boolean) : [];
+  return html`<div class="bar">
+    <button class=${`bb ${W.sidebarOpen ? 'on' : ''}`} onClick=${() => { W.sidebarOpen = !W.sidebarOpen; emit(); }} title="Toggle sidebar (Ctrl+Shift+B)" aria-label="Toggle sidebar"><${Icon} n="sidebar" /></button>
+    ${t ? html`<span class="pt"><${Dot} m=${t.m} /><${Prov} p=${t.provider} /><b>${t.title}</b><span class="dim">${facts.join(', ')}</span></span>
+      <button class="bb" title=${`Close ${t.title}`} aria-label=${`Close ${t.title}`} onClick=${() => closeTab(t.key)}><${Icon} n="close" s=${12} /></button>`
+      : html`<span class="pt dim">Nothing open</span>`}
+    <div class="grow"></div>
+    <${NewSplit} />
+    <span class="chip" title="Claude plan usage in the current 5-hour window">5h <span class="meter"><i style="width: 38%"></i></span>38%</span>
+    <button class="bb" title="Usage, settings and shortcuts" aria-label="More" onClick=${() => { toast({ title: 'Not in this mockup', body: 'The more menu works as it does in 0.5.0.' }); emit(); }}><${Icon} n="more" /></button>
+  </div>`;
+}
+
+function Panes() {
+  if (W.mosaic && W.tabs.length > 1) {
+    const cols = Math.ceil(Math.sqrt(W.tabs.length));
+    return html`<div class="panes">${W.tabs.map((t, i) => html`<div key=${t.key} class="tile" data-tile=${t.title} data-mark=${t.m}
+      style=${`--s:${cols};transform:translate(${((i % cols) * 100) / cols}%,${(Math.floor(i / cols) * 100) / cols}%) scale(${1 / cols})`}
+      onMouseDown=${(e) => { e.preventDefault(); activate(t.key); }}><${Terminal} t=${t} tile=${true} /></div>`)}</div>`;
+  }
+  const t = activeTab();
+  return html`<div class="panes">${t ? html`<${Terminal} key=${t.key} t=${t} />` : html`<p class="empty">Nothing open. Press + to open a shell, or give an agent a task.</p>`}</div>`;
+}
+
+function Toasts() {
+  return html`<div class="corner">${W.toasts.map((o) => html`<button key=${o.id} class="toast"
+    onClick=${() => { W.toasts = W.toasts.filter((x) => x.id !== o.id); o.key ? activate(o.key) : emit(); }}>
+    <b>${o.title}</b><span>${o.body}</span></button>`)}</div>`;
+}
+
+function Menu() {
+  const m = W.menu;
+  if (!m) return null;
+  return html`<div class="menu" role="menu" style=${`left:${m.x}px;top:${m.y}px`}>
+    ${m.items.map((it, i) => html`<button key=${i} role="menuitem" onClick=${() => { W.menu = null; it.run(); emit(); }}>
+      ${it.prov ? html`<${Prov} p=${it.prov} />` : html`<${Icon} n=${it.icon} s=${14} />`}<span>${it.label}</span></button>`)}
+  </div>`;
+}
+
+// ---------- sidebar ----------
+function rowClick(e, t) {
+  if (e.ctrlKey || e.metaKey) {
+    W.picked.has(t.key) ? W.picked.delete(t.key) : W.picked.add(t.key);
+    return emit();
+  }
+  W.picked.clear();
+  activate(t.key);
+}
+function Row({ t, wait }) {
+  const pk = peek(t), p = projectName(t.project);
+  return html`<button class=${`orow ${t.m} ${t.key === W.activeKey ? 'active' : ''} ${W.picked.has(t.key) ? 'picked' : ''} ${wait ? 'wait' : ''}`}
+    onClick=${(e) => rowClick(e, t)} onMouseDown=${mid} onAuxClick=${(e) => e.button === 1 && closeTab(t.key)}
+    title=${`${t.title}: ${markTitle(t)} (Ctrl+click to pick for broadcast, middle-click to close)`}>
+    <${Dot} m=${t.m} />
+    <span class="oic"><${Prov} p=${t.provider} /></span>
+    <span class="otext">${t.title}${p && html`<small>${p}</small>`}</span>
+    <time>${stateWord(t.m)} ${relTime(t.since)}</time>
+    ${pk && html`<span class="peek">${pk}</span>`}
+    <svg class="spark" viewBox="0 0 60 10" preserveAspectRatio="none" aria-hidden="true"><path d=${spark(t)} /></svg>
+  </button>`;
+}
+const GROUP = { attention: 'Waiting on you', interrupted: 'Waiting on you', idle: 'Waiting on you', working: 'Working', open: 'Shells', exited: 'Exited' };
+/** Rows come in triage order, so each group's rows are adjacent: a header goes where the group changes. */
+function inbox(rows) {
+  return rows.flatMap((t, i) => {
+    const g = GROUP[t.m];
+    const head = i === 0 || GROUP[rows[i - 1].m] !== g
+      ? [html`<div key=${`h-${g}`} class="section">${g} <span class="n">${rows.filter((x) => GROUP[x.m] === g).length}</span></div>`]
+      : [];
+    return [...head, html`<${InboxRow} key=${t.key} t=${t} />`];
+  });
+}
+function InboxRow({ t }) {
+  const wait = !!t.provider && URGENCY[t.m] <= URGENCY.idle;
+  return html`<div>
+    <${Row} t=${t} wait=${wait} />
+    ${wait && W.replying !== t.key && html`<button class="rbtn" onClick=${() => { W.replying = t.key; emit(); }} title=${`Answer ${t.title} without leaving this tab`}>Reply</button>`}
+    ${W.replying === t.key && html`<${ReplyBox} t=${t} />`}
+  </div>`;
+}
+function ReplyBox({ t }) {
+  const ref = useRef();
+  useEffect(() => { ref.current?.focus(); }, []);
+  const send = (e) => {
+    e.preventDefault();
+    const v = ref.current.value;
+    if (!v.trim()) return;
+    W.replying = null;
+    sendLine(t, v);
+  };
+  return html`<form class="reply" onSubmit=${send}>
+    <input ref=${ref} id=${`reply-${t.key}`} placeholder=${`Reply to ${pname(t.provider)}, Enter to send`} aria-label=${`Reply to ${t.title}`} spellcheck="false" autocomplete="off"
+      onKeyDown=${(e) => { if (e.key === 'Escape') { e.stopPropagation(); W.replying = null; emit(); } }} />
+  </form>`;
+}
+function TaskBox() {
+  const submit = (e) => {
+    e.preventDefault();
+    const task = W.task.trim();
+    if (!task) return;
+    dispatch(W.taskProject || activeTab()?.project || PROJECTS[0].key, W.taskAgent, task);
+    W.task = '';
+    emit();
+  };
+  return html`<form class="dispatch" onSubmit=${submit}>
+    <input id="task" value=${W.task} onInput=${(e) => { W.task = e.currentTarget.value; }} placeholder="Give an agent a task, Enter to start" aria-label="Task" spellcheck="false" autocomplete="off" />
+    <div class="where">
+      <select id="task-project" aria-label="Project" value=${W.taskProject} onChange=${(e) => { W.taskProject = e.currentTarget.value; emit(); }}>
+        <option value="">This tab's project</option>${PROJECTS.map((p) => html`<option value=${p.key}>${p.name}</option>`)}
+      </select>
+      <select id="task-agent" aria-label="Agent" value=${W.taskAgent} onChange=${(e) => { W.taskAgent = e.currentTarget.value; emit(); }}>
+        <option value="claude">Claude</option><option value="codex">Codex</option>
+      </select>
+    </div>
+  </form>`;
+}
+function Broadcast() {
+  const ref = useRef();
+  const live = [...W.picked].filter((k) => W.tabs.some((t) => t.key === k && !t.exited));
+  useEffect(() => { ref.current?.focus(); }, [live.length > 0]);
+  if (!live.length) return null;
+  const send = (e) => {
+    e.preventDefault();
+    if (!W.line.trim()) return;
+    for (const k of live) sendLine(W.tabs.find((t) => t.key === k), W.line);
+    W.line = '';
+    emit();
+  };
+  return html`<form class="broadcast" onSubmit=${send}>
+    <input id="broadcast" ref=${ref} value=${W.line} onInput=${(e) => { W.line = e.currentTarget.value; }} placeholder=${`Send to ${live.length} tab${live.length === 1 ? '' : 's'}, Enter to send`} aria-label="Broadcast" spellcheck="false" autocomplete="off" />
+    <button type="button" onClick=${() => { W.picked.clear(); emit(); }} aria-label="Clear the picked tabs" title="Clear the picked tabs"><${Icon} n="close" s=${12} /></button>
+  </form>`;
+}
+
+function Sidebar() {
+  const tabs = W.tabs;
+  const q = W.query.trim().toLowerCase();
+  const rows = triageOrder(q ? tabs.filter((t) => `${t.title} ${projectName(t.project)}`.toLowerCase().includes(q)) : tabs);
+  const working = tabs.filter((t) => t.m === 'working').length, waiting = tabs.filter((t) => t.m === 'attention').length;
+  const open = W.view === 'open';
+  return html`<aside class="side">
+    <header class="sh">
+      <div class="views" role="tablist">
+        ${[['sessions', 'Sessions', 15], ['open', 'Open', tabs.length], ['scratch', 'Scratch', 2]].map(([v, l, n]) => html`<button role="tab" aria-selected=${W.view === v} onClick=${() => { W.view = v; emit(); }}>${l} <span class="n">${n}</span></button>`)}
+      </div>
+      <button class="ib" onClick=${() => newTab()} title="New tab (Ctrl+Shift+T)" aria-label="New tab"><${Icon} n="plus" s=${14} /></button>
+    </header>
+    <div class="search"><input id="side-search" type="search" placeholder="Filter open tabs" aria-label="Filter open tabs" spellcheck="false" autocomplete="off" value=${W.query} onInput=${(e) => { W.query = e.currentTarget.value; emit(); }} /></div>
+    ${open && html`<${TaskBox} />`}
+    <div class="list">
+      ${!open ? html`<p class="hint">Sessions and Scratch stay as they are on main. The inbox only changes the Open view.</p>`
+        : rows.length === 0 ? html`<p class="hint">${tabs.length ? `Nothing matches "${W.query.trim()}".` : 'No tabs open.'}</p>`
+        : inbox(rows)}
+      ${open && html`<${Broadcast} />`}
+    </div>
+    <div class="divider">Notes <em>notes.md</em></div>
+    <textarea id="notes" class="notes" aria-label="Notes" spellcheck="false" value=${W.notes} onInput=${(e) => { W.notes = e.currentTarget.value; }}></textarea>
+    <footer class="sf">${[`${tabs.length} open`, working && `${working} working`, waiting && `${waiting} need you`].filter(Boolean).join(', ')}</footer>
+  </aside>`;
+}
+
+// ---------- page ----------
+const k = (s) => html`<kbd>${s}</kbd>`;
+function App() {
+  const [, force] = useReducer((x) => x + 1, 0);
+  useEffect(() => { subs.add(force); return () => subs.delete(force); }, []);
+  return html`
+    <header class="top">
+      <div class="brand">ATC inbox mockup<small>The sidebar direction picked from the prototypes. Scripted agents; nothing runs.</small></div>
+      <div class="clock">
+        <span>Clock</span>
+        <div class="seg" role="group" aria-label="Clock speed">
+          ${[1, 10, 60].map((s) => html`<button aria-pressed=${W.speed === s && !W.paused} onClick=${() => { W.speed = s; W.paused = false; emit(); }}>${s}×</button>`)}
+          <button aria-pressed=${W.paused} onClick=${() => { W.paused = !W.paused; emit(); }}>Pause</button>
+        </div>
+        <button class="pbtn" onClick=${() => advance(5 * MIN)}>Skip 5 min</button>
+        <button class="pbtn" onClick=${() => { seed(); emit(); }}>Reset</button>
+      </div>
+    </header>
+    <main class="stage">
+      <div class="winwrap">
+        <div class="win">
+          <div class="cap">ATC<span class="ctl" aria-hidden="true"><span><${Icon} n="min" s=${12} /></span><span><${Icon} n="max" s=${11} /></span><span><${Icon} n="close" s=${12} /></span></span></div>
+          <div class="body">
+            ${W.sidebarOpen && html`<${Sidebar} />`}
+            <section class="main">
+              <${PaneHeader} />
+              <${Panes} />
+              <${Toasts} />
+            </section>
+          </div>
+        </div>
+      </div>
+      <section class="guide" aria-label="How to try it">
+        <h2>Inbox</h2>
+        <p>The Open view sorted by who needs you, with the task box, broadcast and mosaic, and you can answer an agent from the list. The list does the tab bar's job, so there is no tab bar.</p>
+        <h3>Try this</h3>
+        <ul>
+          <li>Click Reply under the billing agent's question, type an answer and press Enter. You stay on the tab you were on, and the agent moves to Working.</li>
+          <li>Start a task from the box at the top. It shows up under Working, then moves to Waiting on you when it finishes.</li>
+          <li>${k('Ctrl')}+click rows to pick them, then send one line to all of them from the bar at the bottom.</li>
+          <li>${k('Alt')}+${k('J')} goes to the agent that has waited longest. ${k('Alt')}+${k('G')} shows every agent at once; click a tile to go to it. In the app these are ${k('Ctrl+Shift+J')} and ${k('Ctrl+Shift+G')}.</li>
+          <li>Type in the terminal and press Enter to set an agent working. ${k('Esc')} stops it.</li>
+        </ul>
+        <p class="fine">The clock runs ${W.speed} times faster than real time so states change while you watch. Implementation notes are in a comment at the top of this file.</p>
+      </section>
+    </main>
+    <${Menu} />`;
+}
+
+// ---------- boot ----------
+seed();
+addEventListener('keydown', (e) => {
+  const key = e.key.toLowerCase();
+  const chord = (e.ctrlKey && e.shiftKey && !e.altKey) || (e.altKey && !e.ctrlKey && !e.shiftKey);
+  if (chord && key === 'j') { e.preventDefault(); if (!e.repeat) jump(); }
+  else if (chord && key === 'g') { e.preventDefault(); toggleMosaic(); }
+  else if (chord && key === 'b') { e.preventDefault(); W.sidebarOpen = !W.sidebarOpen; emit(); }
+  else if (key === 'escape') {
+    if (W.menu) { W.menu = null; emit(); }
+    else if (W.mosaic) { W.mosaic = false; emit(); }
+  }
+});
+addEventListener('mousedown', (e) => { if (W.menu && !e.target.closest('.menu')) { W.menu = null; emit(); } });
+
+let last = performance.now();
+setInterval(() => {
+  const t = performance.now();
+  if (!W.paused) advance((t - last) * W.speed);
+  last = t;
+}, 250);
+
+render(html`<${App} />`, document.getElementById('root'));
+</script>
+</body>
+</html>
