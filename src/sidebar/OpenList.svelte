@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
+  import Highlight from '../lib/Highlight.svelte';
   import Icon from '../lib/Icon.svelte';
   import { reorderable } from '../lib/dragReorder';
   import { markTitle, relativeTime, tabMark } from '../lib/format';
@@ -55,7 +56,7 @@
   >
     <StatusDot mark={tabMark(tab)} title={s} />
     <span class="icon">{#if tab.provider}<ProviderIcon provider={tab.provider} />{:else}<Icon name="terminal" size={12} />{/if}</span>
-    <span class="text">{tab.title}{#if projectName(tab.projectKey)}<small>{projectName(tab.projectKey)}</small>{/if}</span>
+    <span class="text"><Highlight text={tab.title} {query} />{#if projectName(tab.projectKey)}<small><Highlight text={projectName(tab.projectKey)} {query} /></small>{/if}</span>
     <time>{relativeTime(getTab(tab.key)?.lastOutputAt ?? 0, now)}</time>
   </button>
 {/each}

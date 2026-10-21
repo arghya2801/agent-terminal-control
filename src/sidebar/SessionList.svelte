@@ -146,6 +146,7 @@
 {#snippet node(project: Project, forceOpen: boolean)}
   <ProjectNode
     {project}
+    {query}
     {limit}
     {forceOpen}
     groupByBranch={appState.settings?.ui.groupByBranch ?? false}
