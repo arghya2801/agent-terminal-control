@@ -19,7 +19,7 @@ before(async () => {
     connectionRetryTimeout: 20000,
     capabilities: { 'wdio:enforceWebDriverClassic': true, browserName: 'webview2', 'ms:edgeOptions': process.env.E2E_DEBUGGER ? { debuggerAddress: process.env.E2E_DEBUGGER } : { binary: process.env.E2E_APP } },
   });
-  await (await browser.$('.tab')).waitForDisplayed({ timeout: 20000 });
+  await (await browser.$('.bar .shown b')).waitForDisplayed({ timeout: 20000 });
   await browser.execute(() => { window.__atcKeys = []; window.addEventListener('keydown', (e) => { window.__atcKeys.push({ key: e.key, ctrl: e.ctrlKey, shift: e.shiftKey, target: e.target?.tagName }); window.__atcKeys = window.__atcKeys.slice(-30); }, true); });
 });
 
@@ -39,23 +39,26 @@ async function chord(key) {
 }
 
 const byText = (tag, text) => browser.$(`${tag}*=${text}`);
+/** Every open tab has a row in the Open view, shown or not. */
+const tabCount = async () => (await browser.$$('.open-list .row')).length;
+const shownTitle = async () => (await browser.$('.bar .shown b')).getText();
 
 describe('ATC', () => {
   it('lists the fixture projects and opens a session in a tab', async () => {
+    await (await browser.$('button[role="tab"]*=Sessions')).click();
     const session = await byText('button', 'fix the scoreboard');
     await session.waitForDisplayed({ timeout: 20_000 });
     assert.ok(await (await byText('button', 'game_tracker_app')).isDisplayed());
     await session.click();
-    const tab = await browser.$('.tab.active');
-    await tab.waitForDisplayed();
-    await browser.waitUntil(async () => (await browser.$$('.tab')).length >= 1);
+    await browser.waitUntil(async () => /scoreboard/i.test(await shownTitle()));
+    assert.ok(await tabCount() >= 1);
   });
 
   it('lists the open tabs in the Open view, the active one selected', async () => {
     await (await browser.$('button[role="tab"]*=Open')).click();
     const active = await browser.$('.open-list .row.active');
     await active.waitForDisplayed();
-    assert.equal((await browser.$$('.open-list .row')).length, (await browser.$$('.tab')).length);
+    assert.ok((await active.getText()).includes(await shownTitle()));
   });
 
   it('opens the Usage page and closes it with Escape', async () => {
@@ -99,21 +102,21 @@ describe('desktop behaviour', () => {
   });
   it('filters sessions by label and resets the filter', async () => {
     await (await browser.$('button[role="tab"]*=Sessions')).click();
-    await chord('p'); const filter = await browser.$('input[aria-label="Filter projects and sessions"]');
-    await filter.setValue('Renamed Codex');
+    const filter = await browser.$('input[aria-label="Filter projects and sessions"]');
+    await filter.click(); await filter.setValue('Renamed Codex');
     await (await byText('button', 'Renamed Codex session')).waitForDisplayed();
     assert.equal(await (await byText('button', 'Portfolio refresh')).isExisting(), false);
     await filter.setValue(''); await browser.keys(Key.Escape);
   });
   it('reuses a session tab instead of duplicating it', async () => {
-    const count = (await browser.$$('.tab')).length;
+    const count = (await tabCount());
     await (await byText('button', 'fix the scoreboard')).click();
-    assert.equal((await browser.$$('.tab')).length, count);
+    assert.equal((await tabCount()), count);
   });
   it('opens a fresh shell and round-trips a command through ConPTY', async () => {
-    const before = (await browser.$$('.tab')).length;
+    const before = (await tabCount());
     await chord('t');
-    await browser.waitUntil(async () => (await browser.$$('.tab')).length === before + 1, { timeoutMsg: 'New tab shortcut failed' });
+    await browser.waitUntil(async () => (await tabCount()) === before + 1, { timeoutMsg: 'New tab shortcut failed' });
     await shellCommand("Write-Output ('E2E_' + 'ROUNDTRIP')");
     await findOutput('E2E_ROUNDTRIP');
   });
@@ -126,12 +129,13 @@ describe('desktop behaviour', () => {
     await findOutput('BULK_3000');
   });
   it('renames a tab and cycles tabs with Ctrl+Tab', async () => {
-    await chord('r'); const rename = await browser.$('.tab input.rename'); await rename.waitForDisplayed();
+    await chord('r'); const rename = await browser.$('.bar input.rename'); await rename.waitForDisplayed();
     await browser.keys([Key.Ctrl, 'a']); await browser.keys('Behaviour shell'); await browser.keys(Key.Enter);
-    assert.match(await (await browser.$('.tab.active')).getText(), /Behaviour shell/);
+    assert.match(await shownTitle(), /Behaviour shell/);
     await browser.action('key').down(Key.Ctrl).down(Key.Tab).up(Key.Tab).up(Key.Ctrl).perform();
-    assert.doesNotMatch(await (await browser.$('.tab.active')).getText(), /Behaviour shell/);
-    await (await byText('button', 'Behaviour shell')).click();
+    assert.doesNotMatch(await shownTitle(), /Behaviour shell/);
+    await browser.action('key').down(Key.Ctrl).down(Key.Shift).down(Key.Tab).up(Key.Tab).up(Key.Shift).up(Key.Ctrl).perform();
+    assert.match(await shownTitle(), /Behaviour shell/);
   });
   it('splits the terminal and moves focus between panes', async () => {
     await chord('\\');
@@ -199,11 +203,11 @@ describe('desktop behaviour', () => {
   });
   it('asks before closing a shell with a running child and supports cancel', async () => {
     await chord('t'); await shellCommand('ping.exe -n 60 127.0.0.1');
-    await browser.pause(700); const count = (await browser.$$('.tab')).length; await chord('w');
+    await browser.pause(700); const count = (await tabCount()); await chord('w');
     await (await browser.$('[role="alertdialog"]')).waitForDisplayed();
-    await browser.keys(Key.Escape); assert.equal((await browser.$$('.tab')).length, count);
+    await browser.keys(Key.Escape); assert.equal((await tabCount()), count);
     await chord('w'); await (await browser.$('[role="alertdialog"] .confirm')).click();
-    await browser.waitUntil(async () => (await browser.$$('.tab')).length === count - 1);
+    await browser.waitUntil(async () => (await tabCount()) === count - 1);
   });
   it('shows usage from both providers and survives signed-out limits', async () => {
     await chord('u'); await (await browser.$('h1=Usage')).waitForDisplayed();
@@ -233,15 +237,15 @@ describe('desktop behaviour', () => {
     await browser.waitUntil(() => Object.values(readSettings().projects.sessionNames).includes('Codex custom name'));
   });
   it('opens each provider from the agent chooser and supports cancellation', async () => {
-    const count = (await browser.$$('.tab')).length;
+    const count = (await tabCount());
     await chord('a'); await (await browser.$('dialog')).waitForDisplayed();
     await (await browser.$('dialog').$('button=Cancel')).click();
-    assert.equal((await browser.$$('.tab')).length, count);
+    assert.equal((await tabCount()), count);
     for (const provider of ['Claude', 'Codex']) {
       await chord('a'); await (await browser.$('dialog').$('button*=' + provider)).click();
-      await browser.waitUntil(async () => (await browser.$$('.tab')).length === count + 1);
+      await browser.waitUntil(async () => (await tabCount()) === count + 1);
       await browser.pause(700); await chord('w');
-      await browser.waitUntil(async () => (await browser.$$('.tab')).length === count);
+      await browser.waitUntil(async () => (await tabCount()) === count);
     }
   });
   it('removes a deleted transcript from the live sidebar', async () => {
@@ -250,10 +254,25 @@ describe('desktop behaviour', () => {
   });
 
 
-  it('reorders tabs with an actual pointer drag', async () => {
-    const tabs=await browser.$$('.tab'); const first=await tabs[0].getAttribute('data-tab-key');
-    await tabs[0].dragAndDrop(tabs[tabs.length-1]);
-    await browser.waitUntil(async()=>await (await browser.$$('.tab'))[tabs.length-1].getAttribute('data-tab-key')===first);
+  it('shows every tab in the mosaic and leaves it on a tile click', async () => {
+    await browser.keys(Key.Escape);
+    const count = await tabCount();
+    await chord('g');
+    await browser.waitUntil(async () => (await browser.$$('[data-tile]')).length === count, { timeoutMsg: 'Mosaic did not tile every tab' });
+    await browser.saveScreenshot(`benchmarks/${process.env.E2E_HOST}-mosaic.png`);
+    const tile = (await browser.$$('[data-tile]'))[0]; const title = await tile.getAttribute('data-tile');
+    await tile.click();
+    await browser.waitUntil(async () => (await browser.$$('[data-tile]')).length === 0);
+    assert.equal(await shownTitle(), title);
+  });
+  it('starts a task in the background and stays on the current tab', async () => {
+    await (await browser.$('button[role="tab"]*=Open')).click();
+    const count = await tabCount(); const title = await shownTitle();
+    await (await browser.$('input[aria-label="Task"]')).setValue("Count the tests, don't edit"); await browser.keys(Key.Enter);
+    await browser.waitUntil(async () => (await tabCount()) === count + 1, { timeoutMsg: 'Task did not open a tab' });
+    await browser.pause(700);
+    assert.equal(await shownTitle(), title);
+    await (await browser.$('button[role="tab"]*=Sessions')).click();
   });
   it('copies a session id through the real Windows clipboard', async () => {
     execFileSync('pwsh', ['-NoProfile', '-File', 'scripts/sendkeys.ps1', '-ProcessId', process.env.E2E_PID, '-Keys', '{ESC}', '-SettleMs', '200'], { windowsHide: true });
@@ -282,21 +301,20 @@ describe('desktop behaviour', () => {
     const settings = readSettings(); settings.ui.restoreTabs = true;
     writeFileSync(configFile('settings.json'), JSON.stringify(settings));
     await browser.pause(700);
-    const count = (await browser.$$('.tab')).length;
+    const count = (await tabCount());
     await browser.refresh();
-    await browser.waitUntil(async () => (await browser.$$('.tab')).length === count, { timeout: 15000 });
-    await (await byText('button', 'Behaviour shell')).waitForDisplayed();
+    await browser.waitUntil(async () => (await tabCount()) === count, { timeout: 15000 });
     await (await byText('button', 'Portfolio renamed')).waitForDisplayed();
     await (await browser.$('button[role="tab"]*=Open')).click();
     await (await browser.$('.notes strong=Keep this note')).waitForDisplayed();
+    await (await browser.$('.open-list').$('button*=Behaviour shell')).click();
     await (await browser.$('button[role="tab"]*=Sessions')).click();
-    await (await byText('button', 'Behaviour shell')).click();
     await shellCommand("Write-Output ('RESTORED_' + 'SHELL')"); await findOutput('RESTORED_SHELL');
   });
   it('records runtime memory after the interaction workload', async () => {
     sampleRuntime('after-workload');
     const samples = JSON.parse(readFileSync(`benchmarks/${process.env.E2E_HOST}-after-workload.json`, 'utf8')).samples;
-    const tabs = (await browser.$$('.tab')).length;
+    const tabs = (await tabCount());
     for (const sample of samples) assert.equal(sample.processes.filter(p => /^(pwsh|powershell)$/.test(p.name)).length, tabs, 'Reload left orphan shells');
     await browser.saveScreenshot(`benchmarks/${process.env.E2E_HOST}-after-workload.png`);
   });
