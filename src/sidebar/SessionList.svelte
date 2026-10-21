@@ -81,21 +81,24 @@
       x: e.clientX,
       y: e.clientY,
       items: [
-        { label: 'Open in Claude', disabled: !path || !p.exists, run: () => onNewAgent(p, 'claude') },
-        { label: 'Open in Codex', disabled: !path || !p.exists, run: () => onNewAgent(p, 'codex') },
-        { label: 'Open terminal here', disabled: !path || !p.exists, run: () => onNewShell(p) },
-        { label: 'Rename…', disabled: !path, run: () => (renaming = `p:${p.key}`) },
-        {
-          label: 'Open in Explorer',
-          disabled: !path || !p.exists,
-          run: () => path && void openInExplorer(path),
-        },
-        { label: 'Copy path', disabled: !path, run: () => path && void copy(path) },
+        { label: 'Open in Claude', icon: 'agent', disabled: !path || !p.exists, run: () => onNewAgent(p, 'claude') },
+        { label: 'Open in Codex', icon: 'agent', disabled: !path || !p.exists, run: () => onNewAgent(p, 'codex') },
+        { label: 'Open terminal here', icon: 'terminal', disabled: !path || !p.exists, run: () => onNewShell(p) },
+        { label: 'Rename…', icon: 'pencil', sep: true, disabled: !path, run: () => (renaming = `p:${p.key}`) },
         {
           label: pinnedNow ? 'Unpin project' : 'Pin project',
+          icon: 'pin',
           disabled: !path,
           run: () => path && void setPinned(path, p.name),
         },
+        {
+          label: 'Open in Explorer',
+          icon: 'folder',
+          sep: true,
+          disabled: !path || !p.exists,
+          run: () => path && void openInExplorer(path),
+        },
+        { label: 'Copy path', icon: 'copy', disabled: !path, run: () => path && void copy(path) },
       ],
     };
   }
@@ -107,14 +110,16 @@
       x: e.clientX,
       y: e.clientY,
       items: [
-        { label: 'Rename…', run: () => (renaming = `s:${sessionKey(s)}`) },
-        { label: 'Copy session id', run: () => void copy(s.id) },
+        { label: 'Rename…', icon: 'pencil', run: () => (renaming = `s:${sessionKey(s)}`) },
+        { label: 'Copy session id', icon: 'copy', sep: true, run: () => void copy(s.id) },
         {
           label: 'Copy resume command',
+          icon: 'copy',
           run: () => void agentCommand(s.provider, s.id).then(copy).catch(e => appState.error = String(e)),
         },
         {
           label: 'Open in Explorer',
+          icon: 'folder',
           disabled: !dir,
           run: () => dir && void openInExplorer(dir),
         },

@@ -143,6 +143,12 @@ export function chordLabel(b: { key: string; ctrl: boolean; shift: boolean }): s
   return parts.join('+');
 }
 
+/** The first chord bound to `action`, for showing beside a menu item or tooltip. */
+export function chordFor(action: Action): string | undefined {
+  const b = BINDINGS.find((b) => b.action === action);
+  return b && chordLabel(b);
+}
+
 export interface ShortcutGroup {
   group: Group;
   rows: { action: Action; label: string; chords: string[] }[];
