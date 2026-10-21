@@ -19,6 +19,18 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ### Added
 - An Animations setting: Follow Windows (default), On or Off. With Windows' animation effects turned off, ATC stays still unless set to On.
 - An Animation speed slider under Settings > Appearance, from half to three times as fast.
+- A command palette on Ctrl+Shift+P: every action, open tab, project and session in one fuzzy-searched list. The sidebar filter box no longer has its own chord.
+- A toast in the corner when a background tab finishes while ATC has focus. Click it to go to that tab.
+- Tooltips appear after a short pause instead of a second, and show their shortcut as a key.
+- Context menus have icons and, where one exists, the matching shortcut. Right-click a tab to rename it, split beside it or close it.
+- The sidebar filter highlights what matched in project, session and tab names.
+- A split's divider can be dragged, and double-clicked to even it out. The pane you are not typing in is dimmed.
+- With no sessions yet, the sidebar offers Open a folder, Ask Claude and Ask Codex, and the shortcuts to start with.
+- The usage page has a section list that jumps to Limits, This tab's session, Local usage and Breakdown, and follows the scroll. Hovering a chart bar shows its numbers beside it.
+- The shortcuts page has a filter box.
+- The rail, tab bar and sidebar let the Windows 11 Mica backdrop show through, tinted to the theme.
+- The sidebar edge shows a line and grip on hover, so it is clear it can be dragged.
+- The sidebar shows placeholder rows while sessions are scanned.
 
 ### Fixed
 - Claude tab titles no longer show the ✳ twice.
