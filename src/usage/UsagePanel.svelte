@@ -290,6 +290,8 @@
   /** Bucket under the pointer, for the read-out above the chart. */
   let hovered = $state<number | null>(null);
   const shown = $derived(hovered === null ? null : chart.buckets[hovered]);
+  /** A bar's height as a share of the chart, which the hover label sits just above. */
+  const barPct = (b: (typeof chart.buckets)[number]) => (asShare ? (b.total ? 100 : 0) : chartMax ? (b.total / chartMax) * 100 : 0);
   /** One series keeps the accent; a split takes the categorical slots chartData assigns. */
   // ponytail: model and project slots follow rank, so a range change can recolour a model;
   // pin colours per name if people compare screenshots across ranges.
@@ -714,22 +716,31 @@
         <div class="chart-axis muted"><span>{rates[0].day}</span><span>{rates[rates.length - 1].day}</span></div>
       {/if}
     {:else if chart.buckets.length > 0}
-      <div class="readout muted" aria-live="polite">
-        {#if shown}
-          <strong>{shown.label}</strong> · {fmt(shown.total)}
-          {#if chart.series.length > 1}
-            {#each chart.series as name, i (name)}{#if shown.values[i] > 0} · {name} {asShare ? pct(shown.values[i], shown.total) : fmt(shown.values[i])}{/if}{/each}
-          {/if}
-          {#if average && hovered !== null} · 7-day average {fmt(average[hovered])}{/if}
-        {:else}
-          {chartHourly ? 'Hover an hour' : 'Hover a day for its total; click it to show that day'}
-        {/if}
+      <div class="readout muted">
+        {chartHourly ? 'Hover an hour' : 'Hover a day for its total; click it to show that day'}
       </div>
       <div class="chart" role="img" aria-label={`${cumulative ? 'Running total of' : ''} ${metric === 'tokens' ? 'tokens' : 'estimated cost'} per ${chartHourly ? 'hour' : 'day'}`}>
         {#if average && chartMax}
           <svg class="avg" viewBox="0 0 {average.length} {chartMax}" preserveAspectRatio="none" aria-hidden="true">
             <polyline points={average.map((v, i) => `${i + 0.5},${chartMax - v}`).join(' ')} />
           </svg>
+        {/if}
+        {#if shown && hovered !== null}
+          <!-- Its anchor slides from its left edge to its right across the chart, so it
+               never runs off either side. -->
+          {@const x = ((hovered + 0.5) / chart.buckets.length) * 100}
+          <div class="tip" aria-live="polite" style="left: {x}%; bottom: calc({barPct(shown)}% + 8px); transform: translateX(-{x}%)">
+            <strong>{shown.label}</strong>
+            <span class="tip-total">{fmt(shown.total)}</span>
+            {#if chart.series.length > 1}
+              {#each chart.series as name, i (name)}
+                {#if shown.values[i] > 0}
+                  <span class="tip-row"><span class="swatch" style="background: {color(i)}"></span>{name}<span>{asShare ? pct(shown.values[i], shown.total) : fmt(shown.values[i])}</span></span>
+                {/if}
+              {/each}
+            {/if}
+            {#if average}<span class="tip-row muted">7-day average<span>{fmt(average[hovered])}</span></span>{/if}
+          </div>
         {/if}
         {#each chart.buckets as b, i (b.key)}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -740,7 +751,7 @@
             onmouseleave={() => (hovered = null)}
             onclick={() => !chartHourly && showDay(b.key)}
           >
-            <div class="stack" style="height: {asShare ? (b.total ? 100 : 0) : chartMax ? (b.total / chartMax) * 100 : 0}%">
+            <div class="stack" style="height: {barPct(b)}%">
               {#each b.values as v, s (s)}
                 <!-- Grow weights summing to 100: below 1 in total, flex fills only that fraction of the bar. -->
                 {#if v > 0}<div class="seg" style="flex-grow: {(v / b.total) * 100}; background: {color(s)}"></div>{/if}
@@ -963,6 +974,42 @@
   .readout {
     min-height: 18px;
     margin-bottom: 4px;
+  }
+  .tip {
+    position: absolute;
+    z-index: 2;
+    display: flex;
+    min-width: 120px;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-chrome);
+    box-shadow: var(--shadow-pop);
+    font-size: 11px;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .tip strong {
+    color: var(--fg-dim);
+    font-weight: 500;
+  }
+  .tip-total {
+    color: var(--fg-bright);
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .tip-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tip-row > span:last-child {
+    margin-left: auto;
+    padding-left: 12px;
+    font-variant-numeric: tabular-nums;
   }
   .readout strong {
     color: var(--fg-bright);
