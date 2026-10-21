@@ -104,14 +104,24 @@ build times, build resource use, runtime memory, validation, and migration detai
 - Drag the sidebar's edge to resize it; double-click to reset
 
 **Sidebar: open** (`Ctrl+Shift+K` switches views)
-- Every open tab in tab-bar order, with a dot for its state (working, needs you, idle),
-  the agent, the project and when it last printed anything; exited tabs are struck out
-- Click a row to switch to it, drag to reorder (the tab bar follows), middle-click to close
+- Every open tab, the ones waiting on you first and longest-waiting first, under Waiting
+  on you, Working and Shells. Each row has a dot for its state, the agent, the project,
+  how long it has been in that state, the last line on its screen and 5 minutes of output
+- A waiting agent shows up to three lines of its question and a Reply button: type the
+  answer and press Enter to send it without leaving the tab you are in
+- A task box at the top: type a task, pick the project and Claude or Codex, and Enter
+  starts it in the background
+- Click a row to switch to it, middle-click to close. Ctrl+click rows to pick them, then
+  type one line into all of them from the bar at the bottom
+- `Ctrl+Shift+J` goes to the agent that has waited longest. `Ctrl+Shift+G` shows every
+  tab at once; click one to go to it
 - A notes pad under the list, stored as `notes.md`: raw Markdown while you type, rendered
   when you click away, with checkboxes you can tick in place. Drag the divider to resize
 
 **Terminal**
-- Tabs, each a separate `pwsh` process, reopened on the next launch; drag to reorder
+- Tabs, each a separate `pwsh` process, reopened on the next launch. There is no tab bar:
+  the sidebar's Open view switches tabs, and the header names the one shown, its project,
+  branch and state. Double-click the name to rename it
 - Split panes: two terminals side by side (`Ctrl+Shift+\`), `Ctrl+Shift+O` to move between
   them
 - Clicking a project or session reuses its existing tab rather than opening a second one,
