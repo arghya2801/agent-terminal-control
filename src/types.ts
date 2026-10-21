@@ -115,6 +115,8 @@ export interface Settings {
     sidebarView: string;
     /** `on`, `off`, or anything else to follow Windows' "Show animations". */
     animations: string;
+    /** Multiplies animation speed: 2 is twice as fast, 0.5 half. */
+    animationSpeed: number;
   };
   terminal: TerminalSettings;
   codex: { command: string; resumeArgs: string[]; homeDir: string | null };

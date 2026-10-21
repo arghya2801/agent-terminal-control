@@ -189,6 +189,14 @@
                 Follow Windows uses Settings &gt; Accessibility &gt; Visual effects &gt; Animation effects.
               </div>
             </div>
+            <label for="as">Animation speed</label>
+            <div class="check">
+              <input id="as" type="range" min="0.5" max="3" step="0.25" bind:value={draft.ui.animationSpeed} />
+              <span class="speed">{draft.ui.animationSpeed}×</span>
+              {#if draft.ui.animationSpeed !== 1}
+                <button class="btn" onclick={() => draft && (draft.ui.animationSpeed = 1)}>Reset</button>
+              {/if}
+            </div>
             <label for="zm">Zoom</label>
             <input id="zm" type="number" min="0.5" max="3" step="0.1" bind:value={draft.ui.zoom} />
           </div>
@@ -348,6 +356,18 @@
   }
   input[type='number'] {
     width: 90px;
+  }
+  input[type='range'] {
+    width: 180px;
+    padding: 0;
+    border: none;
+    accent-color: var(--accent);
+  }
+  .speed {
+    min-width: 4ch;
+    color: var(--fg-bright);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
   }
   .check {
     display: flex;

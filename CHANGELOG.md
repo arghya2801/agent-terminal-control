@@ -18,6 +18,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ### Added
 - An Animations setting: Follow Windows (default), On or Off. With Windows' animation effects turned off, ATC stays still unless set to On.
+- An Animation speed slider under Settings > Appearance, from half to three times as fast.
 
 ### Fixed
 - Claude tab titles no longer show the ✳ twice.

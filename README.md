@@ -233,6 +233,7 @@ Every field is optional; missing ones take their default.
     "zoom": 1.0,
     "theme": "ATC Dark",
     "animations": "system",             // "on" or "off"; "system" follows Windows' animation effects
+    "animationSpeed": 1.0,              // 2 is twice as fast, 0.5 half as fast
     "groupSubfolders": false,           // sessions from a subfolder under the project containing it
     "groupByBranch": false,             // sessions under the branch they ran on
     "notifications": true,              // notify when a background session needs you
