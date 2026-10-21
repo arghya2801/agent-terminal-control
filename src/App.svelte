@@ -769,17 +769,20 @@
   </button>
 {/snippet}
 
-{#snippet barEnd()}
+{#snippet barNew()}
   <div class="new-split">
     <button class="bar-btn" onclick={() => newTab()} title="New shell (Ctrl+Shift+T)" aria-label="New shell"><Icon name="plus" /></button>
     <button class="bar-btn caret" onclick={newMenu} title="New shell, Claude or Codex" aria-label="New shell, Claude or Codex">
       <Icon name="chevronDown" size={12} />
     </button>
   </div>
+{/snippet}
+
+{#snippet barEnd()}
   {#if currentZoom() !== 1}
     <button class="bar-btn zoom" onclick={() => adjustZoom(0)} title="Reset zoom (Ctrl+0)">{zoomLabel(currentZoom())}</button>
   {/if}
-  <UsageChip onOpen={openUsage} />
+  <UsageChip active={page === 'usage'} onOpen={openUsage} onClose={closeUsage} />
   <button class="bar-btn" onclick={moreMenu} title="Usage, settings and shortcuts" aria-label="More"><Icon name="more" /></button>
 {/snippet}
 
@@ -833,6 +836,7 @@
       onUsage={openUsage}
       onCloseUsage={closeUsage}
       start={barStart}
+      afterTabs={barNew}
       end={barEnd}
     />
     <div class="panes" bind:this={wrapper}>

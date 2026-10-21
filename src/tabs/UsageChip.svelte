@@ -7,7 +7,12 @@
    * The plan limit nearest to running out, in the tab bar. Hovering shows every limit and
    * today's spend without opening anything; a click opens the usage tab.
    */
-  let { onOpen }: { onOpen: () => void } = $props();
+  let { active = false, onOpen, onClose }: {
+    /** The usage tab is in front, so the chip closes it instead. */
+    active?: boolean;
+    onOpen: () => void;
+    onClose: () => void;
+  } = $props();
 
   const PEEK_DELAY = 400;
   const CODEX_STALE = 300_000;
@@ -44,6 +49,12 @@
     peek = false;
     onOpen();
   }
+  function toggle() {
+    if (!active) return open();
+    clearTimeout(timer);
+    peek = false;
+    onClose();
+  }
 </script>
 
 {#snippet rows(list: PlanLimit[])}
@@ -60,7 +71,7 @@
 {#if top}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="wrap" onmouseenter={enter} onmouseleave={leave}>
-    <button class="chip" onclick={open} aria-label="{top.label}: {Math.round(top.percent)}% used. Open usage">
+    <button class="chip" class:active onclick={toggle} aria-label="{top.label}: {Math.round(top.percent)}% used. {active ? 'Close' : 'Open'} usage">
       <span class="pct {level(top.percent)}">{Math.round(top.percent)}%</span>
       <span class="meter"><span class="fill {level(top.percent)}" style="width: {top.percent}%"></span></span>
     </button>
@@ -106,7 +117,8 @@
     font: inherit;
     cursor: pointer;
   }
-  .chip:hover {
+  .chip:hover,
+  .chip.active {
     background: var(--bg-hover);
   }
   .chip .pct {

@@ -13,7 +13,7 @@
   import { revealPosition, tabWheelDelta } from './scroll';
   import type { TabKey, TabSummary } from '../types';
 
-  let { tabs, activeKey, onClose, renaming = $bindable(null), usage = 'hidden', onUsage, onCloseUsage, start, end }: {
+  let { tabs, activeKey, onClose, renaming = $bindable(null), usage = 'hidden', onUsage, onCloseUsage, start, afterTabs, end }: {
     tabs: TabSummary[];
     activeKey: TabKey | null;
     /** The usage page, shown as a tab after the terminals while it is open. */
@@ -22,6 +22,8 @@
     onCloseUsage?: () => void;
     /** The app's own buttons, before the tabs and after them. */
     start?: Snippet;
+    /** Right after the last tab, as browsers place their new-tab button. */
+    afterTabs?: Snippet;
     end?: Snippet;
     /** Asks first when something is still running in the tab. */
     onClose: (key: TabKey) => void;
@@ -175,10 +177,15 @@
   {#if menu}
     <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => (menu = null)} />
   {/if}
+  {@render afterTabs?.()}
+  <div class="grow"></div>
   {@render end?.()}
 </div>
 
 <style>
+  .grow {
+    flex: 1;
+  }
   .bar {
     display: flex;
     align-items: stretch;
@@ -188,8 +195,9 @@
     background: var(--glass-chrome);
     border-bottom: 1px solid var(--border);
   }
+  /* As wide as its tabs, so what follows sits right after them; it scrolls once full. */
   .tabs {
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
     overflow-x: auto;
     overflow-y: hidden;
