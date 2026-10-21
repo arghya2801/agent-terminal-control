@@ -8,29 +8,67 @@
    */
   let { sections, children }: { sections: { id: string; label: string }[]; children: Snippet } = $props();
 
+  /** Where a heading counts as reached, below the page's sticky header. */
+  const LINE = 90;
   let nav: HTMLElement;
+  let content: HTMLElement;
   let active = $state('');
+  /** Room after the last section, so even a short one can scroll up to the line. */
+  let tail = $state(0);
+  /** Set while a click's scroll runs, so the list does not flick through what it passes. */
+  let jumping = false;
 
   function go(id: string) {
-    document.getElementById(id)?.scrollIntoView({ behavior: enterMs() ? 'smooth' : 'auto', block: 'start' });
+    const el = document.getElementById(id);
+    if (!el) return;
+    active = id;
+    jumping = true;
+    el.scrollIntoView({ behavior: enterMs() ? 'smooth' : 'auto', block: 'start' });
   }
 
   onMount(() => {
-    const scroller = nav.closest('.page');
+    const scroller = nav.closest<HTMLElement>('.page');
     if (!scroller) return;
     const update = () => {
-      const top = scroller.getBoundingClientRect().top + 90;
-      const atEnd = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
+      if (jumping) return;
+      const line = scroller.getBoundingClientRect().top + LINE;
       let current = sections[0]?.id ?? '';
       for (const s of sections) {
         const el = document.getElementById(s.id);
-        if (el && (el.getBoundingClientRect().top <= top || atEnd)) current = s.id;
+        if (el && el.getBoundingClientRect().top <= line + 1) current = s.id;
       }
       active = current;
     };
-    update();
+    const measure = () => {
+      const last = document.getElementById(sections[sections.length - 1]?.id ?? '');
+      if (!last) return;
+      const below = content.getBoundingClientRect().bottom - tail - last.getBoundingClientRect().top;
+      tail = Math.max(0, scroller.clientHeight - LINE - below);
+    };
+    const settle = () => {
+      jumping = false;
+      update();
+    };
+    const resize = new ResizeObserver(() => {
+      measure();
+      update();
+    });
+    resize.observe(content);
+    resize.observe(scroller);
     scroller.addEventListener('scroll', update, { passive: true });
-    return () => scroller.removeEventListener('scroll', update);
+    scroller.addEventListener('scrollend', settle);
+    // A jump to where the page already is never scrolls, so never ends.
+    scroller.addEventListener('pointerdown', settle);
+    scroller.addEventListener('wheel', settle, { passive: true });
+    scroller.addEventListener('keydown', settle);
+    return () => {
+      resize.disconnect();
+      scroller.removeEventListener('scroll', update);
+      scroller.removeEventListener('scrollend', settle);
+      scroller.removeEventListener('pointerdown', settle);
+      scroller.removeEventListener('wheel', settle);
+      scroller.removeEventListener('keydown', settle);
+    };
   });
 </script>
 
@@ -42,7 +80,7 @@
       </button>
     {/each}
   </nav>
-  <div class="content">
+  <div class="content" bind:this={content} style="padding-bottom: {tail}px">
     {@render children()}
   </div>
 </div>
@@ -83,8 +121,8 @@
     box-shadow: inset 2px 0 0 var(--accent);
     color: var(--fg-bright);
   }
-  /* Clear of the sticky header when jumped to. */
+  /* Lands on the same line the list reads from. */
   .content :global([id]) {
-    scroll-margin-top: 64px;
+    scroll-margin-top: 80px;
   }
 </style>

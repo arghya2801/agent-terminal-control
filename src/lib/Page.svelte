@@ -11,9 +11,18 @@
     title,
     full = false,
     wide = false,
+    actions,
     onClose,
     children,
-  }: { title: string; full?: boolean; wide?: boolean; onClose: () => void; children: Snippet } = $props();
+  }: {
+    title: string;
+    full?: boolean;
+    wide?: boolean;
+    /** Buttons in the header, beside Close, so they stay in view while the page scrolls. */
+    actions?: Snippet;
+    onClose: () => void;
+    children: Snippet;
+  } = $props();
 
   let root: HTMLDivElement;
 
@@ -35,7 +44,10 @@
 <div class="page" class:full tabindex="-1" bind:this={root}>
   <header>
     <h1>{title}</h1>
-    <button class="close" onclick={onClose} aria-label="Close" title="Close (Esc)"><Icon name="close" /></button>
+    <div class="head-actions">
+      {@render actions?.()}
+      <button class="close" onclick={onClose} aria-label="Close" title="Close (Esc)"><Icon name="close" /></button>
+    </div>
   </header>
   <div class="body" class:wide>
     {@render children()}
@@ -103,7 +115,7 @@
     font-size: 13px;
     font-weight: 600;
   }
-  .body :global(.muted) {
+  .page :global(.muted) {
     color: var(--fg-faint);
     font-size: 12px;
   }
@@ -111,7 +123,7 @@
     color: var(--danger);
     font-size: 12px;
   }
-  .body :global(button.btn) {
+  .page :global(button.btn) {
     padding: 5px 12px;
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -121,14 +133,19 @@
     font-size: 12px;
     cursor: pointer;
   }
-  .body :global(button.btn:hover:not(:disabled)) {
+  .page :global(button.btn:hover:not(:disabled)) {
     border-color: var(--accent);
   }
-  .body :global(button.btn:disabled) {
+  .page :global(button.btn:disabled) {
     opacity: 0.6;
     cursor: default;
   }
-  .body :global(button.btn.primary) {
+  .head-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .page :global(button.btn.primary) {
     border-color: var(--accent-strong);
     background: var(--accent-strong);
     color: var(--on-accent);

@@ -121,6 +121,11 @@
 </script>
 
 <Page title="Settings" full {onClose}>
+  {#snippet actions()}
+    {#if dirty}<span class="muted">Unsaved changes</span>{/if}
+    <button class="btn" onclick={() => openSettingsFile()}>Open settings.json</button>
+    <button class="btn primary" onclick={save} disabled={!dirty}>{saved ? 'Saved' : 'Save'}</button>
+  {/snippet}
   {#if !draft}
     <p class="err">Settings could not be loaded.</p>
   {:else}
@@ -255,11 +260,6 @@
         <p class="muted">None yet. Right-click a project or session in the sidebar and choose Rename.</p>
       {/if}
 
-      <div class="actions">
-        <button class="btn primary" onclick={save} disabled={!dirty}>{saved ? 'Saved' : 'Save'}</button>
-        <button class="btn" onclick={() => openSettingsFile()}>Open settings.json</button>
-        {#if dirty}<span class="muted">Unsaved changes</span>{/if}
-      </div>
     </SectionNav>
   {/if}
 </Page>
@@ -368,16 +368,5 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .actions {
-    position: sticky;
-    bottom: 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 24px;
-    padding: 12px 0;
-    border-top: 1px solid var(--border);
-    background: var(--bg);
   }
 </style>
