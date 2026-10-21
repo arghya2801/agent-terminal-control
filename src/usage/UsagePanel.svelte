@@ -872,23 +872,6 @@
     gap: 14px;
     margin-bottom: 12px;
   }
-  /* Placeholder for a line of text that has not arrived, sized to the line it replaces. */
-  .ghost {
-    display: inline-block;
-    height: 1em;
-    vertical-align: -0.15em;
-    border-radius: 3px;
-    background: var(--bg-surface);
-    animation: pulse 1.4s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    50% {
-      opacity: 0.45;
-    }
-  }
-  :global([data-still]) .ghost {
-    animation: none;
-  }
   .limit-head {
     display: flex;
     justify-content: space-between;

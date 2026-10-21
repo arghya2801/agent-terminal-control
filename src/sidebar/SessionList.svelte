@@ -166,7 +166,15 @@
 {/snippet}
 
 {#if appState.loading}
-  <div class="hint">scanning…</div>
+  <!-- Shaped like the rows that replace it: a project, then a few sessions. -->
+  <div class="skeleton" aria-busy="true" aria-label="Scanning sessions">
+    {#each [9, 13] as width, p (p)}
+      <div class="sk-project"><span class="ghost" style="width: {width}ch"></span></div>
+      {#each [16, 12, 18] as w, s (s)}
+        <div class="sk-session"><span class="ghost" style="width: {w}ch"></span></div>
+      {/each}
+    {/each}
+  </div>
 {:else if appState.error}
   <div class="hint err">{appState.error}</div>
 {:else if scratch}
@@ -196,6 +204,15 @@
 {/if}
 
 <style>
+  /* Paddings match ProjectNode's row and SessionNode's indent. */
+  .sk-project {
+    padding: 7px 8px 7px 26px;
+    font-size: 12px;
+  }
+  .sk-session {
+    padding: 4px 10px 4px 62px;
+    font-size: 12px;
+  }
   .hint {
     padding: 10px 12px;
     color: var(--fg-faint);

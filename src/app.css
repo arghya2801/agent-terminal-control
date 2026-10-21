@@ -80,6 +80,22 @@ button {
   from { opacity: 0; transform: translateY(-8px); }
 }
 
+/* Placeholder for a line of text that has not arrived, sized to the line it replaces. */
+.ghost {
+  display: inline-block;
+  height: 1em;
+  vertical-align: -0.15em;
+  border-radius: 3px;
+  background: var(--bg-surface);
+  animation: atc-pulse 1.4s ease-in-out infinite;
+}
+@keyframes atc-pulse {
+  50% { opacity: 0.45; }
+}
+[data-still] .ghost {
+  animation: none;
+}
+
 /* Set by `applyMotion` from the Animations setting, which defaults to following Windows. */
 [data-still] *,
 [data-still] ::before,
