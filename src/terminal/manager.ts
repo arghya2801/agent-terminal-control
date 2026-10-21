@@ -16,14 +16,13 @@ import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebglAddon } from '@xterm/addon-webgl';
-import { moveItem } from '../lib/dragReorder';
 import '@xterm/xterm/css/xterm.css';
 
 import { Channel, ptyAck, ptyBusy, ptyKill, ptyResize, ptySpawn, ptyWrite } from '../lib/ipc';
 import { isCopy, isNativePaste, newlineInput, matchChord, type Action } from '../lib/keymap';
 import { decodeOsc52 } from '../lib/osc52';
 import type { Palette } from '../lib/theme';
-import { claudeTitle, usableTitle, type Activity } from '../lib/format';
+import { claudeTitle, tabMark, usableTitle, type Activity, type TabMark } from '../lib/format';
 import { cycleIndex } from './cycle';
 import type { AgentProvider, SessionMeta, Dims, PtyEvent, SpawnOpts, TabKey, TerminalSettings } from '../types';
 import {
@@ -89,7 +88,16 @@ export interface Tab {
   dims: Dims | null;
   /** Bytes written but not yet acked to Go, which releases backpressure. */
   unacked: number;
+  /** The state the sidebar shows, and since when: "waiting 12m", and who waited longest. */
+  mark: TabMark;
+  markSince: number;
+  /** Output bytes per BUCKET_MS, oldest first, ending at `bucketAt`. */
+  buckets: number[];
+  bucketAt: number;
 }
+
+const BUCKET_MS = 10_000;
+const BUCKETS = 30;
 
 const tabs = new Map<TabKey, Tab>();
 /** The focused tab: the one in the focused pane. */
@@ -150,18 +158,49 @@ export function onChange(fn: Listener): () => void {
   return () => listeners.delete(fn);
 }
 function notify() {
+  const now = Date.now();
+  for (const t of tabs.values()) {
+    const mark = tabMark(t);
+    if (mark !== t.mark) {
+      t.mark = mark;
+      t.markSince = now;
+      if (mosaic) layout();
+    }
+  }
   for (const l of listeners) l();
 }
 
-/** Put tab `from` where tab `to` is (#74). The Map's order is the tab bar's order. */
-export function moveTab(from: TabKey, to: TabKey) {
-  const keys = [...tabs.keys()];
-  const order = moveItem(keys, keys.indexOf(from), keys.indexOf(to));
-  if (order === keys) return;
-  const entries = order.map((k) => [k, tabs.get(k)!] as const);
-  tabs.clear();
-  for (const [k, t] of entries) tabs.set(k, t);
-  notify();
+/** Shift the output history up to `now`, so silence reads as zeros. */
+function roll(tab: Tab, now: number) {
+  const at = Math.floor(now / BUCKET_MS);
+  for (let i = Math.min(BUCKETS, at - tab.bucketAt); i > 0; i--) {
+    tab.buckets.shift();
+    tab.buckets.push(0);
+  }
+  tab.bucketAt = at;
+}
+
+/** Output bytes per 10 s over the last 5 minutes, oldest first. */
+export function outputHistory(key: TabKey): number[] {
+  const tab = tabs.get(key);
+  if (!tab) return [];
+  roll(tab, Date.now());
+  return [...tab.buckets];
+}
+
+/** The lines on screen in a tab, as text, with rows the terminal wrapped joined back up. */
+export function screenLines(key: TabKey): string[] {
+  const tab = tabs.get(key);
+  if (!tab) return [];
+  const b = tab.term.buffer.active;
+  const lines: string[] = [];
+  for (let y = b.baseY; y < b.baseY + tab.term.rows; y++) {
+    const line = b.getLine(y);
+    const text = line?.translateToString() ?? '';
+    if (line?.isWrapped && lines.length) lines[lines.length - 1] += text;
+    else lines.push(text);
+  }
+  return lines.map((l) => l.trimEnd());
 }
 
 export function listTabs(): Tab[] {
@@ -215,6 +254,14 @@ export async function openTab(
 
   const container = document.createElement('div');
   Object.assign(container.style, paneStyle(null));
+  // In the mosaic a click picks the tile and leaves the mosaic; xterm never sees it.
+  container.addEventListener('mousedown', (e) => {
+    if (!mosaic) return;
+    e.preventDefault();
+    e.stopPropagation();
+    mosaic = false;
+    activate(key);
+  }, true);
   // Clicking into the other half of a split focuses that pane.
   container.addEventListener('focusin', () => {
     if (activeKey !== key && slotOf(panes, key) !== null) activate(key);
@@ -318,6 +365,10 @@ export async function openTab(
     exitCode: null,
     dims: null,
     unacked: 0,
+    mark: 'open',
+    markSince: Date.now(),
+    buckets: new Array(BUCKETS).fill(0),
+    bucketAt: Math.floor(Date.now() / BUCKET_MS),
   };
   tabs.set(key, tab);
 
@@ -362,6 +413,8 @@ export async function openTab(
   channel.onmessage = (msg) => {
     if (msg.t === 'o') {
       tab.lastOutputAt = Date.now();
+      roll(tab, tab.lastOutputAt);
+      tab.buckets[BUCKETS - 1] += msg.d.length;
       // The callback fires once xterm has parsed the payload: the honest ack point.
       term.write(msg.d, () => {
         tab.unacked += new TextEncoder().encode(msg.d).byteLength;
@@ -408,8 +461,7 @@ export function bindSessions(bindings: Map<TabKey, string>, sessions: SessionMet
 }
 
 /**
- * Move `delta` tabs from the active one, wrapping. Uses the `tabs` Map's insertion
- * order, which is the order the tab bar renders, so cycling matches what is on screen.
+ * Move `delta` tabs from the active one, wrapping, in the order the tabs were opened.
  */
 export function cycleTab(delta: number) {
   const keys = [...tabs.keys()];
@@ -537,6 +589,45 @@ export function isSplit(): boolean {
   return panes[1] !== null;
 }
 
+/**
+ * Every tab at once, each a scaled-down copy of a full-size pane. Scaled rather than
+ * resized, so no agent redraws or rewraps, and leaving restores them exactly.
+ */
+let mosaic = false;
+export function isMosaic(): boolean {
+  return mosaic;
+}
+export function toggleMosaic() {
+  mosaic = !mosaic && tabs.size > 1;
+  if (mosaic) layout();
+  else if (activeKey) activate(activeKey);
+  notify();
+}
+
+function mosaicLayout() {
+  const all = [...tabs.values()];
+  const cols = Math.ceil(Math.sqrt(all.length));
+  all.forEach((t, i) => {
+    Object.assign(t.container.style, {
+      inset: '0',
+      // Percentages are of the unscaled pane, so one tile step is 100/cols of it.
+      transform: `translate(${((i % cols) * 100) / cols}%, ${(Math.floor(i / cols) * 100) / cols}%) scale(${1 / cols})`,
+      transformOrigin: '0 0',
+      visibility: 'visible',
+      zIndex: '1',
+      cursor: 'pointer',
+      // A split's dimming and focus border don't belong on tiles.
+      opacity: '',
+      borderLeft: '',
+      borderTop: '',
+    });
+    t.container.style.setProperty('--tile-scale', String(cols));
+    t.container.dataset.tile = displayTitle(t);
+    // The label carries the state colour: xterm's canvas paints over any border.
+    t.container.dataset.mark = t.mark;
+  });
+}
+
 /** Where a split divides the pane area, as a share of its width from the left. */
 let splitRatio = 0.5;
 export function getSplitRatio(): number {
@@ -551,7 +642,11 @@ export function setSplitRatio(ratio: number) {
 
 /** Place every tab's container in its pane, or hide it. */
 function layout() {
+  if (mosaic) return mosaicLayout();
   for (const t of tabs.values()) {
+    Object.assign(t.container.style, { transform: '', cursor: '' });
+    delete t.container.dataset.tile;
+    delete t.container.dataset.mark;
     const slot = slotOf(panes, t.key);
     Object.assign(t.container.style, paneStyle(slot, isSplit(), slot === focusedPane, splitRatio));
   }
@@ -628,7 +723,21 @@ export async function closeTab(key: TabKey) {
   notify();
 }
 
-/** What the tab bar shows: the user's name, else the program's, else the default. */
+/**
+ * Type `text` into a tab, as if at its prompt, and press Enter. Enter goes on its own a
+ * beat later: in one write, Claude Code reads the pair as a paste and keeps the newline.
+ */
+export function sendText(key: TabKey, text: string) {
+  const tab = tabs.get(key);
+  if (!tab?.ptyId || tab.exited) return;
+  const id = tab.ptyId;
+  void ptyWrite(id, text).then(() => setTimeout(() => void ptyWrite(id, '\r'), 50));
+  // Answered: no longer waiting on you, though it was never shown.
+  tab.attention = false;
+  notify();
+}
+
+/** What the header shows: the user's name, else the program's, else the default. */
 export function displayTitle(tab: Tab): string {
   return tab.customTitle ?? tab.autoTitle ?? tab.title;
 }

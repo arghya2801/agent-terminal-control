@@ -33,7 +33,9 @@ export type Action =
   | 'showShortcuts'
   | 'toggleSplit'
   | 'focusOtherPane'
-  | 'palette';
+  | 'palette'
+  | 'jumpWaiting'
+  | 'toggleMosaic';
 
 /** The subset of KeyboardEvent this needs, so tests require no DOM. */
 export interface ChordEvent {
@@ -95,6 +97,8 @@ const BINDINGS: Binding[] = [
   { key: '|', ctrl: true, shift: true, action: 'toggleSplit' },
   { key: '\\', ctrl: true, shift: true, action: 'toggleSplit' },
   { key: 'o', ctrl: true, shift: true, action: 'focusOtherPane' },
+  { key: 'j', ctrl: true, shift: true, action: 'jumpWaiting' },
+  { key: 'g', ctrl: true, shift: true, action: 'toggleMosaic' },
 ];
 
 /**
@@ -110,9 +114,11 @@ const DESCRIPTIONS: Record<Action, { group: Group; label: string }> = {
   renameTab: { group: 'Tabs', label: 'Rename tab' },
   toggleSplit: { group: 'Tabs', label: 'Split into two panes, or back to one' },
   focusOtherPane: { group: 'Tabs', label: 'Focus the other pane' },
+  jumpWaiting: { group: 'Tabs', label: 'Jump to the agent that has waited longest' },
   openAgentHere: { group: 'Launch', label: 'Open an agent in this tab’s project' },
   openShellHere: { group: 'Launch', label: 'Open a shell in this tab’s project' },
   askAgent: { group: 'Launch', label: 'Ask agent (scratch directory)' },
+  toggleMosaic: { group: 'View', label: 'Show every tab at once, or back to one' },
   toggleSidebar: { group: 'View', label: 'Show or hide the sidebar' },
   palette: { group: 'View', label: 'Command palette' },
   focusSearch: { group: 'View', label: 'Filter the sidebar' },
