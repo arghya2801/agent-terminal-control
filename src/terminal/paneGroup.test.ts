@@ -133,6 +133,15 @@ describe('paneStyle', () => {
   });
 });
 
+describe('paneStyle split', () => {
+  it('divides at the ratio and dims the unfocused half', () => {
+    expect(paneStyle(0, true, true, 0.3).inset).toBe('0 70% 0 0');
+    expect(paneStyle(1, true, false, 0.3).inset).toBe('0 0 0 30%');
+    expect(paneStyle(1, true, false).opacity).toBe('0.6');
+    expect(paneStyle(0, true, true).opacity).toBe('');
+  });
+});
+
 describe('nearestFirst', () => {
   it('puts the right neighbour first, then the left', () => {
     expect(nearestFirst(['a', 'b', 'c', 'd'], 'b')).toEqual(['c', 'd', 'a']);

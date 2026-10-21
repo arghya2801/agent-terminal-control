@@ -6,6 +6,45 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-21
+
+### Changed
+- One set of line icons replaces the mixed symbols in the sidebar, tab bar and find bar.
+- The focused tab has an accent line on its top edge. While an agent works, a light sweeps along that edge. A dot that needs you rings twice when it lands.
+- Menus, dialogs, pages and the find bar ease in, projects slide open, and the sidebar slides in and out like a drawer, carrying the terminal with it. The selected tab and sidebar view draw their accent line in, a context menu grows from the corner nearest the cursor, and usage bars and meters move to their new values. The new Animations setting controls this.
+- Tab close buttons show on hover and on the focused tab only.
+- Sidebar and settings headings use sentence case, and the sidebar footer leaves out zero counts.
+- The UI uses Segoe UI Variable, the Windows 11 system font.
+- Settings and keyboard shortcuts open as a popup over the dimmed app; Esc or a click outside closes them. Settings is one scrolling page with a section list for General, Appearance, Terminal, Sidebar, Agents and Names, with Claude and Codex side by side, and every change saves as you make it.
+- The usage page holds space for Codex limits and this tab's session while they load, so nothing below jumps when they arrive.
+
+### Added
+- An Animations setting: Follow Windows (default), On or Off. With Windows' animation effects turned off, ATC stays still unless set to On.
+- An Animation speed slider under Settings > Appearance, from half to three times as fast.
+- A command palette on Ctrl+Shift+P: every action, open tab, project and session in one fuzzy-searched list. The sidebar filter box no longer has its own chord.
+- A toast in the corner when a background tab finishes while ATC has focus. Click it to go to that tab.
+- Tooltips appear after a short pause instead of a second, and show their shortcut as a key.
+- Context menus have icons and, where one exists, the matching shortcut. Right-click a tab to rename it, split beside it or close it.
+- The sidebar filter highlights what matched in project, session and tab names.
+- A split's divider can be dragged, and double-clicked to even it out. The pane you are not typing in is dimmed.
+- With no sessions yet, the sidebar offers Open a folder, Ask Claude and Ask Codex, and the shortcuts to start with.
+- The usage page has a section list that jumps to Limits, This tab's session, Local usage and Breakdown, and follows the scroll. Hovering a chart bar shows its numbers beside it.
+- The shortcuts page has a filter box.
+- The tab bar and sidebar let the Windows 11 Mica backdrop show through, tinted to the theme.
+- The sidebar edge shows a line and grip on hover, so it is clear it can be dragged.
+- The sidebar shows placeholder rows while sessions are scanned.
+- Right-click shows ATC's own menus only: the terminal gets copy, paste, find, split and tab actions; text boxes and notes get cut, copy and paste; tab rows in the Open view get tab actions. The browser's menu no longer appears.
+- The rail is gone. The sidebar toggle sits at the left of the tab bar; + opens a shell, and its arrow starts a shell, Claude or Codex in the current project; a ⋯ menu holds usage, settings, shortcuts and the command palette.
+- The tab bar shows how much of your tightest Claude plan limit is used, amber from 80%. Hover it for every Claude and Codex limit and today's spend; click it to open usage.
+- Usage opens as a tab after your terminals and stays there until closed; picking a terminal tab switches away from it.
+- The command palette lists Usage, Settings and Keyboard shortcuts right after your open tabs.
+
+### Fixed
+- Sidebar right-click menus no longer open shifted to the right and cut off at the sidebar edge.
+- Claude tab titles no longer show the ✳ twice.
+- Expanded projects show their chevron again; it was hidden whenever a project was open.
+- The find bar, error message and close confirmation follow light themes instead of staying dark.
+
 ## [0.4.3] - 2026-10-15
 
 ### Changed
@@ -193,7 +232,8 @@ ATC now runs on a Go/Wails host instead of Rust/Tauri. The interface is the same
 
 First release.
 
-[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.0...v0.4.1

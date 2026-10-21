@@ -6,7 +6,7 @@
  */
 
 import { migrateSessionNames } from './agents';
-import { listen, frontendReady, setZoom } from './desktop';
+import { listen, frontendReady, setWindowTheme, setZoom } from './desktop';
 import {
   indexRefresh,
   indexSnapshot,
@@ -24,7 +24,7 @@ import {
 } from './expansion';
 import { normalizeZoom, stepZoom } from './zoom';
 import { applyTerminalSettings, applyTheme, setTerminalZoom } from '../terminal/manager';
-import { applyPalette, type Palette } from './theme';
+import { applyPalette, isLight, type Palette } from './theme';
 import { findTheme, loadThemes } from './themes';
 import type { IndexSnapshot, Settings } from '../types';
 
@@ -65,6 +65,7 @@ export const themeState = $state({ themes: [] as Palette[] });
 function applyThemeByName(name: string) {
   const palette = findTheme(themeState.themes, name);
   applyPalette(palette, document.documentElement);
+  setWindowTheme(isLight(palette));
   applyTheme(palette);
 }
 
@@ -97,6 +98,29 @@ function applySettings(s: Settings) {
   applyTerminalSettings(s.terminal);
   applyThemeByName(s.ui.theme);
   applyZoom(s.ui.zoom);
+  applyMotion();
+}
+
+// Windows' "Show animations" reaches the page as reduced motion, and changes live.
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+reduceMotion.addEventListener('change', () => applyMotion());
+
+/**
+ * `data-still` on the root turns every animation off; app.css reads it. The speed scales
+ * the two duration tokens everything else is built from.
+ */
+function applyMotion(pref = appState.settings?.ui.animations) {
+  const root = document.documentElement;
+  root.toggleAttribute('data-still', pref === 'off' || (pref !== 'on' && reduceMotion.matches));
+  const speed = Math.min(4, Math.max(0.25, appState.settings?.ui.animationSpeed || 1));
+  root.style.setProperty('--fast', `${Math.round(75 / speed)}ms`);
+  root.style.setProperty('--enter', `${Math.round(160 / speed)}ms`);
+}
+
+/** How long an entrance takes in a JS transition: `--enter`, or 0 while motion is off. */
+export function enterMs(): number {
+  if (document.documentElement.hasAttribute('data-still')) return 0;
+  return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--enter'));
 }
 
 function applyZoom(value: number) {

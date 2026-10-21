@@ -376,9 +376,10 @@ export async function openTab(
   });
 
   term.onTitleChange((t) => {
-    tab.autoTitle = usableTitle(t);
-    if (tab.provider === 'codex') { notify(); return; }
     const claude = claudeTitle(t);
+    // The status glyph is drawn by StatusDot; keeping it here showed it twice.
+    tab.autoTitle = claude?.name || usableTitle(t);
+    if (tab.provider === 'codex') { notify(); return; }
     const was = tab.activity;
     tab.activity = claude?.activity ?? null;
     if (was === 'working' && tab.activity === 'idle') flagAttention(tab, 'finished');
@@ -587,11 +588,23 @@ export function isSplit(): boolean {
   return panes[1] !== null;
 }
 
+/** Where a split divides the pane area, as a share of its width from the left. */
+let splitRatio = 0.5;
+export function getSplitRatio(): number {
+  return splitRatio;
+}
+export function setSplitRatio(ratio: number) {
+  splitRatio = Math.min(0.8, Math.max(0.2, ratio));
+  layout();
+  scheduleFit();
+  notify();
+}
+
 /** Place every tab's container in its pane, or hide it. */
 function layout() {
   for (const t of tabs.values()) {
     const slot = slotOf(panes, t.key);
-    Object.assign(t.container.style, paneStyle(slot, isSplit(), slot === focusedPane));
+    Object.assign(t.container.style, paneStyle(slot, isSplit(), slot === focusedPane, splitRatio));
   }
 }
 
@@ -679,6 +692,39 @@ export function renameTab(key: TabKey, name: string) {
   notify();
 }
 
+// --- the terminal's right-click menu
+/** The tab whose terminal holds `node`. */
+export function tabAt(node: Node): TabKey | null {
+  for (const t of tabs.values()) if (t.container.contains(node)) return t.key;
+  return null;
+}
+export function hasSelection(key: TabKey): boolean {
+  return !!tabs.get(key)?.term.hasSelection();
+}
+export async function copySelection(key: TabKey) {
+  const term = tabs.get(key)?.term;
+  if (!term?.hasSelection()) return;
+  await writeClipboard(term.getSelection());
+  term.clearSelection();
+}
+/** As a paste, so bracketed-paste programs such as Claude Code see one block. */
+export async function pasteInto(key: TabKey) {
+  const term = tabs.get(key)?.term;
+  if (!term) return;
+  const text = await navigator.clipboard.readText().catch(() => '');
+  if (text) term.paste(text);
+  term.focus();
+}
+export function selectAllIn(key: TabKey) {
+  tabs.get(key)?.term.selectAll();
+}
+/** Drops the scrollback; the program's current line stays. */
+export function clearTerminal(key: TabKey) {
+  const term = tabs.get(key)?.term;
+  term?.clear();
+  term?.focus();
+}
+
 async function writeClipboard(text: string) {
   try {
     await navigator.clipboard.writeText(text);
@@ -715,7 +761,7 @@ function measure(tab: Tab): Dims {
  * applied to all of them. Split, each visible pane is measured on its own, and hidden
  * tabs take the focused pane's size, since that is where they will appear.
  */
-const scheduleFit = debounce(() => {
+function fitAll() {
   const active = activeKey ? tabs.get(activeKey) : null;
   if (!active) return;
 
@@ -732,7 +778,8 @@ const scheduleFit = debounce(() => {
   for (const t of panesNeedingResize(hidden, dims)) {
     applyDims(t, dims);
   }
-}, RESIZE_DEBOUNCE_MS);
+}
+const scheduleFit = debounce(fitAll, RESIZE_DEBOUNCE_MS);
 
 /** Resize the emulator and its PTY together, and remember what was applied. */
 function applyDims(tab: Tab, dims: Dims) {
@@ -746,6 +793,12 @@ function applyDims(tab: Tab, dims: Dims) {
 
 export function refit() {
   scheduleFit();
+}
+
+/** Measure now, in this frame: for a layout change that is about to be animated. */
+export function refitNow() {
+  scheduleFit.cancel();
+  fitAll();
 }
 
 // Terminal instances, their PTY ids, and the WebGL context all live in module scope, and

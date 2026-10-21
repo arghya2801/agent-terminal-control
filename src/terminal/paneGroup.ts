@@ -107,16 +107,19 @@ export function nearestFirst<K>(order: K[], key: K): K[] {
 
 /** Styles for a tab's container: which pane it fills, or hidden. Kept here so the
  *  display/visibility rule lives in exactly one place. */
-export function paneStyle(slot: 0 | 1 | null, split = false, focused = false): Partial<CSSStyleDeclaration> {
+export function paneStyle(slot: 0 | 1 | null, split = false, focused = false, ratio = 0.5): Partial<CSSStyleDeclaration> {
   const half = split && slot !== null;
   return {
     position: 'absolute',
-    inset: !half ? '0' : slot === 0 ? '0 50% 0 0' : '0 0 0 50%',
+    inset: !half ? '0' : slot === 0 ? `0 ${100 - ratio * 100}% 0 0` : `0 0 0 ${ratio * 100}%`,
     borderLeft: half && slot === 1 ? '1px solid var(--border)' : '',
     // The focused pane of a split is marked, so it is clear where typing goes. A border,
     // not a shadow: the terminal's canvas paints over an inset shadow. Both halves carry
     // one, so they measure the same.
     borderTop: half ? `2px solid ${focused ? 'var(--accent)' : 'transparent'}` : '',
+    // The other pane recedes, so where typing goes reads at a glance.
+    opacity: half && !focused ? '0.6' : '',
+    transition: 'opacity var(--enter)',
     boxSizing: 'border-box',
     // NOT `display: none` — see the module comment.
     visibility: slot !== null ? 'visible' : 'hidden',
