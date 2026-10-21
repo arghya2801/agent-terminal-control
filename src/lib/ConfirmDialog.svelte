@@ -59,7 +59,8 @@
     z-index: 50;
     display: grid;
     place-items: center;
-    background: rgba(1, 4, 9, 0.6);
+    background: color-mix(in srgb, var(--bg) 55%, transparent);
+    animation: atc-fade var(--enter) var(--ease-out);
   }
   .dialog {
     width: min(420px, calc(100vw - 32px));
@@ -67,7 +68,8 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--bg-chrome);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--shadow-pop);
+    animation: atc-pop var(--enter) var(--ease-out);
   }
   .message {
     color: var(--fg);

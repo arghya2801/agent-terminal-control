@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
+  import Highlight from '../lib/Highlight.svelte';
+  import Icon from '../lib/Icon.svelte';
   import { reorderable } from '../lib/dragReorder';
   import { markTitle, relativeTime, tabMark } from '../lib/format';
   import { providerName } from '../lib/agents';
@@ -58,6 +60,7 @@
     class:active={tab.key === activeKey}
     class:exited={tab.exited}
     data-row
+    data-tab-key={tab.key}
     tabindex="-1"
     use:reorderable={{ id: tab.key, group: 'open', onMove: (from, to) => !triage && moveTab(from as TabKey, to as TabKey) }}
     onclick={() => activate(tab.key)}
@@ -66,8 +69,8 @@
     title="{tab.title} · {s} (middle-click to close)"
   >
     <StatusDot {mark} title={s} />
-    <span class="icon">{#if tab.provider}<ProviderIcon provider={tab.provider} />{:else}›_{/if}</span>
-    <span class="text">{tab.title}{#if projectName(tab.projectKey)}<small>{projectName(tab.projectKey)}</small>{/if}</span>
+    <span class="icon">{#if tab.provider}<ProviderIcon provider={tab.provider} />{:else}<Icon name="terminal" size={12} />{/if}</span>
+    <span class="text"><Highlight text={tab.title} {query} />{#if projectName(tab.projectKey)}<small><Highlight text={projectName(tab.projectKey)} {query} /></small>{/if}</span>
     <time>{stateWord(mark)} {relativeTime(tab.since, now)}</time>
     {#if peek}<span class="peek">{peek}</span>{/if}
     <svg class="spark" viewBox="0 0 60 10" preserveAspectRatio="none" aria-hidden="true"><path d={spark(tab.key, now)} /></svg>
@@ -112,10 +115,9 @@
     text-decoration: line-through;
   }
   .icon {
+    display: grid;
+    place-items: center;
     color: var(--fg-faint);
-    font-family: ui-monospace, monospace;
-    font-size: 10px;
-    text-align: center;
   }
   .text {
     min-width: 0;

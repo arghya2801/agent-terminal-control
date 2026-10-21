@@ -1,9 +1,12 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { sessionKey, providerName } from '../lib/agents';
   import Page from '../lib/Page.svelte';
+  import SectionNav from '../lib/SectionNav.svelte';
+  import Icon from '../lib/Icon.svelte';
   import { save } from '../lib/desktop';
-  import { claudeUsage, codexUsage, codexUsageStop, usageCosts, writeTextFile } from '../lib/ipc';
+  import { codexUsageStop, usageCosts, writeTextFile } from '../lib/ipc';
+  import { loadClaudeLimits, loadCodexLimits, planState } from '../lib/limits.svelte';
   import { appState } from '../lib/stores.svelte';
   import { cacheHitRate, chartData, dailyTotals, hourToLocalDay, rollingAverage, sessionStats, streaks, usageBlocks, formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv, weekHeatmap, type Split, type UsageBlock } from '../lib/costs';
   import {
@@ -17,36 +20,36 @@
     type Dates,
     type Selection,
   } from '../lib/range';
-  import { codexLimits, planLimits, weeklyBreakdown } from '../lib/plan';
+  import { codexLimits, planLimits, resetsIn, weeklyBreakdown } from '../lib/plan';
   import { relativeTime } from '../lib/format';
   import type { AgentProvider, CostRow } from '../types';
 
   let { onClose, sessionKey: current = null }: { onClose: () => void; sessionKey?: string | null } =
     $props();
 
-  let codexPlan = $state<Record<string, unknown> | null>(null);
-  let codexError = $state<string | null>(null);
-  let codexLoading = $state(false);
-  let codexMissing = $state(false);
+  // Limits come from the app-wide store the tab bar's chip shares.
+  const codexPlan = $derived(planState.codex);
+  const codexError = $derived(planState.codexError);
+  const codexLoading = $derived(planState.codexLoading);
+  const loadCodex = loadCodexLimits;
+  const CODEX_ROWS_KEY = 'atc.usage.codexRows';
+  const lastCodexRows = readRows(CODEX_ROWS_KEY, 2);
+  let codexRows = $state(lastCodexRows);
+  /** Not installed last time either: reserving a card that then vanishes is worse than none. */
+  const codexMissing = $derived(planState.codexAt ? planState.codexMissing : lastCodexRows === 0);
   const codexWindows = $derived(codexPlan ? codexLimits(codexPlan) : []);
-  async function loadCodex() {
-    if (codexLoading) return;
-    codexLoading = true;
-    try {
-      const plan = await codexUsage();
-      codexMissing = plan === null;
-      codexPlan = plan;
-      codexError = null;
-    }
-    catch (e) { codexMissing = false; codexError = String(e); }
-    finally { codexLoading = false; }
-  }
+  $effect(() => {
+    if (!planState.codexAt || planState.codexError) return;
+    const n = planState.codex === null ? 0 : codexWindows.length;
+    codexRows = rememberRows(CODEX_ROWS_KEY, n, untrack(() => codexRows));
+  });
 
   // --- plan limits
-  let plan = $state<Record<string, unknown> | null>(null);
-  let planError = $state<string | null>(null);
-  let planLoading = $state(false);
-  let planUpdatedAt = $state(0);
+  const plan = $derived(planState.claude);
+  const planError = $derived(planState.claudeError);
+  const planLoading = $derived(planState.claudeLoading);
+  const planUpdatedAt = $derived(plan ? planState.claudeAt : 0);
+  const loadPlan = loadClaudeLimits;
   /** Ticks so "updated 3m ago" stays current while the page sits open. */
   let now = $state(Date.now());
   /** Limits move slowly, and the endpoint rate-limits, so poll gently. */
@@ -60,58 +63,35 @@
   // account has varies (session, week, and per-model weeks), so remember the last count
   // rather than guess it every time; the default only matters on the very first load.
   const ROWS_KEY = 'atc.usage.limitRows';
-  let skeletonRows = $state(readRows());
+  let skeletonRows = $state(readRows(ROWS_KEY, 3));
 
-  function readRows(): number {
+  function readRows(key: string, fallback: number): number {
     try {
-      const n = Number(localStorage.getItem(ROWS_KEY));
-      if (Number.isInteger(n) && n > 0 && n <= 6) return n;
+      const raw = localStorage.getItem(key);
+      const n = Number(raw);
+      if (raw !== null && Number.isInteger(n) && n >= 0 && n <= 6) return n;
     } catch {
       // Storage unavailable: fall through to the default.
     }
-    return 3;
+    return fallback;
   }
 
-  function rememberRows(n: number) {
-    if (n <= 0 || n === skeletonRows) return;
-    skeletonRows = n;
+  /** Returns the count to reserve next time; `0` is only kept for Codex being absent. */
+  function rememberRows(key: string, n: number, was: number): number {
+    if (n === was || (n === 0 && key === ROWS_KEY)) return was;
     try {
-      localStorage.setItem(ROWS_KEY, String(n));
+      localStorage.setItem(key, String(n));
     } catch {
       // Storage unavailable: next launch reserves the default instead.
     }
+    return n;
   }
 
-  async function loadPlan() {
-    if (planLoading) return;
-    planLoading = true;
-    try {
-      plan = await claudeUsage();
-      rememberRows(limits.length);
-      planUpdatedAt = Date.now();
-      now = planUpdatedAt;
-      planError = null;
-    } catch (e) {
-      planError = String(e);
-    } finally {
-      planLoading = false;
-    }
-  }
-
-  function resetsIn(iso: string | null): string {
-    if (!iso) return '';
-    const d = new Date(iso);
-    const mins = Math.round((d.getTime() - Date.now()) / 60_000);
-    const when = d.toLocaleString(undefined, {
-      weekday: 'short',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-    if (mins <= 0) return 'resetting now';
-    if (mins < 60) return `resets in ${mins}m (${when})`;
-    if (mins < 48 * 60) return `resets in ${Math.floor(mins / 60)}h ${mins % 60}m (${when})`;
-    return `resets ${when}`;
-  }
+  $effect(() => {
+    if (!plan) return;
+    skeletonRows = rememberRows(ROWS_KEY, limits.length, untrack(() => skeletonRows));
+    now = Date.now();
+  });
 
   // --- spend
   let rows = $state<CostRow[]>([]);
@@ -119,6 +99,8 @@
   const filteredRows = $derived(provider === 'all' ? rows : rows.filter(r => r.provider === provider));
   let costError = $state<string | null>(null);
   let costLoading = $state(false);
+  /** Until the first scan lands, sections that depend on it hold their space. */
+  let costsLoaded = $state(false);
   const today = localDay(new Date());
   const initial = presetDates(30);
   let from = $state(initial.from);
@@ -133,6 +115,7 @@
       costError = String(e);
     } finally {
       costLoading = false;
+      costsLoaded = true;
     }
   }
 
@@ -279,6 +262,8 @@
   /** Bucket under the pointer, for the read-out above the chart. */
   let hovered = $state<number | null>(null);
   const shown = $derived(hovered === null ? null : chart.buckets[hovered]);
+  /** A bar's height as a share of the chart, which the hover label sits just above. */
+  const barPct = (b: (typeof chart.buckets)[number]) => (asShare ? (b.total ? 100 : 0) : chartMax ? (b.total / chartMax) * 100 : 0);
   /** One series keeps the accent; a split takes the categorical slots chartData assigns. */
   // ponytail: model and project slots follow rank, so a range change can recolour a model;
   // pin colours per name if people compare screenshots across ranges.
@@ -352,12 +337,21 @@
     new Date(`${hour}:00:00Z`).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const fmt = (v: number) => (metric === 'tokens' ? `${formatTokens(v)} tokens` : formatUsd(v));
 
+  // --- section list
+  const sections = $derived([
+    { id: 'u-limits', label: 'Limits' },
+    ...(current && (session || !costsLoaded) ? [{ id: 'u-session', label: "This tab's session" }] : []),
+    { id: 'u-local', label: 'Local usage' },
+    ...(costsLoaded && !costError ? [{ id: 'u-breakdown', label: 'Breakdown' }] : []),
+  ]);
+
   onMount(() => {
     restoreRange();
-    void loadPlan();
-    void loadCodex();
+    // The app polls Claude's limits already; only a stale answer is refreshed here.
+    if (Date.now() - planState.claudeAt > PLAN_REFRESH_MS) void loadPlan();
+    if (Date.now() - planState.codexAt > CODEX_REFRESH_MS) void loadCodex();
     void loadCosts();
-    const poll = setInterval(() => { void loadPlan(); void loadCosts(); }, PLAN_REFRESH_MS);
+    const poll = setInterval(() => void loadCosts(), PLAN_REFRESH_MS);
     // Each Codex read starts a `codex app-server` process, so it refreshes less often.
     const codexPoll = setInterval(() => void loadCodex(), CODEX_REFRESH_MS);
     const tick = setInterval(() => (now = Date.now()), 30_000);
@@ -370,7 +364,26 @@
   });
 </script>
 
-<Page title="Usage" {onClose}>
+<!-- Same markup as the real rows, so the space reserved is the space they take and
+     nothing below moves when they arrive. -->
+{#snippet ghostLimits(n: number, label: string)}
+  <div class="limits" aria-busy="true" aria-label={label}>
+    {#each { length: n } as _, i (i)}
+      <div class="limit">
+        <div class="limit-head">
+          <span class="ghost" style="width: 11ch"></span>
+          <span class="ghost" style="width: 7ch"></span>
+        </div>
+        <div class="meter"></div>
+        <div class="muted"><span class="ghost" style="width: 18ch"></span></div>
+      </div>
+    {/each}
+  </div>
+{/snippet}
+
+<Page title="Usage" wide {onClose}>
+  <SectionNav {sections}>
+  <span id="u-limits" class="anchor"></span>
   <div class="plan-grid">
   <section class="plan-card" aria-label="Claude plan limits">
   <h2>
@@ -380,20 +393,7 @@
   {#if planError && !plan}
     <p class="err">{planError}</p>
   {:else if !plan}
-    <!-- Same markup as the real rows, so the space reserved is the space they take and
-         nothing below moves when they arrive. -->
-    <div class="limits" aria-busy="true" aria-label="Loading plan limits">
-      {#each { length: skeletonRows } as _, i (i)}
-        <div class="limit">
-          <div class="limit-head">
-            <span class="ghost" style="width: 11ch"></span>
-            <span class="ghost" style="width: 7ch"></span>
-          </div>
-          <div class="meter"></div>
-          <div class="muted"><span class="ghost" style="width: 18ch"></span></div>
-        </div>
-      {/each}
-    </div>
+    {@render ghostLimits(skeletonRows, 'Loading plan limits')}
   {:else if limits.length === 0}
     <p class="muted">No limits reported for this account.</p>
   {:else}
@@ -436,7 +436,7 @@
   <section class="plan-card" aria-label="Codex plan limits">
   <h2>Codex plan limits</h2>
   {#if codexError}<p class="err">{codexError}</p>{/if}
-  {#if codexLoading && !codexPlan}<p class="muted">Loading Codex limits…</p>
+  {#if !codexPlan && !codexError}{@render ghostLimits(codexRows || 2, 'Loading Codex limits')}
   {:else if codexPlan && codexWindows.length === 0}<p class="muted">No rate-limit data for this account.</p>{/if}
   <div class="limits">
     {#each codexWindows as l (l.key)}
@@ -455,19 +455,28 @@
   {/if}
   </div>
 
-  {#if session && current}
-    <h2>This tab's session</h2>
-    <div class="total">
-      <span class="big">{monetary({ cost: session.cost, partial: session.partial, unavailable: false })}</span>
-      <span class="muted">{formatTokens(session.tokens)} tokens · {Math.round(session.cacheShare * 100)}% of input from cache · {sessionName(current)}</span>
-    </div>
-    <p class="muted">
-      Active {localTime(session.firstHour)} to {localTime(session.lastHour)}, by the hour. API and wall durations and code changes are only in the CLI's own <code>/usage</code>.
-    </p>
+  {#if current && (session || !costsLoaded)}
+    <h2 id="u-session">This tab's session</h2>
+    {#if session}
+      <div class="total">
+        <span class="big">{monetary({ cost: session.cost, partial: session.partial, unavailable: false })}</span>
+        <span class="muted">{formatTokens(session.tokens)} tokens · {Math.round(session.cacheShare * 100)}% of input from cache · {sessionName(current)}</span>
+      </div>
+      <p class="muted">
+        Active {localTime(session.firstHour)} to {localTime(session.lastHour)}, by the hour. API and wall durations and code changes are only in the CLI's own <code>/usage</code>.
+      </p>
+    {:else}
+      <div class="total" aria-busy="true">
+        <span class="big"><span class="ghost" style="width: 5ch"></span></span>
+        <span class="muted"><span class="ghost" style="width: 36ch"></span></span>
+      </div>
+      <p class="muted"><span class="ghost" style="width: 60ch; max-width: 100%"></span></p>
+    {/if}
     <table>
       <thead><tr><th>Model</th><th class="num">Input</th><th class="num">Output</th><th class="num">Cache read</th><th class="num">Cache write</th><th class="num">API cost</th></tr></thead>
       <tbody>
-        {#each session.byModel as m (m.model)}
+        {#if !session}<tr><td colspan="6"><span class="ghost" style="width: 16ch"></span></td></tr>{/if}
+        {#each session?.byModel ?? [] as m (m.model)}
           <tr>
             <td>{m.model}</td>
             <td class="num">{formatTokens(m.input)}</td>
@@ -481,7 +490,7 @@
     </table>
   {/if}
 
-  <h2>Local usage</h2>
+  <h2 id="u-local">Local usage</h2>
   <p class="muted">
     Local tokens include linked child agents. Costs are API-equivalent estimates, not subscription charges. Codex uses standard short-context prices, including cached input; tier and long-context surcharges are excluded. Unknown model prices are unavailable.
   </p>
@@ -690,22 +699,31 @@
         <div class="chart-axis muted"><span>{rates[0].day}</span><span>{rates[rates.length - 1].day}</span></div>
       {/if}
     {:else if chart.buckets.length > 0}
-      <div class="readout muted" aria-live="polite">
-        {#if shown}
-          <strong>{shown.label}</strong> · {fmt(shown.total)}
-          {#if chart.series.length > 1}
-            {#each chart.series as name, i (name)}{#if shown.values[i] > 0} · {name} {asShare ? pct(shown.values[i], shown.total) : fmt(shown.values[i])}{/if}{/each}
-          {/if}
-          {#if average && hovered !== null} · 7-day average {fmt(average[hovered])}{/if}
-        {:else}
-          {chartHourly ? 'Hover an hour' : 'Hover a day for its total; click it to show that day'}
-        {/if}
+      <div class="readout muted">
+        {chartHourly ? 'Hover an hour' : 'Hover a day for its total; click it to show that day'}
       </div>
       <div class="chart" role="img" aria-label={`${cumulative ? 'Running total of' : ''} ${metric === 'tokens' ? 'tokens' : 'estimated cost'} per ${chartHourly ? 'hour' : 'day'}`}>
         {#if average && chartMax}
           <svg class="avg" viewBox="0 0 {average.length} {chartMax}" preserveAspectRatio="none" aria-hidden="true">
             <polyline points={average.map((v, i) => `${i + 0.5},${chartMax - v}`).join(' ')} />
           </svg>
+        {/if}
+        {#if shown && hovered !== null}
+          <!-- Its anchor slides from its left edge to its right across the chart, so it
+               never runs off either side. -->
+          {@const x = ((hovered + 0.5) / chart.buckets.length) * 100}
+          <div class="tip" aria-live="polite" style="left: {x}%; bottom: calc({barPct(shown)}% + 8px); transform: translateX(-{x}%)">
+            <strong>{shown.label}</strong>
+            <span class="tip-total">{fmt(shown.total)}</span>
+            {#if chart.series.length > 1}
+              {#each chart.series as name, i (name)}
+                {#if shown.values[i] > 0}
+                  <span class="tip-row"><span class="swatch" style="background: {color(i)}"></span>{name}<span>{asShare ? pct(shown.values[i], shown.total) : fmt(shown.values[i])}</span></span>
+                {/if}
+              {/each}
+            {/if}
+            {#if average}<span class="tip-row muted">7-day average<span>{fmt(average[hovered])}</span></span>{/if}
+          </div>
         {/if}
         {#each chart.buckets as b, i (b.key)}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -716,7 +734,7 @@
             onmouseleave={() => (hovered = null)}
             onclick={() => !chartHourly && showDay(b.key)}
           >
-            <div class="stack" style="height: {asShare ? (b.total ? 100 : 0) : chartMax ? (b.total / chartMax) * 100 : 0}%">
+            <div class="stack" style="height: {barPct(b)}%">
               {#each b.values as v, s (s)}
                 <!-- Grow weights summing to 100: below 1 in total, flex fills only that fraction of the bar. -->
                 {#if v > 0}<div class="seg" style="flex-grow: {(v / b.total) * 100}; background: {color(s)}"></div>{/if}
@@ -740,6 +758,7 @@
       {/if}
     {/if}
 
+    <h2 id="u-breakdown">Breakdown</h2>
     <div class="group">
       <button class="btn" class:primary={groupBy === 'project'} onclick={() => (groupBy = 'project')}>
         By project
@@ -790,7 +809,7 @@
             <tr>
               <td>
                 <button class="expand" onclick={() => toggleProject(p.key)} aria-expanded={expanded.has(p.key)}>
-                  <span class="twisty" class:open={expanded.has(p.key)}>▸</span>{p.name}
+                  <span class="twisty" class:open={expanded.has(p.key)}><Icon name="chevron" size={12} /></span>{p.name}
                   <span class="muted">{sessions.length} session{sessions.length === 1 ? '' : 's'}</span>
                 </button>
               </td>
@@ -823,9 +842,13 @@
       <p class="muted">Pricing is incomplete for: {summary.unpricedModels.join(', ')} (unknown portions are excluded from the estimate).</p>
     {/if}
   {/if}
+  </SectionNav>
 </Page>
 
 <style>
+  .anchor {
+    display: block;
+  }
   .plan-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
@@ -847,25 +870,6 @@
     display: grid;
     gap: 14px;
     margin-bottom: 12px;
-  }
-  /* Placeholder for a line of text that has not arrived, sized to the line it replaces. */
-  .ghost {
-    display: inline-block;
-    height: 1em;
-    vertical-align: -0.15em;
-    border-radius: 3px;
-    background: var(--bg-surface);
-    animation: pulse 1.4s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    50% {
-      opacity: 0.45;
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .ghost {
-      animation: none;
-    }
   }
   .limit-head {
     display: flex;
@@ -894,6 +898,7 @@
     height: 100%;
     border-radius: 4px;
     background: var(--accent);
+    transition: width var(--enter) var(--ease-out);
   }
   .fill.hot {
     background: var(--warn);
@@ -957,6 +962,42 @@
   .readout {
     min-height: 18px;
     margin-bottom: 4px;
+  }
+  .tip {
+    position: absolute;
+    z-index: 2;
+    display: flex;
+    min-width: 120px;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-chrome);
+    box-shadow: var(--shadow-pop);
+    font-size: 11px;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .tip strong {
+    color: var(--fg-dim);
+    font-weight: 500;
+  }
+  .tip-total {
+    color: var(--fg-bright);
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .tip-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tip-row > span:last-child {
+    margin-left: auto;
+    padding-left: 12px;
+    font-variant-numeric: tabular-nums;
   }
   .readout strong {
     color: var(--fg-bright);
@@ -1173,6 +1214,7 @@
     gap: 2px;
     overflow: hidden;
     border-radius: 4px 4px 0 0;
+    transition: height var(--enter) var(--ease-out), opacity var(--fast);
   }
   .seg {
     min-height: 1px;
@@ -1216,13 +1258,14 @@
     cursor: pointer;
   }
   .twisty {
-    display: inline-block;
     color: var(--fg-faint);
-    font-size: 9px;
-    transition: transform 0.12s;
+    transition: transform var(--fast) var(--ease-out);
   }
   .twisty.open {
     transform: rotate(90deg);
+  }
+  tr.session {
+    animation: atc-rise var(--enter) var(--ease-out);
   }
   tr.session td:first-child {
     padding-left: 26px;

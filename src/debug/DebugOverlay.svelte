@@ -41,7 +41,7 @@
 </script>
 
 <div class="overlay">
-  <div class="title">pty · Ctrl+Shift+D</div>
+  <div class="title">PTY stats, Ctrl+Shift+D</div>
   {#if stats}
     <div class="row"><span>bytes/s</span><b>{rates.bytesPerSec.toLocaleString()}</b></div>
     <div class="row"><span>sends/s</span><b>{rates.sendsPerSec}</b></div>
@@ -71,14 +71,16 @@
     padding: 8px 10px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: rgba(13, 17, 23, 0.92);
+    background: color-mix(in srgb, var(--bg-chrome) 94%, transparent);
+    box-shadow: var(--shadow-pop);
     font-family: ui-monospace, Consolas, monospace;
     font-size: 11px;
     color: var(--fg-dim);
     pointer-events: none;
+    animation: atc-rise var(--enter) var(--ease-out);
   }
-  .title { margin-bottom: 6px; color: var(--accent); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
-  .row { display: flex; justify-content: space-between; gap: 16px; line-height: 1.6; }
+  .title { margin-bottom: 6px; color: var(--accent); font-weight: 600; }
+  .row { display: flex; justify-content: space-between; gap: 16px; line-height: 1.6; font-variant-numeric: tabular-nums; }
   .row b { color: var(--fg); font-weight: 500; }
   .row.warn b { color: var(--warn); }
 </style>
