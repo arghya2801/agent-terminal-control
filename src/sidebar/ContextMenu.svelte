@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { moveIndex } from '../lib/roving';
+  import Icon, { type IconName } from '../lib/Icon.svelte';
 
   export interface MenuItem {
     label: string;
@@ -12,14 +13,25 @@
     /** Shows a tick column; true ticks it. */
     checked?: boolean;
     danger?: boolean;
+    icon?: IconName;
+    /** The chord that does the same, shown on the right. Only where it really does. */
+    hint?: string;
   }
 
   let {
     x,
     y,
     items,
+    dropdown = false,
     onClose,
-  }: { x: number; y: number; items: MenuItem[]; onClose: () => void } = $props();
+  }: {
+    x: number;
+    y: number;
+    items: MenuItem[];
+    /** Dropped from a button: `x` is the button's right edge, and the menu hugs its labels. */
+    dropdown?: boolean;
+    onClose: () => void;
+  } = $props();
 
   let el: HTMLDivElement;
   /** Set once measured; until then the menu renders at the cursor. Keeping it separate
@@ -27,6 +39,8 @@
   let clamped = $state<{ left: number; top: number } | null>(null);
   // Nudged back inside the window when opened near an edge.
   const pos = $derived(clamped ?? { left: x, top: y });
+  // Grows out of the corner nearest the cursor, which is not the top-left once nudged.
+  const origin = $derived(`${pos.top < y ? 'bottom' : 'top'} ${dropdown || pos.left < x ? 'right' : 'left'}`);
 
   function choose(item: MenuItem) {
     if (item.disabled || !item.run) return;
@@ -35,9 +49,12 @@
   }
 
   onMount(() => {
+    // On the body, so no transformed or clipped ancestor (the sliding sidebar) can move
+    // or cut off a fixed-position menu.
+    document.body.append(el);
     const rect = el.getBoundingClientRect();
     clamped = {
-      left: Math.min(x, window.innerWidth - rect.width - 8),
+      left: Math.max(8, Math.min(dropdown ? x - rect.width : x, window.innerWidth - rect.width - 8)),
       top: Math.max(8, Math.min(y, window.innerHeight - rect.height - 8)),
     };
 
@@ -69,14 +86,16 @@
     return () => {
       window.removeEventListener('mousedown', onDown, true);
       window.removeEventListener('keydown', onKey, true);
+      el.remove();
     };
   });
 </script>
 
 <div
   class="menu"
+  class:dropdown
   bind:this={el}
-  style="left: {pos.left}px; top: {pos.top}px"
+  style="left: {pos.left}px; top: {pos.top}px; transform-origin: {origin}"
   role="menu"
   tabindex="-1"
 >
@@ -93,8 +112,10 @@
         role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
         aria-checked={item.checked}
       >
-        {#if item.checked !== undefined}<span class="tick">{item.checked ? '✓' : ''}</span>{/if}
-        {item.label}
+        {#if item.checked !== undefined}<span class="tick">{item.checked ? '✓' : ''}</span>
+        {:else}<span class="ic">{#if item.icon}<Icon name={item.icon} size={14} />{/if}</span>{/if}
+        <span class="label">{item.label}</span>
+        {#if item.hint}<kbd>{item.hint}</kbd>{/if}
       </button>
     {:else}
       <div class="heading">{item.label}</div>
@@ -115,10 +136,19 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--bg-chrome);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--shadow-pop);
+    animation: atc-pop var(--enter) var(--ease-out);
+  }
+  .menu.dropdown {
+    min-width: 0;
+  }
+  .dropdown .item {
+    padding: 5px 12px 5px 8px;
   }
   .item {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     width: 100%;
     padding: 6px 10px;
     border: none;
@@ -129,9 +159,30 @@
     font-size: 12px;
     text-align: left;
     cursor: pointer;
+    white-space: nowrap;
+  }
+  .label {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+  }
+  .ic {
+    display: grid;
+    width: 14px;
+    flex-shrink: 0;
+    place-items: center;
+    color: var(--fg-faint);
+  }
+  .item:hover:not(.disabled) .ic,
+  .item:focus-visible .ic {
+    color: inherit;
+  }
+  kbd {
+    margin-left: 16px;
+    color: var(--fg-faint);
+    font: inherit;
+    font-size: 11px;
   }
   .item:hover:not(.disabled),
   .item:focus-visible {
@@ -160,7 +211,7 @@
     background: var(--border);
   }
   .heading {
-    padding: 4px 10px 2px;
+    padding: 4px 10px 2px 32px;
     color: var(--fg-faint);
     font-size: 11px;
   }
