@@ -764,15 +764,6 @@
     >
       <Icon name="settings" />
     </button>
-    <button
-      class="rail-btn"
-      class:on={showDebug}
-      onclick={() => (showDebug = !showDebug)}
-      title="PTY stats (Ctrl+Shift+D)"
-      aria-label="Toggle debug overlay"
-    >
-      <Icon name="pulse" />
-    </button>
   </nav>
 
   <aside class="panel" inert={popup}>
