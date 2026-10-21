@@ -363,16 +363,30 @@
   }
 
   /** Windows notification for a background tab, only while ATC itself is not focused. */
-  async function notifyAttention(title: string, provider: AgentProvider | null, reason: AttentionReason) {
-    if (document.hasFocus() || appState.settings?.ui.notifications === false) return;
+  /** In-app notes for background tabs, while ATC has focus and Windows would show nothing. */
+  let toasts = $state<{ id: number; key: TabKey; title: string; body: string }[]>([]);
+  let toastId = 0;
+  function dismissToast(id: number) {
+    toasts = toasts.filter((t) => t.id !== id);
+  }
+
+  function attentionBody(provider: AgentProvider | null, reason: AttentionReason) {
+    return reason === 'finished' ? `${provider ? providerName(provider) : 'Agent'} finished and is waiting for you.` : 'Needs your attention.';
+  }
+
+  async function notifyAttention(key: TabKey, title: string, provider: AgentProvider | null, reason: AttentionReason) {
+    if (document.hasFocus()) {
+      const id = ++toastId;
+      toasts = [...toasts.filter((t) => t.key !== key), { id, key, title, body: attentionBody(provider, reason) }].slice(-3);
+      setTimeout(() => dismissToast(id), 6000);
+      return;
+    }
+    if (appState.settings?.ui.notifications === false) return;
     try {
       let granted = await isPermissionGranted();
       if (!granted) granted = (await requestPermission()) === 'granted';
       if (!granted) return;
-      sendNotification({
-        title,
-        body: reason === 'finished' ? `${provider ? providerName(provider) : 'Agent'} finished and is waiting for you.` : 'Needs your attention.',
-      });
+      sendNotification({ title, body: attentionBody(provider, reason) });
     } catch (e) {
       console.warn('notification failed', e);
     }
@@ -473,7 +487,7 @@
     // Chords pressed while the terminal has focus arrive here, already consumed by
     // xterm's interceptor so they never reach the shell.
     const offChord = onChord(runAction);
-    const offAttention = onAttention((t, reason) => void notifyAttention(displayTitle(t), t.provider, reason));
+    const offAttention = onAttention((t, reason) => void notifyAttention(t.key, displayTitle(t), t.provider, reason));
     mountTerminals(wrapper);
     // Settings decide whether the sidebar is open, and so how wide the pane is.
     // Spawning before that lands starts the PTY at the wrong width.
@@ -672,12 +686,23 @@
         Close <strong>{closing.title}</strong>? The {closing.what} running in it will be stopped.
       </ConfirmDialog>
     {/if}
-    {#if error}
-      <div class="error">
-        {error}
-        <button onclick={() => (error = null)} aria-label="Dismiss"><Icon name="close" size={14} /></button>
-      </div>
-    {/if}
+    <div class="corner" aria-live="polite">
+      {#each toasts as t (t.id)}
+        <div class="toast">
+          <button class="toast-body" onclick={() => { activate(t.key); dismissToast(t.id); }} title="Go to this tab">
+            <strong>{t.title}</strong>
+            <span>{t.body}</span>
+          </button>
+          <button class="dismiss" onclick={() => dismissToast(t.id)} aria-label="Dismiss"><Icon name="close" size={14} /></button>
+        </div>
+      {/each}
+      {#if error}
+        <div class="error">
+          {error}
+          <button class="dismiss" onclick={() => (error = null)} aria-label="Dismiss"><Icon name="close" size={14} /></button>
+        </div>
+      {/if}
+    </div>
   </section>
 </div>
 
@@ -785,24 +810,67 @@
     min-height: 0;
     padding: 6px 0 0 8px;
   }
-  .error {
+  /* Toasts and the error stack here, newest at the bottom, so they never overlap. */
+  .corner {
     position: absolute;
     right: 12px;
     bottom: 12px;
+    z-index: 25;
     display: flex;
-    max-width: 60%;
+    max-width: min(60%, 420px);
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .toast,
+  .error {
+    display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    border: 1px solid var(--danger-strong);
+    gap: 6px;
     border-radius: 8px;
-    background: color-mix(in srgb, var(--danger) 12%, var(--bg-chrome));
     box-shadow: var(--shadow-pop);
-    color: var(--danger);
     font-size: 12px;
+    pointer-events: auto;
     animation: atc-rise var(--enter) var(--ease-out);
   }
-  .error button {
+  .toast {
+    padding: 4px 6px 4px 4px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    background: var(--bg-chrome);
+  }
+  .toast-body {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 8px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--fg-dim);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .toast-body:hover {
+    background: var(--bg-hover);
+  }
+  .toast-body strong {
+    overflow: hidden;
+    color: var(--fg-bright);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .error {
+    padding: 8px 8px 8px 12px;
+    border: 1px solid var(--danger-strong);
+    background: color-mix(in srgb, var(--danger) 12%, var(--bg-chrome));
+    color: var(--danger);
+  }
+  .dismiss {
     padding: 2px;
     border: none;
     border-radius: 4px;
@@ -810,7 +878,10 @@
     color: inherit;
     cursor: pointer;
   }
-  .error button:hover {
-    background: color-mix(in srgb, var(--danger) 20%, transparent);
+  .toast .dismiss {
+    color: var(--fg-faint);
+  }
+  .dismiss:hover {
+    background: var(--bg-hover);
   }
 </style>
