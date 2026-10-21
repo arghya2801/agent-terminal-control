@@ -10,9 +10,10 @@
   let {
     title,
     full = false,
+    wide = false,
     onClose,
     children,
-  }: { title: string; full?: boolean; onClose: () => void; children: Snippet } = $props();
+  }: { title: string; full?: boolean; wide?: boolean; onClose: () => void; children: Snippet } = $props();
 
   let root: HTMLDivElement;
 
@@ -36,7 +37,7 @@
     <h1>{title}</h1>
     <button class="close" onclick={onClose} aria-label="Close" title="Close (Esc)"><Icon name="close" /></button>
   </header>
-  <div class="body">
+  <div class="body" class:wide>
     {@render children()}
   </div>
 </div>
@@ -91,6 +92,10 @@
     animation: atc-rise var(--enter) var(--ease-out);
     max-width: 880px;
     padding: 4px 24px 40px;
+  }
+  /* Room for a section list beside content that wants the full 880px. */
+  .body.wide {
+    max-width: 1100px;
   }
   .body :global(h2) {
     margin: 24px 0 10px;
