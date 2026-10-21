@@ -16,6 +16,8 @@
   let target: HTMLElement | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let closedAt = 0;
+  /** Pressed: no tooltip until the pointer leaves it, or it would sit over the menu it opened. */
+  let pressed: HTMLElement | null = null;
 
   function claim(node: HTMLElement): string | null {
     const title = node.getAttribute('title');
@@ -68,7 +70,8 @@
   onMount(() => {
     const over = (e: Event) => {
       const node = (e.target as Element).closest<HTMLElement>('[title], [data-tip]');
-      if (node) arm(node);
+      if (node !== pressed) pressed = null;
+      if (node && node !== pressed) arm(node);
       else if (target) hide();
     };
     const focus = (e: FocusEvent) => {
@@ -77,7 +80,11 @@
     };
     document.addEventListener('pointerover', over);
     document.addEventListener('focusin', focus);
-    document.addEventListener('pointerdown', hide, true);
+    const down = (e: Event) => {
+      pressed = (e.target as Element).closest<HTMLElement>('[title], [data-tip]');
+      hide();
+    };
+    document.addEventListener('pointerdown', down, true);
     document.addEventListener('keydown', hide, true);
     document.addEventListener('focusout', hide);
     window.addEventListener('blur', hide);
@@ -85,7 +92,7 @@
     return () => {
       document.removeEventListener('pointerover', over);
       document.removeEventListener('focusin', focus);
-      document.removeEventListener('pointerdown', hide, true);
+      document.removeEventListener('pointerdown', down, true);
       document.removeEventListener('keydown', hide, true);
       document.removeEventListener('focusout', hide);
       window.removeEventListener('blur', hide);
