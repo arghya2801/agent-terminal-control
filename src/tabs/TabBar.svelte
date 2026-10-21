@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { activate, focusActiveTerminal, moveTab, renameTab } from '../terminal/manager';
+  import { activate, focusActiveTerminal, moveTab, renameTab, splitWith } from '../terminal/manager';
+  import ContextMenu, { type MenuItem } from '../sidebar/ContextMenu.svelte';
+  import { chordFor } from '../lib/keymap';
   import { reorderable } from '../lib/dragReorder';
   import InlineRename from '../lib/InlineRename.svelte';
   import Icon from '../lib/Icon.svelte';
@@ -79,6 +81,23 @@
     focusActiveTerminal();
   }
 
+  let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
+
+  /** Chords act on the active tab, so they are only hinted on its own menu. */
+  function tabMenu(e: MouseEvent, key: TabKey) {
+    e.preventDefault();
+    const active = key === activeKey;
+    menu = {
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        { label: 'Rename…', icon: 'pencil', hint: active ? chordFor('renameTab') : undefined, run: () => (renaming = key) },
+        { label: 'Split beside the current tab', icon: 'split', disabled: active, run: () => splitWith(key) },
+        { label: 'Close tab', icon: 'close', sep: true, hint: active ? chordFor('closeTab') : undefined, run: () => onClose(key) },
+      ],
+    };
+  }
+
   function close(e: MouseEvent, key: TabKey) {
     e.stopPropagation();
     onClose(key);
@@ -113,6 +132,7 @@
       ondblclick={() => (renaming = tab.key)}
       onmousedown={(e) => { if (e.button === 1) e.preventDefault(); }}
       onauxclick={(e) => { if (e.button === 1) close(e, tab.key); }}
+      oncontextmenu={(e) => tabMenu(e, tab.key)}
       title="{tab.title} (double-click or Ctrl+Shift+R to rename)"
     >
       {#if mark !== 'open' && mark !== 'exited'}<StatusDot {mark} title={markTitle(mark, providerName(tab.provider ?? 'claude'))} />{/if}
@@ -129,6 +149,9 @@
   {#if hasOverflow}
     <button class="scroll" disabled={!canScrollRight} onclick={() => scrollTabs(1)} aria-label="Scroll tabs right" title="Scroll tabs right"><Icon name="chevron" size={14} /></button>
   {/if}
+  {#if menu}
+    <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => (menu = null)} />
+  {/if}
   <button class="new" onclick={onNew} title="New tab (Ctrl+Shift+T)" aria-label="New tab"><Icon name="plus" /></button>
 </div>
 
@@ -139,7 +162,7 @@
     gap: 2px;
     height: 34px;
     padding: 4px 6px 0;
-    background: var(--bg-chrome);
+    background: var(--glass-chrome);
     border-bottom: 1px solid var(--border);
   }
   .tabs {

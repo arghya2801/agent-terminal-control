@@ -1,7 +1,7 @@
 /** Desktop transport. The UI talks to Go through one typed command boundary. */
 import type { PtyEvent } from '../types';
 
-type Runtime = { EventsOn(name: string, callback: (value: unknown) => void): () => void };
+type Runtime = { EventsOn(name: string, callback: (value: unknown) => void): () => void; WindowSetLightTheme(): void; WindowSetDarkTheme(): void };
 type Host = Window & { go?: { main: { App: { Invoke(command: string, args: Record<string, unknown>): Promise<unknown> } } }; runtime?: Runtime };
 const host = () => window as Host;
 
@@ -30,6 +30,12 @@ export async function listen<T>(name: string, callback: (payload: T) => void): P
   const runtime = host().runtime;
   if (!runtime) throw new Error('Wails event runtime unavailable');
   return runtime.EventsOn(name, (payload) => callback(payload as T));
+}
+/** Light or dark window chrome, so the Mica backdrop is tinted to match the theme. */
+export function setWindowTheme(light: boolean) {
+  const runtime = host().runtime;
+  if (light) runtime?.WindowSetLightTheme();
+  else runtime?.WindowSetDarkTheme();
 }
 /** Wails v2 cannot change WebView zoom at runtime, so the UI zooms with CSS. */
 export function setZoom(zoom: number) {

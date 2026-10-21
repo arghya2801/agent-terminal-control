@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { moveIndex } from '../lib/roving';
+  import Icon, { type IconName } from '../lib/Icon.svelte';
 
   export interface MenuItem {
     label: string;
@@ -12,6 +13,9 @@
     /** Shows a tick column; true ticks it. */
     checked?: boolean;
     danger?: boolean;
+    icon?: IconName;
+    /** The chord that does the same, shown on the right. Only where it really does. */
+    hint?: string;
   }
 
   let {
@@ -37,6 +41,9 @@
   }
 
   onMount(() => {
+    // On the body, so no transformed or clipped ancestor (the sliding sidebar) can move
+    // or cut off a fixed-position menu.
+    document.body.append(el);
     const rect = el.getBoundingClientRect();
     clamped = {
       left: Math.min(x, window.innerWidth - rect.width - 8),
@@ -71,6 +78,7 @@
     return () => {
       window.removeEventListener('mousedown', onDown, true);
       window.removeEventListener('keydown', onKey, true);
+      el.remove();
     };
   });
 </script>
@@ -95,8 +103,10 @@
         role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
         aria-checked={item.checked}
       >
-        {#if item.checked !== undefined}<span class="tick">{item.checked ? '✓' : ''}</span>{/if}
-        {item.label}
+        {#if item.checked !== undefined}<span class="tick">{item.checked ? '✓' : ''}</span>
+        {:else}<span class="ic">{#if item.icon}<Icon name={item.icon} size={14} />{/if}</span>{/if}
+        <span class="label">{item.label}</span>
+        {#if item.hint}<kbd>{item.hint}</kbd>{/if}
       </button>
     {:else}
       <div class="heading">{item.label}</div>
@@ -121,7 +131,9 @@
     animation: atc-pop var(--enter) var(--ease-out);
   }
   .item {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     width: 100%;
     padding: 6px 10px;
     border: none;
@@ -132,9 +144,30 @@
     font-size: 12px;
     text-align: left;
     cursor: pointer;
+    white-space: nowrap;
+  }
+  .label {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+  }
+  .ic {
+    display: grid;
+    width: 14px;
+    flex-shrink: 0;
+    place-items: center;
+    color: var(--fg-faint);
+  }
+  .item:hover:not(.disabled) .ic,
+  .item:focus-visible .ic {
+    color: inherit;
+  }
+  kbd {
+    margin-left: 16px;
+    color: var(--fg-faint);
+    font: inherit;
+    font-size: 11px;
   }
   .item:hover:not(.disabled),
   .item:focus-visible {
@@ -163,7 +196,7 @@
     background: var(--border);
   }
   .heading {
-    padding: 4px 10px 2px;
+    padding: 4px 10px 2px 32px;
     color: var(--fg-faint);
     font-size: 11px;
   }

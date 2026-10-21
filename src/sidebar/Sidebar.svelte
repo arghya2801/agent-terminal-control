@@ -4,7 +4,7 @@
   import NotesPad from './NotesPad.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import Icon from '../lib/Icon.svelte';
-  import { focusActiveTerminal } from '../terminal/manager';
+  import { activate, focusActiveTerminal, splitWith } from '../terminal/manager';
   import { enterList, listKeys, rows } from '../lib/roving';
   import {
     anyProjectExpanded,
@@ -29,6 +29,8 @@
     onNewAgent,
     onNewChat,
     onPickAgent,
+    onOpenFolder,
+    onAsk,
     onNewTab,
     onCloseTab,
   }: {
@@ -45,6 +47,9 @@
     onNewChat: () => void;
     /** Asks Claude or Codex, then starts it in the project (#146). */
     onPickAgent: (p: Project) => void;
+    onOpenFolder: () => void;
+    /** Starts Claude or Codex in the scratch directory. */
+    onAsk: (provider: AgentProvider) => void;
     onNewTab: () => void;
     onCloseTab: (key: TabKey) => void;
   } = $props();
@@ -185,7 +190,7 @@
       id="sidebar-search"
       type="search"
       placeholder={view === 'open' ? 'Filter open tabs' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
-      title="Filter by project, path, session name or branch (Ctrl+Shift+P)"
+      title="Filter by project, path, session name or branch"
       aria-label={view === 'open' ? 'Filter open tabs' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
       spellcheck="false"
       autocomplete="off"
@@ -212,7 +217,17 @@
       onkeydown={(e) => openList && listKeys(e, openList, leave)}
       oncontextmenu={(e) => {
         e.preventDefault();
-        const items = appState.index.projects.filter((p) => p.path && p.exists).map((p) => ({ label: p.name, run: () => onPickAgent(p) }));
+        // A tab row gets that tab's actions; the empty space below starts something new.
+        const key = (e.target as HTMLElement).closest<HTMLElement>('[data-tab-key]')?.dataset.tabKey as TabKey | undefined;
+        if (key) {
+          menu = { x: e.clientX, y: e.clientY, items: [
+            { label: 'Go to tab', icon: 'terminal', disabled: key === activeKey, run: () => activate(key) },
+            { label: 'Split beside the current tab', icon: 'split', disabled: key === activeKey, run: () => splitWith(key) },
+            { label: 'Close tab', icon: 'close', sep: true, run: () => onCloseTab(key) },
+          ] };
+          return;
+        }
+        const items = appState.index.projects.filter((p) => p.path && p.exists).map((p) => ({ label: p.name, icon: 'folder' as const, run: () => onPickAgent(p) }));
         menu = { x: e.clientX, y: e.clientY, items: [{ label: 'New agent in…' }, ...items] };
       }}
     >
@@ -256,6 +271,8 @@
   >
     <SessionList
       {query}
+      {onOpenFolder}
+      {onAsk}
       {activeKey}
       {activeSessionId}
       {openProjectKeys}
@@ -309,7 +326,7 @@
     height: 100%;
     flex-direction: column;
     border-right: 1px solid var(--border);
-    background: var(--bg);
+    background: var(--glass-bg);
     overflow: hidden;
   }
   header {

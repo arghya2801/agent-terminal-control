@@ -24,8 +24,11 @@
   --selection: #2a3b52;
   /* Not from the palette: motion and elevation are the same in every theme. */
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --fast: 90ms;
-  --enter: 200ms;
+  --fast: 75ms;
+  --enter: 160ms;
+  /* The rail, tab bar and sidebar let the window's Mica backdrop show faintly through. */
+  --glass-chrome: color-mix(in srgb, var(--bg-chrome) 70%, transparent);
+  --glass-bg: color-mix(in srgb, var(--bg) 75%, transparent);
   --shadow-pop: 0 10px 32px rgb(0 0 0 / 0.35), 0 1px 3px rgb(0 0 0 / 0.2);
   font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
   font-size: 13px;
@@ -34,13 +37,15 @@
   color-scheme: dark;
 }
 
+/* Transparent, so the Mica backdrop main.go asks for can show; the terminal area paints
+   its own background. */
 html,
 body,
 #app {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: var(--bg);
+  background: transparent;
   color: var(--fg);
 }
 
@@ -78,6 +83,22 @@ button {
 }
 @keyframes atc-drop {
   from { opacity: 0; transform: translateY(-8px); }
+}
+
+/* Placeholder for a line of text that has not arrived, sized to the line it replaces. */
+.ghost {
+  display: inline-block;
+  height: 1em;
+  vertical-align: -0.15em;
+  border-radius: 3px;
+  background: var(--bg-surface);
+  animation: atc-pulse 1.4s ease-in-out infinite;
+}
+@keyframes atc-pulse {
+  50% { opacity: 0.45; }
+}
+[data-still] .ghost {
+  animation: none;
 }
 
 /* Set by `applyMotion` from the Animations setting, which defaults to following Windows. */

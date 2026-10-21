@@ -4,6 +4,7 @@
   import Icon from '../lib/Icon.svelte';
   import SessionNode from './SessionNode.svelte';
   import InlineRename from '../lib/InlineRename.svelte';
+  import Highlight from '../lib/Highlight.svelte';
   import { enterMs, isExpanded, toggleExpanded } from '../lib/stores.svelte';
   import { shortenPath } from '../lib/format';
   import { branchGroups } from '../lib/branchGroups';
@@ -12,6 +13,7 @@
 
   let {
     project,
+    query = '',
     limit,
     forceOpen = false,
     groupByBranch = false,
@@ -29,6 +31,8 @@
     onSessionMenu,
   }: {
     project: Project;
+    /** The sidebar filter, for marking what matched. */
+    query?: string;
     limit: number;
     /** Expanded regardless of the user's toggle, e.g. while a search is showing results. */
     forceOpen?: boolean;
@@ -89,7 +93,7 @@
       >
         <span class="twisty" class:open><Icon name="chevron" size={12} /></span>
         {#if project.pinned}<span class="pin">●</span>{/if}
-        <span class="text" class:missing={!launchable}>{project.name}</span>
+        <span class="text" class:missing={!launchable}><Highlight text={project.name} {query} /></span>
         {#if hasTab}<span class="live" title="Open in a tab"></span>{/if}
         <span class="count">{project.sessions.length}</span>
       </button>
@@ -115,6 +119,7 @@
       {#snippet row(session: SessionMeta)}
         <SessionNode
           {session}
+          {query}
           projectPath={project.path}
           active={sessionKey(session) === activeSessionId}
           mark={sessionMarks.get(sessionKey(session)) ?? null}

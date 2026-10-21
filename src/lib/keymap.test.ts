@@ -27,7 +27,7 @@ describe('matchChord', () => {
     expect(matchChord(ctrlShift('N'))).toBe('openShellHere');
     expect(matchChord(ctrlShift('R'))).toBe('renameTab');
     expect(matchChord(ctrlShift('U'))).toBe('openUsage');
-    expect(matchChord(ctrlShift('P'))).toBe('focusSearch');
+    expect(matchChord(ctrlShift('P'))).toBe('palette');
     expect(matchChord(ctrlShift('K'))).toBe('switchSidebarView');
     // Released with the task panel; the shell gets Ctrl+Shift+E back.
     expect(matchChord(ctrlShift('E'))).toBeNull();

@@ -88,7 +88,7 @@ build times, build resource use, runtime memory, validation, and migration detai
   a provider icon on each session
 - Sessions listed newest first, labelled by the name the agent gives the session, falling
   back to its title, the first message, then the session id
-- Filter box (`Ctrl+Shift+P`): matches project name, path, session name and branch
+- Filter box: matches project name, path, session name and branch
 - Git branch shown per session; optionally group sessions by branch, or group subfolders
   under the project containing them
 - Live refresh — sessions appear as they are created, without a restart
@@ -164,7 +164,7 @@ untouched.
 | `Ctrl+Shift+N` | Open a terminal in this tab's project |
 | `Ctrl+Shift+A` | Choose an agent in the shared scratch directory |
 | `Ctrl+Shift+B` | Show or hide the sidebar |
-| `Ctrl+Shift+P` | Filter projects and sessions |
+| `Ctrl+Shift+P` | Command palette: actions, tabs, projects and sessions |
 | `Ctrl+Shift+K` | Switch the sidebar between sessions, open tabs and scratch |
 | `Ctrl+Shift+F` | Find in terminal |
 | `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | Zoom in / out / reset |

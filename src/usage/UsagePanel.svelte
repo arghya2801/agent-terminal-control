@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { sessionKey, providerName } from '../lib/agents';
   import Page from '../lib/Page.svelte';
+  import SectionNav from '../lib/SectionNav.svelte';
   import Icon from '../lib/Icon.svelte';
   import { save } from '../lib/desktop';
   import { claudeUsage, codexUsage, codexUsageStop, usageCosts, writeTextFile } from '../lib/ipc';
@@ -290,6 +291,8 @@
   /** Bucket under the pointer, for the read-out above the chart. */
   let hovered = $state<number | null>(null);
   const shown = $derived(hovered === null ? null : chart.buckets[hovered]);
+  /** A bar's height as a share of the chart, which the hover label sits just above. */
+  const barPct = (b: (typeof chart.buckets)[number]) => (asShare ? (b.total ? 100 : 0) : chartMax ? (b.total / chartMax) * 100 : 0);
   /** One series keeps the accent; a split takes the categorical slots chartData assigns. */
   // ponytail: model and project slots follow rank, so a range change can recolour a model;
   // pin colours per name if people compare screenshots across ranges.
@@ -363,6 +366,14 @@
     new Date(`${hour}:00:00Z`).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const fmt = (v: number) => (metric === 'tokens' ? `${formatTokens(v)} tokens` : formatUsd(v));
 
+  // --- section list
+  const sections = $derived([
+    { id: 'u-limits', label: 'Limits' },
+    ...(current && (session || !costsLoaded) ? [{ id: 'u-session', label: "This tab's session" }] : []),
+    { id: 'u-local', label: 'Local usage' },
+    ...(costsLoaded && !costError ? [{ id: 'u-breakdown', label: 'Breakdown' }] : []),
+  ]);
+
   onMount(() => {
     restoreRange();
     void loadPlan();
@@ -398,7 +409,9 @@
   </div>
 {/snippet}
 
-<Page title="Usage" {onClose}>
+<Page title="Usage" wide {onClose}>
+  <SectionNav {sections}>
+  <span id="u-limits" class="anchor"></span>
   <div class="plan-grid">
   <section class="plan-card" aria-label="Claude plan limits">
   <h2>
@@ -471,7 +484,7 @@
   </div>
 
   {#if current && (session || !costsLoaded)}
-    <h2>This tab's session</h2>
+    <h2 id="u-session">This tab's session</h2>
     {#if session}
       <div class="total">
         <span class="big">{monetary({ cost: session.cost, partial: session.partial, unavailable: false })}</span>
@@ -505,7 +518,7 @@
     </table>
   {/if}
 
-  <h2>Local usage</h2>
+  <h2 id="u-local">Local usage</h2>
   <p class="muted">
     Local tokens include linked child agents. Costs are API-equivalent estimates, not subscription charges. Codex uses standard short-context prices, including cached input; tier and long-context surcharges are excluded. Unknown model prices are unavailable.
   </p>
@@ -714,22 +727,31 @@
         <div class="chart-axis muted"><span>{rates[0].day}</span><span>{rates[rates.length - 1].day}</span></div>
       {/if}
     {:else if chart.buckets.length > 0}
-      <div class="readout muted" aria-live="polite">
-        {#if shown}
-          <strong>{shown.label}</strong> · {fmt(shown.total)}
-          {#if chart.series.length > 1}
-            {#each chart.series as name, i (name)}{#if shown.values[i] > 0} · {name} {asShare ? pct(shown.values[i], shown.total) : fmt(shown.values[i])}{/if}{/each}
-          {/if}
-          {#if average && hovered !== null} · 7-day average {fmt(average[hovered])}{/if}
-        {:else}
-          {chartHourly ? 'Hover an hour' : 'Hover a day for its total; click it to show that day'}
-        {/if}
+      <div class="readout muted">
+        {chartHourly ? 'Hover an hour' : 'Hover a day for its total; click it to show that day'}
       </div>
       <div class="chart" role="img" aria-label={`${cumulative ? 'Running total of' : ''} ${metric === 'tokens' ? 'tokens' : 'estimated cost'} per ${chartHourly ? 'hour' : 'day'}`}>
         {#if average && chartMax}
           <svg class="avg" viewBox="0 0 {average.length} {chartMax}" preserveAspectRatio="none" aria-hidden="true">
             <polyline points={average.map((v, i) => `${i + 0.5},${chartMax - v}`).join(' ')} />
           </svg>
+        {/if}
+        {#if shown && hovered !== null}
+          <!-- Its anchor slides from its left edge to its right across the chart, so it
+               never runs off either side. -->
+          {@const x = ((hovered + 0.5) / chart.buckets.length) * 100}
+          <div class="tip" aria-live="polite" style="left: {x}%; bottom: calc({barPct(shown)}% + 8px); transform: translateX(-{x}%)">
+            <strong>{shown.label}</strong>
+            <span class="tip-total">{fmt(shown.total)}</span>
+            {#if chart.series.length > 1}
+              {#each chart.series as name, i (name)}
+                {#if shown.values[i] > 0}
+                  <span class="tip-row"><span class="swatch" style="background: {color(i)}"></span>{name}<span>{asShare ? pct(shown.values[i], shown.total) : fmt(shown.values[i])}</span></span>
+                {/if}
+              {/each}
+            {/if}
+            {#if average}<span class="tip-row muted">7-day average<span>{fmt(average[hovered])}</span></span>{/if}
+          </div>
         {/if}
         {#each chart.buckets as b, i (b.key)}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -740,7 +762,7 @@
             onmouseleave={() => (hovered = null)}
             onclick={() => !chartHourly && showDay(b.key)}
           >
-            <div class="stack" style="height: {asShare ? (b.total ? 100 : 0) : chartMax ? (b.total / chartMax) * 100 : 0}%">
+            <div class="stack" style="height: {barPct(b)}%">
               {#each b.values as v, s (s)}
                 <!-- Grow weights summing to 100: below 1 in total, flex fills only that fraction of the bar. -->
                 {#if v > 0}<div class="seg" style="flex-grow: {(v / b.total) * 100}; background: {color(s)}"></div>{/if}
@@ -764,6 +786,7 @@
       {/if}
     {/if}
 
+    <h2 id="u-breakdown">Breakdown</h2>
     <div class="group">
       <button class="btn" class:primary={groupBy === 'project'} onclick={() => (groupBy = 'project')}>
         By project
@@ -847,9 +870,13 @@
       <p class="muted">Pricing is incomplete for: {summary.unpricedModels.join(', ')} (unknown portions are excluded from the estimate).</p>
     {/if}
   {/if}
+  </SectionNav>
 </Page>
 
 <style>
+  .anchor {
+    display: block;
+  }
   .plan-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
@@ -871,23 +898,6 @@
     display: grid;
     gap: 14px;
     margin-bottom: 12px;
-  }
-  /* Placeholder for a line of text that has not arrived, sized to the line it replaces. */
-  .ghost {
-    display: inline-block;
-    height: 1em;
-    vertical-align: -0.15em;
-    border-radius: 3px;
-    background: var(--bg-surface);
-    animation: pulse 1.4s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    50% {
-      opacity: 0.45;
-    }
-  }
-  :global([data-still]) .ghost {
-    animation: none;
   }
   .limit-head {
     display: flex;
@@ -980,6 +990,42 @@
   .readout {
     min-height: 18px;
     margin-bottom: 4px;
+  }
+  .tip {
+    position: absolute;
+    z-index: 2;
+    display: flex;
+    min-width: 120px;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-chrome);
+    box-shadow: var(--shadow-pop);
+    font-size: 11px;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .tip strong {
+    color: var(--fg-dim);
+    font-weight: 500;
+  }
+  .tip-total {
+    color: var(--fg-bright);
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .tip-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tip-row > span:last-child {
+    margin-left: auto;
+    padding-left: 12px;
+    font-variant-numeric: tabular-nums;
   }
   .readout strong {
     color: var(--fg-bright);

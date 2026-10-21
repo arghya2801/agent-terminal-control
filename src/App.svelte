@@ -13,6 +13,7 @@
   import ShortcutsPanel from './settings/ShortcutsPanel.svelte';
   import ConfirmDialog from './lib/ConfirmDialog.svelte';
   import Icon from './lib/Icon.svelte';
+  import Tooltip from './lib/Tooltip.svelte';
   import {
     isPermissionGranted,
     requestPermission,
@@ -47,18 +48,30 @@
     openTab,
     refit,
     refitNow,
+    tabAt,
+    hasSelection,
+    copySelection,
+    pasteInto,
+    selectAllIn,
+    clearTerminal,
     renameTab,
     activate,
     focusOtherPane,
     isSplit,
+    getSplitRatio,
+    setSplitRatio,
     splitWith,
     unsplit,
     type AttentionReason,
     type Tab,
   } from './terminal/manager';
-  import { matchChord, type Action } from './lib/keymap';
+  import { actionList, chordFor, matchChord, type Action } from './lib/keymap';
+  import CommandPalette, { type Command } from './lib/CommandPalette.svelte';
+  import ContextMenu, { type MenuItem } from './sidebar/ContextMenu.svelte';
+  import type { IconName } from './lib/Icon.svelte';
+  import { relativeTime } from './lib/format';
   import { parseSavedTabs, type SavedTab } from './lib/restore';
-  import { agentCommand, openDevtools, scratchDir } from './lib/ipc';
+  import { agentCommand, openDevtools, pickFolder, scratchDir } from './lib/ipc';
   import { projectKey } from './lib/paths';
   import { resolveSessions, type TabRef } from './lib/sessions';
   import { zoomLabel } from './lib/zoom';
@@ -171,6 +184,8 @@
   let showFind = $state(false);
   type PageName = 'settings' | 'usage' | 'shortcuts';
   let page = $state<PageName | null>(null);
+  /** Settings and shortcuts open over the whole app, which waits behind them. */
+  const popup = $derived(page === 'settings' || page === 'shortcuts');
   let renamingTab = $state<TabKey | null>(null);
   /** A busy tab waiting on the close confirmation. */
   let closing = $state<{ key: TabKey; title: string; what: string } | null>(null);
@@ -220,7 +235,26 @@
     handle.addEventListener('pointercancel', end);
   }
 
+  let split = $state(false);
+  let splitRatio = $state(0.5);
+
+  function dragSplit(e: PointerEvent) {
+    if (e.button !== 0) return;
+    const handle = e.currentTarget as HTMLElement;
+    const box = wrapper.getBoundingClientRect();
+    handle.setPointerCapture(e.pointerId);
+    const move = (m: PointerEvent) => setSplitRatio((m.clientX - box.left) / box.width);
+    const end = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', end);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', end);
+  }
+
   function sync() {
+    split = isSplit();
+    splitRatio = getSplitRatio();
     const all = listTabs();
     tabs = all.map((t) => ({
       key: t.key,
@@ -319,6 +353,123 @@
     });
   }
 
+  /** A folder that is not a project yet: pick it, then pick the agent to start there. */
+  async function openFolder() {
+    const path = await pickFolder().catch((e) => void (error = String(e)));
+    if (!path) return;
+    const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+    picker = { project: { key: projectKey(path), path, name, pinned: false, exists: true, lastActiveMs: 0, sessions: [] } };
+  }
+
+  // --- right-click: ATC's own menu, never the WebView's
+  let contextMenu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
+
+  function terminalItems(key: TabKey): MenuItem[] {
+    const selected = hasSelection(key);
+    return [
+      { label: 'Copy', icon: 'copy', hint: 'Ctrl+C', disabled: !selected, run: () => void copySelection(key) },
+      { label: 'Paste', icon: 'paste', hint: 'Ctrl+V', run: () => void pasteInto(key) },
+      { label: 'Select all', run: () => selectAllIn(key) },
+      { label: 'Clear terminal', run: () => clearTerminal(key) },
+      { label: 'Find…', icon: 'search', sep: true, hint: chordFor('find'), run: () => runAction('find') },
+      { label: isSplit() ? 'Back to one pane' : 'Split', icon: 'split', hint: chordFor('toggleSplit'), run: () => void toggleSplit() },
+      { label: 'Rename tab…', icon: 'pencil', hint: chordFor('renameTab'), run: () => (renamingTab = key) },
+      { label: 'Close tab', icon: 'close', sep: true, hint: chordFor('closeTab'), run: () => void requestClose(key) },
+    ];
+  }
+
+  /** Cut, copy and paste for text boxes and the notes pad, through the browser's own commands. */
+  function editItems(field: HTMLElement): MenuItem[] {
+    const input = field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement ? field : null;
+    const selected = input ? input.selectionStart !== input.selectionEnd : !document.getSelection()?.isCollapsed;
+    const exec = (command: string) => () => {
+      field.focus();
+      document.execCommand(command);
+    };
+    return [
+      { label: 'Cut', hint: 'Ctrl+X', disabled: !selected, run: exec('cut') },
+      { label: 'Copy', icon: 'copy', hint: 'Ctrl+C', disabled: !selected, run: exec('copy') },
+      {
+        label: 'Paste',
+        icon: 'paste',
+        hint: 'Ctrl+V',
+        run: () =>
+          void navigator.clipboard.readText().then((text) => {
+            field.focus();
+            document.execCommand('insertText', false, text);
+          }),
+      },
+      { label: 'Select all', hint: 'Ctrl+A', sep: true, run: () => (input ? (input.focus(), input.select()) : exec('selectAll')()) },
+    ];
+  }
+
+  /** Runs after any component's own menu, which marks the event handled. */
+  function onContextMenu(e: MouseEvent) {
+    if (e.defaultPrevented) return;
+    e.preventDefault();
+    const target = e.target as HTMLElement;
+    const key = tabAt(target);
+    if (key) {
+      activate(key);
+      contextMenu = { x: e.clientX, y: e.clientY, items: terminalItems(key) };
+      return;
+    }
+    const field = target.closest<HTMLElement>('input, textarea, [contenteditable="true"]');
+    if (field) contextMenu = { x: e.clientX, y: e.clientY, items: editItems(field) };
+  }
+
+  // --- command palette
+  let paletteOpen = $state(false);
+  const ACTION_ICONS: Partial<Record<Action, IconName>> = {
+    newTab: 'plus', closeTab: 'close', renameTab: 'pencil', toggleSplit: 'split', toggleSidebar: 'sidebar',
+    openSettings: 'settings', openUsage: 'usage', showShortcuts: 'keyboard', find: 'search', focusSearch: 'search',
+    askAgent: 'agent', openAgentHere: 'agent', openShellHere: 'terminal', toggleDebug: 'pulse',
+  };
+
+  /** Built when the palette opens, from what is open and indexed at that moment. */
+  function paletteCommands(): { all: Command[]; initial: Command[] } {
+    const projectName = (key: string | null) => appState.index.projects.find((p) => p.key === key)?.name;
+    const tabCmds: Command[] = tabs.map((t) => ({
+      id: `t:${t.key}`,
+      label: t.title,
+      detail: ['Open tab', projectName(t.projectKey)].filter(Boolean).join(', '),
+      icon: t.provider ? 'agent' : 'terminal',
+      run: () => activate(t.key),
+    }));
+    const extras: Command[] = [
+      { id: 'x:folder', label: 'Open a folder…', detail: 'Pick a folder, then Claude or Codex', icon: 'folder', run: () => void openFolder() },
+      { id: 'x:claude', label: 'Ask Claude', detail: 'In the scratch directory', icon: 'agent', run: () => askAgent('claude') },
+      { id: 'x:codex', label: 'Ask Codex', detail: 'In the scratch directory', icon: 'agent', run: () => askAgent('codex') },
+    ];
+    const actions: Command[] = actionList()
+      .filter((a) => a.action !== 'palette')
+      .map((a) => ({ id: `a:${a.action}`, label: a.label, icon: ACTION_ICONS[a.action] ?? 'chevron', chord: a.chord, run: () => runAction(a.action) }));
+    const live = appState.index.projects.filter((p) => p.path && p.exists && !p.kind);
+    const projectCmds: Command[] = live.flatMap((p) => [
+      { id: `p:${p.key}`, label: p.name, detail: `Open a shell, ${p.path}`, icon: 'terminal', run: () => void openProject(p) },
+      { id: `pa:${p.key}`, label: `New agent in ${p.name}`, detail: p.path ?? '', icon: 'agent', run: () => (picker = { project: p }) },
+    ]);
+    const sessions = appState.index.projects
+      .flatMap((p) => p.sessions.map((s) => ({ p, s })))
+      .sort((a, b) => b.s.mtimeMs - a.s.mtimeMs);
+    const sessionCmd = ({ p, s }: (typeof sessions)[number]): Command => ({
+      id: `s:${sessionKey(s)}`,
+      label: s.label,
+      detail: `Resume, ${providerName(s.provider)} in ${p.name}, ${relativeTime(s.mtimeMs)}`,
+      icon: 'agent',
+      run: () => void openSession(p, s),
+    });
+    return {
+      all: [...tabCmds, ...extras, ...actions, ...projectCmds, ...sessions.map(sessionCmd)],
+      initial: [...tabCmds, ...sessions.slice(0, 10).map(sessionCmd), ...extras, ...actions],
+    };
+  }
+
+  function askAgent(provider: AgentProvider) {
+    picker = { project: null };
+    finishPicker(provider);
+  }
+
   function openSession(p: Project, s: SessionMeta) {
     const cwd = s.cwd ?? p.path;
     if (!cwd) return;
@@ -363,16 +514,30 @@
   }
 
   /** Windows notification for a background tab, only while ATC itself is not focused. */
-  async function notifyAttention(title: string, provider: AgentProvider | null, reason: AttentionReason) {
-    if (document.hasFocus() || appState.settings?.ui.notifications === false) return;
+  /** In-app notes for background tabs, while ATC has focus and Windows would show nothing. */
+  let toasts = $state<{ id: number; key: TabKey; title: string; body: string }[]>([]);
+  let toastId = 0;
+  function dismissToast(id: number) {
+    toasts = toasts.filter((t) => t.id !== id);
+  }
+
+  function attentionBody(provider: AgentProvider | null, reason: AttentionReason) {
+    return reason === 'finished' ? `${provider ? providerName(provider) : 'Agent'} finished and is waiting for you.` : 'Needs your attention.';
+  }
+
+  async function notifyAttention(key: TabKey, title: string, provider: AgentProvider | null, reason: AttentionReason) {
+    if (document.hasFocus()) {
+      const id = ++toastId;
+      toasts = [...toasts.filter((t) => t.key !== key), { id, key, title, body: attentionBody(provider, reason) }].slice(-3);
+      setTimeout(() => dismissToast(id), 6000);
+      return;
+    }
+    if (appState.settings?.ui.notifications === false) return;
     try {
       let granted = await isPermissionGranted();
       if (!granted) granted = (await requestPermission()) === 'granted';
       if (!granted) return;
-      sendNotification({
-        title,
-        body: reason === 'finished' ? `${provider ? providerName(provider) : 'Agent'} finished and is waiting for you.` : 'Needs your attention.',
-      });
+      sendNotification({ title, body: attentionBody(provider, reason) });
     } catch (e) {
       console.warn('notification failed', e);
     }
@@ -459,6 +624,9 @@
       case 'askAgent':
         picker = { project: null };
         break;
+      case 'palette':
+        paletteOpen = true;
+        break;
       case 'toggleSplit':
         void toggleSplit();
         break;
@@ -473,7 +641,7 @@
     // Chords pressed while the terminal has focus arrive here, already consumed by
     // xterm's interceptor so they never reach the shell.
     const offChord = onChord(runAction);
-    const offAttention = onAttention((t, reason) => void notifyAttention(displayTitle(t), t.provider, reason));
+    const offAttention = onAttention((t, reason) => void notifyAttention(t.key, displayTitle(t), t.provider, reason));
     mountTerminals(wrapper);
     // Settings decide whether the sidebar is open, and so how wide the pane is.
     // Spawning before that lands starts the PTY at the wrong width.
@@ -487,20 +655,24 @@
 
     // Covers focus being anywhere outside the terminal -- the sidebar, a button.
     const onKey = (e: KeyboardEvent) => {
-      if (picker) return;
+      if (picker || paletteOpen) return;
       const action = matchChord(e);
       if (!action) return;
+      // Behind a popup the app is inert; only its own chord, or the other popup's, acts.
+      if (popup && action !== 'openSettings' && action !== 'showShortcuts') return;
       e.preventDefault();
       runAction(action);
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', refit);
+    window.addEventListener('contextmenu', onContextMenu);
 
     return () => {
       off();
       offChord();
       offAttention();
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('contextmenu', onContextMenu);
       window.removeEventListener('resize', refit);
     };
   });
@@ -528,7 +700,7 @@
 </script>
 
 <div class="app" style="--panel: {open ? width : 0}px">
-  <nav class="rail">
+  <nav class="rail" data-tip-side="right" inert={popup}>
     <button
       class="rail-btn"
       class:on={open}
@@ -592,18 +764,9 @@
     >
       <Icon name="settings" />
     </button>
-    <button
-      class="rail-btn"
-      class:on={showDebug}
-      onclick={() => (showDebug = !showDebug)}
-      title="PTY stats (Ctrl+Shift+D)"
-      aria-label="Toggle debug overlay"
-    >
-      <Icon name="pulse" />
-    </button>
   </nav>
 
-  <aside class="panel">
+  <aside class="panel" inert={popup}>
     {#if open}
       <div
         class="drawer"
@@ -631,6 +794,8 @@
         onNewAgent={newAgentIn}
         onNewChat={() => (picker = { project: null, chats: true })}
         onPickAgent={(p) => (picker = { project: p })}
+        onOpenFolder={openFolder}
+        onAsk={askAgent}
         {tabs}
         onNewTab={newTab}
         onCloseTab={requestClose}
@@ -639,21 +804,37 @@
     {/if}
   </aside>
 
-  <section class="main" bind:this={main}>
+  <section class="main" bind:this={main} inert={popup}>
     <TabBar {tabs} {activeKey} onNew={newTab} onClose={requestClose} bind:renaming={renamingTab} />
-    <div class="panes" bind:this={wrapper}></div>
-    {#if page === 'settings'}
-      <SettingsPanel onClose={() => (page = null)} />
-    {:else if page === 'usage'}
+    <div class="panes" bind:this={wrapper}>
+      {#if split}
+        <div
+          class="split-handle"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize panes"
+          title="Drag to resize, double-click to make them equal"
+          style="left: {splitRatio * 100}%"
+          onpointerdown={dragSplit}
+          ondblclick={() => setSplitRatio(0.5)}
+        ></div>
+      {/if}
+    </div>
+    {#if page === 'usage'}
       <UsagePanel onClose={() => (page = null)} sessionKey={activeSessionId} />
-    {:else if page === 'shortcuts'}
-      <ShortcutsPanel onClose={() => (page = null)} />
     {/if}
     {#if showFind}
       <FindBar onClose={() => (showFind = false)} />
     {/if}
     {#if showDebug}
       <DebugOverlay {activeKey} />
+    {/if}
+    {#if contextMenu}
+      <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenu.items} onClose={() => (contextMenu = null)} />
+    {/if}
+    {#if paletteOpen}
+      {@const cmds = paletteCommands()}
+      <CommandPalette commands={cmds.all} initial={cmds.initial} onClose={() => (paletteOpen = false)} />
     {/if}
     {#if picker}
       <ProviderPicker
@@ -672,14 +853,33 @@
         Close <strong>{closing.title}</strong>? The {closing.what} running in it will be stopped.
       </ConfirmDialog>
     {/if}
-    {#if error}
-      <div class="error">
-        {error}
-        <button onclick={() => (error = null)} aria-label="Dismiss"><Icon name="close" size={14} /></button>
-      </div>
-    {/if}
+    <div class="corner" aria-live="polite">
+      {#each toasts as t (t.id)}
+        <div class="toast">
+          <button class="toast-body" onclick={() => { activate(t.key); dismissToast(t.id); }} title="Go to this tab">
+            <strong>{t.title}</strong>
+            <span>{t.body}</span>
+          </button>
+          <button class="dismiss" onclick={() => dismissToast(t.id)} aria-label="Dismiss"><Icon name="close" size={14} /></button>
+        </div>
+      {/each}
+      {#if error}
+        <div class="error">
+          {error}
+          <button class="dismiss" onclick={() => (error = null)} aria-label="Dismiss"><Icon name="close" size={14} /></button>
+        </div>
+      {/if}
+    </div>
   </section>
+
+  <!-- Popups, outside everything they make inert. -->
+  {#if page === 'settings'}
+    <SettingsPanel onClose={() => (page = null)} />
+  {:else if page === 'shortcuts'}
+    <ShortcutsPanel onClose={() => (page = null)} />
+  {/if}
 </div>
+<Tooltip />
 
 <style>
   .app {
@@ -696,7 +896,7 @@
     z-index: 2;
     padding: 8px 0;
     border-right: 1px solid var(--border);
-    background: var(--bg-chrome);
+    background: var(--glass-chrome);
   }
   .rail-btn {
     position: relative;
@@ -758,18 +958,62 @@
     left: 0;
     z-index: 1;
   }
+  /* Centred on the sidebar's border. The line and grip wait a beat on hover, so passing
+     the mouse across does not flash them. */
   .resize {
     position: absolute;
     top: 0;
-    right: 0;
+    right: -4px;
     bottom: 0;
     z-index: 5;
-    width: 5px;
+    width: 8px;
     cursor: col-resize;
   }
-  .resize:hover,
-  .resize.dragging {
-    background: color-mix(in srgb, var(--accent) 40%, transparent);
+  .split-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 3;
+    width: 8px;
+    margin-left: -4px;
+    cursor: col-resize;
+  }
+  .resize::before,
+  .resize::after,
+  .split-handle::before,
+  .split-handle::after {
+    position: absolute;
+    left: 3px;
+    width: 2px;
+    background: var(--accent);
+    content: '';
+    opacity: 0;
+    transition: opacity var(--fast);
+  }
+  .resize::before,
+  .split-handle::before {
+    top: 0;
+    bottom: 0;
+  }
+  .resize::after,
+  .split-handle::after {
+    top: 50%;
+    left: 1px;
+    width: 6px;
+    height: 32px;
+    margin-top: -16px;
+    border-radius: 3px;
+  }
+  .resize:hover::before,
+  .resize:hover::after,
+  .split-handle:hover::before,
+  .split-handle:hover::after {
+    opacity: 1;
+    transition-delay: 150ms;
+  }
+  .resize.dragging::before,
+  .resize.dragging::after {
+    opacity: 1;
   }
   .main {
     position: relative;
@@ -781,28 +1025,72 @@
      share its geometry and can be measured once. */
   .panes {
     position: relative;
+    background: var(--bg);
     flex: 1;
     min-height: 0;
     padding: 6px 0 0 8px;
   }
-  .error {
+  /* Toasts and the error stack here, newest at the bottom, so they never overlap. */
+  .corner {
     position: absolute;
     right: 12px;
     bottom: 12px;
+    z-index: 25;
     display: flex;
-    max-width: 60%;
+    max-width: min(60%, 420px);
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .toast,
+  .error {
+    display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    border: 1px solid var(--danger-strong);
+    gap: 6px;
     border-radius: 8px;
-    background: color-mix(in srgb, var(--danger) 12%, var(--bg-chrome));
     box-shadow: var(--shadow-pop);
-    color: var(--danger);
     font-size: 12px;
+    pointer-events: auto;
     animation: atc-rise var(--enter) var(--ease-out);
   }
-  .error button {
+  .toast {
+    padding: 4px 6px 4px 4px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    background: var(--bg-chrome);
+  }
+  .toast-body {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 8px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--fg-dim);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .toast-body:hover {
+    background: var(--bg-hover);
+  }
+  .toast-body strong {
+    overflow: hidden;
+    color: var(--fg-bright);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .error {
+    padding: 8px 8px 8px 12px;
+    border: 1px solid var(--danger-strong);
+    background: color-mix(in srgb, var(--danger) 12%, var(--bg-chrome));
+    color: var(--danger);
+  }
+  .dismiss {
     padding: 2px;
     border: none;
     border-radius: 4px;
@@ -810,7 +1098,10 @@
     color: inherit;
     cursor: pointer;
   }
-  .error button:hover {
-    background: color-mix(in srgb, var(--danger) 20%, transparent);
+  .toast .dismiss {
+    color: var(--fg-faint);
+  }
+  .dismiss:hover {
+    background: var(--bg-hover);
   }
 </style>
