@@ -210,7 +210,7 @@
     <dl>
       <dt>Ask an agent</dt><dd><kbd>{chordFor('askAgent')}</kbd></dd>
       <dt>New shell</dt><dd><kbd>{chordFor('newTab')}</kbd></dd>
-      <dt>Search sessions</dt><dd><kbd>{chordFor('focusSearch')}</kbd></dd>
+      <dt>Command palette</dt><dd><kbd>{chordFor('palette')}</kbd></dd>
     </dl>
   </div>
 {:else if shown.length === 0}

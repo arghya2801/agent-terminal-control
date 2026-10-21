@@ -59,7 +59,10 @@
     type AttentionReason,
     type Tab,
   } from './terminal/manager';
-  import { matchChord, type Action } from './lib/keymap';
+  import { actionList, matchChord, type Action } from './lib/keymap';
+  import CommandPalette, { type Command } from './lib/CommandPalette.svelte';
+  import type { IconName } from './lib/Icon.svelte';
+  import { relativeTime } from './lib/format';
   import { parseSavedTabs, type SavedTab } from './lib/restore';
   import { agentCommand, openDevtools, pickFolder, scratchDir } from './lib/ipc';
   import { projectKey } from './lib/paths';
@@ -349,6 +352,53 @@
     picker = { project: { key: projectKey(path), path, name, pinned: false, exists: true, lastActiveMs: 0, sessions: [] } };
   }
 
+  // --- command palette
+  let paletteOpen = $state(false);
+  const ACTION_ICONS: Partial<Record<Action, IconName>> = {
+    newTab: 'plus', closeTab: 'close', renameTab: 'pencil', toggleSplit: 'split', toggleSidebar: 'sidebar',
+    openSettings: 'settings', openUsage: 'usage', showShortcuts: 'keyboard', find: 'search', focusSearch: 'search',
+    askAgent: 'agent', openAgentHere: 'agent', openShellHere: 'terminal', toggleDebug: 'pulse',
+  };
+
+  /** Built when the palette opens, from what is open and indexed at that moment. */
+  function paletteCommands(): { all: Command[]; initial: Command[] } {
+    const projectName = (key: string | null) => appState.index.projects.find((p) => p.key === key)?.name;
+    const tabCmds: Command[] = tabs.map((t) => ({
+      id: `t:${t.key}`,
+      label: t.title,
+      detail: ['Open tab', projectName(t.projectKey)].filter(Boolean).join(', '),
+      icon: t.provider ? 'agent' : 'terminal',
+      run: () => activate(t.key),
+    }));
+    const extras: Command[] = [
+      { id: 'x:folder', label: 'Open a folder…', detail: 'Pick a folder, then Claude or Codex', icon: 'folder', run: () => void openFolder() },
+      { id: 'x:claude', label: 'Ask Claude', detail: 'In the scratch directory', icon: 'agent', run: () => askAgent('claude') },
+      { id: 'x:codex', label: 'Ask Codex', detail: 'In the scratch directory', icon: 'agent', run: () => askAgent('codex') },
+    ];
+    const actions: Command[] = actionList()
+      .filter((a) => a.action !== 'palette')
+      .map((a) => ({ id: `a:${a.action}`, label: a.label, icon: ACTION_ICONS[a.action] ?? 'chevron', chord: a.chord, run: () => runAction(a.action) }));
+    const live = appState.index.projects.filter((p) => p.path && p.exists && !p.kind);
+    const projectCmds: Command[] = live.flatMap((p) => [
+      { id: `p:${p.key}`, label: p.name, detail: `Open a shell, ${p.path}`, icon: 'terminal', run: () => void openProject(p) },
+      { id: `pa:${p.key}`, label: `New agent in ${p.name}`, detail: p.path ?? '', icon: 'agent', run: () => (picker = { project: p }) },
+    ]);
+    const sessions = appState.index.projects
+      .flatMap((p) => p.sessions.map((s) => ({ p, s })))
+      .sort((a, b) => b.s.mtimeMs - a.s.mtimeMs);
+    const sessionCmd = ({ p, s }: (typeof sessions)[number]): Command => ({
+      id: `s:${sessionKey(s)}`,
+      label: s.label,
+      detail: `Resume, ${providerName(s.provider)} in ${p.name}, ${relativeTime(s.mtimeMs)}`,
+      icon: 'agent',
+      run: () => void openSession(p, s),
+    });
+    return {
+      all: [...tabCmds, ...extras, ...actions, ...projectCmds, ...sessions.map(sessionCmd)],
+      initial: [...tabCmds, ...sessions.slice(0, 10).map(sessionCmd), ...extras, ...actions],
+    };
+  }
+
   function askAgent(provider: AgentProvider) {
     picker = { project: null };
     finishPicker(provider);
@@ -508,6 +558,9 @@
       case 'askAgent':
         picker = { project: null };
         break;
+      case 'palette':
+        paletteOpen = true;
+        break;
       case 'toggleSplit':
         void toggleSplit();
         break;
@@ -536,7 +589,7 @@
 
     // Covers focus being anywhere outside the terminal -- the sidebar, a button.
     const onKey = (e: KeyboardEvent) => {
-      if (picker) return;
+      if (picker || paletteOpen) return;
       const action = matchChord(e);
       if (!action) return;
       e.preventDefault();
@@ -718,6 +771,10 @@
     {/if}
     {#if showDebug}
       <DebugOverlay {activeKey} />
+    {/if}
+    {#if paletteOpen}
+      {@const cmds = paletteCommands()}
+      <CommandPalette commands={cmds.all} initial={cmds.initial} onClose={() => (paletteOpen = false)} />
     {/if}
     {#if picker}
       <ProviderPicker

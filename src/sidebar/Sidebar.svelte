@@ -190,7 +190,7 @@
       id="sidebar-search"
       type="search"
       placeholder={view === 'open' ? 'Filter open tabs' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
-      title="Filter by project, path, session name or branch (Ctrl+Shift+P)"
+      title="Filter by project, path, session name or branch"
       aria-label={view === 'open' ? 'Filter open tabs' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
       spellcheck="false"
       autocomplete="off"

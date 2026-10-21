@@ -32,7 +32,8 @@ export type Action =
   | 'askAgent'
   | 'showShortcuts'
   | 'toggleSplit'
-  | 'focusOtherPane';
+  | 'focusOtherPane'
+  | 'palette';
 
 /** The subset of KeyboardEvent this needs, so tests require no DOM. */
 export interface ChordEvent {
@@ -79,7 +80,9 @@ const BINDINGS: Binding[] = [
   { key: 'n', ctrl: true, shift: true, action: 'openShellHere' },
   { key: 'r', ctrl: true, shift: true, action: 'renameTab' },
   { key: 'u', ctrl: true, shift: true, action: 'openUsage' },
-  { key: 'p', ctrl: true, shift: true, action: 'focusSearch' },
+  // As in VS Code and Windows Terminal. It also searches projects and sessions, so the
+  // sidebar's filter box no longer needs a chord of its own.
+  { key: 'p', ctrl: true, shift: true, action: 'palette' },
   { key: 'k', ctrl: true, shift: true, action: 'switchSidebarView' },
   { key: 'a', ctrl: true, shift: true, action: 'askAgent' },
   // Ctrl+Comma is the settings chord in most editors; the shell and Claude Code ignore it.
@@ -111,7 +114,8 @@ const DESCRIPTIONS: Record<Action, { group: Group; label: string }> = {
   openShellHere: { group: 'Launch', label: 'Open a shell in this tab’s project' },
   askAgent: { group: 'Launch', label: 'Ask agent (scratch directory)' },
   toggleSidebar: { group: 'View', label: 'Show or hide the sidebar' },
-  focusSearch: { group: 'View', label: 'Search projects and sessions' },
+  palette: { group: 'View', label: 'Command palette' },
+  focusSearch: { group: 'View', label: 'Filter the sidebar' },
   switchSidebarView: { group: 'View', label: 'Switch the sidebar between sessions, open tabs and scratch' },
   find: { group: 'View', label: 'Find in the terminal' },
   zoomIn: { group: 'View', label: 'Zoom in' },
@@ -147,6 +151,11 @@ export function chordLabel(b: { key: string; ctrl: boolean; shift: boolean }): s
 export function chordFor(action: Action): string | undefined {
   const b = BINDINGS.find((b) => b.action === action);
   return b && chordLabel(b);
+}
+
+/** Every action with its name and chord, for the command palette. */
+export function actionList(): { action: Action; label: string; chord: string | undefined }[] {
+  return (Object.keys(DESCRIPTIONS) as Action[]).map((action) => ({ action, label: DESCRIPTIONS[action].label, chord: chordFor(action) }));
 }
 
 export interface ShortcutGroup {
