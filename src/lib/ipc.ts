@@ -74,14 +74,14 @@ export function openDevtools(): Promise<void> {
   return invoke('open_devtools');
 }
 
-/** The directory "Ask Claude" runs in, or with `chats` the one new chats run in; created if missing. */
 /** The native folder picker; null when cancelled. */
 export function pickFolder(): Promise<string | null> {
   return invoke<string | null>('folder_dialog');
 }
 
-export function scratchDir(kind?: 'chats'): Promise<string> {
-  return invoke<string>('scratch_dir', { kind });
+/** The directory "Ask Claude" and chats run in; created if missing. */
+export function scratchDir(): Promise<string> {
+  return invoke<string>('scratch_dir');
 }
 
 /** Writes text to a path the user picked in the save dialog. */
@@ -109,8 +109,9 @@ export function claudeUsage(): Promise<Record<string, unknown>> {
   return invoke<Record<string, unknown>>('claude_usage');
 }
 
-export function agentCommand(provider: AgentProvider, sessionId: string | null = null): Promise<string> {
-  return invoke<string>('agent_command', { provider, sessionId });
+/** With `chat`, the agent starts with the chat arguments from settings: no tools for Claude, a read-only sandbox for Codex. */
+export function agentCommand(provider: AgentProvider, sessionId: string | null = null, chat = false): Promise<string> {
+  return invoke<string>('agent_command', { provider, sessionId, chat });
 }
 
 /** Null when the Codex CLI is not installed. */

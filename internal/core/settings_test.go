@@ -84,21 +84,31 @@ func TestCommandsQuotePathsIdsAndHomeAsLiteralPowerShellArguments(t *testing.T) 
 		{"claude", "abc", "claude --resume abc"},
 		{"claude", "", "claude"},
 	} {
-		if got := AgentCommand(s, c.provider, c.session); got != c.want {
+		if got := AgentCommand(s, c.provider, c.session, false); got != c.want {
 			t.Errorf("%q != %q", got, c.want)
 		}
 	}
 }
-func TestCodexAlwaysRunsStandalone(t *testing.T) {
-	if got := AgentCommand(Defaults(), "codex", "abc"); got != "codex --no-daemon resume abc" {
+func TestLaunchAndChatArgumentsComeBeforeResume(t *testing.T) {
+	s := Defaults()
+	Obj(s["claude"])["args"] = []any{"--model", "opus"}
+	if got := AgentCommand(s, "claude", "abc", true); got != "claude --model opus '--tools=' --strict-mcp-config --resume abc" {
 		t.Fatal(got)
 	}
-	if got := AgentCommand(Defaults(), "claude", ""); got != "claude" {
+	if got := AgentCommand(Defaults(), "codex", "", true); got != "codex --no-daemon --sandbox read-only" {
+		t.Fatal(got)
+	}
+}
+func TestCodexAlwaysRunsStandalone(t *testing.T) {
+	if got := AgentCommand(Defaults(), "codex", "abc", false); got != "codex --no-daemon resume abc" {
+		t.Fatal(got)
+	}
+	if got := AgentCommand(Defaults(), "claude", "", false); got != "claude" {
 		t.Fatal(got)
 	}
 }
 func TestSimpleArgumentsStayReadableAndExpressionsStayLiteral(t *testing.T) {
-	if got := AgentCommand(Defaults(), "codex", ""); got != "codex --no-daemon" {
+	if got := AgentCommand(Defaults(), "codex", "", false); got != "codex --no-daemon" {
 		t.Fatal(got)
 	}
 	if Argument("0199-abc") != "0199-abc" {

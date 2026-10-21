@@ -117,6 +117,13 @@ function applyMotion(pref = appState.settings?.ui.animations) {
   root.style.setProperty('--enter', `${Math.round(160 / speed)}ms`);
 }
 
+/** How often to re-read Claude's or Codex's plan limits, from settings, never under 15 s. */
+export function refreshMs(which: 'claude' | 'codex'): number {
+  const ui = appState.settings?.ui;
+  const seconds = which === 'claude' ? ui?.limitsRefreshSec ?? 90 : ui?.codexRefreshSec ?? 300;
+  return Math.max(15, seconds || 0) * 1000;
+}
+
 /** How long an entrance takes in a JS transition: `--enter`, or 0 while motion is off. */
 export function enterMs(): number {
   if (document.documentElement.hasAttribute('data-still')) return 0;

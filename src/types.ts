@@ -14,6 +14,9 @@ export interface SpawnOpts {
   rows: number;
   /** Typed into the shell after it starts, e.g. `claude --resume <uuid>`. */
   initialCommand?: string | null;
+  /** `pwsh` or `powershell` to prefer that one; anything else prefers pwsh. */
+  shell?: string;
+  noProfile?: boolean;
 }
 
 export interface StatsSnapshot {
@@ -119,10 +122,26 @@ export interface Settings {
     animations: string;
     /** Multiplies animation speed: 2 is twice as fast, 0.5 half. */
     animationSpeed: number;
+    /** Which Open view rows show the last line on their screen. */
+    peek: 'all' | 'waiting' | 'off';
+    outputGraph: boolean;
+    /** What the task box starts with: its agent, and a project key or '' for the focused tab's. */
+    taskAgent: AgentProvider;
+    taskProject: string;
+    /** Where Ctrl+Shift+T opens a shell: the home folder, or the focused tab's project. */
+    newTabIn: 'home' | 'project';
+    /** Ask before closing a tab with something running in it. */
+    confirmClose: boolean;
+    /** In-app notes when a background tab finishes while ATC has focus. */
+    toasts: boolean;
+    toastSeconds: number;
+    limitsRefreshSec: number;
+    codexRefreshSec: number;
   };
   terminal: TerminalSettings;
-  codex: { command: string; resumeArgs: string[]; homeDir: string | null };
-  claude: { command: string; resumeArgs: string[]; scratchDir: string | null };
+  /** `args` go on every launch; `chatArgs` on chats too, so they cannot change anything. */
+  codex: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; homeDir: string | null };
+  claude: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; scratchDir: string | null };
 }
 
 
@@ -130,6 +149,14 @@ export interface TerminalSettings {
   fontFamily: string;
   fontSize: number;
   scrollback: number;
+  cursorStyle: 'bar' | 'block' | 'underline';
+  cursorBlink: boolean;
+  lineHeight: number;
+  /** `auto`, `pwsh` or `powershell`. */
+  shell: string;
+  loadProfile: boolean;
+  /** Tabs drawn with WebGL at once; 0 draws every tab in software. */
+  gpuTabs: number;
 }
 
 /** Mirrors `CostRow` in src-tauri/src/index/cost.rs. */

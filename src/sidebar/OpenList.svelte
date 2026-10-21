@@ -27,6 +27,9 @@
     return () => clearInterval(timer);
   });
 
+  const peekRows = $derived(appState.settings?.ui.peek ?? 'all');
+  const graph = $derived(appState.settings?.ui.outputGraph !== false);
+
   const projectName = (key: string | null) => (key ? appState.index.projects.find((p) => p.key === key)?.name ?? '' : '');
 
   const shown = $derived.by(() => {
@@ -90,7 +93,8 @@
 {#each shown as tab, i (tab.key)}
   {@const s = markTitle(tab.mark, providerName(tab.provider ?? 'claude'))}
   {@const wait = isWaiting(tab.mark)}
-  {@const peek = peekLine((void now, screenLines(tab.key)), wait ? 3 : 1)}
+  {@const showPeek = peekRows === 'all' || (peekRows === 'waiting' && wait)}
+  {@const peek = showPeek ? peekLine((void now, screenLines(tab.key)), wait ? 3 : 1) : null}
   {#if i === 0 || shown[i - 1].group !== tab.group}
     <div class="section">{tab.group} <span class="n">{shown.filter((t) => t.group === tab.group).length}</span></div>
   {/if}
@@ -113,7 +117,7 @@
     <span class="text"><Highlight text={tab.title} {query} />{#if projectName(tab.projectKey)}<small><Highlight text={projectName(tab.projectKey)} {query} /></small>{/if}</span>
     <time>{stateWord(tab.mark)} {relativeTime(tab.since, now)}</time>
     {#if peek}<span class="peek">{peek}</span>{/if}
-    {#if !wait}<svg class="spark" viewBox="0 0 60 10" preserveAspectRatio="none" aria-hidden="true"><path d={spark(tab.key, now)} /></svg>{/if}
+    {#if !wait && graph}<svg class="spark" viewBox="0 0 60 10" preserveAspectRatio="none" aria-hidden="true"><path d={spark(tab.key, now)} /></svg>{/if}
   </button>
   {#if replying === tab.key}
     <form class="reply" onsubmit={sendReply}>

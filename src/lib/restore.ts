@@ -7,8 +7,9 @@ import type { AgentProvider } from '../types';
 
 export type SavedTab =
   /** A Claude session, resumed with its id. */
-  | { kind: 'session'; provider: AgentProvider; sessionId: string; cwd: string; projectKey: string | null; customTitle: string | null }
-  | { kind: 'agent'; provider: AgentProvider; cwd: string; projectKey: string | null; customTitle: string | null }
+  | { kind: 'session'; provider: AgentProvider; sessionId: string; cwd: string; projectKey: string | null; customTitle: string | null; chat?: true }
+  /** `chat` reopens it with the chat arguments, so it still cannot change anything. */
+  | { kind: 'agent'; provider: AgentProvider; cwd: string; projectKey: string | null; customTitle: string | null; chat?: true }
   /** A shell. `project` marks the one tab a project row opens, so it is reused again. */
   | { kind: 'shell'; cwd: string | null; projectKey: string | null; project: boolean; customTitle: string | null };
 
@@ -27,11 +28,12 @@ function parseTab(v: unknown): SavedTab | null {
   const common = { projectKey: strOrNull(t.projectKey), customTitle: strOrNull(t.customTitle) };
   const provider = t.provider === undefined ? 'claude' : t.provider;
   if (provider !== 'claude' && provider !== 'codex') return null;
+  const chat = t.chat === true ? { chat: true as const } : {};
   if (t.kind === 'agent' && str(t.cwd)) {
-    return { kind: 'agent', provider, cwd: t.cwd, ...common };
+    return { kind: 'agent', provider, cwd: t.cwd, ...common, ...chat };
   }
   if (t.kind === 'session' && str(t.sessionId) && str(t.cwd)) {
-    return { kind: 'session', provider, sessionId: t.sessionId, cwd: t.cwd, ...common };
+    return { kind: 'session', provider, sessionId: t.sessionId, cwd: t.cwd, ...common, ...chat };
   }
   if (t.kind === 'shell') {
     return { kind: 'shell', cwd: strOrNull(t.cwd), project: t.project === true, ...common };

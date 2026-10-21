@@ -17,19 +17,31 @@
     { id: 's-sidebar', label: 'Sidebar' },
     { id: 's-agents', label: 'Agents' },
     { id: 's-names', label: 'Names' },
+    { id: 's-advanced', label: 'Advanced' },
   ];
 
   /** What the fields show. Saved a moment after each edit, cleaned up on the way out. */
   let draft = $state<Settings | null>(
     appState.settings ? structuredClone($state.snapshot(appState.settings)) : null,
   );
-  let resumeArgs = $state(appState.settings?.claude.resumeArgs.join('\n') ?? '');
-  let codexResumeArgs = $state(appState.settings?.codex.resumeArgs.join('\n') ?? '');
-  let saved = $state(false);
-
+  // Arguments are edited one per line. A blank line is dropped, so an empty argument,
+  // as in Claude's `--tools ""`, is written as "".
+  const joinArgs = (args: string[] | undefined) => (args ?? []).map((a) => (a === '' ? '""' : a)).join('\n');
   function splitArgs(s: string): string[] {
-    return s.split('\n').map((arg) => arg.trim()).filter((arg) => arg.length > 0);
+    return s
+      .split('\n')
+      .map((arg) => arg.trim())
+      .filter((arg) => arg.length > 0)
+      .map((arg) => (arg === '""' || arg === "''" ? '' : arg));
   }
+  let resumeArgs = $state(joinArgs(appState.settings?.claude.resumeArgs));
+  let codexResumeArgs = $state(joinArgs(appState.settings?.codex.resumeArgs));
+  let claudeArgs = $state(joinArgs(appState.settings?.claude.args));
+  let codexArgs = $state(joinArgs(appState.settings?.codex.args));
+  let claudeChatArgs = $state(joinArgs(appState.settings?.claude.chatArgs));
+  let codexChatArgs = $state(joinArgs(appState.settings?.codex.chatArgs));
+  let saved = $state(false);
+  const projects = $derived(appState.index.projects.filter((p) => p.path && p.exists));
 
   /** Three swatches per theme: the chrome, the accent and the foreground. */
   function swatches(name: string) {
@@ -50,21 +62,30 @@
         ...draft.ui,
         sessionsPerProject: clamp(draft.ui.sessionsPerProject, 1, 500, 15),
         sidebarWidth: clamp(draft.ui.sidebarWidth, 160, 800, 260),
+        toastSeconds: clamp(draft.ui.toastSeconds, 1, 60, 6),
+        limitsRefreshSec: clamp(draft.ui.limitsRefreshSec, 15, 3600, 90),
+        codexRefreshSec: clamp(draft.ui.codexRefreshSec, 15, 3600, 300),
       },
       terminal: {
         ...draft.terminal,
         fontSize: clamp(draft.terminal.fontSize, 6, 48, 13),
         scrollback: clamp(draft.terminal.scrollback, 0, 1_000_000, 10_000),
+        lineHeight: Number.isFinite(draft.terminal.lineHeight) ? Math.min(2, Math.max(1, draft.terminal.lineHeight)) : 1,
+        gpuTabs: clamp(draft.terminal.gpuTabs, 0, 12, 4),
       },
       codex: {
         ...draft.codex,
         command: draft.codex.command.trim() || 'codex',
+        args: splitArgs(codexArgs),
+        chatArgs: splitArgs(codexChatArgs),
         resumeArgs: splitArgs(codexResumeArgs),
         homeDir: draft.codex.homeDir?.trim() || null,
       },
       claude: {
         ...draft.claude,
         command: draft.claude.command.trim() || 'claude',
+        args: splitArgs(claudeArgs),
+        chatArgs: splitArgs(claudeChatArgs),
         resumeArgs: splitArgs(resumeArgs),
         scratchDir: draft.claude.scratchDir?.trim() || null,
       },
@@ -99,8 +120,7 @@
   $effect(() => {
     // Read everything that is saved, so any edit schedules a save.
     void JSON.stringify(draft);
-    void resumeArgs;
-    void codexResumeArgs;
+    void [resumeArgs, codexResumeArgs, claudeArgs, codexArgs, claudeChatArgs, codexChatArgs];
     pending = setTimeout(() => void save(), 300);
     return () => clearTimeout(pending);
   });
@@ -191,6 +211,17 @@
         <input id="fs" type="number" min="6" max="48" bind:value={draft.terminal.fontSize} />
         <label for="sb">Scrollback lines</label>
         <input id="sb" type="number" min="0" step="1000" bind:value={draft.terminal.scrollback} />
+        <label for="cs">Cursor</label>
+        <div class="check">
+          <select id="cs" bind:value={draft.terminal.cursorStyle}>
+            <option value="bar">Bar</option>
+            <option value="block">Block</option>
+            <option value="underline">Underline</option>
+          </select>
+          <label class="check"><input type="checkbox" bind:checked={draft.terminal.cursorBlink} /> Blink</label>
+        </div>
+        <label for="lh">Line height</label>
+        <input id="lh" type="number" min="1" max="2" step="0.05" bind:value={draft.terminal.lineHeight} />
       </div>
 
       <h2 id="s-sidebar">Sidebar</h2>
@@ -209,6 +240,32 @@
           <input id="gb" type="checkbox" bind:checked={draft.ui.groupByBranch} />
           <span class="muted">Group each project's sessions by git branch</span>
         </label>
+        <label for="pk">Screen peek</label>
+        <div>
+          <select id="pk" bind:value={draft.ui.peek}>
+            <option value="all">Every row</option>
+            <option value="waiting">Waiting agents only</option>
+            <option value="off">Off</option>
+          </select>
+          <span class="muted hint">The last line on a tab's screen, under its name in the Open view</span>
+        </div>
+        <label for="og">Output graph</label>
+        <label class="check">
+          <input id="og" type="checkbox" bind:checked={draft.ui.outputGraph} />
+          <span class="muted">Five minutes of output beside each row in the Open view</span>
+        </label>
+        <label for="ta">Task box</label>
+        <div class="check">
+          <select id="ta" aria-label="Task box agent" bind:value={draft.ui.taskAgent}>
+            <option value="claude">Claude</option>
+            <option value="codex">Codex</option>
+          </select>
+          <span class="muted">in</span>
+          <select aria-label="Task box project" bind:value={draft.ui.taskProject}>
+            <option value="">This tab's project</option>
+            {#each projects as p (p.key)}<option value={p.key}>{p.name}</option>{/each}
+          </select>
+        </div>
       </div>
 
       <h2 id="s-agents">Agents</h2>
@@ -220,6 +277,12 @@
         <label for="ra">Resume arguments<span class="muted hint">One per line; <code>{'{session}'}</code> is the session id</span></label>
         <textarea id="ra" bind:value={resumeArgs}></textarea>
         <textarea aria-label="Codex resume arguments" bind:value={codexResumeArgs}></textarea>
+        <label for="la">Launch arguments<span class="muted hint">Every new and resumed session, e.g. <code>--model</code></span></label>
+        <textarea id="la" bind:value={claudeArgs}></textarea>
+        <textarea aria-label="Codex launch arguments" bind:value={codexArgs}></textarea>
+        <label for="ca">Chat arguments<span class="muted hint">Added for chats. Codex keeps its MCP servers; only its commands are read-only. <code>""</code> is an empty argument</span></label>
+        <textarea id="ca" bind:value={claudeChatArgs}></textarea>
+        <textarea aria-label="Codex chat arguments" bind:value={codexChatArgs}></textarea>
       </div>
       <div class="grid folders">
         <label for="pd">Claude projects</label>
@@ -261,6 +324,58 @@
       {#if !Object.keys(draft.projects.names).length && !Object.keys(draft.projects.sessionNames).length}
         <p class="muted">None yet. Right-click a project or session in the sidebar and choose Rename.</p>
       {/if}
+
+      <h2 id="s-advanced">Advanced</h2>
+      <div class="grid">
+        <label for="sh">Shell</label>
+        <div>
+          <select id="sh" bind:value={draft.terminal.shell}>
+            <option value="auto">PowerShell 7 if installed</option>
+            <option value="pwsh">PowerShell 7</option>
+            <option value="powershell">Windows PowerShell</option>
+          </select>
+          <span class="muted hint">For new tabs. Agents start with PowerShell commands, so only PowerShell is offered.</span>
+        </div>
+        <label for="lp">PowerShell profile</label>
+        <label class="check">
+          <input id="lp" type="checkbox" bind:checked={draft.terminal.loadProfile} />
+          <span class="muted">Load it in new tabs. Off starts tabs faster, without your prompt and aliases</span>
+        </label>
+        <label for="gpu">GPU-drawn tabs</label>
+        <div>
+          <input id="gpu" type="number" min="0" max="12" bind:value={draft.terminal.gpuTabs} />
+          <span class="muted hint">The most recent tabs drawn with WebGL. 0 draws every tab in software, for remote desktop or GPU trouble</span>
+        </div>
+        <label for="nti">New tab opens in</label>
+        <div>
+          <select id="nti" bind:value={draft.ui.newTabIn}>
+            <option value="home">Your home folder</option>
+            <option value="project">This tab's project</option>
+          </select>
+        </div>
+        <label for="cfc">Confirm close</label>
+        <label class="check">
+          <input id="cfc" type="checkbox" bind:checked={draft.ui.confirmClose} />
+          <span class="muted">Ask before closing a tab with a program running in it</span>
+        </label>
+        <label for="tst">In-app notes</label>
+        <div class="check">
+          <input id="tst" type="checkbox" bind:checked={draft.ui.toasts} />
+          <span class="muted">When a background tab finishes while ATC is focused, for</span>
+          <input type="number" min="1" max="60" aria-label="Seconds a note stays" bind:value={draft.ui.toastSeconds} />
+          <span class="muted">seconds</span>
+        </div>
+        <label for="lr">Claude limits every</label>
+        <div class="check">
+          <input id="lr" type="number" min="15" max="3600" step="15" bind:value={draft.ui.limitsRefreshSec} />
+          <span class="muted">seconds</span>
+        </div>
+        <label for="cr">Codex limits every</label>
+        <div class="check">
+          <input id="cr" type="number" min="15" max="3600" step="15" bind:value={draft.ui.codexRefreshSec} />
+          <span class="muted">seconds. Each read starts a Codex process</span>
+        </div>
+      </div>
 
     </SectionNav>
   {/if}
