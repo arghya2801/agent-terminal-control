@@ -184,6 +184,8 @@
   let showFind = $state(false);
   type PageName = 'settings' | 'usage' | 'shortcuts';
   let page = $state<PageName | null>(null);
+  /** Settings and shortcuts open over the whole app, which waits behind them. */
+  const popup = $derived(page === 'settings' || page === 'shortcuts');
   let renamingTab = $state<TabKey | null>(null);
   /** A busy tab waiting on the close confirmation. */
   let closing = $state<{ key: TabKey; title: string; what: string } | null>(null);
@@ -416,13 +418,6 @@
     if (field) contextMenu = { x: e.clientX, y: e.clientY, items: editItems(field) };
   }
 
-  /** Settings covers the sidebar, so there the button means "back to it", not "toggle it". */
-  function sidebarButton() {
-    if (page !== 'settings') return void toggleSidebar();
-    page = null;
-    if (!sidebarOpen()) void toggleSidebar();
-  }
-
   // --- command palette
   let paletteOpen = $state(false);
   const ACTION_ICONS: Partial<Record<Action, IconName>> = {
@@ -560,7 +555,7 @@
   function runAction(action: Action) {
     switch (action) {
       case 'toggleSidebar':
-        sidebarButton();
+        void toggleSidebar();
         break;
       case 'newTab':
         void newTab();
@@ -663,6 +658,8 @@
       if (picker || paletteOpen) return;
       const action = matchChord(e);
       if (!action) return;
+      // Behind a popup the app is inert; only its own chord, or the other popup's, acts.
+      if (popup && action !== 'openSettings' && action !== 'showShortcuts') return;
       e.preventDefault();
       runAction(action);
     };
@@ -703,11 +700,11 @@
 </script>
 
 <div class="app" style="--panel: {open ? width : 0}px">
-  <nav class="rail" data-tip-side="right">
+  <nav class="rail" data-tip-side="right" inert={popup}>
     <button
       class="rail-btn"
-      class:on={open && page !== 'settings'}
-      onclick={sidebarButton}
+      class:on={open}
+      onclick={() => toggleSidebar()}
       title="Toggle projects (Ctrl+Shift+B)"
       aria-label="Toggle projects"
     >
@@ -778,7 +775,7 @@
     </button>
   </nav>
 
-  <aside class="panel">
+  <aside class="panel" inert={popup}>
     {#if open}
       <div
         class="drawer"
@@ -816,7 +813,7 @@
     {/if}
   </aside>
 
-  <section class="main" bind:this={main}>
+  <section class="main" bind:this={main} inert={popup}>
     <TabBar {tabs} {activeKey} onNew={newTab} onClose={requestClose} bind:renaming={renamingTab} />
     <div class="panes" bind:this={wrapper}>
       {#if split}
@@ -834,8 +831,6 @@
     </div>
     {#if page === 'usage'}
       <UsagePanel onClose={() => (page = null)} sessionKey={activeSessionId} />
-    {:else if page === 'shortcuts'}
-      <ShortcutsPanel onClose={() => (page = null)} />
     {/if}
     {#if showFind}
       <FindBar onClose={() => (showFind = false)} />
@@ -886,9 +881,11 @@
     </div>
   </section>
 
-  <!-- Outside .main: the sidebar slide moves .main, and settings covers the sidebar. -->
+  <!-- Popups, outside everything they make inert. -->
   {#if page === 'settings'}
     <SettingsPanel onClose={() => (page = null)} />
+  {:else if page === 'shortcuts'}
+    <ShortcutsPanel onClose={() => (page = null)} />
   {/if}
 </div>
 <Tooltip />

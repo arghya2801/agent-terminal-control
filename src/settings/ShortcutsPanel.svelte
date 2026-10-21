@@ -26,7 +26,7 @@
   onMount(() => setTimeout(() => input.focus()));
 </script>
 
-<Page title="Keyboard shortcuts" {onClose}>
+<Page title="Keyboard shortcuts" modal {onClose}>
   <p class="muted">
     These are claimed by ATC, so the shell and Claude Code never see them. Everything else
     goes straight to whatever is running in the terminal.

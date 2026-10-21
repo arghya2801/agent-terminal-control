@@ -4,19 +4,20 @@
   import Icon from './Icon.svelte';
 
   /**
-   * Full-pane overlay above the terminals, which stay mounted underneath. `full` also
-   * covers the sidebar and tab bar, leaving only the rail; nothing under it changes size.
+   * Full-pane overlay above the terminals, which stay mounted underneath. `modal` makes
+   * it a popup over the whole dimmed app instead, closed by Esc or a click outside; the
+   * app marks everything behind it inert.
    */
   let {
     title,
-    full = false,
+    modal = false,
     wide = false,
     actions,
     onClose,
     children,
   }: {
     title: string;
-    full?: boolean;
+    modal?: boolean;
     wide?: boolean;
     /** Buttons in the header, beside Close, so they stay in view while the page scrolls. */
     actions?: Snippet;
@@ -36,23 +37,42 @@
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
-      focusActiveTerminal();
+      // Next task: behind a popup the terminal is still inert during this one.
+      setTimeout(focusActiveTerminal);
     };
   });
 </script>
 
-<div class="page" class:full tabindex="-1" bind:this={root}>
-  <header>
-    <h1>{title}</h1>
-    <div class="head-actions">
-      {@render actions?.()}
-      <button class="close" onclick={onClose} aria-label="Close" title="Close (Esc)"><Icon name="close" /></button>
+{#snippet sheet()}
+  <div
+    class="page"
+    class:modal
+    tabindex="-1"
+    bind:this={root}
+    role={modal ? 'dialog' : undefined}
+    aria-modal={modal || undefined}
+    aria-label={title}
+  >
+    <header>
+      <h1>{title}</h1>
+      <div class="head-actions">
+        {@render actions?.()}
+        <button class="close" onclick={onClose} aria-label="Close" title="Close (Esc)"><Icon name="close" /></button>
+      </div>
+    </header>
+    <div class="body" class:wide>
+      {@render children()}
     </div>
-  </header>
-  <div class="body" class:wide>
-    {@render children()}
   </div>
-</div>
+{/snippet}
+
+{#if modal}
+  <div class="backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && onClose()}>
+    {@render sheet()}
+  </div>
+{:else}
+  {@render sheet()}
+{/if}
 
 <style>
   .page {
@@ -63,10 +83,28 @@
     background: var(--bg);
     outline: none;
   }
-  /* 44px is the rail. */
-  .page.full {
+  .backdrop {
     position: fixed;
-    inset: 0 0 0 44px;
+    inset: 0;
+    z-index: 40;
+    display: grid;
+    place-items: center;
+    background: color-mix(in srgb, var(--bg) 55%, transparent);
+    animation: atc-fade var(--enter) var(--ease-out);
+  }
+  .page.modal {
+    position: relative;
+    inset: auto;
+    width: min(920px, calc(100vw - 48px));
+    height: min(680px, calc(100vh - 48px));
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-pop);
+    animation: atc-pop var(--enter) var(--ease-out);
+  }
+  /* The sheet already pops in; its content rising too would be two motions at once. */
+  .modal .body {
+    animation: none;
   }
   header {
     position: sticky;

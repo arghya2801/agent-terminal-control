@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { sessionKey } from '../lib/agents';
   import Page from '../lib/Page.svelte';
   import SectionNav from '../lib/SectionNav.svelte';
@@ -18,7 +19,7 @@
     { id: 's-names', label: 'Names' },
   ];
 
-  /** Edited copy; nothing is written until Save. */
+  /** What the fields show. Saved a moment after each edit, cleaned up on the way out. */
   let draft = $state<Settings | null>(
     appState.settings ? structuredClone($state.snapshot(appState.settings)) : null,
   );
@@ -26,30 +27,8 @@
   let codexResumeArgs = $state(appState.settings?.codex.resumeArgs.join('\n') ?? '');
   let saved = $state(false);
 
-  const dirty = $derived(
-    !!draft &&
-      !!appState.settings &&
-      JSON.stringify({
-        ...draft,
-        codex: { ...draft.codex, resumeArgs: splitArgs(codexResumeArgs) },
-        claude: { ...draft.claude, resumeArgs: splitArgs(resumeArgs) },
-      }) !==
-        JSON.stringify(appState.settings),
-  );
-
   function splitArgs(s: string): string[] {
     return s.split('\n').map((arg) => arg.trim()).filter((arg) => arg.length > 0);
-  }
-
-  /**
-   * The theme applies as soon as it is picked, without waiting for Save: choosing colours
-   * blind is no choice at all. Saving is still what makes it stick, and Cancel restores
-   * what was there.
-   */
-  function previewTheme(name: string) {
-    if (!draft || !appState.settings) return;
-    draft.ui.theme = name;
-    void saveSettings({ ...appState.settings, ui: { ...appState.settings.ui, theme: name } });
   }
 
   /** Three swatches per theme: the chrome, the accent and the foreground. */
@@ -63,9 +42,9 @@
   const clamp = (n: number, lo: number, hi: number, fallback: number) =>
     Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : fallback;
 
-  async function save() {
-    if (!draft) return;
-    const next: Settings = {
+  /** The draft as it goes to disk: numbers clamped, blanks back to their defaults. */
+  function cleaned(draft: Settings): Settings {
+    return {
       ...draft,
       ui: {
         ...draft.ui,
@@ -94,15 +73,39 @@
         claudeProjectsDir: draft.projects.claudeProjectsDir?.trim() || null,
       },
     };
-    await saveSettings(next);
-    // Renames and the projects directory only show up after a rescan.
-    await refresh();
-    draft = structuredClone(next);
-    resumeArgs = next.claude.resumeArgs.join('\n');
-    codexResumeArgs = next.codex.resumeArgs.join('\n');
-    saved = true;
-    setTimeout(() => (saved = false), 1500);
   }
+
+  /**
+   * The draft is not rewritten with the cleaned copy: a width typed as "3" on the way to
+   * "300" would be snapped to 160 mid-keystroke.
+   */
+  async function save() {
+    clearTimeout(pending);
+    const prev = appState.settings;
+    if (!draft || !prev) return;
+    const next = cleaned(draft);
+    if (JSON.stringify(next) === JSON.stringify(prev)) return;
+    await saveSettings(next);
+    // Renames and the projects directory only show up after a rescan, which is not free.
+    const scanned = (s: Settings) => JSON.stringify([s.projects.names, s.projects.sessionNames, s.projects.claudeProjectsDir]);
+    if (scanned(next) !== scanned(prev)) await refresh();
+    saved = true;
+    clearTimeout(savedTimer);
+    savedTimer = setTimeout(() => (saved = false), 1500);
+  }
+
+  let pending: ReturnType<typeof setTimeout> | undefined;
+  let savedTimer: ReturnType<typeof setTimeout> | undefined;
+  $effect(() => {
+    // Read everything that is saved, so any edit schedules a save.
+    void JSON.stringify(draft);
+    void resumeArgs;
+    void codexResumeArgs;
+    pending = setTimeout(() => void save(), 300);
+    return () => clearTimeout(pending);
+  });
+  // Closing writes whatever is still waiting.
+  onDestroy(() => void save());
 
   function removeName(field: 'names' | 'sessionNames', id: string) {
     if (!draft) return;
@@ -120,11 +123,10 @@
   }
 </script>
 
-<Page title="Settings" full {onClose}>
+<Page title="Settings" modal {onClose}>
   {#snippet actions()}
-    {#if dirty}<span class="muted">Unsaved changes</span>{/if}
+    {#if saved}<span class="muted saved">Saved</span>{/if}
     <button class="btn" onclick={() => openSettingsFile()}>Open settings.json</button>
-    <button class="btn primary" onclick={save} disabled={!dirty}>{saved ? 'Saved' : 'Save'}</button>
   {/snippet}
   {#if !draft}
     <p class="err">Settings could not be loaded.</p>
@@ -148,7 +150,7 @@
       <div class="grid">
         <label for="th">Theme</label>
         <div>
-          <select id="th" value={draft.ui.theme} onchange={(e) => previewTheme(e.currentTarget.value)}>
+          <select id="th" bind:value={draft.ui.theme}>
             {#each themeState.themes as t (t.name)}
               <option value={t.name}>{t.name}</option>
             {/each}
@@ -283,6 +285,9 @@
   }
   .folders {
     margin-top: 10px;
+  }
+  .saved {
+    animation: atc-fade var(--enter) var(--ease-out);
   }
   textarea {
     min-height: 52px;
