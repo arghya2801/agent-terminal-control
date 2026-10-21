@@ -954,18 +954,33 @@
     color: var(--accent);
     font-size: 11px;
   }
-  /* New shell, and beside it the choice of what to start. */
+  /* New shell, and beside it the choice of what to start. One rounded piece: hovering
+     either half lights the whole of it, the half under the pointer a shade more. */
   .new-split {
     display: flex;
     align-self: center;
     margin-left: 4px;
+    overflow: hidden;
+    border-radius: 6px;
+    transition: background-color var(--fast);
+  }
+  .new-split:hover {
+    background: var(--bg-hover);
   }
   .new-split .bar-btn {
-    border-radius: 6px 0 0 6px;
+    border-radius: 0;
+  }
+  .new-split .bar-btn:hover {
+    background: color-mix(in srgb, var(--fg) 8%, transparent);
+  }
+  .new-split .bar-btn:active {
+    transform: none;
   }
   .new-split .caret {
     width: 18px;
-    border-radius: 0 6px 6px 0;
+  }
+  .new-split:hover .caret {
+    box-shadow: inset 1px 0 0 var(--border);
   }
   .drawer {
     position: absolute;
