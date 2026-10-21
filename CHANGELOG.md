@@ -9,6 +9,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ### Changed
 - The sidebar's Open view is an inbox: agents waiting on you come first, longest-waiting first, under Waiting on you, Working and Shells headings. Each row shows how long it has been in its state, the last line on its screen and a 5-minute output graph.
 - The tab bar is gone. A header names the tab on screen with its project, branch and state; double-click the name to rename it. Tabs can no longer be dragged into order.
+- The sidebar filter sits behind a search icon in every view. Typing on a row starts a filter too.
+- The task box is one field: the icon at its left switches between Claude and Codex, and the project line under it picks where the task runs.
 
 ### Added
 - Reply in place: a waiting agent's row shows its question and a Reply button that sends your answer without leaving the tab you are in.
@@ -17,8 +19,10 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Ctrl+Shift+J goes to the agent that has waited longest.
 - Ctrl+Shift+G shows every tab at once, labelled by state. Click one to go to it.
 - Rename in the Open view's row menu.
+- The notes pad collapses to its header, like the Outline pane in VS Code's sidebar.
 
 ### Fixed
+- Dragging the notes divider resizes the notes again.
 - Pressing Enter to finish renaming a tab no longer also sends Enter to the terminal.
 
 ## [0.5.0] - 2026-10-21

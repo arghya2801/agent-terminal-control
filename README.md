@@ -88,7 +88,8 @@ build times, build resource use, runtime memory, validation, and migration detai
   a provider icon on each session
 - Sessions listed newest first, labelled by the name the agent gives the session, falling
   back to its title, the first message, then the session id
-- Filter box: matches project name, path, session name and branch
+- Filter: the search icon in the sidebar header, or start typing on a row. Matches
+  project name, path, session name and branch
 - Git branch shown per session; optionally group sessions by branch, or group subfolders
   under the project containing them
 - Live refresh — sessions appear as they are created, without a restart
@@ -98,7 +99,7 @@ build times, build resource use, runtime memory, validation, and migration detai
 - Right-click a project: open Claude, Codex or a shell, rename, open in Explorer, copy
   path, pin/unpin
 - Right-click a session: rename, copy session id, copy resume command, open in Explorer
-- Full keyboard use: Down from the filter box (or Tab) enters the list, arrows move and
+- Full keyboard use: Tab (or Down from the filter) enters the list, arrows move and
   expand, Enter opens, `Shift+F10` or the Menu key opens the context menu, Esc returns to
   the terminal
 - Drag the sidebar's edge to resize it; double-click to reset
@@ -109,14 +110,16 @@ build times, build resource use, runtime memory, validation, and migration detai
   how long it has been in that state, the last line on its screen and 5 minutes of output
 - A waiting agent shows up to three lines of its question and a Reply button: type the
   answer and press Enter to send it without leaving the tab you are in
-- A task box at the top: type a task, pick the project and Claude or Codex, and Enter
-  starts it in the background
+- A task box at the top: type a task and press Enter to start it in the background. The
+  icon at its left switches between Claude and Codex; the project line under it picks
+  where it runs, by default the focused tab's project
 - Click a row to switch to it, middle-click to close. Ctrl+click rows to pick them, then
   type one line into all of them from the bar at the bottom
 - `Ctrl+Shift+J` goes to the agent that has waited longest. `Ctrl+Shift+G` shows every
   tab at once; click one to go to it
 - A notes pad under the list, stored as `notes.md`: raw Markdown while you type, rendered
-  when you click away, with checkboxes you can tick in place. Drag the divider to resize
+  when you click away, with checkboxes you can tick in place. Click its header to
+  collapse it; drag its top edge to resize
 
 **Terminal**
 - Tabs, each a separate `pwsh` process, reopened on the next launch. There is no tab bar:

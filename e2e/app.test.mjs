@@ -102,8 +102,9 @@ describe('desktop behaviour', () => {
   });
   it('filters sessions by label and resets the filter', async () => {
     await (await browser.$('button[role="tab"]*=Sessions')).click();
+    await (await browser.$('button[aria-label="Filter"]')).click();
     const filter = await browser.$('input[aria-label="Filter projects and sessions"]');
-    await filter.click(); await filter.setValue('Renamed Codex');
+    await filter.setValue('Renamed Codex');
     await (await byText('button', 'Renamed Codex session')).waitForDisplayed();
     assert.equal(await (await byText('button', 'Portfolio refresh')).isExisting(), false);
     await filter.setValue(''); await browser.keys(Key.Escape);
@@ -149,8 +150,8 @@ describe('desktop behaviour', () => {
     await chord('\\');
   });
   it('toggles the sidebar through its shortcut', async () => {
-    await chord('b'); await (await browser.$('input[aria-label="Filter projects and sessions"]')).waitForDisplayed({ reverse: true });
-    await chord('b'); await (await browser.$('input[aria-label="Filter projects and sessions"]')).waitForDisplayed();
+    await chord('b'); await (await browser.$('button[aria-label="Filter"]')).waitForDisplayed({ reverse: true });
+    await chord('b'); await (await browser.$('button[aria-label="Filter"]')).waitForDisplayed();
   });
   it('changes theme, font and grouping and saves them', async () => {
     await settingsPage();
