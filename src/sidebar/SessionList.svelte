@@ -3,6 +3,8 @@
   import { agentCommand, openInExplorer } from '../lib/ipc';
   import ProjectNode from './ProjectNode.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
+  import Icon from '../lib/Icon.svelte';
+  import { chordFor } from '../lib/keymap';
   import { filterProjects } from '../lib/filter';
   import { groupSubfolders } from '../lib/group';
   import { isPinned, togglePinned } from '../lib/pinned';
@@ -27,8 +29,13 @@
     onOpenSession,
     onNewShell,
     onNewAgent,
+    onOpenFolder,
+    onAsk,
   }: {
     query: string;
+    /** For the first-run card; the Scratch view has its own empty text. */
+    onOpenFolder?: () => void;
+    onAsk?: (provider: AgentProvider) => void;
     /** The Scratch view: only the scratch and chats directories, as fixed sections (#135). */
     scratch?: boolean;
     activeKey: TabKey | null;
@@ -91,21 +98,24 @@
       x: e.clientX,
       y: e.clientY,
       items: [
-        { label: 'Open in Claude', disabled: !path || !p.exists, run: () => onNewAgent(p, 'claude') },
-        { label: 'Open in Codex', disabled: !path || !p.exists, run: () => onNewAgent(p, 'codex') },
-        { label: 'Open terminal here', disabled: !path || !p.exists, run: () => onNewShell(p) },
-        { label: 'Rename…', disabled: !path, run: () => (renaming = `p:${p.key}`) },
-        {
-          label: 'Open in Explorer',
-          disabled: !path || !p.exists,
-          run: () => path && void openInExplorer(path),
-        },
-        { label: 'Copy path', disabled: !path, run: () => path && void copy(path) },
+        { label: 'Open in Claude', icon: 'agent', disabled: !path || !p.exists, run: () => onNewAgent(p, 'claude') },
+        { label: 'Open in Codex', icon: 'agent', disabled: !path || !p.exists, run: () => onNewAgent(p, 'codex') },
+        { label: 'Open terminal here', icon: 'terminal', disabled: !path || !p.exists, run: () => onNewShell(p) },
+        { label: 'Rename…', icon: 'pencil', sep: true, disabled: !path, run: () => (renaming = `p:${p.key}`) },
         {
           label: pinnedNow ? 'Unpin project' : 'Pin project',
+          icon: 'pin',
           disabled: !path,
           run: () => path && void setPinned(path, p.name),
         },
+        {
+          label: 'Open in Explorer',
+          icon: 'folder',
+          sep: true,
+          disabled: !path || !p.exists,
+          run: () => path && void openInExplorer(path),
+        },
+        { label: 'Copy path', icon: 'copy', disabled: !path, run: () => path && void copy(path) },
       ],
     };
   }
@@ -118,16 +128,18 @@
       y: e.clientY,
       items: [
         ...(sessionMarks.has(sessionKey(s))
-          ? [{ label: 'Park (close the tab, keep the row)', run: () => onPark(sessionKey(s)) }]
+          ? [{ label: 'Park (close the tab, keep the row)', icon: 'close' as const, run: () => onPark(sessionKey(s)) }]
           : []),
-        { label: 'Rename…', run: () => (renaming = `s:${sessionKey(s)}`) },
-        { label: 'Copy session id', run: () => void copy(s.id) },
+        { label: 'Rename…', icon: 'pencil', run: () => (renaming = `s:${sessionKey(s)}`) },
+        { label: 'Copy session id', icon: 'copy', sep: true, run: () => void copy(s.id) },
         {
           label: 'Copy resume command',
+          icon: 'copy',
           run: () => void agentCommand(s.provider, s.id).then(copy).catch(e => appState.error = String(e)),
         },
         {
           label: 'Open in Explorer',
+          icon: 'folder',
           disabled: !dir,
           run: () => dir && void openInExplorer(dir),
         },
@@ -158,6 +170,7 @@
 {#snippet node(project: Project, forceOpen: boolean)}
   <ProjectNode
     {project}
+    {query}
     {limit}
     {forceOpen}
     groupByBranch={appState.settings?.ui.groupByBranch ?? false}
@@ -181,7 +194,15 @@
 {/snippet}
 
 {#if appState.loading}
-  <div class="hint">scanning…</div>
+  <!-- Shaped like the rows that replace it: a project, then a few sessions. -->
+  <div class="skeleton" aria-busy="true" aria-label="Scanning sessions">
+    {#each [9, 13] as width, p (p)}
+      <div class="sk-project"><span class="ghost" style="width: {width}ch"></span></div>
+      {#each [16, 12, 18] as w, s (s)}
+        <div class="sk-session"><span class="ghost" style="width: {w}ch"></span></div>
+      {/each}
+    {/each}
+  </div>
 {:else if appState.error}
   <div class="hint err">{appState.error}</div>
 {:else if scratch}
@@ -197,8 +218,21 @@
     {/if}
   {/each}
 {:else if mine.length === 0}
-  <div class="hint">
-    No agent sessions found yet. Run <code>claude</code> or <code>codex</code> in a project and it will appear here.
+  <div class="first-run">
+    <h3>No sessions yet</h3>
+    <p>Start Claude or Codex in a folder and its sessions show up here.</p>
+    <div class="starts">
+      {#if onOpenFolder}<button class="start primary" onclick={onOpenFolder}><Icon name="folder" size={14} />Open a folder</button>{/if}
+      {#if onAsk}
+        <button class="start" onclick={() => onAsk('claude')}><Icon name="agent" size={14} />Ask Claude</button>
+        <button class="start" onclick={() => onAsk('codex')}><Icon name="agent" size={14} />Ask Codex</button>
+      {/if}
+    </div>
+    <dl>
+      <dt>Ask an agent</dt><dd><kbd>{chordFor('askAgent')}</kbd></dd>
+      <dt>New shell</dt><dd><kbd>{chordFor('newTab')}</kbd></dd>
+      <dt>Command palette</dt><dd><kbd>{chordFor('palette')}</kbd></dd>
+    </dl>
   </div>
 {:else if shown.length === 0}
   <div class="hint">Nothing matches “{query.trim()}”.</div>
@@ -211,6 +245,76 @@
 {/if}
 
 <style>
+  .first-run {
+    margin: 10px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--fg-dim);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  h3 {
+    margin: 0 0 4px;
+    color: var(--fg-bright);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .first-run p {
+    margin: 0 0 12px;
+  }
+  .starts {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .start {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-surface);
+    color: var(--fg);
+    font: inherit;
+    cursor: pointer;
+  }
+  .start:hover {
+    border-color: var(--accent);
+  }
+  .start.primary {
+    border-color: var(--accent-strong);
+    background: var(--accent-strong);
+    color: var(--on-accent);
+  }
+  dl {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px 8px;
+    margin: 14px 0 0;
+    font-size: 11px;
+  }
+  dd {
+    margin: 0;
+  }
+  kbd {
+    padding: 0 5px;
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: var(--bg-surface);
+    font: inherit;
+  }
+  /* Paddings match ProjectNode's row and SessionNode's indent. */
+  .sk-project {
+    padding: 7px 8px 7px 26px;
+    font-size: 12px;
+  }
+  .sk-session {
+    padding: 4px 10px 4px 62px;
+    font-size: 12px;
+  }
   .hint {
     padding: 10px 12px;
     color: var(--fg-faint);
@@ -229,11 +333,5 @@
   }
   .hint.err {
     color: var(--danger);
-  }
-  code {
-    padding: 1px 4px;
-    border-radius: 3px;
-    background: var(--bg-chrome);
-    font-size: 10px;
   }
 </style>

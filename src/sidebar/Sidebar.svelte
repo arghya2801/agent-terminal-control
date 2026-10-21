@@ -3,6 +3,7 @@
   import SessionList from './SessionList.svelte';
   import LiveRow from './LiveRow.svelte';
   import NotesPad from './NotesPad.svelte';
+  import Icon from '../lib/Icon.svelte';
   import { focusActiveTerminal } from '../terminal/manager';
   import { enterList, listKeys, rows } from '../lib/roving';
   import { usageCosts } from '../lib/ipc';
@@ -25,6 +26,8 @@
     onOpenSession,
     onNewShell,
     onNewAgent,
+    onOpenFolder,
+    onAsk,
     onNewTab,
   }: {
     activeKey: TabKey | null;
@@ -45,6 +48,9 @@
     onNewAgent: (p: Project, provider: AgentProvider) => void;
     onNewChat: () => void;
     onPickAgent: (p: Project) => void;
+    onOpenFolder: () => void;
+    /** Starts Claude or Codex in the scratch directory. */
+    onAsk: (provider: AgentProvider) => void;
     onNewTab: () => void;
     onCloseTab: (key: TabKey) => void;
   } = $props();
@@ -138,16 +144,16 @@
   <header>
     <span class="title">Agents <span class="n">{tabs.length} open</span></span>
     <div class="actions">
-      <button class="icon" onclick={onNewTab} title="New tab (Ctrl+Shift+T)" aria-label="New tab">+</button>
+      <button class="icon" onclick={onNewTab} title="New tab (Ctrl+Shift+T)" aria-label="New tab"><Icon name="plus" size={14} /></button>
       <button
         class="icon"
         onclick={toggleAllProjects}
         title={anyOpen ? 'Collapse all' : 'Expand all'}
         aria-label={anyOpen ? 'Collapse all' : 'Expand all'}
       >
-        {anyOpen ? '⌄' : '›'}
+        <Icon name={anyOpen ? 'collapse' : 'expand'} size={14} />
       </button>
-      <button class="icon" class:spin={refreshing} onclick={doRefresh} title="Rescan sessions" aria-label="Rescan sessions">⟳</button>
+      <button class="icon" class:spin={refreshing} onclick={doRefresh} title="Rescan sessions" aria-label="Rescan sessions"><Icon name="refresh" size={14} /></button>
     </div>
   </header>
 
@@ -156,7 +162,7 @@
       id="sidebar-search"
       type="search"
       placeholder="Filter projects and sessions"
-      title="Filter by project, path, session name or branch (Ctrl+Shift+P)"
+      title="Filter by project, path, session name or branch"
       aria-label="Filter projects and sessions"
       spellcheck="false"
       autocomplete="off"
@@ -181,7 +187,7 @@
       <div class="section">Shells</div>
       {#each loose as tab (tab.key)}<LiveRow {tab} active={tab.key === activeKey} indent={26} />{/each}
     {/if}
-    <SessionList {...common} />
+    <SessionList {...common} {onOpenFolder} {onAsk} />
     <SessionList scratch {...common} />
   </div>
 
@@ -206,7 +212,7 @@
   </div>
   <NotesPad />
 
-  <footer>{working} working · {waiting} need you · {parked.size} parked</footer>
+  <footer>{[`${working} working`, `${waiting} need you`, `${parked.size} parked`].join(', ')}</footer>
 </div>
 
 <style>
@@ -215,7 +221,7 @@
     height: 100%;
     flex-direction: column;
     border-right: 1px solid var(--border);
-    background: var(--bg);
+    background: var(--glass-bg);
     overflow: hidden;
   }
   header {
@@ -240,19 +246,24 @@
     gap: 2px;
   }
   .icon {
-    width: 20px;
+    display: grid;
+    width: 22px;
+    height: 22px;
+    place-items: center;
     border: none;
     border-radius: 4px;
     background: transparent;
     color: var(--fg-faint);
-    font-size: 12px;
     cursor: pointer;
   }
   .icon:hover {
-    background: var(--bg-surface);
-    color: var(--accent);
+    background: var(--bg-hover);
+    color: var(--fg-bright);
   }
-  .icon.spin {
+  .icon:active {
+    transform: scale(0.92);
+  }
+  .icon.spin :global(svg) {
     animation: spin 0.8s linear infinite;
   }
   @keyframes spin {
@@ -291,8 +302,9 @@
     height: 26px;
     padding: 0 10px;
     border-top: 1px solid var(--border);
-    color: var(--fg-faint);
-    font-size: 11px;
+    color: var(--fg-dim);
+    font-size: 12px;
+    font-weight: 600;
     cursor: row-resize;
     user-select: none;
   }
@@ -302,13 +314,14 @@
     outline: none;
   }
   .divider em {
+    color: var(--fg-faint);
+    font-size: 11px;
     font-style: normal;
+    font-weight: 400;
   }
   .list {
     flex: none;
     overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
   }
   .list :global([data-row]:focus-visible) {
     outline: 1px solid var(--accent);
@@ -318,6 +331,7 @@
     padding: 6px 10px;
     border-top: 1px solid var(--border);
     color: var(--fg-faint);
-    font-size: 10px;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
   }
 </style>

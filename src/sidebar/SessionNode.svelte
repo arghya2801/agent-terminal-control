@@ -6,10 +6,12 @@
   import StatusDot from '../lib/StatusDot.svelte';
   import { subfolderLabel } from '../lib/group';
   import InlineRename from '../lib/InlineRename.svelte';
+  import Highlight from '../lib/Highlight.svelte';
   import type { SessionMeta } from '../types';
 
   let {
     session,
+    query = '',
     projectPath,
     active = false,
     mark = null,
@@ -24,6 +26,7 @@
     onMenu,
   }: {
     session: SessionMeta;
+    query?: string;
     /** Null when the project has no trusted path; resume is then disabled. */
     projectPath: string | null;
     active?: boolean;
@@ -73,12 +76,12 @@
 >
   {#if mark}<span class="mark"><StatusDot {mark} title={markTitle(mark, providerName(session.provider))} /></span>{/if}
   <ProviderIcon provider={session.provider} />
-  <span class="label">{session.label}</span>
+  <span class="label"><Highlight text={session.label} {query} /></span>
   <span class="meta">
     {#if subfolder}<span class="sub" title="Started in {subfolder}">{subfolder}</span>{/if}
     {#if showBranch && session.gitBranch}
       <span class="branch" class:default={session.gitBranch === 'main'}>
-        {session.gitBranch}
+        <Highlight text={session.gitBranch} {query} />
       </span>
     {/if}
     {#if cost >= 0.01}<span class="cost" class:high={cost >= 5}>${cost < 10 ? cost.toFixed(2) : cost.toFixed(0)}</span>{/if}

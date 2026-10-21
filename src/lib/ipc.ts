@@ -75,6 +75,11 @@ export function openDevtools(): Promise<void> {
 }
 
 /** The directory "Ask Claude" runs in, or with `chats` the one new chats run in; created if missing. */
+/** The native folder picker; null when cancelled. */
+export function pickFolder(): Promise<string | null> {
+  return invoke<string | null>('folder_dialog');
+}
+
 export function scratchDir(kind?: 'chats'): Promise<string> {
   return invoke<string>('scratch_dir', { kind });
 }

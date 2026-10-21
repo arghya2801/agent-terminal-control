@@ -1,9 +1,12 @@
 <script lang="ts">
+  import { slide } from 'svelte/transition';
   import { sessionKey } from '../lib/agents';
+  import Icon from '../lib/Icon.svelte';
   import SessionNode from './SessionNode.svelte';
   import LiveRow from './LiveRow.svelte';
   import InlineRename from '../lib/InlineRename.svelte';
-  import { isExpanded, toggleExpanded } from '../lib/stores.svelte';
+  import Highlight from '../lib/Highlight.svelte';
+  import { enterMs, isExpanded, toggleExpanded } from '../lib/stores.svelte';
   import { shortenPath } from '../lib/format';
   import { branchGroups } from '../lib/branchGroups';
   import type { Project, SessionMeta, TabKey, TabSummary } from '../types';
@@ -11,6 +14,7 @@
 
   let {
     project,
+    query = '',
     limit,
     forceOpen = false,
     groupByBranch = false,
@@ -32,6 +36,8 @@
     onSessionMenu,
   }: {
     project: Project;
+    /** The sidebar filter, for marking what matched. */
+    query?: string;
     limit: number;
     /** Expanded regardless of the user's toggle, e.g. while a search is showing results. */
     forceOpen?: boolean;
@@ -82,7 +88,7 @@
   >
     {#if renaming === `p:${project.key}`}
       <div class="disclosure">
-        <span class="twisty" class:open>▸</span>
+        <span class="twisty" class:open><Icon name="chevron" size={12} /></span>
         <InlineRename
           value={project.name}
           onDone={(name) => onRenameProject(project, name)}
@@ -98,16 +104,16 @@
         aria-expanded={open}
         title={open ? 'Collapse' : 'Expand'}
       >
-        <span class="twisty" class:open>▸</span>
+        <span class="twisty" class:open><Icon name="chevron" size={12} /></span>
         {#if project.pinned}<span class="pin">●</span>{/if}
-        <span class="text" class:missing={!launchable}>{project.name}</span>
+        <span class="text" class:missing={!launchable}><Highlight text={project.name} {query} /></span>
         {#if hasTab}<span class="live" title="Open in a tab"></span>{/if}
         <span class="count">{project.sessions.length}</span>
       </button>
     {/if}
 
     <button
-      class="open"
+      class="shell"
       tabindex="-1"
       disabled={!launchable}
       onclick={() => onOpenProject(project)}
@@ -116,16 +122,18 @@
         : 'These sessions never recorded a working directory'}
       aria-label="Open a shell here"
     >
-      ▸_
+      <Icon name="terminal" size={14} />
     </button>
   </div>
 
   {#if open || live.length > 0 || liveTabs.length > 0}
-    <div class="sessions">
+    <!-- A filter opens every match at once; only a click on one project animates. -->
+    <div class="sessions" transition:slide={{ duration: forceOpen ? 0 : enterMs() }}>
       {#each liveTabs as tab (tab.key)}<LiveRow {tab} active={tab.key === activeKey} />{/each}
       {#snippet row(session: SessionMeta)}
         <SessionNode
           {session}
+          {query}
           projectPath={project.path}
           active={sessionKey(session) === activeSessionId}
           mark={sessionMarks.get(sessionKey(session)) ?? null}
@@ -164,9 +172,10 @@
     align-items: stretch;
     gap: 2px;
     padding-right: 6px;
+    transition: background-color var(--fast);
   }
   .row:hover {
-    background: var(--bg-chrome);
+    background: var(--bg-hover);
   }
   .row.active {
     background: color-mix(in srgb, var(--accent-strong) 16%, transparent);
@@ -202,10 +211,8 @@
   }
   .twisty {
     flex-shrink: 0;
-    width: 10px;
-    color: var(--fg-dim);
-    font-size: 11px;
-    transition: transform 120ms ease;
+    color: var(--fg-faint);
+    transition: transform var(--fast) var(--ease-out), color var(--fast);
   }
   .disclosure:hover .twisty {
     color: var(--accent);
@@ -229,35 +236,36 @@
   }
   .count {
     flex-shrink: 0;
-    padding: 0 5px;
-    border-radius: 8px;
-    background: var(--bg-surface);
+    margin-left: auto;
     color: var(--fg-faint);
-    font-size: 9px;
-    line-height: 14px;
+    font-size: 11px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
   }
-  .open {
+  .shell {
+    display: grid;
     flex-shrink: 0;
-    padding: 0 5px;
+    align-self: center;
+    width: 22px;
+    height: 22px;
+    place-items: center;
     border: none;
     border-radius: 4px;
     background: transparent;
     color: var(--fg-faint);
-    font-family: ui-monospace, monospace;
-    font-size: 10px;
     cursor: pointer;
     opacity: 0;
   }
-  .row:hover .open {
+  .row:hover .shell:not(:disabled),
+  .shell:focus-visible {
     opacity: 1;
   }
-  .open:hover:not(:disabled) {
+  .shell:hover:not(:disabled) {
     background: var(--border);
     color: var(--accent);
   }
-  .open:disabled {
+  .shell:disabled {
     cursor: default;
-    opacity: 0;
   }
   .branch-head {
     overflow: hidden;

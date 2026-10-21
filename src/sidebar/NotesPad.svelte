@@ -93,8 +93,6 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
     color: var(--fg);
     font-size: 12px;
     line-height: 1.6;

@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
+  import { fly } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
   import ProviderPicker from './lib/ProviderPicker.svelte';
   import { providerName, sessionKey } from './lib/agents';
   import TabBar from './tabs/TabBar.svelte';
@@ -10,6 +12,10 @@
   import UsagePanel from './usage/UsagePanel.svelte';
   import ShortcutsPanel from './settings/ShortcutsPanel.svelte';
   import ConfirmDialog from './lib/ConfirmDialog.svelte';
+  import Icon from './lib/Icon.svelte';
+  import Tooltip from './lib/Tooltip.svelte';
+  import UsageChip from './tabs/UsageChip.svelte';
+  import { loadClaudeLimits } from './lib/limits.svelte';
   import {
     isPermissionGranted,
     requestPermission,
@@ -19,6 +25,7 @@
     adjustZoom,
     appState,
     currentZoom,
+    enterMs,
     initStores,
     saveSettings,
     sidebarOpen,
@@ -42,18 +49,31 @@
     onChord,
     openTab,
     refit,
+    refitNow,
+    tabAt,
+    hasSelection,
+    copySelection,
+    pasteInto,
+    selectAllIn,
+    clearTerminal,
     renameTab,
     activate,
     focusOtherPane,
     isSplit,
+    getSplitRatio,
+    setSplitRatio,
     splitWith,
     unsplit,
     type AttentionReason,
     type Tab,
   } from './terminal/manager';
-  import { matchChord, type Action } from './lib/keymap';
+  import { actionList, chordFor, matchChord, type Action } from './lib/keymap';
+  import CommandPalette, { type Command } from './lib/CommandPalette.svelte';
+  import ContextMenu, { type MenuItem } from './sidebar/ContextMenu.svelte';
+  import type { IconName } from './lib/Icon.svelte';
+  import { relativeTime } from './lib/format';
   import { parseSavedTabs, type SavedTab } from './lib/restore';
-  import { agentCommand, openDevtools, scratchDir } from './lib/ipc';
+  import { agentCommand, openDevtools, pickFolder, scratchDir } from './lib/ipc';
   import { projectKey } from './lib/paths';
   import { resolveSessions, type TabRef } from './lib/sessions';
   import { zoomLabel } from './lib/zoom';
@@ -114,7 +134,7 @@
   // --- restore tabs on launch
   const TABS_KEY = import.meta.env.VITE_ATC_PLAYGROUND === '1' ? 'atc.playground.tabs' : 'atc.tabs';
   /** Until startup has reopened the saved tabs, saving would overwrite them. */
-  let restoring = true;
+  let restoring = $state(true);
 
   let savedTabs = '';
   function saveTabs(all: Tab[]) {
@@ -188,6 +208,8 @@
   let showFind = $state(false);
   type PageName = 'settings' | 'usage' | 'shortcuts';
   let page = $state<PageName | null>(null);
+  /** Settings and shortcuts open over the whole app, which waits behind them. */
+  const popup = $derived(page === 'settings' || page === 'shortcuts');
   let renamingTab = $state<TabKey | null>(null);
   /** A busy tab waiting on the close confirmation. */
   let closing = $state<{ key: TabKey; title: string; what: string } | null>(null);
@@ -203,6 +225,8 @@
   const SIDEBAR_MIN = 160;
   const SIDEBAR_MAX = 800;
   const SIDEBAR_DEFAULT = 260;
+  /** Svelte's `cubicOut`, which the drawer uses, so drawer and terminal move as one. */
+  const DRAWER_EASE = 'cubic-bezier(0.33, 1, 0.68, 1)';
   /** Live width while the edge is being dragged; saved once, when the drag ends. */
   let dragWidth = $state<number | null>(null);
   const width = $derived(dragWidth ?? appState.settings?.ui.sidebarWidth ?? SIDEBAR_DEFAULT);
@@ -235,7 +259,26 @@
     handle.addEventListener('pointercancel', end);
   }
 
+  let split = $state(false);
+  let splitRatio = $state(0.5);
+
+  function dragSplit(e: PointerEvent) {
+    if (e.button !== 0) return;
+    const handle = e.currentTarget as HTMLElement;
+    const box = wrapper.getBoundingClientRect();
+    handle.setPointerCapture(e.pointerId);
+    const move = (m: PointerEvent) => setSplitRatio((m.clientX - box.left) / box.width);
+    const end = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', end);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', end);
+  }
+
   function sync() {
+    split = isSplit();
+    splitRatio = getSplitRatio();
     const all = listTabs();
     tabs = all.map((t) => ({
       key: t.key,
@@ -336,6 +379,174 @@
     });
   }
 
+  /** A folder that is not a project yet: pick it, then pick the agent to start there. */
+  async function openFolder() {
+    const path = await pickFolder().catch((e) => void (error = String(e)));
+    if (!path) return;
+    const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+    picker = { project: { key: projectKey(path), path, name, pinned: false, exists: true, lastActiveMs: 0, sessions: [] } };
+  }
+
+  // --- right-click: ATC's own menu, never the WebView's
+  let contextMenu = $state<{ x: number; y: number; items: MenuItem[]; dropdown?: boolean } | null>(null);
+
+  function terminalItems(key: TabKey): MenuItem[] {
+    const selected = hasSelection(key);
+    return [
+      { label: 'Copy', icon: 'copy', hint: 'Ctrl+C', disabled: !selected, run: () => void copySelection(key) },
+      { label: 'Paste', icon: 'paste', hint: 'Ctrl+V', run: () => void pasteInto(key) },
+      { label: 'Select all', run: () => selectAllIn(key) },
+      { label: 'Clear terminal', run: () => clearTerminal(key) },
+      { label: 'Find…', icon: 'search', sep: true, hint: chordFor('find'), run: () => runAction('find') },
+      { label: isSplit() ? 'Back to one pane' : 'Split', icon: 'split', hint: chordFor('toggleSplit'), run: () => void toggleSplit() },
+      { label: 'Rename tab…', icon: 'pencil', hint: chordFor('renameTab'), run: () => (renamingTab = key) },
+      { label: 'Close tab', icon: 'close', sep: true, hint: chordFor('closeTab'), run: () => void requestClose(key) },
+    ];
+  }
+
+  /** Cut, copy and paste for text boxes and the notes pad, through the browser's own commands. */
+  function editItems(field: HTMLElement): MenuItem[] {
+    const input = field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement ? field : null;
+    const selected = input ? input.selectionStart !== input.selectionEnd : !document.getSelection()?.isCollapsed;
+    const exec = (command: string) => () => {
+      field.focus();
+      document.execCommand(command);
+    };
+    return [
+      { label: 'Cut', hint: 'Ctrl+X', disabled: !selected, run: exec('cut') },
+      { label: 'Copy', icon: 'copy', hint: 'Ctrl+C', disabled: !selected, run: exec('copy') },
+      {
+        label: 'Paste',
+        icon: 'paste',
+        hint: 'Ctrl+V',
+        run: () =>
+          void navigator.clipboard.readText().then((text) => {
+            field.focus();
+            document.execCommand('insertText', false, text);
+          }),
+      },
+      { label: 'Select all', hint: 'Ctrl+A', sep: true, run: () => (input ? (input.focus(), input.select()) : exec('selectAll')()) },
+    ];
+  }
+
+  /** Runs after any component's own menu, which marks the event handled. */
+  function onContextMenu(e: MouseEvent) {
+    if (e.defaultPrevented) return;
+    e.preventDefault();
+    const target = e.target as HTMLElement;
+    const key = tabAt(target);
+    if (key) {
+      activate(key);
+      contextMenu = { x: e.clientX, y: e.clientY, items: terminalItems(key) };
+      return;
+    }
+    const field = target.closest<HTMLElement>('input, textarea, [contenteditable="true"]');
+    if (field) contextMenu = { x: e.clientX, y: e.clientY, items: editItems(field) };
+  }
+
+  /** Usage opens as a tab after the terminals and stays there; `page` says it is in front. */
+  let usageTab = $state(false);
+  function openUsage() {
+    usageTab = true;
+    page = 'usage';
+  }
+  function closeUsage() {
+    usageTab = false;
+    if (page === 'usage') page = null;
+  }
+
+  /** A menu dropped from a tab bar button. */
+  function menuAt(e: MouseEvent, items: MenuItem[]) {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    contextMenu = { x: r.right, y: r.bottom + 4, items, dropdown: true };
+  }
+
+  /** In the focused tab's project when it has one, else the scratch directory. */
+  function newMenu(e: MouseEvent) {
+    const p = activeProject();
+    // Only a real project is named; the scratch and chats folders are not places people pick.
+    const where = p && !p.kind ? ` in ${p.name}` : '';
+    const agent = (provider: AgentProvider): MenuItem => ({
+      label: `${providerName(provider)}${where}`,
+      icon: 'agent',
+      run: () => (p ? void newAgentIn(p, provider) : askAgent(provider)),
+    });
+    menuAt(e, [
+      { label: `Shell${where}`, icon: 'terminal', run: () => void (p ? newShellIn(p) : newTab()) },
+      agent('claude'),
+      agent('codex'),
+    ]);
+  }
+
+  function moreMenu(e: MouseEvent) {
+    menuAt(e, [
+      { label: 'Usage and spend', icon: 'usage', hint: chordFor('openUsage'), run: openUsage },
+      { label: 'Settings', icon: 'settings', hint: chordFor('openSettings'), run: () => (page = 'settings') },
+      { label: 'Keyboard shortcuts', icon: 'keyboard', hint: chordFor('showShortcuts'), run: () => (page = 'shortcuts') },
+      { label: 'Command palette', icon: 'search', sep: true, hint: chordFor('palette'), run: () => (paletteOpen = true) },
+      ...(currentZoom() !== 1 ? [{ label: `Reset zoom (${zoomLabel(currentZoom())})`, hint: chordFor('zoomReset'), run: () => void adjustZoom(0) }] : []),
+    ]);
+  }
+
+  // --- command palette
+  let paletteOpen = $state(false);
+  const ACTION_ICONS: Partial<Record<Action, IconName>> = {
+    newTab: 'plus', closeTab: 'close', renameTab: 'pencil', toggleSplit: 'split', toggleSidebar: 'sidebar',
+    openSettings: 'settings', openUsage: 'usage', showShortcuts: 'keyboard', find: 'search', focusSearch: 'search',
+    askAgent: 'agent', openAgentHere: 'agent', openShellHere: 'terminal', toggleDebug: 'pulse',
+  };
+
+  /** Built when the palette opens, from what is open and indexed at that moment. */
+  function paletteCommands(): { all: Command[]; initial: Command[] } {
+    const projectName = (key: string | null) => appState.index.projects.find((p) => p.key === key)?.name;
+    const tabCmds: Command[] = tabs.map((t) => ({
+      id: `t:${t.key}`,
+      label: t.title,
+      detail: ['Open tab', projectName(t.projectKey)].filter(Boolean).join(', '),
+      icon: t.provider ? 'agent' : 'terminal',
+      run: () => activate(t.key),
+    }));
+    const extras: Command[] = [
+      { id: 'x:folder', label: 'Open a folder…', detail: 'Pick a folder, then Claude or Codex', icon: 'folder', run: () => void openFolder() },
+      { id: 'x:claude', label: 'Ask Claude', detail: 'In the scratch directory', icon: 'agent', run: () => askAgent('claude') },
+      { id: 'x:codex', label: 'Ask Codex', detail: 'In the scratch directory', icon: 'agent', run: () => askAgent('codex') },
+    ];
+    const pages: Command[] = [
+      { id: 'g:usage', label: 'Usage and spend', icon: 'usage', chord: chordFor('openUsage'), run: openUsage },
+      { id: 'g:settings', label: 'Settings', icon: 'settings', chord: chordFor('openSettings'), run: () => (page = 'settings') },
+      { id: 'g:shortcuts', label: 'Keyboard shortcuts', icon: 'keyboard', chord: chordFor('showShortcuts'), run: () => (page = 'shortcuts') },
+    ];
+    // The pages are listed above, so their actions are not listed twice.
+    const listed: Action[] = ['palette', 'openUsage', 'openSettings', 'showShortcuts'];
+    const actions: Command[] = actionList()
+      .filter((a) => !listed.includes(a.action))
+      .map((a) => ({ id: `a:${a.action}`, label: a.label, icon: ACTION_ICONS[a.action] ?? 'chevron', chord: a.chord, run: () => runAction(a.action) }));
+    const live = appState.index.projects.filter((p) => p.path && p.exists && !p.kind);
+    const projectCmds: Command[] = live.flatMap((p) => [
+      { id: `p:${p.key}`, label: p.name, detail: `Open a shell, ${p.path}`, icon: 'terminal', run: () => void openProject(p) },
+      { id: `pa:${p.key}`, label: `New agent in ${p.name}`, detail: p.path ?? '', icon: 'agent', run: () => (picker = { project: p }) },
+    ]);
+    const sessions = appState.index.projects
+      .flatMap((p) => p.sessions.map((s) => ({ p, s })))
+      .sort((a, b) => b.s.mtimeMs - a.s.mtimeMs);
+    const sessionCmd = ({ p, s }: (typeof sessions)[number]): Command => ({
+      id: `s:${sessionKey(s)}`,
+      label: s.label,
+      detail: `Resume, ${providerName(s.provider)} in ${p.name}, ${relativeTime(s.mtimeMs)}`,
+      icon: 'agent',
+      run: () => void openSession(p, s),
+    });
+    return {
+      all: [...tabCmds, ...pages, ...extras, ...actions, ...projectCmds, ...sessions.map(sessionCmd)],
+      initial: [...tabCmds, ...pages, ...sessions.slice(0, 10).map(sessionCmd), ...extras, ...actions],
+    };
+  }
+
+  function askAgent(provider: AgentProvider) {
+    picker = { project: null };
+    finishPicker(provider);
+  }
+
   function openSession(p: Project, s: SessionMeta) {
     const cwd = s.cwd ?? p.path;
     if (!cwd) return;
@@ -384,16 +595,30 @@
   }
 
   /** Windows notification for a background tab, only while ATC itself is not focused. */
-  async function notifyAttention(title: string, provider: AgentProvider | null, reason: AttentionReason) {
-    if (document.hasFocus() || appState.settings?.ui.notifications === false) return;
+  /** In-app notes for background tabs, while ATC has focus and Windows would show nothing. */
+  let toasts = $state<{ id: number; key: TabKey; title: string; body: string }[]>([]);
+  let toastId = 0;
+  function dismissToast(id: number) {
+    toasts = toasts.filter((t) => t.id !== id);
+  }
+
+  function attentionBody(provider: AgentProvider | null, reason: AttentionReason) {
+    return reason === 'finished' ? `${provider ? providerName(provider) : 'Agent'} finished and is waiting for you.` : 'Needs your attention.';
+  }
+
+  async function notifyAttention(key: TabKey, title: string, provider: AgentProvider | null, reason: AttentionReason) {
+    if (document.hasFocus()) {
+      const id = ++toastId;
+      toasts = [...toasts.filter((t) => t.key !== key), { id, key, title, body: attentionBody(provider, reason) }].slice(-3);
+      setTimeout(() => dismissToast(id), 6000);
+      return;
+    }
+    if (appState.settings?.ui.notifications === false) return;
     try {
       let granted = await isPermissionGranted();
       if (!granted) granted = (await requestPermission()) === 'granted';
       if (!granted) return;
-      sendNotification({
-        title,
-        body: reason === 'finished' ? `${provider ? providerName(provider) : 'Agent'} finished and is waiting for you.` : 'Needs your attention.',
-      });
+      sendNotification({ title, body: attentionBody(provider, reason) });
     } catch (e) {
       console.warn('notification failed', e);
     }
@@ -465,7 +690,9 @@
         togglePage('settings');
         break;
       case 'openUsage':
-        togglePage('usage');
+        // In front already: back to the terminal, which takes the page out of view.
+        if (page === 'usage') focusActiveTerminal();
+        else openUsage();
         break;
       case 'showShortcuts':
         togglePage('shortcuts');
@@ -479,6 +706,9 @@
         break;
       case 'askAgent':
         picker = { project: null };
+        break;
+      case 'palette':
+        paletteOpen = true;
         break;
       case 'toggleSplit':
         void toggleSplit();
@@ -494,8 +724,15 @@
     // Chords pressed while the terminal has focus arrive here, already consumed by
     // xterm's interceptor so they never reach the shell.
     const offChord = onChord(runAction);
-    const offAttention = onAttention((t, reason) => void notifyAttention(displayTitle(t), t.provider, reason));
+    const offAttention = onAttention((t, reason) => void notifyAttention(t.key, displayTitle(t), t.provider, reason));
     mountTerminals(wrapper);
+    const onPaneFocus = () => {
+      if (page === 'usage') page = null;
+    };
+    wrapper.addEventListener('focusin', onPaneFocus);
+    // The tab bar's chip shows the limits all the time, not only on the usage page.
+    void loadClaudeLimits();
+    const limitPoll = setInterval(() => void loadClaudeLimits(), 90_000);
     // Settings decide whether the sidebar is open, and so how wide the pane is.
     // Spawning before that lands starts the PTY at the wrong width.
     void (async () => {
@@ -508,9 +745,11 @@
 
     // Covers focus being anywhere outside the terminal -- the sidebar, a button.
     const onKey = (e: KeyboardEvent) => {
-      if (picker) return;
+      if (picker || paletteOpen) return;
       const action = matchChord(e);
       if (!action) return;
+      // Behind a popup the app is inert; only its own chord, or the other popup's, acts.
+      if (popup && action !== 'openSettings' && action !== 'showShortcuts') return;
       e.preventDefault();
       runAction(action);
     };
@@ -523,105 +762,75 @@
     }, 60_000);
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', refit);
+    window.addEventListener('contextmenu', onContextMenu);
 
     return () => {
       off();
       offChord();
       offAttention();
       clearInterval(parker);
+      wrapper.removeEventListener('focusin', onPaneFocus);
+      clearInterval(limitPoll);
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('contextmenu', onContextMenu);
       window.removeEventListener('resize', refit);
     };
   });
 
-  // The terminal shares the wrapper's geometry, so it must re-measure once the panel
-  // has finished animating -- otherwise ConPTY keeps the old column count.
+  // The terminal shares the wrapper's geometry, so it re-measures whenever the panel
+  // changes; otherwise ConPTY keeps the old column count. Waiting any longer than
+  // refit's own debounce leaves the terminal clipped at its old width, then jumping.
   $effect(() => {
-    void open;
     void width;
-    const t = setTimeout(refit, 180);
-    return () => clearTimeout(t);
+    refit();
+  });
+
+  // Toggling the sidebar: the column snaps and the terminal takes its final size in the
+  // same frame, then slides with the drawer. Resizing after the slide made it jump.
+  let main: HTMLElement;
+  $effect(() => {
+    const isOpen = open;
+    // Untracked: startup ending is not a toggle.
+    if (untrack(() => restoring)) return refit();
+    refitNow();
+    const ms = enterMs();
+    const w = untrack(() => width);
+    if (ms) main.animate([{ transform: `translateX(${isOpen ? -w : w}px)` }, { transform: 'none' }], { duration: ms, easing: DRAWER_EASE });
   });
 </script>
 
-<div class="app" style="--panel: {open ? width : 0}px">
-  <nav class="rail">
-    <button
-      class="rail-btn"
-      class:on={open}
-      onclick={() => toggleSidebar()}
-      title="Toggle projects (Ctrl+Shift+B)"
-      aria-label="Toggle projects"
-    >
-      ▤
-    </button>
-    <button
-      class="rail-btn"
-      onclick={() => newTab()}
-      title="New shell (Ctrl+Shift+T)"
-      aria-label="New shell"
-    >
-      +
-    </button>
-    <button
-      class="rail-btn"
-      onclick={() => (picker = { project: null })}
-      title="Ask agent, outside any project (Ctrl+Shift+A)"
-      aria-label="Ask agent"
-    >
-      ✳
-    </button>
-    <button
-      class="rail-btn"
-      class:on={page === 'usage'}
-      onclick={() => togglePage('usage')}
-      title="Usage and spend (Ctrl+Shift+U)"
-      aria-label="Usage and spend"
-    >
-      $
-    </button>
-    <div class="spacer"></div>
-    {#if currentZoom() !== 1}
-      <button
-        class="rail-btn zoom"
-        onclick={() => adjustZoom(0)}
-        title="Reset zoom (Ctrl+0)"
-        aria-label="Reset zoom"
-      >
-        {zoomLabel(currentZoom())}
-      </button>
-    {/if}
-    <button
-      class="rail-btn small"
-      class:on={page === 'shortcuts'}
-      onclick={() => togglePage('shortcuts')}
-      title="Keyboard shortcuts (Ctrl+Shift+?)"
-      aria-label="Keyboard shortcuts"
-    >
-      ?
-    </button>
-    <button
-      class="rail-btn small"
-      class:on={page === 'settings'}
-      onclick={() => togglePage('settings')}
-      title="Settings (Ctrl+,)"
-      aria-label="Settings"
-    >
-      ⚙
-    </button>
-    <button
-      class="rail-btn small"
-      class:on={showDebug}
-      onclick={() => (showDebug = !showDebug)}
-      title="PTY stats (Ctrl+Shift+D)"
-      aria-label="Toggle debug overlay"
-    >
-      ◔
-    </button>
-  </nav>
+{#snippet barStart()}
+  <button class="bar-btn" class:on={open} onclick={() => toggleSidebar()} title="Toggle sidebar (Ctrl+Shift+B)" aria-label="Toggle sidebar">
+    <Icon name="sidebar" />
+  </button>
+{/snippet}
 
-  <aside class="panel">
+{#snippet barNew()}
+  <div class="new-split">
+    <button class="bar-btn" onclick={() => newTab()} title="New shell (Ctrl+Shift+T)" aria-label="New shell"><Icon name="plus" /></button>
+    <button class="bar-btn caret" onclick={newMenu} title="New shell, Claude or Codex" aria-label="New shell, Claude or Codex">
+      <Icon name="chevronDown" size={12} />
+    </button>
+  </div>
+{/snippet}
+
+{#snippet barEnd()}
+  {#if currentZoom() !== 1}
+    <button class="bar-btn zoom" onclick={() => adjustZoom(0)} title="Reset zoom (Ctrl+0)">{zoomLabel(currentZoom())}</button>
+  {/if}
+  <UsageChip active={page === 'usage'} onOpen={openUsage} onClose={closeUsage} />
+  <button class="bar-btn" onclick={moreMenu} title="Usage, settings and shortcuts" aria-label="More"><Icon name="more" /></button>
+{/snippet}
+
+<div class="app" style="--panel: {open ? width : 0}px">
+
+  <aside class="panel" inert={popup}>
     {#if open}
+      <div
+        class="drawer"
+        style="width: {width}px"
+        transition:fly={{ x: -width, opacity: 1, duration: restoring ? 0 : enterMs(), easing: cubicOut }}
+      >
       <div
         class="resize"
         class:dragging={dragWidth !== null}
@@ -647,28 +856,58 @@
         onNewAgent={newAgentIn}
         onNewChat={() => (picker = { project: null, chats: true })}
         onPickAgent={(p) => (picker = { project: p })}
+        onOpenFolder={openFolder}
+        onAsk={askAgent}
         {tabs}
         onNewTab={newTab}
         onCloseTab={requestClose}
       />
+      </div>
     {/if}
   </aside>
 
-  <section class="main">
-    <TabBar {tabs} {activeKey} onNew={newTab} onClose={requestClose} bind:renaming={renamingTab} />
-    <div class="panes" bind:this={wrapper}></div>
-    {#if page === 'settings'}
-      <SettingsPanel onClose={() => (page = null)} />
-    {:else if page === 'usage'}
-      <UsagePanel onClose={() => (page = null)} sessionKey={activeSessionId} />
-    {:else if page === 'shortcuts'}
-      <ShortcutsPanel onClose={() => (page = null)} />
+  <section class="main" bind:this={main} inert={popup}>
+    <TabBar
+      {tabs}
+      activeKey={page === 'usage' ? null : activeKey}
+      onClose={requestClose}
+      bind:renaming={renamingTab}
+      usage={usageTab ? (page === 'usage' ? 'active' : 'open') : 'hidden'}
+      onUsage={openUsage}
+      onCloseUsage={closeUsage}
+      start={barStart}
+      afterTabs={barNew}
+      end={barEnd}
+    />
+    <div class="panes" bind:this={wrapper}>
+      {#if split}
+        <div
+          class="split-handle"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize panes"
+          title="Drag to resize, double-click to make them equal"
+          style="left: {splitRatio * 100}%"
+          onpointerdown={dragSplit}
+          ondblclick={() => setSplitRatio(0.5)}
+        ></div>
+      {/if}
+    </div>
+    {#if page === 'usage'}
+      <UsagePanel onClose={closeUsage} sessionKey={activeSessionId} />
     {/if}
     {#if showFind}
       <FindBar onClose={() => (showFind = false)} />
     {/if}
     {#if showDebug}
       <DebugOverlay {activeKey} />
+    {/if}
+    {#if contextMenu}
+      <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenu.items} dropdown={contextMenu.dropdown} onClose={() => (contextMenu = null)} />
+    {/if}
+    {#if paletteOpen}
+      {@const cmds = paletteCommands()}
+      <CommandPalette commands={cmds.all} initial={cmds.initial} onClose={() => (paletteOpen = false)} />
     {/if}
     {#if picker}
       <ProviderPicker
@@ -687,76 +926,165 @@
         Close <strong>{closing.title}</strong>? The {closing.what} running in it will be stopped.
       </ConfirmDialog>
     {/if}
-    {#if error}
-      <div class="error">
-        {error}
-        <button onclick={() => (error = null)} aria-label="Dismiss">×</button>
-      </div>
-    {/if}
+    <div class="corner" aria-live="polite">
+      {#each toasts as t (t.id)}
+        <div class="toast">
+          <button class="toast-body" onclick={() => { activate(t.key); dismissToast(t.id); }} title="Go to this tab">
+            <strong>{t.title}</strong>
+            <span>{t.body}</span>
+          </button>
+          <button class="dismiss" onclick={() => dismissToast(t.id)} aria-label="Dismiss"><Icon name="close" size={14} /></button>
+        </div>
+      {/each}
+      {#if error}
+        <div class="error">
+          {error}
+          <button class="dismiss" onclick={() => (error = null)} aria-label="Dismiss"><Icon name="close" size={14} /></button>
+        </div>
+      {/if}
+    </div>
   </section>
+
+  <!-- Popups, outside everything they make inert. -->
+  {#if page === 'settings'}
+    <SettingsPanel onClose={() => (page = null)} />
+  {:else if page === 'shortcuts'}
+    <ShortcutsPanel onClose={() => (page = null)} />
+  {/if}
 </div>
+<Tooltip />
 
 <style>
   .app {
     display: grid;
     height: 100%;
-    grid-template-columns: 44px var(--panel) 1fr;
+    grid-template-columns: var(--panel) 1fr;
   }
-  .rail {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    padding-top: 8px;
-    border-right: 1px solid var(--border);
-    background: var(--bg-chrome);
+  /* The drawer is not clipped to its column: sliding out, it overlays the terminal that
+     has already taken the column back, and leaves by the window's edge. */
+  .panel {
+    position: relative;
   }
-  .rail-btn {
-    width: 30px;
-    height: 30px;
+  .bar-btn {
+    display: grid;
+    width: 28px;
+    height: 26px;
+    flex: none;
+    align-self: center;
+    place-items: center;
     border: none;
     border-radius: 6px;
     background: transparent;
-    color: var(--fg-faint);
-    font-size: 14px;
-    line-height: 1;
+    color: var(--fg-dim);
     cursor: pointer;
   }
-  .rail-btn:hover {
+  .bar-btn:hover {
     background: var(--bg-hover);
-    color: var(--fg);
+    color: var(--fg-bright);
   }
-  .rail-btn.on {
+  .bar-btn:active {
+    transform: scale(0.92);
+  }
+  .bar-btn.on {
     color: var(--accent);
   }
-  .rail-btn.small {
-    font-size: 12px;
-  }
-  .rail-btn.zoom {
+  .bar-btn.zoom {
     width: auto;
-    padding: 0 4px;
+    padding: 0 6px;
     color: var(--accent);
-    font-size: 10px;
+    font-size: 11px;
   }
-  .spacer {
-    flex: 1;
-  }
-  .panel {
-    position: relative;
+  /* New shell, and beside it the choice of what to start. One rounded piece: hovering
+     either half lights the whole of it, the half under the pointer a shade more. */
+  .new-split {
+    display: flex;
+    align-self: center;
+    margin-left: 4px;
     overflow: hidden;
+    border-radius: 6px;
+    transition: background-color var(--fast);
   }
+  .new-split:hover {
+    background: var(--bg-hover);
+  }
+  .new-split .bar-btn {
+    border-radius: 0;
+  }
+  .new-split .bar-btn:hover {
+    background: color-mix(in srgb, var(--fg) 8%, transparent);
+  }
+  .new-split .bar-btn:active {
+    transform: none;
+  }
+  .new-split .caret {
+    width: 22px;
+  }
+  .new-split:hover .caret {
+    box-shadow: inset 1px 0 0 var(--border);
+  }
+  .drawer {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1;
+  }
+  /* Centred on the sidebar's border. The line and grip wait a beat on hover, so passing
+     the mouse across does not flash them. */
   .resize {
     position: absolute;
     top: 0;
-    right: 0;
+    right: -4px;
     bottom: 0;
     z-index: 5;
-    width: 5px;
+    width: 8px;
     cursor: col-resize;
   }
-  .resize:hover,
-  .resize.dragging {
-    background: color-mix(in srgb, var(--accent) 40%, transparent);
+  .split-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 3;
+    width: 8px;
+    margin-left: -4px;
+    cursor: col-resize;
+  }
+  .resize::before,
+  .resize::after,
+  .split-handle::before,
+  .split-handle::after {
+    position: absolute;
+    left: 3px;
+    width: 2px;
+    background: var(--accent);
+    content: '';
+    opacity: 0;
+    transition: opacity var(--fast);
+  }
+  .resize::before,
+  .split-handle::before {
+    top: 0;
+    bottom: 0;
+  }
+  .resize::after,
+  .split-handle::after {
+    top: 50%;
+    left: 1px;
+    width: 6px;
+    height: 32px;
+    margin-top: -16px;
+    border-radius: 3px;
+  }
+  .resize:hover::before,
+  .resize:hover::after,
+  .split-handle:hover::before,
+  .split-handle:hover::after {
+    opacity: 1;
+    transition-delay: 150ms;
+  }
+  .resize.dragging::before,
+  .resize.dragging::after {
+    opacity: 1;
   }
   .main {
     position: relative;
@@ -768,30 +1096,83 @@
      share its geometry and can be measured once. */
   .panes {
     position: relative;
+    background: var(--bg);
     flex: 1;
     min-height: 0;
     padding: 6px 0 0 8px;
   }
-  .error {
+  /* Toasts and the error stack here, newest at the bottom, so they never overlap. */
+  .corner {
     position: absolute;
     right: 12px;
     bottom: 12px;
+    z-index: 25;
     display: flex;
-    max-width: 60%;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    border: 1px solid var(--danger-strong);
-    border-radius: 8px;
-    background: rgba(35, 15, 15, 0.95);
-    color: var(--danger);
-    font-size: 12px;
+    max-width: min(60%, 420px);
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    pointer-events: none;
   }
-  .error button {
+  .toast,
+  .error {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 8px;
+    box-shadow: var(--shadow-pop);
+    font-size: 12px;
+    pointer-events: auto;
+    animation: atc-rise var(--enter) var(--ease-out);
+  }
+  .toast {
+    padding: 4px 6px 4px 4px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    background: var(--bg-chrome);
+  }
+  .toast-body {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 8px;
     border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--fg-dim);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .toast-body:hover {
+    background: var(--bg-hover);
+  }
+  .toast-body strong {
+    overflow: hidden;
+    color: var(--fg-bright);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .error {
+    padding: 8px 8px 8px 12px;
+    border: 1px solid var(--danger-strong);
+    background: color-mix(in srgb, var(--danger) 12%, var(--bg-chrome));
+    color: var(--danger);
+  }
+  .dismiss {
+    padding: 2px;
+    border: none;
+    border-radius: 4px;
     background: transparent;
     color: inherit;
-    font-size: 15px;
     cursor: pointer;
+  }
+  .toast .dismiss {
+    color: var(--fg-faint);
+  }
+  .dismiss:hover {
+    background: var(--bg-hover);
   }
 </style>
