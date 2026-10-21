@@ -13,6 +13,7 @@
   import ShortcutsPanel from './settings/ShortcutsPanel.svelte';
   import ConfirmDialog from './lib/ConfirmDialog.svelte';
   import Icon from './lib/Icon.svelte';
+  import Tooltip from './lib/Tooltip.svelte';
   import {
     isPermissionGranted,
     requestPermission,
@@ -542,7 +543,7 @@
 </script>
 
 <div class="app" style="--panel: {open ? width : 0}px">
-  <nav class="rail">
+  <nav class="rail" data-tip-side="right">
     <button
       class="rail-btn"
       class:on={open}
@@ -705,6 +706,7 @@
     </div>
   </section>
 </div>
+<Tooltip />
 
 <style>
   .app {
