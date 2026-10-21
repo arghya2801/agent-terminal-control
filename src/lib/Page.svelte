@@ -3,9 +3,16 @@
   import { focusActiveTerminal } from '../terminal/manager';
   import Icon from './Icon.svelte';
 
-  /** Full-pane overlay above the terminals, which stay mounted underneath. */
-  let { title, onClose, children }: { title: string; onClose: () => void; children: Snippet } =
-    $props();
+  /**
+   * Full-pane overlay above the terminals, which stay mounted underneath. `full` also
+   * covers the sidebar and tab bar, leaving only the rail; nothing under it changes size.
+   */
+  let {
+    title,
+    full = false,
+    onClose,
+    children,
+  }: { title: string; full?: boolean; onClose: () => void; children: Snippet } = $props();
 
   let root: HTMLDivElement;
 
@@ -24,7 +31,7 @@
   });
 </script>
 
-<div class="page" tabindex="-1" bind:this={root}>
+<div class="page" class:full tabindex="-1" bind:this={root}>
   <header>
     <h1>{title}</h1>
     <button class="close" onclick={onClose} aria-label="Close" title="Close (Esc)"><Icon name="close" /></button>
@@ -42,6 +49,11 @@
     overflow-y: auto;
     background: var(--bg);
     outline: none;
+  }
+  /* 44px is the rail. */
+  .page.full {
+    position: fixed;
+    inset: 0 0 0 44px;
   }
   header {
     position: sticky;
