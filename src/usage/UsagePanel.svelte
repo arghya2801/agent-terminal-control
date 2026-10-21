@@ -2,10 +2,11 @@
   import { onMount } from 'svelte';
   import { sessionKey, providerName } from '../lib/agents';
   import Page from '../lib/Page.svelte';
+  import SectionNav from '../lib/SectionNav.svelte';
   import Icon from '../lib/Icon.svelte';
   import { save } from '../lib/desktop';
   import { claudeUsage, codexUsage, codexUsageStop, usageCosts, writeTextFile } from '../lib/ipc';
-  import { appState, enterMs } from '../lib/stores.svelte';
+  import { appState } from '../lib/stores.svelte';
   import { cacheHitRate, chartData, dailyTotals, hourToLocalDay, rollingAverage, sessionStats, streaks, usageBlocks, formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv, weekHeatmap, type Split, type UsageBlock } from '../lib/costs';
   import {
     clampDays,
@@ -365,36 +366,13 @@
     new Date(`${hour}:00:00Z`).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const fmt = (v: number) => (metric === 'tokens' ? `${formatTokens(v)} tokens` : formatUsd(v));
 
-  // --- section list: jumps to a part of the page and follows the scroll
-  let nav = $state<HTMLElement>();
-  let active = $state('u-limits');
+  // --- section list
   const sections = $derived([
     { id: 'u-limits', label: 'Limits' },
     ...(current && (session || !costsLoaded) ? [{ id: 'u-session', label: "This tab's session" }] : []),
     { id: 'u-local', label: 'Local usage' },
     ...(costsLoaded && !costError ? [{ id: 'u-breakdown', label: 'Breakdown' }] : []),
   ]);
-
-  function go(id: string) {
-    document.getElementById(id)?.scrollIntoView({ behavior: enterMs() ? 'smooth' : 'auto', block: 'start' });
-  }
-
-  onMount(() => {
-    const scroller = nav?.closest('.page');
-    if (!scroller) return;
-    const onScroll = () => {
-      const top = scroller.getBoundingClientRect().top + 90;
-      const atEnd = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
-      let current = sections[0].id;
-      for (const s of sections) {
-        const el = document.getElementById(s.id);
-        if (el && (el.getBoundingClientRect().top <= top || atEnd)) current = s.id;
-      }
-      active = current;
-    };
-    scroller.addEventListener('scroll', onScroll, { passive: true });
-    return () => scroller.removeEventListener('scroll', onScroll);
-  });
 
   onMount(() => {
     restoreRange();
@@ -432,13 +410,7 @@
 {/snippet}
 
 <Page title="Usage" wide {onClose}>
-  <div class="layout">
-  <nav bind:this={nav} aria-label="Usage sections">
-    {#each sections as s (s.id)}
-      <button class:on={active === s.id} aria-current={active === s.id ? 'location' : undefined} onclick={() => go(s.id)}>{s.label}</button>
-    {/each}
-  </nav>
-  <div class="content">
+  <SectionNav {sections}>
   <span id="u-limits" class="anchor"></span>
   <div class="plan-grid">
   <section class="plan-card" aria-label="Claude plan limits">
@@ -898,51 +870,12 @@
       <p class="muted">Pricing is incomplete for: {summary.unpricedModels.join(', ')} (unknown portions are excluded from the estimate).</p>
     {/if}
   {/if}
-  </div>
-  </div>
+  </SectionNav>
 </Page>
 
 <style>
-  .layout {
-    display: grid;
-    grid-template-columns: 150px minmax(0, 1fr);
-    gap: 32px;
-  }
-  /* Below the page's sticky header. */
-  nav {
-    position: sticky;
-    top: 70px;
-    display: flex;
-    flex-direction: column;
-    align-self: start;
-    gap: 2px;
-    margin-top: 18px;
-  }
-  nav button {
-    padding: 6px 10px;
-    border: none;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--fg-dim);
-    font: inherit;
-    font-size: 13px;
-    text-align: left;
-    cursor: pointer;
-  }
-  nav button:hover {
-    background: var(--bg-hover);
-    color: var(--fg);
-  }
-  nav button.on {
-    background: color-mix(in srgb, var(--accent-strong) 16%, transparent);
-    box-shadow: inset 2px 0 0 var(--accent);
-    color: var(--fg-bright);
-  }
   .anchor {
     display: block;
-  }
-  [id^='u-'] {
-    scroll-margin-top: 64px;
   }
   .plan-grid {
     display: grid;

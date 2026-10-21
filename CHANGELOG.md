@@ -13,7 +13,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Tab close buttons show on hover and on the focused tab only.
 - Sidebar and settings headings use sentence case, and the sidebar footer leaves out zero counts.
 - The UI uses Segoe UI Variable, the Windows 11 system font.
-- Settings fills the window beside the rail, with its options split into General, Appearance, Terminal, Sidebar, Claude, Codex and Names.
+- Settings fills the window beside the rail as one scrolling page, with a section list to jump between General, Appearance, Terminal, Sidebar, Agents and Names. Claude and Codex share the Agents section side by side.
 - The usage page holds space for Codex limits and this tab's session while they load, so nothing below jumps when they arrive.
 
 ### Added

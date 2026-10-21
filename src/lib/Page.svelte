@@ -134,7 +134,8 @@
     color: var(--on-accent);
   }
   .body :global(input),
-  .body :global(select) {
+  .body :global(select),
+  .body :global(textarea) {
     padding: 5px 8px;
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -144,7 +145,8 @@
     font-size: 12px;
   }
   .body :global(input:focus),
-  .body :global(select:focus) {
+  .body :global(select:focus),
+  .body :global(textarea:focus) {
     border-color: var(--accent);
     outline: none;
   }
