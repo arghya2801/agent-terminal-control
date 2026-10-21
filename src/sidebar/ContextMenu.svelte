@@ -22,8 +22,16 @@
     x,
     y,
     items,
+    dropdown = false,
     onClose,
-  }: { x: number; y: number; items: MenuItem[]; onClose: () => void } = $props();
+  }: {
+    x: number;
+    y: number;
+    items: MenuItem[];
+    /** Dropped from a button: `x` is the button's right edge, and the menu hugs its labels. */
+    dropdown?: boolean;
+    onClose: () => void;
+  } = $props();
 
   let el: HTMLDivElement;
   /** Set once measured; until then the menu renders at the cursor. Keeping it separate
@@ -32,7 +40,7 @@
   // Nudged back inside the window when opened near an edge.
   const pos = $derived(clamped ?? { left: x, top: y });
   // Grows out of the corner nearest the cursor, which is not the top-left once nudged.
-  const origin = $derived(`${pos.top < y ? 'bottom' : 'top'} ${pos.left < x ? 'right' : 'left'}`);
+  const origin = $derived(`${pos.top < y ? 'bottom' : 'top'} ${dropdown || pos.left < x ? 'right' : 'left'}`);
 
   function choose(item: MenuItem) {
     if (item.disabled || !item.run) return;
@@ -46,7 +54,7 @@
     document.body.append(el);
     const rect = el.getBoundingClientRect();
     clamped = {
-      left: Math.min(x, window.innerWidth - rect.width - 8),
+      left: Math.max(8, Math.min(dropdown ? x - rect.width : x, window.innerWidth - rect.width - 8)),
       top: Math.max(8, Math.min(y, window.innerHeight - rect.height - 8)),
     };
 
@@ -85,6 +93,7 @@
 
 <div
   class="menu"
+  class:dropdown
   bind:this={el}
   style="left: {pos.left}px; top: {pos.top}px; transform-origin: {origin}"
   role="menu"
@@ -129,6 +138,12 @@
     background: var(--bg-chrome);
     box-shadow: var(--shadow-pop);
     animation: atc-pop var(--enter) var(--ease-out);
+  }
+  .menu.dropdown {
+    min-width: 0;
+  }
+  .dropdown .item {
+    padding: 5px 12px 5px 8px;
   }
   .item {
     display: flex;

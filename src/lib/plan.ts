@@ -103,3 +103,19 @@ export function codexLimits(plan: Record<string, unknown>): PlanLimit[] {
     });
   });
 }
+
+/** "resets in 2h 10m (Tue 14:00)", for a limit's reset time. */
+export function resetsIn(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const mins = Math.round((d.getTime() - Date.now()) / 60_000);
+  const when = d.toLocaleString(undefined, {
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  if (mins <= 0) return 'resetting now';
+  if (mins < 60) return `resets in ${mins}m (${when})`;
+  if (mins < 48 * 60) return `resets in ${Math.floor(mins / 60)}h ${mins % 60}m (${when})`;
+  return `resets ${when}`;
+}

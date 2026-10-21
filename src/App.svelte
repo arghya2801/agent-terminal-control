@@ -14,6 +14,8 @@
   import ConfirmDialog from './lib/ConfirmDialog.svelte';
   import Icon from './lib/Icon.svelte';
   import Tooltip from './lib/Tooltip.svelte';
+  import UsageChip from './tabs/UsageChip.svelte';
+  import { loadClaudeLimits } from './lib/limits.svelte';
   import {
     isPermissionGranted,
     requestPermission,
@@ -362,7 +364,7 @@
   }
 
   // --- right-click: ATC's own menu, never the WebView's
-  let contextMenu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  let contextMenu = $state<{ x: number; y: number; items: MenuItem[]; dropdown?: boolean } | null>(null);
 
   function terminalItems(key: TabKey): MenuItem[] {
     const selected = hasSelection(key);
@@ -418,6 +420,50 @@
     if (field) contextMenu = { x: e.clientX, y: e.clientY, items: editItems(field) };
   }
 
+  /** Usage opens as a tab after the terminals and stays there; `page` says it is in front. */
+  let usageTab = $state(false);
+  function openUsage() {
+    usageTab = true;
+    page = 'usage';
+  }
+  function closeUsage() {
+    usageTab = false;
+    if (page === 'usage') page = null;
+  }
+
+  /** A menu dropped from a tab bar button. */
+  function menuAt(e: MouseEvent, items: MenuItem[]) {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    contextMenu = { x: r.right, y: r.bottom + 4, items, dropdown: true };
+  }
+
+  /** In the focused tab's project when it has one, else the scratch directory. */
+  function newMenu(e: MouseEvent) {
+    const p = activeProject();
+    // Only a real project is named; the scratch and chats folders are not places people pick.
+    const where = p && !p.kind ? ` in ${p.name}` : '';
+    const agent = (provider: AgentProvider): MenuItem => ({
+      label: `${providerName(provider)}${where}`,
+      icon: 'agent',
+      run: () => (p ? void newAgentIn(p, provider) : askAgent(provider)),
+    });
+    menuAt(e, [
+      { label: `Shell${where}`, icon: 'terminal', run: () => void (p ? newShellIn(p) : newTab()) },
+      agent('claude'),
+      agent('codex'),
+    ]);
+  }
+
+  function moreMenu(e: MouseEvent) {
+    menuAt(e, [
+      { label: 'Usage and spend', icon: 'usage', hint: chordFor('openUsage'), run: openUsage },
+      { label: 'Settings', icon: 'settings', hint: chordFor('openSettings'), run: () => (page = 'settings') },
+      { label: 'Keyboard shortcuts', icon: 'keyboard', hint: chordFor('showShortcuts'), run: () => (page = 'shortcuts') },
+      { label: 'Command palette', icon: 'search', sep: true, hint: chordFor('palette'), run: () => (paletteOpen = true) },
+      ...(currentZoom() !== 1 ? [{ label: `Reset zoom (${zoomLabel(currentZoom())})`, hint: chordFor('zoomReset'), run: () => void adjustZoom(0) }] : []),
+    ]);
+  }
+
   // --- command palette
   let paletteOpen = $state(false);
   const ACTION_ICONS: Partial<Record<Action, IconName>> = {
@@ -441,8 +487,15 @@
       { id: 'x:claude', label: 'Ask Claude', detail: 'In the scratch directory', icon: 'agent', run: () => askAgent('claude') },
       { id: 'x:codex', label: 'Ask Codex', detail: 'In the scratch directory', icon: 'agent', run: () => askAgent('codex') },
     ];
+    const pages: Command[] = [
+      { id: 'g:usage', label: 'Usage and spend', icon: 'usage', chord: chordFor('openUsage'), run: openUsage },
+      { id: 'g:settings', label: 'Settings', icon: 'settings', chord: chordFor('openSettings'), run: () => (page = 'settings') },
+      { id: 'g:shortcuts', label: 'Keyboard shortcuts', icon: 'keyboard', chord: chordFor('showShortcuts'), run: () => (page = 'shortcuts') },
+    ];
+    // The pages are listed above, so their actions are not listed twice.
+    const listed: Action[] = ['palette', 'openUsage', 'openSettings', 'showShortcuts'];
     const actions: Command[] = actionList()
-      .filter((a) => a.action !== 'palette')
+      .filter((a) => !listed.includes(a.action))
       .map((a) => ({ id: `a:${a.action}`, label: a.label, icon: ACTION_ICONS[a.action] ?? 'chevron', chord: a.chord, run: () => runAction(a.action) }));
     const live = appState.index.projects.filter((p) => p.path && p.exists && !p.kind);
     const projectCmds: Command[] = live.flatMap((p) => [
@@ -460,8 +513,8 @@
       run: () => void openSession(p, s),
     });
     return {
-      all: [...tabCmds, ...extras, ...actions, ...projectCmds, ...sessions.map(sessionCmd)],
-      initial: [...tabCmds, ...sessions.slice(0, 10).map(sessionCmd), ...extras, ...actions],
+      all: [...tabCmds, ...pages, ...extras, ...actions, ...projectCmds, ...sessions.map(sessionCmd)],
+      initial: [...tabCmds, ...pages, ...sessions.slice(0, 10).map(sessionCmd), ...extras, ...actions],
     };
   }
 
@@ -609,7 +662,9 @@
         togglePage('settings');
         break;
       case 'openUsage':
-        togglePage('usage');
+        // In front already: back to the terminal, which takes the page out of view.
+        if (page === 'usage') focusActiveTerminal();
+        else openUsage();
         break;
       case 'showShortcuts':
         togglePage('shortcuts');
@@ -643,6 +698,13 @@
     const offChord = onChord(runAction);
     const offAttention = onAttention((t, reason) => void notifyAttention(t.key, displayTitle(t), t.provider, reason));
     mountTerminals(wrapper);
+    const onPaneFocus = () => {
+      if (page === 'usage') page = null;
+    };
+    wrapper.addEventListener('focusin', onPaneFocus);
+    // The tab bar's chip shows the limits all the time, not only on the usage page.
+    void loadClaudeLimits();
+    const limitPoll = setInterval(() => void loadClaudeLimits(), 90_000);
     // Settings decide whether the sidebar is open, and so how wide the pane is.
     // Spawning before that lands starts the PTY at the wrong width.
     void (async () => {
@@ -671,6 +733,8 @@
       off();
       offChord();
       offAttention();
+      wrapper.removeEventListener('focusin', onPaneFocus);
+      clearInterval(limitPoll);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('contextmenu', onContextMenu);
       window.removeEventListener('resize', refit);
@@ -699,72 +763,30 @@
   });
 </script>
 
+{#snippet barStart()}
+  <button class="bar-btn" class:on={open} onclick={() => toggleSidebar()} title="Toggle sidebar (Ctrl+Shift+B)" aria-label="Toggle sidebar">
+    <Icon name="sidebar" />
+  </button>
+{/snippet}
+
+{#snippet barNew()}
+  <div class="new-split">
+    <button class="bar-btn" onclick={() => newTab()} title="New shell (Ctrl+Shift+T)" aria-label="New shell"><Icon name="plus" /></button>
+    <button class="bar-btn caret" onclick={newMenu} title="New shell, Claude or Codex" aria-label="New shell, Claude or Codex">
+      <Icon name="chevronDown" size={12} />
+    </button>
+  </div>
+{/snippet}
+
+{#snippet barEnd()}
+  {#if currentZoom() !== 1}
+    <button class="bar-btn zoom" onclick={() => adjustZoom(0)} title="Reset zoom (Ctrl+0)">{zoomLabel(currentZoom())}</button>
+  {/if}
+  <UsageChip active={page === 'usage'} onOpen={openUsage} onClose={closeUsage} />
+  <button class="bar-btn" onclick={moreMenu} title="Usage, settings and shortcuts" aria-label="More"><Icon name="more" /></button>
+{/snippet}
+
 <div class="app" style="--panel: {open ? width : 0}px">
-  <nav class="rail" data-tip-side="right" inert={popup}>
-    <button
-      class="rail-btn"
-      class:on={open}
-      onclick={() => toggleSidebar()}
-      title="Toggle projects (Ctrl+Shift+B)"
-      aria-label="Toggle projects"
-    >
-      <Icon name="sidebar" />
-    </button>
-    <button
-      class="rail-btn"
-      onclick={() => newTab()}
-      title="New shell (Ctrl+Shift+T)"
-      aria-label="New shell"
-    >
-      <Icon name="plus" />
-    </button>
-    <button
-      class="rail-btn"
-      onclick={() => (picker = { project: null })}
-      title="Ask agent, outside any project (Ctrl+Shift+A)"
-      aria-label="Ask agent"
-    >
-      <Icon name="agent" />
-    </button>
-    <button
-      class="rail-btn"
-      class:on={page === 'usage'}
-      onclick={() => togglePage('usage')}
-      title="Usage and spend (Ctrl+Shift+U)"
-      aria-label="Usage and spend"
-    >
-      <Icon name="usage" />
-    </button>
-    <div class="spacer"></div>
-    {#if currentZoom() !== 1}
-      <button
-        class="rail-btn zoom"
-        onclick={() => adjustZoom(0)}
-        title="Reset zoom (Ctrl+0)"
-        aria-label="Reset zoom"
-      >
-        {zoomLabel(currentZoom())}
-      </button>
-    {/if}
-    <button
-      class="rail-btn"
-      class:on={page === 'shortcuts'}
-      onclick={() => togglePage('shortcuts')}
-      title="Keyboard shortcuts (Ctrl+Shift+?)"
-      aria-label="Keyboard shortcuts"
-    >
-      <Icon name="keyboard" />
-    </button>
-    <button
-      class="rail-btn"
-      class:on={page === 'settings'}
-      onclick={() => togglePage('settings')}
-      title="Settings (Ctrl+,)"
-      aria-label="Settings"
-    >
-      <Icon name="settings" />
-    </button>
-  </nav>
 
   <aside class="panel" inert={popup}>
     {#if open}
@@ -805,7 +827,18 @@
   </aside>
 
   <section class="main" bind:this={main} inert={popup}>
-    <TabBar {tabs} {activeKey} onNew={newTab} onClose={requestClose} bind:renaming={renamingTab} />
+    <TabBar
+      {tabs}
+      activeKey={page === 'usage' ? null : activeKey}
+      onClose={requestClose}
+      bind:renaming={renamingTab}
+      usage={usageTab ? (page === 'usage' ? 'active' : 'open') : 'hidden'}
+      onUsage={openUsage}
+      onCloseUsage={closeUsage}
+      start={barStart}
+      afterTabs={barNew}
+      end={barEnd}
+    />
     <div class="panes" bind:this={wrapper}>
       {#if split}
         <div
@@ -821,7 +854,7 @@
       {/if}
     </div>
     {#if page === 'usage'}
-      <UsagePanel onClose={() => (page = null)} sessionKey={activeSessionId} />
+      <UsagePanel onClose={closeUsage} sessionKey={activeSessionId} />
     {/if}
     {#if showFind}
       <FindBar onClose={() => (showFind = false)} />
@@ -830,7 +863,7 @@
       <DebugOverlay {activeKey} />
     {/if}
     {#if contextMenu}
-      <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenu.items} onClose={() => (contextMenu = null)} />
+      <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenu.items} dropdown={contextMenu.dropdown} onClose={() => (contextMenu = null)} />
     {/if}
     {#if paletteOpen}
       {@const cmds = paletteCommands()}
@@ -885,71 +918,69 @@
   .app {
     display: grid;
     height: 100%;
-    grid-template-columns: 44px var(--panel) 1fr;
+    grid-template-columns: var(--panel) 1fr;
   }
-  .rail {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
+  /* The drawer is not clipped to its column: sliding out, it overlays the terminal that
+     has already taken the column back, and leaves by the window's edge. */
+  .panel {
     position: relative;
-    z-index: 2;
-    padding: 8px 0;
-    border-right: 1px solid var(--border);
-    background: var(--glass-chrome);
   }
-  .rail-btn {
-    position: relative;
+  .bar-btn {
     display: grid;
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 26px;
+    flex: none;
+    align-self: center;
     place-items: center;
     border: none;
     border-radius: 6px;
     background: transparent;
-    color: var(--fg-faint);
-    line-height: 1;
+    color: var(--fg-dim);
     cursor: pointer;
   }
-  .rail-btn:hover {
+  .bar-btn:hover {
     background: var(--bg-hover);
-    color: var(--fg);
+    color: var(--fg-bright);
   }
-  .rail-btn:active {
-    transform: scale(0.94);
+  .bar-btn:active {
+    transform: scale(0.92);
   }
-  .rail-btn.on {
+  .bar-btn.on {
     color: var(--accent);
   }
-  /* Flush with the window edge, so the open page reads as attached to its button. */
-  .rail-btn::before {
-    position: absolute;
-    top: 7px;
-    bottom: 7px;
-    left: -6px;
-    width: 2px;
-    border-radius: 0 2px 2px 0;
-    background: var(--accent);
-    content: '';
-    transform: scaleY(0);
-    transition: transform var(--enter) var(--ease-out);
-  }
-  .rail-btn.on::before {
-    transform: scaleY(1);
-  }
-  .rail-btn.zoom {
+  .bar-btn.zoom {
     width: auto;
-    padding: 0 4px;
+    padding: 0 6px;
     color: var(--accent);
-    font-size: 10px;
+    font-size: 11px;
   }
-  .spacer {
-    flex: 1;
+  /* New shell, and beside it the choice of what to start. One rounded piece: hovering
+     either half lights the whole of it, the half under the pointer a shade more. */
+  .new-split {
+    display: flex;
+    align-self: center;
+    margin-left: 4px;
+    overflow: hidden;
+    border-radius: 6px;
+    transition: background-color var(--fast);
   }
-  /* The drawer is not clipped to its column: sliding out, it overlays the terminal that
-     has already taken the column back. The rail covers it from the other side. */
-  .panel {
-    position: relative;
+  .new-split:hover {
+    background: var(--bg-hover);
+  }
+  .new-split .bar-btn {
+    border-radius: 0;
+  }
+  .new-split .bar-btn:hover {
+    background: color-mix(in srgb, var(--fg) 8%, transparent);
+  }
+  .new-split .bar-btn:active {
+    transform: none;
+  }
+  .new-split .caret {
+    width: 22px;
+  }
+  .new-split:hover .caret {
+    box-shadow: inset 1px 0 0 var(--border);
   }
   .drawer {
     position: absolute;

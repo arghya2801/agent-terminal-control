@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { sessionKey, providerName } from '../lib/agents';
   import Page from '../lib/Page.svelte';
   import SectionNav from '../lib/SectionNav.svelte';
   import Icon from '../lib/Icon.svelte';
   import { save } from '../lib/desktop';
-  import { claudeUsage, codexUsage, codexUsageStop, usageCosts, writeTextFile } from '../lib/ipc';
+  import { codexUsageStop, usageCosts, writeTextFile } from '../lib/ipc';
+  import { loadClaudeLimits, loadCodexLimits, planState } from '../lib/limits.svelte';
   import { appState } from '../lib/stores.svelte';
   import { cacheHitRate, chartData, dailyTotals, hourToLocalDay, rollingAverage, sessionStats, streaks, usageBlocks, formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv, weekHeatmap, type Split, type UsageBlock } from '../lib/costs';
   import {
@@ -19,41 +20,36 @@
     type Dates,
     type Selection,
   } from '../lib/range';
-  import { codexLimits, planLimits, weeklyBreakdown } from '../lib/plan';
+  import { codexLimits, planLimits, resetsIn, weeklyBreakdown } from '../lib/plan';
   import { relativeTime } from '../lib/format';
   import type { AgentProvider, CostRow } from '../types';
 
   let { onClose, sessionKey: current = null }: { onClose: () => void; sessionKey?: string | null } =
     $props();
 
-  let codexPlan = $state<Record<string, unknown> | null>(null);
-  let codexError = $state<string | null>(null);
-  let codexLoading = $state(false);
+  // Limits come from the app-wide store the tab bar's chip shares.
+  const codexPlan = $derived(planState.codex);
+  const codexError = $derived(planState.codexError);
+  const codexLoading = $derived(planState.codexLoading);
+  const loadCodex = loadCodexLimits;
   const CODEX_ROWS_KEY = 'atc.usage.codexRows';
   const lastCodexRows = readRows(CODEX_ROWS_KEY, 2);
   let codexRows = $state(lastCodexRows);
   /** Not installed last time either: reserving a card that then vanishes is worse than none. */
-  let codexMissing = $state(lastCodexRows === 0);
+  const codexMissing = $derived(planState.codexAt ? planState.codexMissing : lastCodexRows === 0);
   const codexWindows = $derived(codexPlan ? codexLimits(codexPlan) : []);
-  async function loadCodex() {
-    if (codexLoading) return;
-    codexLoading = true;
-    try {
-      const plan = await codexUsage();
-      codexMissing = plan === null;
-      codexPlan = plan;
-      codexError = null;
-      codexRows = rememberRows(CODEX_ROWS_KEY, plan === null ? 0 : codexWindows.length, codexRows);
-    }
-    catch (e) { codexMissing = false; codexError = String(e); }
-    finally { codexLoading = false; }
-  }
+  $effect(() => {
+    if (!planState.codexAt || planState.codexError) return;
+    const n = planState.codex === null ? 0 : codexWindows.length;
+    codexRows = rememberRows(CODEX_ROWS_KEY, n, untrack(() => codexRows));
+  });
 
   // --- plan limits
-  let plan = $state<Record<string, unknown> | null>(null);
-  let planError = $state<string | null>(null);
-  let planLoading = $state(false);
-  let planUpdatedAt = $state(0);
+  const plan = $derived(planState.claude);
+  const planError = $derived(planState.claudeError);
+  const planLoading = $derived(planState.claudeLoading);
+  const planUpdatedAt = $derived(plan ? planState.claudeAt : 0);
+  const loadPlan = loadClaudeLimits;
   /** Ticks so "updated 3m ago" stays current while the page sits open. */
   let now = $state(Date.now());
   /** Limits move slowly, and the endpoint rate-limits, so poll gently. */
@@ -91,36 +87,11 @@
     return n;
   }
 
-  async function loadPlan() {
-    if (planLoading) return;
-    planLoading = true;
-    try {
-      plan = await claudeUsage();
-      skeletonRows = rememberRows(ROWS_KEY, limits.length, skeletonRows);
-      planUpdatedAt = Date.now();
-      now = planUpdatedAt;
-      planError = null;
-    } catch (e) {
-      planError = String(e);
-    } finally {
-      planLoading = false;
-    }
-  }
-
-  function resetsIn(iso: string | null): string {
-    if (!iso) return '';
-    const d = new Date(iso);
-    const mins = Math.round((d.getTime() - Date.now()) / 60_000);
-    const when = d.toLocaleString(undefined, {
-      weekday: 'short',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-    if (mins <= 0) return 'resetting now';
-    if (mins < 60) return `resets in ${mins}m (${when})`;
-    if (mins < 48 * 60) return `resets in ${Math.floor(mins / 60)}h ${mins % 60}m (${when})`;
-    return `resets ${when}`;
-  }
+  $effect(() => {
+    if (!plan) return;
+    skeletonRows = rememberRows(ROWS_KEY, limits.length, untrack(() => skeletonRows));
+    now = Date.now();
+  });
 
   // --- spend
   let rows = $state<CostRow[]>([]);
@@ -376,10 +347,11 @@
 
   onMount(() => {
     restoreRange();
-    void loadPlan();
-    void loadCodex();
+    // The app polls Claude's limits already; only a stale answer is refreshed here.
+    if (Date.now() - planState.claudeAt > PLAN_REFRESH_MS) void loadPlan();
+    if (Date.now() - planState.codexAt > CODEX_REFRESH_MS) void loadCodex();
     void loadCosts();
-    const poll = setInterval(() => { void loadPlan(); void loadCosts(); }, PLAN_REFRESH_MS);
+    const poll = setInterval(() => void loadCosts(), PLAN_REFRESH_MS);
     // Each Codex read starts a `codex app-server` process, so it refreshes less often.
     const codexPoll = setInterval(() => void loadCodex(), CODEX_REFRESH_MS);
     const tick = setInterval(() => (now = Date.now()), 30_000);
