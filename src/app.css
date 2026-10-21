@@ -24,8 +24,8 @@
   --selection: #2a3b52;
   /* Not from the palette: motion and elevation are the same in every theme. */
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --fast: 90ms;
-  --enter: 200ms;
+  --fast: 75ms;
+  --enter: 160ms;
   /* The rail, tab bar and sidebar let the window's Mica backdrop show faintly through. */
   --glass-chrome: color-mix(in srgb, var(--bg-chrome) 70%, transparent);
   --glass-bg: color-mix(in srgb, var(--bg) 75%, transparent);

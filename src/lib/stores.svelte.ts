@@ -113,8 +113,8 @@ function applyMotion(pref = appState.settings?.ui.animations) {
   const root = document.documentElement;
   root.toggleAttribute('data-still', pref === 'off' || (pref !== 'on' && reduceMotion.matches));
   const speed = Math.min(4, Math.max(0.25, appState.settings?.ui.animationSpeed || 1));
-  root.style.setProperty('--fast', `${Math.round(90 / speed)}ms`);
-  root.style.setProperty('--enter', `${Math.round(200 / speed)}ms`);
+  root.style.setProperty('--fast', `${Math.round(75 / speed)}ms`);
+  root.style.setProperty('--enter', `${Math.round(160 / speed)}ms`);
 }
 
 /** How long an entrance takes in a JS transition: `--enter`, or 0 while motion is off. */
