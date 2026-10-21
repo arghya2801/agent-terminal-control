@@ -977,7 +977,7 @@
     transform: none;
   }
   .new-split .caret {
-    width: 18px;
+    width: 22px;
   }
   .new-split:hover .caret {
     box-shadow: inset 1px 0 0 var(--border);
