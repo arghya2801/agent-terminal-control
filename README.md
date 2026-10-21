@@ -131,8 +131,9 @@ build times, build resource use, runtime memory, validation, and migration detai
   including a session reached with `/resume` inside a tab
 - Closing a tab asks only when something is still running in it, and names it
 - Windows notification when a background session finishes while ATC is not focused
-- Ask either agent outside any project, in a shared scratch directory, or start a plain
-  chat with either. Both are listed in the sidebar's Scratch view, not among the projects
+- Ask either agent outside any project, in a shared scratch directory, or chat with one
+  that cannot change anything: Claude with no tools or MCP servers, Codex in a read-only
+  sandbox. Both start from the `+` in the sidebar's Scratch view, and are listed there
 - Search across scrollback with match counts
 - Themes for the whole app: ATC Dark, Nord, Rosé Pine, Catppuccin Mocha and Latte, plus
   your own
@@ -250,15 +251,33 @@ Every field is optional; missing ones take their default.
     "groupSubfolders": false,           // sessions from a subfolder under the project containing it
     "groupByBranch": false,             // sessions under the branch they ran on
     "notifications": true,              // notify when a background session needs you
-    "restoreTabs": true                 // reopen last session's tabs on launch
+    "restoreTabs": true,                // reopen last session's tabs on launch
+    "peek": "all",                      // Open view screen peek: "all", "waiting" or "off"
+    "outputGraph": true,                // Open view output graph
+    "taskAgent": "claude",              // what the task box starts with
+    "taskProject": "",                  // "" = the focused tab's project
+    "newTabIn": "home",                 // "project" opens Ctrl+Shift+T in the focused tab's project
+    "confirmClose": true,               // ask before closing a tab with a program running
+    "toasts": true,                     // in-app notes while ATC is focused
+    "toastSeconds": 6,
+    "limitsRefreshSec": 90,             // Claude plan limits
+    "codexRefreshSec": 300              // Codex limits; each read starts a Codex process
   },
   "terminal": {
     "fontFamily": "\"FiraCode Nerd Font Mono\", Consolas, monospace",
     "fontSize": 13,
-    "scrollback": 10000
+    "scrollback": 10000,
+    "cursorStyle": "bar",               // "block" or "underline"
+    "cursorBlink": true,
+    "lineHeight": 1.0,
+    "shell": "auto",                    // "pwsh" or "powershell"
+    "loadProfile": true,                // false starts tabs with -NoProfile
+    "gpuTabs": 4                        // tabs drawn with WebGL; 0 = software rendering
   },
   "claude": {
     "command": "claude",
+    "args": [],                               // on every launch, e.g. ["--model", "opus"]
+    "chatArgs": ["--tools=", "--strict-mcp-config"],  // added for chats
     "resumeArgs": ["--resume", "{session}"],  // {session} is the session id
     "scratchDir": null                        // null = <config dir>\\scratch
   }
