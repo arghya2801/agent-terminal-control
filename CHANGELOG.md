@@ -6,6 +6,19 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Changed
+- One set of line icons replaces the mixed symbols in the rail, sidebar, tab bar and find bar.
+- The focused tab has an accent line on its top edge. While an agent works, a light sweeps along that edge. A dot that needs you rings twice when it lands.
+- Menus, dialogs, pages and the find bar ease in, projects slide open, and the sidebar slides when toggled. Windows' "Show animations" setting turns this off.
+- Tab close buttons show on hover and on the focused tab only.
+- Sidebar and settings headings use sentence case, and the sidebar footer leaves out zero counts.
+- The UI uses Segoe UI Variable, the Windows 11 system font.
+
+### Fixed
+- Claude tab titles no longer show the ✳ twice.
+- Expanded projects show their chevron again; it was hidden whenever a project was open.
+- The find bar, error message and close confirmation follow light themes instead of staying dark.
+
 ## [0.4.3] - 2026-10-15
 
 ### Changed
