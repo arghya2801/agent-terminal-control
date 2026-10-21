@@ -603,12 +603,12 @@
     else focusActiveTerminal();
   }
 
+  let sidebar = $state<ReturnType<typeof Sidebar>>();
   async function focusSearch() {
     if (!sidebarOpen()) await toggleSidebar();
     await tick();
-    const input = document.getElementById('sidebar-search') as HTMLInputElement | null;
-    input?.focus();
-    input?.select();
+    await sidebar?.openSearch();
+    (document.getElementById('sidebar-search') as HTMLInputElement | null)?.select();
   }
 
   /** Windows notification for a background tab, only while ATC itself is not focused. */
@@ -837,6 +837,7 @@
         ondblclick={() => saveSidebarWidth(SIDEBAR_DEFAULT)}
       ></div>
       <Sidebar
+        bind:this={sidebar}
         {activeKey}
         {activeSessionId}
         {openProjectKeys}

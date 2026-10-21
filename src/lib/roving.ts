@@ -25,9 +25,19 @@ export function enterList(e: FocusEvent, list: HTMLElement, last: HTMLElement | 
   (last && list.contains(last) ? last : rows(list)[0])?.focus();
 }
 
-export function listKeys(e: KeyboardEvent, list: HTMLElement, leave: { up: () => void; escape: () => void }) {
+export function listKeys(
+  e: KeyboardEvent,
+  list: HTMLElement,
+  leave: { up: () => void; escape: () => void; type?: (char: string) => void },
+) {
   // Keys typed into an inline rename belong to the input.
   if ((e.target as HTMLElement).closest?.('input, textarea') || e.altKey) return;
+  // Typing on a row starts filtering with that character, as in VS Code's lists.
+  if (leave.type && e.key.length === 1 && e.key !== ' ' && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    leave.type(e.key);
+    return;
+  }
   const all = rows(list);
   const current = (e.target as HTMLElement).closest?.<HTMLElement>('[data-row]') ?? null;
   const i = current ? all.indexOf(current) : -1;

@@ -27,6 +27,18 @@ describe('listKeys', () => {
   };
   const leave = () => ({ up: vi.fn(), escape: vi.fn() });
 
+  it('starts filtering with a typed character, but not on chords or Space', () => {
+    const el = list();
+    const s1 = el.querySelector<HTMLElement>('#s1')!;
+    const type = vi.fn();
+    listKeys(key(s1, 'f'), el, { ...leave(), type });
+    listKeys(key(s1, ' '), el, { ...leave(), type });
+    const chord = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, cancelable: true });
+    Object.defineProperty(chord, 'target', { value: s1 });
+    listKeys(chord, el, { ...leave(), type });
+    expect(type.mock.calls).toEqual([['f']]);
+  });
+
   it('skips disabled rows, leaves upward from the top, goes up to the project', () => {
     const el = list();
     const [p, s1, s2] = ['p', 's1', 's2'].map((id) => document.getElementById(id)!);
