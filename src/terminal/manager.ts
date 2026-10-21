@@ -327,9 +327,10 @@ export async function openTab(
   });
 
   term.onTitleChange((t) => {
-    tab.autoTitle = usableTitle(t);
-    if (tab.provider === 'codex') { notify(); return; }
     const claude = claudeTitle(t);
+    // The status glyph is drawn by StatusDot; keeping it here showed it twice.
+    tab.autoTitle = claude?.name || usableTitle(t);
+    if (tab.provider === 'codex') { notify(); return; }
     const was = tab.activity;
     tab.activity = claude?.activity ?? null;
     if (was === 'working' && tab.activity === 'idle') flagAttention(tab, 'finished');
