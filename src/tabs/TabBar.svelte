@@ -1,8 +1,11 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
-  import { activate, focusActiveTerminal, moveTab, renameTab } from '../terminal/manager';
+  import { onMount, tick, type Snippet } from 'svelte';
+  import { activate, focusActiveTerminal, moveTab, renameTab, splitWith } from '../terminal/manager';
+  import ContextMenu, { type MenuItem } from '../sidebar/ContextMenu.svelte';
+  import { chordFor } from '../lib/keymap';
   import { reorderable } from '../lib/dragReorder';
   import InlineRename from '../lib/InlineRename.svelte';
+  import Icon from '../lib/Icon.svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import StatusDot from '../lib/StatusDot.svelte';
   import { providerName } from '../lib/agents';
@@ -10,10 +13,18 @@
   import { revealPosition, tabWheelDelta } from './scroll';
   import type { TabKey, TabSummary } from '../types';
 
-  let { tabs, activeKey, onNew, onClose, renaming = $bindable(null) }: {
+  let { tabs, activeKey, onClose, renaming = $bindable(null), usage = 'hidden', onUsage, onCloseUsage, start, afterTabs, end }: {
     tabs: TabSummary[];
     activeKey: TabKey | null;
-    onNew: () => void;
+    /** The usage page, shown as a tab after the terminals while it is open. */
+    usage?: 'hidden' | 'open' | 'active';
+    onUsage?: () => void;
+    onCloseUsage?: () => void;
+    /** The app's own buttons, before the tabs and after them. */
+    start?: Snippet;
+    /** Right after the last tab, as browsers place their new-tab button. */
+    afterTabs?: Snippet;
+    end?: Snippet;
     /** Asks first when something is still running in the tab. */
     onClose: (key: TabKey) => void;
     /** The tab whose name is being edited; the app sets it from the rename chord. */
@@ -78,6 +89,23 @@
     focusActiveTerminal();
   }
 
+  let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
+
+  /** Chords act on the active tab, so they are only hinted on its own menu. */
+  function tabMenu(e: MouseEvent, key: TabKey) {
+    e.preventDefault();
+    const active = key === activeKey;
+    menu = {
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        { label: 'Rename…', icon: 'pencil', hint: active ? chordFor('renameTab') : undefined, run: () => (renaming = key) },
+        { label: 'Split beside the current tab', icon: 'split', disabled: active, run: () => splitWith(key) },
+        { label: 'Close tab', icon: 'close', sep: true, hint: active ? chordFor('closeTab') : undefined, run: () => onClose(key) },
+      ],
+    };
+  }
+
   function close(e: MouseEvent, key: TabKey) {
     e.stopPropagation();
     onClose(key);
@@ -85,8 +113,9 @@
 </script>
 
 <div class="bar">
+  {@render start?.()}
   {#if hasOverflow}
-    <button class="scroll" disabled={!canScrollLeft} onclick={() => scrollTabs(-1)} aria-label="Scroll tabs left" title="Scroll tabs left">‹</button>
+    <button class="scroll" disabled={!canScrollLeft} onclick={() => scrollTabs(-1)} aria-label="Scroll tabs left" title="Scroll tabs left"><Icon name="back" size={14} /></button>
   {/if}
   <div class="tabs" bind:this={scroller} onscroll={updateScroll}>
   <div class="track" bind:this={track}>
@@ -105,12 +134,14 @@
       class="tab"
       class:active={tab.key === activeKey}
       class:exited={tab.exited}
+      class:working={mark === 'working'}
       data-tab-key={tab.key}
       use:reorderable={{ id: tab.key, group: 'tab', onMove: (from, to) => moveTab(from as TabKey, to as TabKey) }}
       onclick={() => activate(tab.key)}
       ondblclick={() => (renaming = tab.key)}
       onmousedown={(e) => { if (e.button === 1) e.preventDefault(); }}
       onauxclick={(e) => { if (e.button === 1) close(e, tab.key); }}
+      oncontextmenu={(e) => tabMenu(e, tab.key)}
       title="{tab.title} (double-click or Ctrl+Shift+R to rename)"
     >
       {#if mark !== 'open' && mark !== 'exited'}<StatusDot {mark} title={markTitle(mark, providerName(tab.provider ?? 'claude'))} />{/if}
@@ -118,30 +149,55 @@
       <span class="label">{tab.title}</span>
       <span class="close" role="button" tabindex="-1"
         onclick={(e) => close(e, tab.key)}
-        onkeydown={() => {}}>×</span>
+        onkeydown={() => {}}><Icon name="close" size={12} /></span>
     </button>
     {/if}
   {/each}
+  {#if usage !== 'hidden'}
+    <button
+      class="tab"
+      class:active={usage === 'active'}
+      onclick={onUsage}
+      onmousedown={(e) => { if (e.button === 1) e.preventDefault(); }}
+      onauxclick={(e) => { if (e.button === 1) onCloseUsage?.(); }}
+      title="Usage and spend (Ctrl+Shift+U)"
+    >
+      <Icon name="usage" size={14} />
+      <span class="label">Usage</span>
+      <span class="close" role="button" tabindex="-1"
+        onclick={(e) => { e.stopPropagation(); onCloseUsage?.(); }}
+        onkeydown={() => {}}><Icon name="close" size={12} /></span>
+    </button>
+  {/if}
   </div>
   </div>
   {#if hasOverflow}
-    <button class="scroll" disabled={!canScrollRight} onclick={() => scrollTabs(1)} aria-label="Scroll tabs right" title="Scroll tabs right">›</button>
+    <button class="scroll" disabled={!canScrollRight} onclick={() => scrollTabs(1)} aria-label="Scroll tabs right" title="Scroll tabs right"><Icon name="chevron" size={14} /></button>
   {/if}
-  <button class="new" onclick={onNew} title="New tab (Ctrl+Shift+T)">+</button>
+  {#if menu}
+    <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => (menu = null)} />
+  {/if}
+  {@render afterTabs?.()}
+  <div class="grow"></div>
+  {@render end?.()}
 </div>
 
 <style>
+  .grow {
+    flex: 1;
+  }
   .bar {
     display: flex;
     align-items: stretch;
     gap: 2px;
     height: 34px;
     padding: 4px 6px 0;
-    background: var(--bg-chrome);
+    background: var(--glass-chrome);
     border-bottom: 1px solid var(--border);
   }
+  /* As wide as its tabs, so what follows sits right after them; it scrolls once full. */
   .tabs {
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
     overflow-x: auto;
     overflow-y: hidden;
@@ -158,10 +214,11 @@
     height: 100%;
   }
   .tab {
+    position: relative;
     display: flex;
     flex: 0 0 auto;
     align-items: center;
-    gap: 8px;
+    gap: 7px;
     max-width: 220px;
     padding: 0 6px 0 12px;
     border: none;
@@ -172,38 +229,61 @@
     font-size: 12px;
     cursor: pointer;
     white-space: nowrap;
+    animation: atc-fade var(--enter) var(--ease-out);
   }
   .tab:hover { background: var(--bg-hover); color: var(--fg); }
   .tab.active { background: var(--bg); color: var(--fg-bright); }
+  /* The top edge carries state: accent on the focused tab, a sweep while an agent works. */
+  .tab::before {
+    position: absolute;
+    top: 0;
+    right: 8px;
+    left: 8px;
+    height: 2px;
+    border-radius: 0 0 2px 2px;
+    content: '';
+    transform: scaleX(0);
+    transition: transform var(--enter) var(--ease-out);
+  }
+  .tab.active::before { background: var(--accent); }
+  .tab.active::before,
+  .tab.working::before { transform: scaleX(1); }
+  /* Three times the line's width, so the highlight starts and ends fully off it and the
+     loop has no visible jump. */
+  .tab.working::before {
+    background: linear-gradient(90deg, transparent 40%, var(--warn) 50%, transparent 60%) 0 0 / 300% 100%;
+    animation: sweep 1.6s ease-in-out infinite;
+  }
+  @keyframes sweep {
+    from { background-position: 100% 0; }
+    to { background-position: 0 0; }
+  }
+  :global([data-still]) .tab.working::before { background: var(--warn); animation: none; }
   /* Drop target while dragging a tab (#74). */
   .tab:global(.drop-target) { box-shadow: inset 2px 0 0 var(--accent); }
   .tab.exited .label { text-decoration: line-through; opacity: 0.6; }
   .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  /* Only where it is about to be used, so a row of tabs is not a row of crosses. */
   .close {
-    padding: 0 4px;
+    display: grid;
+    width: 18px;
+    height: 18px;
+    place-items: center;
     border-radius: 4px;
-    opacity: 0.5;
-    font-size: 14px;
-    line-height: 1;
+    opacity: 0;
+    transition: opacity var(--fast), background-color var(--fast);
   }
-  .close:hover { background: var(--border); opacity: 1; }
-  .new {
-    flex: 0 0 auto;
-    padding: 0 10px;
-    border: none;
-    background: transparent;
-    color: var(--fg-dim);
-    font-size: 16px;
-    cursor: pointer;
-  }
-  .new:hover { color: var(--fg-bright); }
+  .tab:hover .close,
+  .tab:focus-visible .close,
+  .tab.active .close { opacity: 0.6; }
+  .tab .close:hover { background: var(--border); opacity: 1; }
   .scroll {
+    display: grid;
     flex: 0 0 24px;
+    place-items: center;
     border: none;
     background: transparent;
     color: var(--fg-dim);
-    font: inherit;
-    font-size: 20px;
     cursor: pointer;
   }
   .scroll:hover:not(:disabled) { color: var(--fg-bright); background: var(--bg-hover); }

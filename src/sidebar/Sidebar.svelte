@@ -3,7 +3,8 @@
   import OpenList from './OpenList.svelte';
   import NotesPad from './NotesPad.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
-  import { focusActiveTerminal } from '../terminal/manager';
+  import Icon from '../lib/Icon.svelte';
+  import { activate, focusActiveTerminal, splitWith } from '../terminal/manager';
   import { enterList, listKeys, rows } from '../lib/roving';
   import {
     anyProjectExpanded,
@@ -28,6 +29,8 @@
     onNewAgent,
     onNewChat,
     onPickAgent,
+    onOpenFolder,
+    onAsk,
     onNewTab,
     onCloseTab,
   }: {
@@ -44,6 +47,9 @@
     onNewChat: () => void;
     /** Asks Claude or Codex, then starts it in the project (#146). */
     onPickAgent: (p: Project) => void;
+    onOpenFolder: () => void;
+    /** Starts Claude or Codex in the scratch directory. */
+    onAsk: (provider: AgentProvider) => void;
     onNewTab: () => void;
     onCloseTab: (key: TabKey) => void;
   } = $props();
@@ -154,9 +160,9 @@
     </div>
     <div class="actions">
       {#if view === 'open'}
-        <button class="icon" onclick={onNewTab} title="New tab (Ctrl+Shift+T)" aria-label="New tab">+</button>
+        <button class="icon" onclick={onNewTab} title="New tab (Ctrl+Shift+T)" aria-label="New tab"><Icon name="plus" size={14} /></button>
       {:else if view === 'scratch'}
-        <button class="icon" onclick={onNewChat} title="New chat with Claude or Codex" aria-label="New chat">+</button>
+        <button class="icon" onclick={onNewChat} title="New chat with Claude or Codex" aria-label="New chat"><Icon name="plus" size={14} /></button>
       {:else}
       <button
         class="icon"
@@ -164,7 +170,7 @@
         title={anyOpen ? 'Collapse all' : 'Expand all'}
         aria-label={anyOpen ? 'Collapse all' : 'Expand all'}
       >
-        {anyOpen ? '⌄' : '›'}
+        <Icon name={anyOpen ? 'collapse' : 'expand'} size={14} />
       </button>
       <button
         class="icon"
@@ -173,7 +179,7 @@
         title="Rescan sessions"
         aria-label="Rescan sessions"
       >
-        ⟳
+        <Icon name="refresh" size={14} />
       </button>
       {/if}
     </div>
@@ -184,7 +190,7 @@
       id="sidebar-search"
       type="search"
       placeholder={view === 'open' ? 'Filter open tabs' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
-      title="Filter by project, path, session name or branch (Ctrl+Shift+P)"
+      title="Filter by project, path, session name or branch"
       aria-label={view === 'open' ? 'Filter open tabs' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
       spellcheck="false"
       autocomplete="off"
@@ -211,7 +217,17 @@
       onkeydown={(e) => openList && listKeys(e, openList, leave)}
       oncontextmenu={(e) => {
         e.preventDefault();
-        const items = appState.index.projects.filter((p) => p.path && p.exists).map((p) => ({ label: p.name, run: () => onPickAgent(p) }));
+        // A tab row gets that tab's actions; the empty space below starts something new.
+        const key = (e.target as HTMLElement).closest<HTMLElement>('[data-tab-key]')?.dataset.tabKey as TabKey | undefined;
+        if (key) {
+          menu = { x: e.clientX, y: e.clientY, items: [
+            { label: 'Go to tab', icon: 'terminal', disabled: key === activeKey, run: () => activate(key) },
+            { label: 'Split beside the current tab', icon: 'split', disabled: key === activeKey, run: () => splitWith(key) },
+            { label: 'Close tab', icon: 'close', sep: true, run: () => onCloseTab(key) },
+          ] };
+          return;
+        }
+        const items = appState.index.projects.filter((p) => p.path && p.exists).map((p) => ({ label: p.name, icon: 'folder' as const, run: () => onPickAgent(p) }));
         menu = { x: e.clientX, y: e.clientY, items: [{ label: 'New agent in…' }, ...items] };
       }}
     >
@@ -255,6 +271,8 @@
   >
     <SessionList
       {query}
+      {onOpenFolder}
+      {onAsk}
       {activeKey}
       {activeSessionId}
       {openProjectKeys}
@@ -293,11 +311,11 @@
 
   <footer>
     {#if view === 'open'}
-      {tabs.length} open · {working} working · {waiting} need you
+      {[`${tabs.length} open`, working && `${working} working`, waiting && `${waiting} need you`].filter(Boolean).join(', ')}
     {:else if view === 'scratch'}
       {scratchSessions} sessions
     {:else}
-      {appState.index.projects.filter((p) => !p.kind).length} projects · {appState.index.sessionCount - scratchSessions} sessions
+      {appState.index.projects.filter((p) => !p.kind).length} projects, {appState.index.sessionCount - scratchSessions} sessions
     {/if}
   </footer>
 </div>
@@ -308,19 +326,17 @@
     height: 100%;
     flex-direction: column;
     border-right: 1px solid var(--border);
-    background: var(--bg);
+    background: var(--glass-bg);
     overflow: hidden;
   }
   header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 8px 8px;
+    padding: 10px 8px 8px 10px;
     color: var(--fg-faint);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
   }
   .actions {
     display: flex;
@@ -328,45 +344,64 @@
   }
   .views {
     display: flex;
-    gap: 8px;
+    gap: 10px;
   }
   .views button {
-    padding: 0 0 3px;
+    position: relative;
+    padding: 0 0 4px;
     white-space: nowrap;
     border: none;
-    border-bottom: 2px solid transparent;
     background: transparent;
     color: var(--fg-faint);
     font: inherit;
-    letter-spacing: inherit;
-    text-transform: inherit;
     cursor: pointer;
   }
   .views button:hover {
     color: var(--fg);
   }
   .views button[aria-selected='true'] {
-    border-bottom-color: var(--accent);
     color: var(--fg-bright);
   }
+  .views button::after {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--accent);
+    content: '';
+    transform: scaleX(0);
+    transition: transform var(--enter) var(--ease-out);
+  }
+  .views button[aria-selected='true']::after {
+    transform: scaleX(1);
+  }
   .views .n {
+    margin-left: 1px;
     color: var(--fg-faint);
+    font-weight: 400;
     font-variant-numeric: tabular-nums;
   }
   .icon {
-    width: 20px;
+    display: grid;
+    width: 22px;
+    height: 22px;
+    place-items: center;
     border: none;
     border-radius: 4px;
     background: transparent;
     color: var(--fg-faint);
-    font-size: 12px;
     cursor: pointer;
   }
   .icon:hover {
-    background: var(--bg-surface);
-    color: var(--accent);
+    background: var(--bg-hover);
+    color: var(--fg-bright);
   }
-  .icon.spin {
+  .icon:active {
+    transform: scale(0.92);
+  }
+  .icon.spin :global(svg) {
     animation: spin 0.8s linear infinite;
   }
   @keyframes spin {
@@ -412,11 +447,9 @@
     height: 26px;
     padding: 0 10px;
     border-top: 1px solid var(--border);
-    color: var(--fg-faint);
-    font-size: 10px;
+    color: var(--fg-dim);
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
     cursor: row-resize;
     user-select: none;
   }
@@ -426,16 +459,14 @@
     outline: none;
   }
   .divider em {
+    color: var(--fg-faint);
+    font-size: 11px;
     font-style: normal;
     font-weight: 400;
-    letter-spacing: 0;
-    text-transform: none;
   }
   .list {
     flex: 1;
     overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
   }
   .list :global([data-row]:focus-visible) {
     outline: 1px solid var(--accent);
@@ -445,6 +476,7 @@
     padding: 6px 10px;
     border-top: 1px solid var(--border);
     color: var(--fg-faint);
-    font-size: 10px;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
   }
 </style>

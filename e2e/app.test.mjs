@@ -74,7 +74,7 @@ describe('ATC', () => {
 const configFile = (name) => join(process.env.E2E_CONFIG, name);
 const readSettings = () => JSON.parse(readFileSync(configFile('settings.json'), 'utf8'));
 const readNotes = () => { try { return readFileSync(configFile('notes.md'), 'utf8'); } catch { return ''; } };
-async function settingsPage() { await (await browser.$('button[aria-label="Settings"]')).click(); await (await browser.$('h1=Settings')).waitForDisplayed(); }
+async function settingsPage() { await (await browser.$('button[aria-label="More"]')).click(); await (await browser.$('button.item*=Settings')).click(); await (await browser.$('h1=Settings')).waitForDisplayed(); }
 async function shellCommand(command) { await browser.pause(900); await browser.keys(command); await browser.keys(Key.Enter); }
 async function findOutput(text) {
   await chord('f'); const input = await browser.$('input[aria-label="Find in terminal"]'); await input.waitForDisplayed(); await input.setValue(text);
@@ -153,7 +153,6 @@ describe('desktop behaviour', () => {
     await (await browser.$('#th')).selectByVisibleText('Nord');
     await (await browser.$('#fs')).setValue('15');
     await (await browser.$('#gb')).click();
-    await (await browser.$('button=Save')).click();
     await browser.waitUntil(() => readSettings().terminal.fontSize === 15 && readSettings().ui.theme === 'Nord' && readSettings().ui.groupByBranch === true);
     await browser.saveScreenshot(`benchmarks/${process.env.E2E_HOST}-settings.png`);
     await browser.keys(Key.Escape);

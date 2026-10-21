@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterProjects } from './filter';
+import { filterProjects, splitMatches } from './filter';
 import type { Project, SessionMeta } from '../types';
 
 const session = (id: string, label: string, gitBranch: string | null = null): SessionMeta => ({
@@ -69,5 +69,13 @@ describe('filterProjects', () => {
     filterProjects(projects, 'scoreboard');
     expect(projects[1].sessions).toHaveLength(1);
     expect(projects[0].sessions).toHaveLength(2);
+  });
+});
+
+describe('splitMatches', () => {
+  it('cuts around every match, keeping the original case', () => {
+    expect(splitMatches('Game tracker game', 'GAME')).toEqual(['', 'Game', ' tracker ', 'game', '']);
+    expect(splitMatches('portfolio', 'x')).toEqual(['portfolio']);
+    expect(splitMatches('portfolio', '  ')).toEqual(['portfolio']);
   });
 });
