@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
+  import Icon from '../lib/Icon.svelte';
   import { formatMatches } from '../lib/format';
   import {
     clearFind,
@@ -64,10 +65,10 @@
   />
   <span class="count" class:none={!!query && count === 0}>{label}</span>
   <button onclick={() => search(-1)} title="Previous (Shift+Enter)" aria-label="Previous match">
-    ↑
+    <Icon name="up" size={14} />
   </button>
-  <button onclick={() => search(1)} title="Next (Enter)" aria-label="Next match">↓</button>
-  <button onclick={close} title="Close (Esc)" aria-label="Close find">×</button>
+  <button onclick={() => search(1)} title="Next (Enter)" aria-label="Next match"><Icon name="down" size={14} /></button>
+  <button onclick={close} title="Close (Esc)" aria-label="Close find"><Icon name="close" size={14} /></button>
 </div>
 
 <style>
@@ -78,12 +79,16 @@
     z-index: 12;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     padding: 5px 6px 5px 10px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: rgba(22, 27, 34, 0.97);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+    background: var(--bg-chrome);
+    box-shadow: var(--shadow-pop);
+    animation: atc-rise var(--enter) var(--ease-out);
+  }
+  .find:focus-within {
+    border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
   }
   input {
     width: 200px;
@@ -96,26 +101,28 @@
   }
   .count {
     min-width: 48px;
+    margin-right: 2px;
     color: var(--fg-faint);
     font-size: 11px;
+    font-variant-numeric: tabular-nums;
     text-align: right;
   }
   .count.none {
     color: var(--danger-strong);
   }
   button {
-    width: 22px;
-    height: 22px;
+    display: grid;
+    width: 24px;
+    height: 24px;
+    place-items: center;
     border: none;
     border-radius: 4px;
     background: transparent;
     color: var(--fg-dim);
-    font-size: 12px;
-    line-height: 1;
     cursor: pointer;
   }
   button:hover {
-    background: var(--border);
+    background: var(--bg-hover);
     color: var(--fg-bright);
   }
 </style>

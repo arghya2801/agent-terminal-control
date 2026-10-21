@@ -10,6 +10,7 @@
   import UsagePanel from './usage/UsagePanel.svelte';
   import ShortcutsPanel from './settings/ShortcutsPanel.svelte';
   import ConfirmDialog from './lib/ConfirmDialog.svelte';
+  import Icon from './lib/Icon.svelte';
   import {
     isPermissionGranted,
     requestPermission,
@@ -92,7 +93,7 @@
   // --- restore tabs on launch
   const TABS_KEY = import.meta.env.VITE_ATC_PLAYGROUND === '1' ? 'atc.playground.tabs' : 'atc.tabs';
   /** Until startup has reopened the saved tabs, saving would overwrite them. */
-  let restoring = true;
+  let restoring = $state(true);
 
   let savedTabs = '';
   function saveTabs(all: Tab[]) {
@@ -508,7 +509,8 @@
   });
 </script>
 
-<div class="app" style="--panel: {open ? width : 0}px">
+<!-- The sidebar only animates once restore has spawned its tabs at their real width. -->
+<div class="app" class:animate={!restoring && dragWidth === null} style="--panel: {open ? width : 0}px">
   <nav class="rail">
     <button
       class="rail-btn"
@@ -517,7 +519,7 @@
       title="Toggle projects (Ctrl+Shift+B)"
       aria-label="Toggle projects"
     >
-      ▤
+      <Icon name="sidebar" />
     </button>
     <button
       class="rail-btn"
@@ -525,7 +527,7 @@
       title="New shell (Ctrl+Shift+T)"
       aria-label="New shell"
     >
-      +
+      <Icon name="plus" />
     </button>
     <button
       class="rail-btn"
@@ -533,7 +535,7 @@
       title="Ask agent, outside any project (Ctrl+Shift+A)"
       aria-label="Ask agent"
     >
-      ✳
+      <Icon name="agent" />
     </button>
     <button
       class="rail-btn"
@@ -542,7 +544,7 @@
       title="Usage and spend (Ctrl+Shift+U)"
       aria-label="Usage and spend"
     >
-      $
+      <Icon name="usage" />
     </button>
     <div class="spacer"></div>
     {#if currentZoom() !== 1}
@@ -556,31 +558,31 @@
       </button>
     {/if}
     <button
-      class="rail-btn small"
+      class="rail-btn"
       class:on={page === 'shortcuts'}
       onclick={() => togglePage('shortcuts')}
       title="Keyboard shortcuts (Ctrl+Shift+?)"
       aria-label="Keyboard shortcuts"
     >
-      ?
+      <Icon name="keyboard" />
     </button>
     <button
-      class="rail-btn small"
+      class="rail-btn"
       class:on={page === 'settings'}
       onclick={() => togglePage('settings')}
       title="Settings (Ctrl+,)"
       aria-label="Settings"
     >
-      ⚙
+      <Icon name="settings" />
     </button>
     <button
-      class="rail-btn small"
+      class="rail-btn"
       class:on={showDebug}
       onclick={() => (showDebug = !showDebug)}
       title="PTY stats (Ctrl+Shift+D)"
       aria-label="Toggle debug overlay"
     >
-      ◔
+      <Icon name="pulse" />
     </button>
   </nav>
 
@@ -650,7 +652,7 @@
     {#if error}
       <div class="error">
         {error}
-        <button onclick={() => (error = null)} aria-label="Dismiss">×</button>
+        <button onclick={() => (error = null)} aria-label="Dismiss"><Icon name="close" size={14} /></button>
       </div>
     {/if}
   </section>
@@ -662,23 +664,28 @@
     height: 100%;
     grid-template-columns: 44px var(--panel) 1fr;
   }
+  .app.animate {
+    transition: grid-template-columns 160ms var(--ease-out);
+  }
   .rail {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    padding-top: 8px;
+    padding: 8px 0;
     border-right: 1px solid var(--border);
     background: var(--bg-chrome);
   }
   .rail-btn {
-    width: 30px;
-    height: 30px;
+    position: relative;
+    display: grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
     border: none;
     border-radius: 6px;
     background: transparent;
     color: var(--fg-faint);
-    font-size: 14px;
     line-height: 1;
     cursor: pointer;
   }
@@ -686,11 +693,22 @@
     background: var(--bg-hover);
     color: var(--fg);
   }
+  .rail-btn:active {
+    transform: scale(0.94);
+  }
   .rail-btn.on {
     color: var(--accent);
   }
-  .rail-btn.small {
-    font-size: 12px;
+  /* Flush with the window edge, so the open page reads as attached to its button. */
+  .rail-btn.on::before {
+    position: absolute;
+    top: 7px;
+    bottom: 7px;
+    left: -6px;
+    width: 2px;
+    border-radius: 0 2px 2px 0;
+    background: var(--accent);
+    content: '';
   }
   .rail-btn.zoom {
     width: auto;
@@ -743,15 +761,21 @@
     padding: 8px 12px;
     border: 1px solid var(--danger-strong);
     border-radius: 8px;
-    background: rgba(35, 15, 15, 0.95);
+    background: color-mix(in srgb, var(--danger) 12%, var(--bg-chrome));
+    box-shadow: var(--shadow-pop);
     color: var(--danger);
     font-size: 12px;
+    animation: atc-rise var(--enter) var(--ease-out);
   }
   .error button {
+    padding: 2px;
     border: none;
+    border-radius: 4px;
     background: transparent;
     color: inherit;
-    font-size: 15px;
     cursor: pointer;
+  }
+  .error button:hover {
+    background: color-mix(in srgb, var(--danger) 20%, transparent);
   }
 </style>

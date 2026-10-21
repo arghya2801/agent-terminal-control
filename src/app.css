@@ -22,7 +22,12 @@
   --ok: #3fb950;
   --info: #b083f0;
   --selection: #2a3b52;
-  font-family: 'Segoe UI', system-ui, sans-serif;
+  /* Not from the palette: motion and elevation are the same in every theme. */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --fast: 90ms;
+  --enter: 150ms;
+  --shadow-pop: 0 10px 32px rgb(0 0 0 / 0.35), 0 1px 3px rgb(0 0 0 / 0.2);
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
   font-size: 13px;
   /* Set from the theme's background by `applyPalette`; inherited, so native controls
      (date pickers, number spinners, scrollbars) follow a light theme too. */
@@ -37,4 +42,47 @@ body,
   overflow: hidden;
   background: var(--bg);
   color: var(--fg);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+::selection {
+  background: var(--selection);
+}
+
+button {
+  transition:
+    background-color var(--fast),
+    color var(--fast),
+    border-color var(--fast),
+    opacity var(--fast),
+    transform var(--fast) var(--ease-out);
+}
+
+:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+@keyframes atc-fade {
+  from { opacity: 0; }
+}
+@keyframes atc-pop {
+  from { opacity: 0; transform: scale(0.97); }
+}
+@keyframes atc-rise {
+  from { opacity: 0; transform: translateY(4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

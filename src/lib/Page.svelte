@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, type Snippet } from 'svelte';
   import { focusActiveTerminal } from '../terminal/manager';
+  import Icon from './Icon.svelte';
 
   /** Full-pane overlay above the terminals, which stay mounted underneath. */
   let { title, onClose, children }: { title: string; onClose: () => void; children: Snippet } =
@@ -26,7 +27,7 @@
 <div class="page" tabindex="-1" bind:this={root}>
   <header>
     <h1>{title}</h1>
-    <button class="close" onclick={onClose} aria-label="Close" title="Close (Esc)">×</button>
+    <button class="close" onclick={onClose} aria-label="Close" title="Close (Esc)"><Icon name="close" /></button>
   </header>
   <div class="body">
     {@render children()}
@@ -40,8 +41,8 @@
     z-index: 20;
     overflow-y: auto;
     background: var(--bg);
-    scrollbar-color: var(--border) transparent;
     outline: none;
+    animation: atc-rise var(--enter) var(--ease-out);
   }
   header {
     position: sticky;
@@ -61,13 +62,18 @@
     font-weight: 600;
   }
   .close {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    place-items: center;
     border: none;
+    border-radius: 6px;
     background: transparent;
     color: var(--fg-dim);
-    font-size: 20px;
     cursor: pointer;
   }
   .close:hover {
+    background: var(--bg-hover);
     color: var(--fg-bright);
   }
   .body {
@@ -75,12 +81,10 @@
     padding: 4px 24px 40px;
   }
   .body :global(h2) {
-    margin: 22px 0 10px;
-    color: var(--fg-dim);
-    font-size: 11px;
+    margin: 24px 0 10px;
+    color: var(--fg-bright);
+    font-size: 13px;
     font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
   }
   .body :global(.muted) {
     color: var(--fg-faint);

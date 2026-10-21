@@ -115,7 +115,9 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--bg-chrome);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--shadow-pop);
+    animation: atc-pop 110ms var(--ease-out);
+    transform-origin: top left;
   }
   .item {
     display: block;
