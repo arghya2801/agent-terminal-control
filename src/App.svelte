@@ -416,6 +416,13 @@
     if (field) contextMenu = { x: e.clientX, y: e.clientY, items: editItems(field) };
   }
 
+  /** Settings covers the sidebar, so there the button means "back to it", not "toggle it". */
+  function sidebarButton() {
+    if (page !== 'settings') return void toggleSidebar();
+    page = null;
+    if (!sidebarOpen()) void toggleSidebar();
+  }
+
   // --- command palette
   let paletteOpen = $state(false);
   const ACTION_ICONS: Partial<Record<Action, IconName>> = {
@@ -553,7 +560,7 @@
   function runAction(action: Action) {
     switch (action) {
       case 'toggleSidebar':
-        void toggleSidebar();
+        sidebarButton();
         break;
       case 'newTab':
         void newTab();
@@ -699,8 +706,8 @@
   <nav class="rail" data-tip-side="right">
     <button
       class="rail-btn"
-      class:on={open}
-      onclick={() => toggleSidebar()}
+      class:on={open && page !== 'settings'}
+      onclick={sidebarButton}
       title="Toggle projects (Ctrl+Shift+B)"
       aria-label="Toggle projects"
     >
@@ -825,9 +832,7 @@
         ></div>
       {/if}
     </div>
-    {#if page === 'settings'}
-      <SettingsPanel onClose={() => (page = null)} />
-    {:else if page === 'usage'}
+    {#if page === 'usage'}
       <UsagePanel onClose={() => (page = null)} sessionKey={activeSessionId} />
     {:else if page === 'shortcuts'}
       <ShortcutsPanel onClose={() => (page = null)} />
@@ -880,6 +885,11 @@
       {/if}
     </div>
   </section>
+
+  <!-- Outside .main: the sidebar slide moves .main, and settings covers the sidebar. -->
+  {#if page === 'settings'}
+    <SettingsPanel onClose={() => (page = null)} />
+  {/if}
 </div>
 <Tooltip />
 
