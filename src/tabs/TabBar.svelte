@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, type Snippet } from 'svelte';
   import { activate, focusActiveTerminal, moveTab, renameTab, splitWith } from '../terminal/manager';
   import ContextMenu, { type MenuItem } from '../sidebar/ContextMenu.svelte';
   import { chordFor } from '../lib/keymap';
@@ -13,10 +13,16 @@
   import { revealPosition, tabWheelDelta } from './scroll';
   import type { TabKey, TabSummary } from '../types';
 
-  let { tabs, activeKey, onNew, onClose, renaming = $bindable(null) }: {
+  let { tabs, activeKey, onClose, renaming = $bindable(null), usage = 'hidden', onUsage, onCloseUsage, start, end }: {
     tabs: TabSummary[];
     activeKey: TabKey | null;
-    onNew: () => void;
+    /** The usage page, shown as a tab after the terminals while it is open. */
+    usage?: 'hidden' | 'open' | 'active';
+    onUsage?: () => void;
+    onCloseUsage?: () => void;
+    /** The app's own buttons, before the tabs and after them. */
+    start?: Snippet;
+    end?: Snippet;
     /** Asks first when something is still running in the tab. */
     onClose: (key: TabKey) => void;
     /** The tab whose name is being edited; the app sets it from the rename chord. */
@@ -105,6 +111,7 @@
 </script>
 
 <div class="bar">
+  {@render start?.()}
   {#if hasOverflow}
     <button class="scroll" disabled={!canScrollLeft} onclick={() => scrollTabs(-1)} aria-label="Scroll tabs left" title="Scroll tabs left"><Icon name="back" size={14} /></button>
   {/if}
@@ -144,6 +151,22 @@
     </button>
     {/if}
   {/each}
+  {#if usage !== 'hidden'}
+    <button
+      class="tab"
+      class:active={usage === 'active'}
+      onclick={onUsage}
+      onmousedown={(e) => { if (e.button === 1) e.preventDefault(); }}
+      onauxclick={(e) => { if (e.button === 1) onCloseUsage?.(); }}
+      title="Usage and spend (Ctrl+Shift+U)"
+    >
+      <Icon name="usage" size={14} />
+      <span class="label">Usage</span>
+      <span class="close" role="button" tabindex="-1"
+        onclick={(e) => { e.stopPropagation(); onCloseUsage?.(); }}
+        onkeydown={() => {}}><Icon name="close" size={12} /></span>
+    </button>
+  {/if}
   </div>
   </div>
   {#if hasOverflow}
@@ -152,7 +175,7 @@
   {#if menu}
     <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => (menu = null)} />
   {/if}
-  <button class="new" onclick={onNew} title="New tab (Ctrl+Shift+T)" aria-label="New tab"><Icon name="plus" /></button>
+  {@render end?.()}
 </div>
 
 <style>
@@ -246,21 +269,6 @@
   .tab:focus-visible .close,
   .tab.active .close { opacity: 0.6; }
   .tab .close:hover { background: var(--border); opacity: 1; }
-  .new {
-    display: grid;
-    flex: 0 0 auto;
-    align-self: center;
-    width: 28px;
-    height: 26px;
-    place-items: center;
-    border: none;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--fg-dim);
-    cursor: pointer;
-  }
-  .new:hover { background: var(--bg-hover); color: var(--fg-bright); }
-  .new:active { transform: scale(0.92); }
   .scroll {
     display: grid;
     flex: 0 0 24px;
