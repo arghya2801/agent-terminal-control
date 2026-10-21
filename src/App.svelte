@@ -440,13 +440,15 @@
   /** In the focused tab's project when it has one, else the scratch directory. */
   function newMenu(e: MouseEvent) {
     const p = activeProject();
+    // Only a real project is named; the scratch and chats folders are not places people pick.
+    const where = p && !p.kind ? ` in ${p.name}` : '';
     const agent = (provider: AgentProvider): MenuItem => ({
-      label: p ? `${providerName(provider)} in ${p.name}` : `Ask ${providerName(provider)}`,
+      label: `${providerName(provider)}${where}`,
       icon: 'agent',
       run: () => (p ? void newAgentIn(p, provider) : askAgent(provider)),
     });
     menuAt(e, [
-      { label: p ? `Shell in ${p.name}` : 'Shell', icon: 'terminal', hint: chordFor(p ? 'openShellHere' : 'newTab'), run: () => void (p ? newShellIn(p) : newTab()) },
+      { label: `Shell${where}`, icon: 'terminal', hint: chordFor(p ? 'openShellHere' : 'newTab'), run: () => void (p ? newShellIn(p) : newTab()) },
       agent('claude'),
       agent('codex'),
     ]);
