@@ -1,7 +1,7 @@
 # Sidebar prototypes
 
 Four prototypes for managing many agent sessions from the sidebar, each on its own
-branch from `main` (0.4.3). None is merged. The next step is to pick features from all
+branch from `main` (0.4.3), with v0.5.0 merged in. None is merged into `main`. The next step is to pick features from all
 four and combine them on one branch, then open one PR.
 
 | Branch | Idea | Commits |
@@ -20,7 +20,6 @@ Tick what to keep, then combine. Each item names the branch it lives on.
 - [ ] Peek line: the last readable line of the terminal under each row (triage)
 - [ ] 5-minute output sparkline per row (triage)
 - [ ] Ctrl+Shift+J jumps to the agent that has waited longest (triage)
-- [ ] One rail button per open tab with a state dot, hover shows title, state and peek (rail)
 - [ ] Hold Ctrl+Shift, press J to flip through waiting agents in an overlay, Alt+Tab style (rail)
 - [ ] Focus mode: hold notifications for 20 minutes, then one summary (rail)
 - [ ] Single list: no Sessions/Open/Scratch tabs (one-list)
@@ -59,7 +58,9 @@ combined branch should start from it:
 
 ### rail
 
-- `src/tabs/RailAgents.svelte`: rail buttons. The tooltip is built on pointer enter.
+- v0.5.0 removed the rail, so the merge dropped the per-tab rail buttons
+  (`RailAgents.svelte`, still in commit `6792289`). The focus mode button is now in the
+  tab bar, beside the usage chip.
 - `src/tabs/Switcher.svelte`: overlay while Ctrl+Shift+J is held. `App.svelte` closes it
   on keyup of Ctrl or Shift. Each step calls `activate()`, so previewed tabs lose their
   needs-you mark. There is no Esc-to-return.
@@ -93,7 +94,7 @@ combined branch should start from it:
 
 Done on Windows in `npm run play`:
 
-- Each branch: `svelte-check` clean, 249 frontend tests pass. Full `npm test` and
+- Each branch: `svelte-check` clean, 249 frontend tests pass (255 after the v0.5.0 merge). Full `npm test` and
   `npm run lint` were run on the triage branch only.
 - Seen working: triage rows; rail dots and Ctrl+Shift+J; a resumed session moving to
   the top of its project; the mosaic opening, colouring and restoring.
