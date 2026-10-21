@@ -364,7 +364,7 @@
   }
 
   // --- right-click: ATC's own menu, never the WebView's
-  let contextMenu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  let contextMenu = $state<{ x: number; y: number; items: MenuItem[]; dropdown?: boolean } | null>(null);
 
   function terminalItems(key: TabKey): MenuItem[] {
     const selected = hasSelection(key);
@@ -434,7 +434,7 @@
   /** A menu dropped from a tab bar button. */
   function menuAt(e: MouseEvent, items: MenuItem[]) {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    contextMenu = { x: r.left, y: r.bottom + 4, items };
+    contextMenu = { x: r.right, y: r.bottom + 4, items, dropdown: true };
   }
 
   /** In the focused tab's project when it has one, else the scratch directory. */
@@ -448,7 +448,7 @@
       run: () => (p ? void newAgentIn(p, provider) : askAgent(provider)),
     });
     menuAt(e, [
-      { label: `Shell${where}`, icon: 'terminal', hint: chordFor(p ? 'openShellHere' : 'newTab'), run: () => void (p ? newShellIn(p) : newTab()) },
+      { label: `Shell${where}`, icon: 'terminal', run: () => void (p ? newShellIn(p) : newTab()) },
       agent('claude'),
       agent('codex'),
     ]);
@@ -859,7 +859,7 @@
       <DebugOverlay {activeKey} />
     {/if}
     {#if contextMenu}
-      <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenu.items} onClose={() => (contextMenu = null)} />
+      <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenu.items} dropdown={contextMenu.dropdown} onClose={() => (contextMenu = null)} />
     {/if}
     {#if paletteOpen}
       {@const cmds = paletteCommands()}
