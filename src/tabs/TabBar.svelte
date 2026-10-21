@@ -162,7 +162,7 @@
     gap: 2px;
     height: 34px;
     padding: 4px 6px 0;
-    background: var(--bg-chrome);
+    background: var(--glass-chrome);
     border-bottom: 1px solid var(--border);
   }
   .tabs {

@@ -26,6 +26,9 @@
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --fast: 90ms;
   --enter: 200ms;
+  /* The rail, tab bar and sidebar let the window's Mica backdrop show faintly through. */
+  --glass-chrome: color-mix(in srgb, var(--bg-chrome) 70%, transparent);
+  --glass-bg: color-mix(in srgb, var(--bg) 75%, transparent);
   --shadow-pop: 0 10px 32px rgb(0 0 0 / 0.35), 0 1px 3px rgb(0 0 0 / 0.2);
   font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
   font-size: 13px;
@@ -34,13 +37,15 @@
   color-scheme: dark;
 }
 
+/* Transparent, so the Mica backdrop main.go asks for can show; the terminal area paints
+   its own background. */
 html,
 body,
 #app {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: var(--bg);
+  background: transparent;
   color: var(--fg);
 }
 

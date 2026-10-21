@@ -309,7 +309,7 @@
     height: 100%;
     flex-direction: column;
     border-right: 1px solid var(--border);
-    background: var(--bg);
+    background: var(--glass-bg);
     overflow: hidden;
   }
   header {

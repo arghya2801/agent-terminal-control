@@ -723,7 +723,7 @@
     z-index: 2;
     padding: 8px 0;
     border-right: 1px solid var(--border);
-    background: var(--bg-chrome);
+    background: var(--glass-chrome);
   }
   .rail-btn {
     position: relative;
@@ -837,6 +837,7 @@
      share its geometry and can be measured once. */
   .panes {
     position: relative;
+    background: var(--bg);
     flex: 1;
     min-height: 0;
     padding: 6px 0 0 8px;
