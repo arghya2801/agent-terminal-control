@@ -641,6 +641,39 @@ export function renameTab(key: TabKey, name: string) {
   notify();
 }
 
+// --- the terminal's right-click menu
+/** The tab whose terminal holds `node`. */
+export function tabAt(node: Node): TabKey | null {
+  for (const t of tabs.values()) if (t.container.contains(node)) return t.key;
+  return null;
+}
+export function hasSelection(key: TabKey): boolean {
+  return !!tabs.get(key)?.term.hasSelection();
+}
+export async function copySelection(key: TabKey) {
+  const term = tabs.get(key)?.term;
+  if (!term?.hasSelection()) return;
+  await writeClipboard(term.getSelection());
+  term.clearSelection();
+}
+/** As a paste, so bracketed-paste programs such as Claude Code see one block. */
+export async function pasteInto(key: TabKey) {
+  const term = tabs.get(key)?.term;
+  if (!term) return;
+  const text = await navigator.clipboard.readText().catch(() => '');
+  if (text) term.paste(text);
+  term.focus();
+}
+export function selectAllIn(key: TabKey) {
+  tabs.get(key)?.term.selectAll();
+}
+/** Drops the scrollback; the program's current line stays. */
+export function clearTerminal(key: TabKey) {
+  const term = tabs.get(key)?.term;
+  term?.clear();
+  term?.focus();
+}
+
 async function writeClipboard(text: string) {
   try {
     await navigator.clipboard.writeText(text);

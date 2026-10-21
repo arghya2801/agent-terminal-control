@@ -31,8 +31,10 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - The rail, tab bar and sidebar let the Windows 11 Mica backdrop show through, tinted to the theme.
 - The sidebar edge shows a line and grip on hover, so it is clear it can be dragged.
 - The sidebar shows placeholder rows while sessions are scanned.
+- Right-click shows ATC's own menus only: the terminal gets copy, paste, find, split and tab actions; text boxes and notes get cut, copy and paste; tab rows in the Open view get tab actions. The browser's menu no longer appears.
 
 ### Fixed
+- Sidebar right-click menus no longer open shifted to the right and cut off at the sidebar edge.
 - Claude tab titles no longer show the ✳ twice.
 - Expanded projects show their chevron again; it was hidden whenever a project was open.
 - The find bar, error message and close confirmation follow light themes instead of staying dark.

@@ -4,7 +4,7 @@
   import NotesPad from './NotesPad.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import Icon from '../lib/Icon.svelte';
-  import { focusActiveTerminal } from '../terminal/manager';
+  import { activate, focusActiveTerminal, splitWith } from '../terminal/manager';
   import { enterList, listKeys, rows } from '../lib/roving';
   import {
     anyProjectExpanded,
@@ -217,6 +217,16 @@
       onkeydown={(e) => openList && listKeys(e, openList, leave)}
       oncontextmenu={(e) => {
         e.preventDefault();
+        // A tab row gets that tab's actions; the empty space below starts something new.
+        const key = (e.target as HTMLElement).closest<HTMLElement>('[data-tab-key]')?.dataset.tabKey as TabKey | undefined;
+        if (key) {
+          menu = { x: e.clientX, y: e.clientY, items: [
+            { label: 'Go to tab', icon: 'terminal', disabled: key === activeKey, run: () => activate(key) },
+            { label: 'Split beside the current tab', icon: 'split', disabled: key === activeKey, run: () => splitWith(key) },
+            { label: 'Close tab', icon: 'close', sep: true, run: () => onCloseTab(key) },
+          ] };
+          return;
+        }
         const items = appState.index.projects.filter((p) => p.path && p.exists).map((p) => ({ label: p.name, icon: 'folder' as const, run: () => onPickAgent(p) }));
         menu = { x: e.clientX, y: e.clientY, items: [{ label: 'New agent in…' }, ...items] };
       }}

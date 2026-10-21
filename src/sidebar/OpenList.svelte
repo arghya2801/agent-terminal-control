@@ -47,6 +47,7 @@
     class:active={tab.key === activeKey}
     class:exited={tab.exited}
     data-row
+    data-tab-key={tab.key}
     tabindex="-1"
     use:reorderable={{ id: tab.key, group: 'open', onMove: (from, to) => moveTab(from as TabKey, to as TabKey) }}
     onclick={() => activate(tab.key)}

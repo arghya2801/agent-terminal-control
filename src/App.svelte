@@ -48,6 +48,12 @@
     openTab,
     refit,
     refitNow,
+    tabAt,
+    hasSelection,
+    copySelection,
+    pasteInto,
+    selectAllIn,
+    clearTerminal,
     renameTab,
     activate,
     focusOtherPane,
@@ -59,8 +65,9 @@
     type AttentionReason,
     type Tab,
   } from './terminal/manager';
-  import { actionList, matchChord, type Action } from './lib/keymap';
+  import { actionList, chordFor, matchChord, type Action } from './lib/keymap';
   import CommandPalette, { type Command } from './lib/CommandPalette.svelte';
+  import ContextMenu, { type MenuItem } from './sidebar/ContextMenu.svelte';
   import type { IconName } from './lib/Icon.svelte';
   import { relativeTime } from './lib/format';
   import { parseSavedTabs, type SavedTab } from './lib/restore';
@@ -352,6 +359,63 @@
     picker = { project: { key: projectKey(path), path, name, pinned: false, exists: true, lastActiveMs: 0, sessions: [] } };
   }
 
+  // --- right-click: ATC's own menu, never the WebView's
+  let contextMenu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
+
+  function terminalItems(key: TabKey): MenuItem[] {
+    const selected = hasSelection(key);
+    return [
+      { label: 'Copy', icon: 'copy', hint: 'Ctrl+C', disabled: !selected, run: () => void copySelection(key) },
+      { label: 'Paste', icon: 'paste', hint: 'Ctrl+V', run: () => void pasteInto(key) },
+      { label: 'Select all', run: () => selectAllIn(key) },
+      { label: 'Clear terminal', run: () => clearTerminal(key) },
+      { label: 'Find…', icon: 'search', sep: true, hint: chordFor('find'), run: () => runAction('find') },
+      { label: isSplit() ? 'Back to one pane' : 'Split', icon: 'split', hint: chordFor('toggleSplit'), run: () => void toggleSplit() },
+      { label: 'Rename tab…', icon: 'pencil', hint: chordFor('renameTab'), run: () => (renamingTab = key) },
+      { label: 'Close tab', icon: 'close', sep: true, hint: chordFor('closeTab'), run: () => void requestClose(key) },
+    ];
+  }
+
+  /** Cut, copy and paste for text boxes and the notes pad, through the browser's own commands. */
+  function editItems(field: HTMLElement): MenuItem[] {
+    const input = field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement ? field : null;
+    const selected = input ? input.selectionStart !== input.selectionEnd : !document.getSelection()?.isCollapsed;
+    const exec = (command: string) => () => {
+      field.focus();
+      document.execCommand(command);
+    };
+    return [
+      { label: 'Cut', hint: 'Ctrl+X', disabled: !selected, run: exec('cut') },
+      { label: 'Copy', icon: 'copy', hint: 'Ctrl+C', disabled: !selected, run: exec('copy') },
+      {
+        label: 'Paste',
+        icon: 'paste',
+        hint: 'Ctrl+V',
+        run: () =>
+          void navigator.clipboard.readText().then((text) => {
+            field.focus();
+            document.execCommand('insertText', false, text);
+          }),
+      },
+      { label: 'Select all', hint: 'Ctrl+A', sep: true, run: () => (input ? (input.focus(), input.select()) : exec('selectAll')()) },
+    ];
+  }
+
+  /** Runs after any component's own menu, which marks the event handled. */
+  function onContextMenu(e: MouseEvent) {
+    if (e.defaultPrevented) return;
+    e.preventDefault();
+    const target = e.target as HTMLElement;
+    const key = tabAt(target);
+    if (key) {
+      activate(key);
+      contextMenu = { x: e.clientX, y: e.clientY, items: terminalItems(key) };
+      return;
+    }
+    const field = target.closest<HTMLElement>('input, textarea, [contenteditable="true"]');
+    if (field) contextMenu = { x: e.clientX, y: e.clientY, items: editItems(field) };
+  }
+
   // --- command palette
   let paletteOpen = $state(false);
   const ACTION_ICONS: Partial<Record<Action, IconName>> = {
@@ -597,12 +661,14 @@
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', refit);
+    window.addEventListener('contextmenu', onContextMenu);
 
     return () => {
       off();
       offChord();
       offAttention();
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('contextmenu', onContextMenu);
       window.removeEventListener('resize', refit);
     };
   });
@@ -771,6 +837,9 @@
     {/if}
     {#if showDebug}
       <DebugOverlay {activeKey} />
+    {/if}
+    {#if contextMenu}
+      <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenu.items} onClose={() => (contextMenu = null)} />
     {/if}
     {#if paletteOpen}
       {@const cmds = paletteCommands()}

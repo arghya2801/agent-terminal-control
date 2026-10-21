@@ -41,6 +41,9 @@
   }
 
   onMount(() => {
+    // On the body, so no transformed or clipped ancestor (the sliding sidebar) can move
+    // or cut off a fixed-position menu.
+    document.body.append(el);
     const rect = el.getBoundingClientRect();
     clamped = {
       left: Math.min(x, window.innerWidth - rect.width - 8),
@@ -75,6 +78,7 @@
     return () => {
       window.removeEventListener('mousedown', onDown, true);
       window.removeEventListener('keydown', onKey, true);
+      el.remove();
     };
   });
 </script>
