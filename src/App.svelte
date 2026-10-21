@@ -783,18 +783,47 @@
     left: 0;
     z-index: 1;
   }
+  /* Centred on the sidebar's border. The line and grip wait a beat on hover, so passing
+     the mouse across does not flash them. */
   .resize {
     position: absolute;
     top: 0;
-    right: 0;
+    right: -4px;
     bottom: 0;
     z-index: 5;
-    width: 5px;
+    width: 8px;
     cursor: col-resize;
   }
-  .resize:hover,
-  .resize.dragging {
-    background: color-mix(in srgb, var(--accent) 40%, transparent);
+  .resize::before,
+  .resize::after {
+    position: absolute;
+    left: 3px;
+    width: 2px;
+    background: var(--accent);
+    content: '';
+    opacity: 0;
+    transition: opacity var(--fast);
+  }
+  .resize::before {
+    top: 0;
+    bottom: 0;
+  }
+  .resize::after {
+    top: 50%;
+    left: 1px;
+    width: 6px;
+    height: 32px;
+    margin-top: -16px;
+    border-radius: 3px;
+  }
+  .resize:hover::before,
+  .resize:hover::after {
+    opacity: 1;
+    transition-delay: 150ms;
+  }
+  .resize.dragging::before,
+  .resize.dragging::after {
+    opacity: 1;
   }
   .main {
     position: relative;
