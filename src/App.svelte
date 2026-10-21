@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import ProviderPicker from './lib/ProviderPicker.svelte';
@@ -46,6 +46,7 @@
     onChord,
     openTab,
     refit,
+    refitNow,
     renameTab,
     activate,
     focusOtherPane,
@@ -96,7 +97,7 @@
   // --- restore tabs on launch
   const TABS_KEY = import.meta.env.VITE_ATC_PLAYGROUND === '1' ? 'atc.playground.tabs' : 'atc.tabs';
   /** Until startup has reopened the saved tabs, saving would overwrite them. */
-  let restoring = true;
+  let restoring = $state(true);
 
   let savedTabs = '';
   function saveTabs(all: Tab[]) {
@@ -185,13 +186,11 @@
   const SIDEBAR_MIN = 160;
   const SIDEBAR_MAX = 800;
   const SIDEBAR_DEFAULT = 260;
+  /** Svelte's `cubicOut`, which the drawer uses, so drawer and terminal move as one. */
+  const DRAWER_EASE = 'cubic-bezier(0.33, 1, 0.68, 1)';
   /** Live width while the edge is being dragged; saved once, when the drag ends. */
   let dragWidth = $state<number | null>(null);
   const width = $derived(dragWidth ?? appState.settings?.ui.sidebarWidth ?? SIDEBAR_DEFAULT);
-  /** The sidebar is sliding out; its column stays until it has gone. */
-  let leaving = $state(false);
-  /** The column only ever snaps, so the terminal is never mid-resize while it moves. */
-  const panelWidth = $derived(open || leaving ? width : 0);
 
   function saveSidebarWidth(w: number) {
     if (!appState.settings || appState.settings.ui.sidebarWidth === w) return;
@@ -510,12 +509,25 @@
   // changes; otherwise ConPTY keeps the old column count. Waiting any longer than
   // refit's own debounce leaves the terminal clipped at its old width, then jumping.
   $effect(() => {
-    void panelWidth;
+    void width;
     refit();
+  });
+
+  // Toggling the sidebar: the column snaps and the terminal takes its final size in the
+  // same frame, then slides with the drawer. Resizing after the slide made it jump.
+  let main: HTMLElement;
+  $effect(() => {
+    const isOpen = open;
+    // Untracked: startup ending is not a toggle.
+    if (untrack(() => restoring)) return refit();
+    refitNow();
+    const ms = enterMs();
+    const w = untrack(() => width);
+    if (ms) main.animate([{ transform: `translateX(${isOpen ? -w : w}px)` }, { transform: 'none' }], { duration: ms, easing: DRAWER_EASE });
   });
 </script>
 
-<div class="app" style="--panel: {panelWidth}px">
+<div class="app" style="--panel: {open ? width : 0}px">
   <nav class="rail">
     <button
       class="rail-btn"
@@ -595,9 +607,8 @@
     {#if open}
       <div
         class="drawer"
-        transition:fly={{ x: -width, opacity: 1, duration: enterMs(), easing: cubicOut }}
-        onoutrostart={() => (leaving = true)}
-        onoutroend={() => (leaving = false)}
+        style="width: {width}px"
+        transition:fly={{ x: -width, opacity: 1, duration: restoring ? 0 : enterMs(), easing: cubicOut }}
       >
       <div
         class="resize"
@@ -628,7 +639,7 @@
     {/if}
   </aside>
 
-  <section class="main">
+  <section class="main" bind:this={main}>
     <TabBar {tabs} {activeKey} onNew={newTab} onClose={requestClose} bind:renaming={renamingTab} />
     <div class="panes" bind:this={wrapper}></div>
     {#if page === 'settings'}
@@ -681,6 +692,8 @@
     flex-direction: column;
     align-items: center;
     gap: 4px;
+    position: relative;
+    z-index: 2;
     padding: 8px 0;
     border-right: 1px solid var(--border);
     background: var(--bg-chrome);
@@ -733,12 +746,17 @@
   .spacer {
     flex: 1;
   }
+  /* The drawer is not clipped to its column: sliding out, it overlays the terminal that
+     has already taken the column back. The rail covers it from the other side. */
   .panel {
     position: relative;
-    overflow: hidden;
   }
   .drawer {
-    height: 100%;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1;
   }
   .resize {
     position: absolute;

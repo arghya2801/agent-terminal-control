@@ -665,7 +665,7 @@ function measure(tab: Tab): Dims {
  * applied to all of them. Split, each visible pane is measured on its own, and hidden
  * tabs take the focused pane's size, since that is where they will appear.
  */
-const scheduleFit = debounce(() => {
+function fitAll() {
   const active = activeKey ? tabs.get(activeKey) : null;
   if (!active) return;
 
@@ -682,7 +682,8 @@ const scheduleFit = debounce(() => {
   for (const t of panesNeedingResize(hidden, dims)) {
     applyDims(t, dims);
   }
-}, RESIZE_DEBOUNCE_MS);
+}
+const scheduleFit = debounce(fitAll, RESIZE_DEBOUNCE_MS);
 
 /** Resize the emulator and its PTY together, and remember what was applied. */
 function applyDims(tab: Tab, dims: Dims) {
@@ -696,6 +697,12 @@ function applyDims(tab: Tab, dims: Dims) {
 
 export function refit() {
   scheduleFit();
+}
+
+/** Measure now, in this frame: for a layout change that is about to be animated. */
+export function refitNow() {
+  scheduleFit.cancel();
+  fitAll();
 }
 
 // Terminal instances, their PTY ids, and the WebGL context all live in module scope, and
