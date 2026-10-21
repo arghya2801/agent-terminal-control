@@ -53,7 +53,8 @@
   let showAll = $state(false);
   // A filter opens every match at once; only a click on one project animates.
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const expand = $derived({ duration: forceOpen || reduced ? 0 : 180 });
+  const enter = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--enter'));
+  const expand = $derived({ duration: forceOpen || reduced ? 0 : enter });
 
   const open = $derived(forceOpen || isExpanded(project.key));
   const visible = $derived(showAll ? project.sessions : project.sessions.slice(0, limit));
@@ -192,7 +193,7 @@
   .twisty {
     flex-shrink: 0;
     color: var(--fg-faint);
-    transition: transform 120ms var(--ease-out), color var(--fast);
+    transition: transform var(--fast) var(--ease-out), color var(--fast);
   }
   .disclosure:hover .twisty {
     color: var(--accent);

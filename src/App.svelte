@@ -499,13 +499,13 @@
     };
   });
 
-  // The terminal shares the wrapper's geometry, so it must re-measure once the panel
-  // has finished animating -- otherwise ConPTY keeps the old column count.
+  // The terminal shares the wrapper's geometry, so it re-measures whenever the panel
+  // changes; otherwise ConPTY keeps the old column count. Waiting any longer than
+  // refit's own debounce leaves the terminal clipped at its old width, then jumping.
   $effect(() => {
     void open;
     void width;
-    const t = setTimeout(refit, 180);
-    return () => clearTimeout(t);
+    refit();
   });
 </script>
 

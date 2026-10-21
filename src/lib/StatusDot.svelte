@@ -13,7 +13,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    transition: background-color 200ms, box-shadow 200ms;
+    transition: background-color var(--enter), box-shadow var(--enter);
   }
   .open {
     box-shadow: inset 0 0 0 1px var(--fg-faint);

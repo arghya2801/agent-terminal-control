@@ -895,7 +895,7 @@
     height: 100%;
     border-radius: 4px;
     background: var(--accent);
-    transition: width 240ms var(--ease-out);
+    transition: width var(--enter) var(--ease-out);
   }
   .fill.hot {
     background: var(--warn);
@@ -1175,7 +1175,7 @@
     gap: 2px;
     overflow: hidden;
     border-radius: 4px 4px 0 0;
-    transition: height 200ms var(--ease-out), opacity var(--fast);
+    transition: height var(--enter) var(--ease-out), opacity var(--fast);
   }
   .seg {
     min-height: 1px;
@@ -1220,7 +1220,7 @@
   }
   .twisty {
     color: var(--fg-faint);
-    transition: transform 120ms var(--ease-out);
+    transition: transform var(--fast) var(--ease-out);
   }
   .twisty.open {
     transform: rotate(90deg);
