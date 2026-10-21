@@ -204,9 +204,7 @@
     from { background-position: 100% 0; }
     to { background-position: 0 0; }
   }
-  @media (prefers-reduced-motion: reduce) {
-    .tab.working::before { background: var(--warn); animation: none; }
-  }
+  :global([data-still]) .tab.working::before { background: var(--warn); animation: none; }
   /* Drop target while dragging a tab (#74). */
   .tab:global(.drop-target) { box-shadow: inset 2px 0 0 var(--accent); }
   .tab.exited .label { text-decoration: line-through; opacity: 0.6; }

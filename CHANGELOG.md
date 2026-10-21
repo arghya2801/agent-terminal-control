@@ -9,10 +9,13 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ### Changed
 - One set of line icons replaces the mixed symbols in the rail, sidebar, tab bar and find bar.
 - The focused tab has an accent line on its top edge. While an agent works, a light sweeps along that edge. A dot that needs you rings twice when it lands.
-- Menus, dialogs, pages and the find bar ease in, and projects slide open. The selected tab, rail button and sidebar view draw their accent line in, a context menu grows from the corner nearest the cursor, and usage bars and meters move to their new values. Windows' "Show animations" setting turns this off.
+- Menus, dialogs, pages and the find bar ease in, and projects slide open. The selected tab, rail button and sidebar view draw their accent line in, a context menu grows from the corner nearest the cursor, and usage bars and meters move to their new values. The new Animations setting controls this.
 - Tab close buttons show on hover and on the focused tab only.
 - Sidebar and settings headings use sentence case, and the sidebar footer leaves out zero counts.
 - The UI uses Segoe UI Variable, the Windows 11 system font.
+
+### Added
+- An Animations setting: Follow Windows (default), On or Off. With Windows' animation effects turned off, ATC stays still unless set to On.
 
 ### Fixed
 - Claude tab titles no longer show the ✳ twice.

@@ -97,6 +97,20 @@ function applySettings(s: Settings) {
   applyTerminalSettings(s.terminal);
   applyThemeByName(s.ui.theme);
   applyZoom(s.ui.zoom);
+  applyMotion();
+}
+
+// Windows' "Show animations" reaches the page as reduced motion, and changes live.
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+reduceMotion.addEventListener('change', () => applyMotion());
+
+/** `data-still` on the root turns every animation off; app.css reads it. */
+function applyMotion(pref = appState.settings?.ui.animations) {
+  document.documentElement.toggleAttribute('data-still', pref === 'off' || (pref !== 'on' && reduceMotion.matches));
+}
+
+export function motionOff(): boolean {
+  return document.documentElement.hasAttribute('data-still');
 }
 
 function applyZoom(value: number) {

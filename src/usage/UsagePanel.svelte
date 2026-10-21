@@ -863,10 +863,8 @@
       opacity: 0.45;
     }
   }
-  @media (prefers-reduced-motion: reduce) {
-    .ghost {
-      animation: none;
-    }
+  :global([data-still]) .ghost {
+    animation: none;
   }
   .limit-head {
     display: flex;

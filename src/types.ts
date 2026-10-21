@@ -113,6 +113,8 @@ export interface Settings {
     groupByBranch: boolean;
     /** Which list the sidebar shows. Unknown values read as sessions. */
     sidebarView: string;
+    /** `on`, `off`, or anything else to follow Windows' "Show animations". */
+    animations: string;
   };
   terminal: TerminalSettings;
   codex: { command: string; resumeArgs: string[]; homeDir: string | null };

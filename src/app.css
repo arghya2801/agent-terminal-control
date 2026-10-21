@@ -80,12 +80,11 @@ button {
   from { opacity: 0; transform: translateY(-8px); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  ::before,
-  ::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
+/* Set by `applyMotion` from the Animations setting, which defaults to following Windows. */
+[data-still] *,
+[data-still] ::before,
+[data-still] ::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
 }

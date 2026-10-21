@@ -4,7 +4,7 @@
   import Icon from '../lib/Icon.svelte';
   import SessionNode from './SessionNode.svelte';
   import InlineRename from '../lib/InlineRename.svelte';
-  import { isExpanded, toggleExpanded } from '../lib/stores.svelte';
+  import { isExpanded, motionOff, toggleExpanded } from '../lib/stores.svelte';
   import { shortenPath } from '../lib/format';
   import { branchGroups } from '../lib/branchGroups';
   import type { Project, SessionMeta, TabKey } from '../types';
@@ -51,10 +51,7 @@
   } = $props();
 
   let showAll = $state(false);
-  // A filter opens every match at once; only a click on one project animates.
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const enter = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--enter'));
-  const expand = $derived({ duration: forceOpen || reduced ? 0 : enter });
 
   const open = $derived(forceOpen || isExpanded(project.key));
   const visible = $derived(showAll ? project.sessions : project.sessions.slice(0, limit));
@@ -114,7 +111,8 @@
   </div>
 
   {#if open}
-    <div class="sessions" transition:slide={expand}>
+    <!-- A filter opens every match at once; only a click on one project animates. -->
+    <div class="sessions" transition:slide={{ duration: forceOpen || motionOff() ? 0 : enter }}>
       {#snippet row(session: SessionMeta)}
         <SessionNode
           {session}

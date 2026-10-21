@@ -169,6 +169,17 @@
           <code>settings.json</code>: any Windows Terminal or VS Code terminal palette works.
         </div>
       </div>
+      <label for="an">Animations</label>
+      <div>
+        <select id="an" bind:value={draft.ui.animations}>
+          <option value="system">Follow Windows</option>
+          <option value="on">On</option>
+          <option value="off">Off</option>
+        </select>
+        <div class="muted hint">
+          Follow Windows uses Settings &gt; Accessibility &gt; Visual effects &gt; Animation effects.
+        </div>
+      </div>
     </div>
 
     <h2>Codex</h2>

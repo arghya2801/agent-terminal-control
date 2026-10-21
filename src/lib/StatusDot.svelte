@@ -47,10 +47,8 @@
       box-shadow: 0 0 0 7px transparent;
     }
   }
-  @media (prefers-reduced-motion: reduce) {
-    .working,
-    .attention {
-      animation: none;
-    }
+  :global([data-still]) .working,
+  :global([data-still]) .attention {
+    animation: none;
   }
 </style>
