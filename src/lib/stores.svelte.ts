@@ -97,6 +97,29 @@ function applySettings(s: Settings) {
   applyTerminalSettings(s.terminal);
   applyThemeByName(s.ui.theme);
   applyZoom(s.ui.zoom);
+  applyMotion();
+}
+
+// Windows' "Show animations" reaches the page as reduced motion, and changes live.
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+reduceMotion.addEventListener('change', () => applyMotion());
+
+/**
+ * `data-still` on the root turns every animation off; app.css reads it. The speed scales
+ * the two duration tokens everything else is built from.
+ */
+function applyMotion(pref = appState.settings?.ui.animations) {
+  const root = document.documentElement;
+  root.toggleAttribute('data-still', pref === 'off' || (pref !== 'on' && reduceMotion.matches));
+  const speed = Math.min(4, Math.max(0.25, appState.settings?.ui.animationSpeed || 1));
+  root.style.setProperty('--fast', `${Math.round(90 / speed)}ms`);
+  root.style.setProperty('--enter', `${Math.round(200 / speed)}ms`);
+}
+
+/** How long an entrance takes in a JS transition: `--enter`, or 0 while motion is off. */
+export function enterMs(): number {
+  if (document.documentElement.hasAttribute('data-still')) return 0;
+  return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--enter'));
 }
 
 function applyZoom(value: number) {

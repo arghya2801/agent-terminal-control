@@ -6,6 +6,25 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Changed
+- One set of line icons replaces the mixed symbols in the rail, sidebar, tab bar and find bar.
+- The focused tab has an accent line on its top edge. While an agent works, a light sweeps along that edge. A dot that needs you rings twice when it lands.
+- Menus, dialogs, pages and the find bar ease in, projects slide open, and the sidebar slides in and out like a drawer, carrying the terminal with it. The selected tab, rail button and sidebar view draw their accent line in, a context menu grows from the corner nearest the cursor, and usage bars and meters move to their new values. The new Animations setting controls this.
+- Tab close buttons show on hover and on the focused tab only.
+- Sidebar and settings headings use sentence case, and the sidebar footer leaves out zero counts.
+- The UI uses Segoe UI Variable, the Windows 11 system font.
+- Settings fills the window beside the rail, with its options split into General, Appearance, Terminal, Sidebar, Claude, Codex and Names.
+- The usage page holds space for Codex limits and this tab's session while they load, so nothing below jumps when they arrive.
+
+### Added
+- An Animations setting: Follow Windows (default), On or Off. With Windows' animation effects turned off, ATC stays still unless set to On.
+- An Animation speed slider under Settings > Appearance, from half to three times as fast.
+
+### Fixed
+- Claude tab titles no longer show the ✳ twice.
+- Expanded projects show their chevron again; it was hidden whenever a project was open.
+- The find bar, error message and close confirmation follow light themes instead of staying dark.
+
 ## [0.4.3] - 2026-10-15
 
 ### Changed

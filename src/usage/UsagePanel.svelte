@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { sessionKey, providerName } from '../lib/agents';
   import Page from '../lib/Page.svelte';
+  import Icon from '../lib/Icon.svelte';
   import { save } from '../lib/desktop';
   import { claudeUsage, codexUsage, codexUsageStop, usageCosts, writeTextFile } from '../lib/ipc';
   import { appState } from '../lib/stores.svelte';
@@ -27,7 +28,11 @@
   let codexPlan = $state<Record<string, unknown> | null>(null);
   let codexError = $state<string | null>(null);
   let codexLoading = $state(false);
-  let codexMissing = $state(false);
+  const CODEX_ROWS_KEY = 'atc.usage.codexRows';
+  const lastCodexRows = readRows(CODEX_ROWS_KEY, 2);
+  let codexRows = $state(lastCodexRows);
+  /** Not installed last time either: reserving a card that then vanishes is worse than none. */
+  let codexMissing = $state(lastCodexRows === 0);
   const codexWindows = $derived(codexPlan ? codexLimits(codexPlan) : []);
   async function loadCodex() {
     if (codexLoading) return;
@@ -37,6 +42,7 @@
       codexMissing = plan === null;
       codexPlan = plan;
       codexError = null;
+      codexRows = rememberRows(CODEX_ROWS_KEY, plan === null ? 0 : codexWindows.length, codexRows);
     }
     catch (e) { codexMissing = false; codexError = String(e); }
     finally { codexLoading = false; }
@@ -60,26 +66,28 @@
   // account has varies (session, week, and per-model weeks), so remember the last count
   // rather than guess it every time; the default only matters on the very first load.
   const ROWS_KEY = 'atc.usage.limitRows';
-  let skeletonRows = $state(readRows());
+  let skeletonRows = $state(readRows(ROWS_KEY, 3));
 
-  function readRows(): number {
+  function readRows(key: string, fallback: number): number {
     try {
-      const n = Number(localStorage.getItem(ROWS_KEY));
-      if (Number.isInteger(n) && n > 0 && n <= 6) return n;
+      const raw = localStorage.getItem(key);
+      const n = Number(raw);
+      if (raw !== null && Number.isInteger(n) && n >= 0 && n <= 6) return n;
     } catch {
       // Storage unavailable: fall through to the default.
     }
-    return 3;
+    return fallback;
   }
 
-  function rememberRows(n: number) {
-    if (n <= 0 || n === skeletonRows) return;
-    skeletonRows = n;
+  /** Returns the count to reserve next time; `0` is only kept for Codex being absent. */
+  function rememberRows(key: string, n: number, was: number): number {
+    if (n === was || (n === 0 && key === ROWS_KEY)) return was;
     try {
-      localStorage.setItem(ROWS_KEY, String(n));
+      localStorage.setItem(key, String(n));
     } catch {
       // Storage unavailable: next launch reserves the default instead.
     }
+    return n;
   }
 
   async function loadPlan() {
@@ -87,7 +95,7 @@
     planLoading = true;
     try {
       plan = await claudeUsage();
-      rememberRows(limits.length);
+      skeletonRows = rememberRows(ROWS_KEY, limits.length, skeletonRows);
       planUpdatedAt = Date.now();
       now = planUpdatedAt;
       planError = null;
@@ -119,6 +127,8 @@
   const filteredRows = $derived(provider === 'all' ? rows : rows.filter(r => r.provider === provider));
   let costError = $state<string | null>(null);
   let costLoading = $state(false);
+  /** Until the first scan lands, sections that depend on it hold their space. */
+  let costsLoaded = $state(false);
   const today = localDay(new Date());
   const initial = presetDates(30);
   let from = $state(initial.from);
@@ -133,6 +143,7 @@
       costError = String(e);
     } finally {
       costLoading = false;
+      costsLoaded = true;
     }
   }
 
@@ -370,6 +381,23 @@
   });
 </script>
 
+<!-- Same markup as the real rows, so the space reserved is the space they take and
+     nothing below moves when they arrive. -->
+{#snippet ghostLimits(n: number, label: string)}
+  <div class="limits" aria-busy="true" aria-label={label}>
+    {#each { length: n } as _, i (i)}
+      <div class="limit">
+        <div class="limit-head">
+          <span class="ghost" style="width: 11ch"></span>
+          <span class="ghost" style="width: 7ch"></span>
+        </div>
+        <div class="meter"></div>
+        <div class="muted"><span class="ghost" style="width: 18ch"></span></div>
+      </div>
+    {/each}
+  </div>
+{/snippet}
+
 <Page title="Usage" {onClose}>
   <div class="plan-grid">
   <section class="plan-card" aria-label="Claude plan limits">
@@ -380,20 +408,7 @@
   {#if planError && !plan}
     <p class="err">{planError}</p>
   {:else if !plan}
-    <!-- Same markup as the real rows, so the space reserved is the space they take and
-         nothing below moves when they arrive. -->
-    <div class="limits" aria-busy="true" aria-label="Loading plan limits">
-      {#each { length: skeletonRows } as _, i (i)}
-        <div class="limit">
-          <div class="limit-head">
-            <span class="ghost" style="width: 11ch"></span>
-            <span class="ghost" style="width: 7ch"></span>
-          </div>
-          <div class="meter"></div>
-          <div class="muted"><span class="ghost" style="width: 18ch"></span></div>
-        </div>
-      {/each}
-    </div>
+    {@render ghostLimits(skeletonRows, 'Loading plan limits')}
   {:else if limits.length === 0}
     <p class="muted">No limits reported for this account.</p>
   {:else}
@@ -436,7 +451,7 @@
   <section class="plan-card" aria-label="Codex plan limits">
   <h2>Codex plan limits</h2>
   {#if codexError}<p class="err">{codexError}</p>{/if}
-  {#if codexLoading && !codexPlan}<p class="muted">Loading Codex limits…</p>
+  {#if !codexPlan && !codexError}{@render ghostLimits(codexRows || 2, 'Loading Codex limits')}
   {:else if codexPlan && codexWindows.length === 0}<p class="muted">No rate-limit data for this account.</p>{/if}
   <div class="limits">
     {#each codexWindows as l (l.key)}
@@ -455,19 +470,28 @@
   {/if}
   </div>
 
-  {#if session && current}
+  {#if current && (session || !costsLoaded)}
     <h2>This tab's session</h2>
-    <div class="total">
-      <span class="big">{monetary({ cost: session.cost, partial: session.partial, unavailable: false })}</span>
-      <span class="muted">{formatTokens(session.tokens)} tokens · {Math.round(session.cacheShare * 100)}% of input from cache · {sessionName(current)}</span>
-    </div>
-    <p class="muted">
-      Active {localTime(session.firstHour)} to {localTime(session.lastHour)}, by the hour. API and wall durations and code changes are only in the CLI's own <code>/usage</code>.
-    </p>
+    {#if session}
+      <div class="total">
+        <span class="big">{monetary({ cost: session.cost, partial: session.partial, unavailable: false })}</span>
+        <span class="muted">{formatTokens(session.tokens)} tokens · {Math.round(session.cacheShare * 100)}% of input from cache · {sessionName(current)}</span>
+      </div>
+      <p class="muted">
+        Active {localTime(session.firstHour)} to {localTime(session.lastHour)}, by the hour. API and wall durations and code changes are only in the CLI's own <code>/usage</code>.
+      </p>
+    {:else}
+      <div class="total" aria-busy="true">
+        <span class="big"><span class="ghost" style="width: 5ch"></span></span>
+        <span class="muted"><span class="ghost" style="width: 36ch"></span></span>
+      </div>
+      <p class="muted"><span class="ghost" style="width: 60ch; max-width: 100%"></span></p>
+    {/if}
     <table>
       <thead><tr><th>Model</th><th class="num">Input</th><th class="num">Output</th><th class="num">Cache read</th><th class="num">Cache write</th><th class="num">API cost</th></tr></thead>
       <tbody>
-        {#each session.byModel as m (m.model)}
+        {#if !session}<tr><td colspan="6"><span class="ghost" style="width: 16ch"></span></td></tr>{/if}
+        {#each session?.byModel ?? [] as m (m.model)}
           <tr>
             <td>{m.model}</td>
             <td class="num">{formatTokens(m.input)}</td>
@@ -790,7 +814,7 @@
             <tr>
               <td>
                 <button class="expand" onclick={() => toggleProject(p.key)} aria-expanded={expanded.has(p.key)}>
-                  <span class="twisty" class:open={expanded.has(p.key)}>▸</span>{p.name}
+                  <span class="twisty" class:open={expanded.has(p.key)}><Icon name="chevron" size={12} /></span>{p.name}
                   <span class="muted">{sessions.length} session{sessions.length === 1 ? '' : 's'}</span>
                 </button>
               </td>
@@ -862,10 +886,8 @@
       opacity: 0.45;
     }
   }
-  @media (prefers-reduced-motion: reduce) {
-    .ghost {
-      animation: none;
-    }
+  :global([data-still]) .ghost {
+    animation: none;
   }
   .limit-head {
     display: flex;
@@ -894,6 +916,7 @@
     height: 100%;
     border-radius: 4px;
     background: var(--accent);
+    transition: width var(--enter) var(--ease-out);
   }
   .fill.hot {
     background: var(--warn);
@@ -1173,6 +1196,7 @@
     gap: 2px;
     overflow: hidden;
     border-radius: 4px 4px 0 0;
+    transition: height var(--enter) var(--ease-out), opacity var(--fast);
   }
   .seg {
     min-height: 1px;
@@ -1216,13 +1240,14 @@
     cursor: pointer;
   }
   .twisty {
-    display: inline-block;
     color: var(--fg-faint);
-    font-size: 9px;
-    transition: transform 0.12s;
+    transition: transform var(--fast) var(--ease-out);
   }
   .twisty.open {
     transform: rotate(90deg);
+  }
+  tr.session {
+    animation: atc-rise var(--enter) var(--ease-out);
   }
   tr.session td:first-child {
     padding-left: 26px;

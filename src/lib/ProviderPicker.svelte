@@ -74,10 +74,13 @@
     border-radius: 10px;
     background: var(--bg-chrome);
     color: var(--fg);
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+    box-shadow: var(--shadow-pop);
+    animation: atc-pop var(--enter) var(--ease-out);
+    transform-origin: top center;
   }
   dialog::backdrop {
     background: color-mix(in srgb, var(--bg) 55%, transparent);
+    animation: atc-fade var(--enter) var(--ease-out);
   }
   .sheet {
     padding: 6px;
