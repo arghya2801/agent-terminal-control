@@ -13,6 +13,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
+    transition: background-color 200ms, box-shadow 200ms;
   }
   .open {
     box-shadow: inset 0 0 0 1px var(--fg-faint);
@@ -23,9 +24,11 @@
   .interrupted {
     background: var(--danger);
   }
+  /* Rings out twice when it lands, then holds: the one thing here that moves unasked. */
   .attention {
     background: var(--accent);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 27%, transparent);
+    animation: ping 0.9s var(--ease-out) 2;
   }
   .working {
     background: var(--warn);
@@ -36,8 +39,17 @@
       opacity: 0.35;
     }
   }
+  @keyframes ping {
+    from {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent);
+    }
+    to {
+      box-shadow: 0 0 0 7px transparent;
+    }
+  }
   @media (prefers-reduced-motion: reduce) {
-    .working {
+    .working,
+    .attention {
       animation: none;
     }
   }
