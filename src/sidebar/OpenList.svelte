@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
+  import Icon from '../lib/Icon.svelte';
   import { reorderable } from '../lib/dragReorder';
   import { markTitle, relativeTime, tabMark } from '../lib/format';
   import { providerName } from '../lib/agents';
@@ -53,7 +54,7 @@
     title="{tab.title} · {s} (middle-click to close)"
   >
     <StatusDot mark={tabMark(tab)} title={s} />
-    <span class="icon">{#if tab.provider}<ProviderIcon provider={tab.provider} />{:else}›_{/if}</span>
+    <span class="icon">{#if tab.provider}<ProviderIcon provider={tab.provider} />{:else}<Icon name="terminal" size={12} />{/if}</span>
     <span class="text">{tab.title}{#if projectName(tab.projectKey)}<small>{projectName(tab.projectKey)}</small>{/if}</span>
     <time>{relativeTime(getTab(tab.key)?.lastOutputAt ?? 0, now)}</time>
   </button>
@@ -96,10 +97,9 @@
     text-decoration: line-through;
   }
   .icon {
+    display: grid;
+    place-items: center;
     color: var(--fg-faint);
-    font-family: ui-monospace, monospace;
-    font-size: 10px;
-    text-align: center;
   }
   .text {
     min-width: 0;
