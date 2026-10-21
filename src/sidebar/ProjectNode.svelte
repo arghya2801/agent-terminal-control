@@ -4,7 +4,7 @@
   import Icon from '../lib/Icon.svelte';
   import SessionNode from './SessionNode.svelte';
   import InlineRename from '../lib/InlineRename.svelte';
-  import { isExpanded, motionOff, toggleExpanded } from '../lib/stores.svelte';
+  import { enterMs, isExpanded, toggleExpanded } from '../lib/stores.svelte';
   import { shortenPath } from '../lib/format';
   import { branchGroups } from '../lib/branchGroups';
   import type { Project, SessionMeta, TabKey } from '../types';
@@ -51,7 +51,6 @@
   } = $props();
 
   let showAll = $state(false);
-  const enter = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--enter'));
 
   const open = $derived(forceOpen || isExpanded(project.key));
   const visible = $derived(showAll ? project.sessions : project.sessions.slice(0, limit));
@@ -112,7 +111,7 @@
 
   {#if open}
     <!-- A filter opens every match at once; only a click on one project animates. -->
-    <div class="sessions" transition:slide={{ duration: forceOpen || motionOff() ? 0 : enter }}>
+    <div class="sessions" transition:slide={{ duration: forceOpen ? 0 : enterMs() }}>
       {#snippet row(session: SessionMeta)}
         <SessionNode
           {session}

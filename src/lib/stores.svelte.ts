@@ -109,8 +109,10 @@ function applyMotion(pref = appState.settings?.ui.animations) {
   document.documentElement.toggleAttribute('data-still', pref === 'off' || (pref !== 'on' && reduceMotion.matches));
 }
 
-export function motionOff(): boolean {
-  return document.documentElement.hasAttribute('data-still');
+/** How long an entrance takes in a JS transition: `--enter`, or 0 while motion is off. */
+export function enterMs(): number {
+  if (document.documentElement.hasAttribute('data-still')) return 0;
+  return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--enter'));
 }
 
 function applyZoom(value: number) {

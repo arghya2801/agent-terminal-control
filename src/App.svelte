@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { fly } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
   import ProviderPicker from './lib/ProviderPicker.svelte';
   import { providerName, sessionKey } from './lib/agents';
   import TabBar from './tabs/TabBar.svelte';
@@ -20,6 +22,7 @@
     adjustZoom,
     appState,
     currentZoom,
+    enterMs,
     initStores,
     saveSettings,
     sidebarOpen,
@@ -185,6 +188,10 @@
   /** Live width while the edge is being dragged; saved once, when the drag ends. */
   let dragWidth = $state<number | null>(null);
   const width = $derived(dragWidth ?? appState.settings?.ui.sidebarWidth ?? SIDEBAR_DEFAULT);
+  /** The sidebar is sliding out; its column stays until it has gone. */
+  let leaving = $state(false);
+  /** The column only ever snaps, so the terminal is never mid-resize while it moves. */
+  const panelWidth = $derived(open || leaving ? width : 0);
 
   function saveSidebarWidth(w: number) {
     if (!appState.settings || appState.settings.ui.sidebarWidth === w) return;
@@ -503,13 +510,12 @@
   // changes; otherwise ConPTY keeps the old column count. Waiting any longer than
   // refit's own debounce leaves the terminal clipped at its old width, then jumping.
   $effect(() => {
-    void open;
-    void width;
+    void panelWidth;
     refit();
   });
 </script>
 
-<div class="app" style="--panel: {open ? width : 0}px">
+<div class="app" style="--panel: {panelWidth}px">
   <nav class="rail">
     <button
       class="rail-btn"
@@ -588,6 +594,12 @@
   <aside class="panel">
     {#if open}
       <div
+        class="drawer"
+        transition:fly={{ x: -width, opacity: 1, duration: enterMs(), easing: cubicOut }}
+        onoutrostart={() => (leaving = true)}
+        onoutroend={() => (leaving = false)}
+      >
+      <div
         class="resize"
         class:dragging={dragWidth !== null}
         role="separator"
@@ -612,6 +624,7 @@
         onNewTab={newTab}
         onCloseTab={requestClose}
       />
+      </div>
     {/if}
   </aside>
 
@@ -723,6 +736,9 @@
   .panel {
     position: relative;
     overflow: hidden;
+  }
+  .drawer {
+    height: 100%;
   }
   .resize {
     position: absolute;
