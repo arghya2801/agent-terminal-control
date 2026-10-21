@@ -52,6 +52,8 @@
     activate,
     focusOtherPane,
     isSplit,
+    getSplitRatio,
+    setSplitRatio,
     splitWith,
     unsplit,
     type AttentionReason,
@@ -221,7 +223,26 @@
     handle.addEventListener('pointercancel', end);
   }
 
+  let split = $state(false);
+  let splitRatio = $state(0.5);
+
+  function dragSplit(e: PointerEvent) {
+    if (e.button !== 0) return;
+    const handle = e.currentTarget as HTMLElement;
+    const box = wrapper.getBoundingClientRect();
+    handle.setPointerCapture(e.pointerId);
+    const move = (m: PointerEvent) => setSplitRatio((m.clientX - box.left) / box.width);
+    const end = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', end);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', end);
+  }
+
   function sync() {
+    split = isSplit();
+    splitRatio = getSplitRatio();
     const all = listTabs();
     tabs = all.map((t) => ({
       key: t.key,
@@ -656,7 +677,20 @@
 
   <section class="main" bind:this={main}>
     <TabBar {tabs} {activeKey} onNew={newTab} onClose={requestClose} bind:renaming={renamingTab} />
-    <div class="panes" bind:this={wrapper}></div>
+    <div class="panes" bind:this={wrapper}>
+      {#if split}
+        <div
+          class="split-handle"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize panes"
+          title="Drag to resize, double-click to make them equal"
+          style="left: {splitRatio * 100}%"
+          onpointerdown={dragSplit}
+          ondblclick={() => setSplitRatio(0.5)}
+        ></div>
+      {/if}
+    </div>
     {#if page === 'settings'}
       <SettingsPanel onClose={() => (page = null)} />
     {:else if page === 'usage'}
@@ -796,8 +830,19 @@
     width: 8px;
     cursor: col-resize;
   }
+  .split-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 3;
+    width: 8px;
+    margin-left: -4px;
+    cursor: col-resize;
+  }
   .resize::before,
-  .resize::after {
+  .resize::after,
+  .split-handle::before,
+  .split-handle::after {
     position: absolute;
     left: 3px;
     width: 2px;
@@ -806,11 +851,13 @@
     opacity: 0;
     transition: opacity var(--fast);
   }
-  .resize::before {
+  .resize::before,
+  .split-handle::before {
     top: 0;
     bottom: 0;
   }
-  .resize::after {
+  .resize::after,
+  .split-handle::after {
     top: 50%;
     left: 1px;
     width: 6px;
@@ -819,7 +866,9 @@
     border-radius: 3px;
   }
   .resize:hover::before,
-  .resize:hover::after {
+  .resize:hover::after,
+  .split-handle:hover::before,
+  .split-handle:hover::after {
     opacity: 1;
     transition-delay: 150ms;
   }

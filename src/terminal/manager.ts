@@ -537,11 +537,23 @@ export function isSplit(): boolean {
   return panes[1] !== null;
 }
 
+/** Where a split divides the pane area, as a share of its width from the left. */
+let splitRatio = 0.5;
+export function getSplitRatio(): number {
+  return splitRatio;
+}
+export function setSplitRatio(ratio: number) {
+  splitRatio = Math.min(0.8, Math.max(0.2, ratio));
+  layout();
+  scheduleFit();
+  notify();
+}
+
 /** Place every tab's container in its pane, or hide it. */
 function layout() {
   for (const t of tabs.values()) {
     const slot = slotOf(panes, t.key);
-    Object.assign(t.container.style, paneStyle(slot, isSplit(), slot === focusedPane));
+    Object.assign(t.container.style, paneStyle(slot, isSplit(), slot === focusedPane, splitRatio));
   }
 }
 
