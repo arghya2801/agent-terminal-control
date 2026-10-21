@@ -29,6 +29,8 @@
     onNewAgent,
     onNewChat,
     onPickAgent,
+    onOpenFolder,
+    onAsk,
     onNewTab,
     onCloseTab,
   }: {
@@ -45,6 +47,9 @@
     onNewChat: () => void;
     /** Asks Claude or Codex, then starts it in the project (#146). */
     onPickAgent: (p: Project) => void;
+    onOpenFolder: () => void;
+    /** Starts Claude or Codex in the scratch directory. */
+    onAsk: (provider: AgentProvider) => void;
     onNewTab: () => void;
     onCloseTab: (key: TabKey) => void;
   } = $props();
@@ -256,6 +261,8 @@
   >
     <SessionList
       {query}
+      {onOpenFolder}
+      {onAsk}
       {activeKey}
       {activeSessionId}
       {openProjectKeys}

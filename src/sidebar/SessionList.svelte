@@ -3,6 +3,8 @@
   import { agentCommand, openInExplorer } from '../lib/ipc';
   import ProjectNode from './ProjectNode.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
+  import Icon from '../lib/Icon.svelte';
+  import { chordFor } from '../lib/keymap';
   import { filterProjects } from '../lib/filter';
   import { groupSubfolders } from '../lib/group';
   import { isPinned, togglePinned } from '../lib/pinned';
@@ -22,8 +24,13 @@
     onOpenSession,
     onNewShell,
     onNewAgent,
+    onOpenFolder,
+    onAsk,
   }: {
     query: string;
+    /** For the first-run card; the Scratch view has its own empty text. */
+    onOpenFolder?: () => void;
+    onAsk?: (provider: AgentProvider) => void;
     /** The Scratch view: only the scratch and chats directories, as fixed sections (#135). */
     scratch?: boolean;
     activeKey: TabKey | null;
@@ -190,8 +197,21 @@
     {/if}
   {/each}
 {:else if mine.length === 0}
-  <div class="hint">
-    No agent sessions found yet. Run <code>claude</code> or <code>codex</code> in a project and it will appear here.
+  <div class="first-run">
+    <h3>No sessions yet</h3>
+    <p>Start Claude or Codex in a folder and its sessions show up here.</p>
+    <div class="starts">
+      {#if onOpenFolder}<button class="start primary" onclick={onOpenFolder}><Icon name="folder" size={14} />Open a folder</button>{/if}
+      {#if onAsk}
+        <button class="start" onclick={() => onAsk('claude')}><Icon name="agent" size={14} />Ask Claude</button>
+        <button class="start" onclick={() => onAsk('codex')}><Icon name="agent" size={14} />Ask Codex</button>
+      {/if}
+    </div>
+    <dl>
+      <dt>Ask an agent</dt><dd><kbd>{chordFor('askAgent')}</kbd></dd>
+      <dt>New shell</dt><dd><kbd>{chordFor('newTab')}</kbd></dd>
+      <dt>Search sessions</dt><dd><kbd>{chordFor('focusSearch')}</kbd></dd>
+    </dl>
   </div>
 {:else if shown.length === 0}
   <div class="hint">Nothing matches “{query.trim()}”.</div>
@@ -204,6 +224,67 @@
 {/if}
 
 <style>
+  .first-run {
+    margin: 10px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--fg-dim);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  h3 {
+    margin: 0 0 4px;
+    color: var(--fg-bright);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .first-run p {
+    margin: 0 0 12px;
+  }
+  .starts {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .start {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-surface);
+    color: var(--fg);
+    font: inherit;
+    cursor: pointer;
+  }
+  .start:hover {
+    border-color: var(--accent);
+  }
+  .start.primary {
+    border-color: var(--accent-strong);
+    background: var(--accent-strong);
+    color: var(--on-accent);
+  }
+  dl {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px 8px;
+    margin: 14px 0 0;
+    font-size: 11px;
+  }
+  dd {
+    margin: 0;
+  }
+  kbd {
+    padding: 0 5px;
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: var(--bg-surface);
+    font: inherit;
+  }
   /* Paddings match ProjectNode's row and SessionNode's indent. */
   .sk-project {
     padding: 7px 8px 7px 26px;
@@ -231,11 +312,5 @@
   }
   .hint.err {
     color: var(--danger);
-  }
-  code {
-    padding: 1px 4px;
-    border-radius: 3px;
-    background: var(--bg-chrome);
-    font-size: 10px;
   }
 </style>

@@ -61,7 +61,7 @@
   } from './terminal/manager';
   import { matchChord, type Action } from './lib/keymap';
   import { parseSavedTabs, type SavedTab } from './lib/restore';
-  import { agentCommand, openDevtools, scratchDir } from './lib/ipc';
+  import { agentCommand, openDevtools, pickFolder, scratchDir } from './lib/ipc';
   import { projectKey } from './lib/paths';
   import { resolveSessions, type TabRef } from './lib/sessions';
   import { zoomLabel } from './lib/zoom';
@@ -339,6 +339,19 @@
       const name = target.chats ? `${providerName(provider)} chat` : `Ask ${providerName(provider)}`;
       await newAgentIn({ key: projectKey(cwd), path: cwd, name, pinned: false, exists: true, lastActiveMs: 0, sessions: [] }, provider);
     });
+  }
+
+  /** A folder that is not a project yet: pick it, then pick the agent to start there. */
+  async function openFolder() {
+    const path = await pickFolder().catch((e) => void (error = String(e)));
+    if (!path) return;
+    const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+    picker = { project: { key: projectKey(path), path, name, pinned: false, exists: true, lastActiveMs: 0, sessions: [] } };
+  }
+
+  function askAgent(provider: AgentProvider) {
+    picker = { project: null };
+    finishPicker(provider);
   }
 
   function openSession(p: Project, s: SessionMeta) {
@@ -667,6 +680,8 @@
         onNewAgent={newAgentIn}
         onNewChat={() => (picker = { project: null, chats: true })}
         onPickAgent={(p) => (picker = { project: p })}
+        onOpenFolder={openFolder}
+        onAsk={askAgent}
         {tabs}
         onNewTab={newTab}
         onCloseTab={requestClose}
