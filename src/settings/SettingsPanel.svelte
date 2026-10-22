@@ -204,6 +204,11 @@
           <input id="urt" type="checkbox" bind:checked={draft.ui.usageResetTime} />
           <span class="muted">Show when the 5-hour limit resets, beside the usage chip</span>
         </label>
+        <label for="stb">Tab bar</label>
+        <label class="check">
+          <input id="stb" type="checkbox" bind:checked={draft.ui.showTabBar} />
+          <span class="muted">Show tabs across the top, as well as in the sidebar's Open view</span>
+        </label>
         <label for="zm">Zoom</label>
         <input id="zm" type="number" min="0.5" max="3" step="0.1" bind:value={draft.ui.zoom} />
       </div>

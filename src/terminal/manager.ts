@@ -16,6 +16,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebglAddon } from '@xterm/addon-webgl';
+import { moveItem } from '../lib/dragReorder';
 import '@xterm/xterm/css/xterm.css';
 
 import { Channel, ptyAck, ptyBusy, ptyKill, ptyResize, ptySpawn, ptyWrite } from '../lib/ipc';
@@ -205,6 +206,17 @@ export function screenLines(key: TabKey): string[] {
     else lines.push(text);
   }
   return lines.map((l) => l.trimEnd());
+}
+
+/** Put tab `from` where tab `to` is (#74). The Map's order is the tab bar's order. */
+export function moveTab(from: TabKey, to: TabKey) {
+  const keys = [...tabs.keys()];
+  const order = moveItem(keys, keys.indexOf(from), keys.indexOf(to));
+  if (order === keys) return;
+  const entries = order.map((k) => [k, tabs.get(k)!] as const);
+  tabs.clear();
+  for (const [k, t] of entries) tabs.set(k, t);
+  notify();
 }
 
 export function listTabs(): Tab[] {
@@ -466,7 +478,8 @@ export function bindSessions(bindings: Map<TabKey, string>, sessions: SessionMet
 }
 
 /**
- * Move `delta` tabs from the active one, wrapping, in the order the tabs were opened.
+ * Move `delta` tabs from the active one, wrapping, in tab order: the order they were
+ * opened, or the tab bar's, which dragging changes.
  */
 export function cycleTab(delta: number) {
   const keys = [...tabs.keys()];

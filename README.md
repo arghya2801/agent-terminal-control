@@ -122,9 +122,10 @@ build times, build resource use, runtime memory, validation, and migration detai
   collapse it; drag its top edge to resize
 
 **Terminal**
-- Tabs, each a separate `pwsh` process, reopened on the next launch. There is no tab bar:
-  the sidebar's Open view switches tabs, and the header names the one shown, its project,
-  branch and state. Double-click the name to rename it
+- Tabs, each a separate `pwsh` process, reopened on the next launch. By default there is
+  no tab bar: the sidebar's Open view switches tabs, and the header names the one shown,
+  its project, branch and state. Double-click the name to rename it. Settings > Appearance
+  > Tab bar brings back tabs across the top, which drag to reorder
 - Split panes: two terminals side by side (`Ctrl+Shift+\`), `Ctrl+Shift+O` to move between
   them
 - Clicking a project or session reuses its existing tab rather than opening a second one,
@@ -252,6 +253,7 @@ Every field is optional; missing ones take their default.
     "groupByBranch": false,             // sessions under the branch they ran on
     "notifications": true,              // notify when a background session needs you
     "restoreTabs": true,                // reopen last session's tabs on launch
+    "showTabBar": false,                // tabs across the top as well as in the sidebar
     "peek": "all",                      // Open view screen peek: "all", "waiting" or "off"
     "outputGraph": true,                // Open view output graph
     "taskAgent": "claude",              // what the task box starts with

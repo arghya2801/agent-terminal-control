@@ -124,6 +124,8 @@ export interface Settings {
     animationSpeed: number;
     /** When the 5-hour limit resets, beside the usage chip. */
     usageResetTime: boolean;
+    /** Tabs across the top as well as in the sidebar's Open view. */
+    showTabBar: boolean;
     /** Which Open view rows show the last line on their screen. */
     peek: 'all' | 'waiting' | 'off';
     outputGraph: boolean;

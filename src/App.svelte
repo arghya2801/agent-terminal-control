@@ -5,6 +5,7 @@
   import ProviderPicker from './lib/ProviderPicker.svelte';
   import { providerName, sessionKey } from './lib/agents';
   import InlineRename from './lib/InlineRename.svelte';
+  import TabBar from './tabs/TabBar.svelte';
   import ProviderIcon from './lib/ProviderIcon.svelte';
   import StatusDot from './lib/StatusDot.svelte';
   import DebugOverlay from './debug/DebugOverlay.svelte';
@@ -837,6 +838,30 @@
   });
 </script>
 
+<!-- Shared by the pane header and, when the setting shows it, the tab bar. -->
+{#snippet barStart()}
+  <button class="bar-btn" class:on={open} onclick={() => toggleSidebar()} title="Toggle sidebar (Ctrl+Shift+B)" aria-label="Toggle sidebar">
+    <Icon name="sidebar" />
+  </button>
+{/snippet}
+
+{#snippet barNew()}
+  <div class="new-split">
+    <button class="bar-btn" onclick={() => newTab()} title="New shell (Ctrl+Shift+T)" aria-label="New shell"><Icon name="plus" /></button>
+    <button class="bar-btn caret" onclick={newMenu} title="New shell, Claude or Codex" aria-label="New shell, Claude or Codex">
+      <Icon name="chevronDown" size={12} />
+    </button>
+  </div>
+{/snippet}
+
+{#snippet barEnd()}
+  {#if currentZoom() !== 1}
+    <button class="bar-btn zoom" onclick={() => adjustZoom(0)} title="Reset zoom (Ctrl+0)">{zoomLabel(currentZoom())}</button>
+  {/if}
+  <UsageChip active={page === 'usage'} onOpen={openUsage} onClose={closeUsage} />
+  <button class="bar-btn" onclick={moreMenu} title="Usage, settings and shortcuts" aria-label="More"><Icon name="more" /></button>
+{/snippet}
+
 <div class="app" style="--panel: {open ? width : 0}px">
 
   <aside class="panel" inert={popup}>
@@ -882,10 +907,22 @@
 
   <section class="main" bind:this={main} inert={popup}>
     <!-- In place of a tab bar: the sidebar's Open view switches tabs, this names the one shown. -->
+    {#if appState.settings?.ui.showTabBar}
+      <TabBar
+        {tabs}
+        activeKey={page === 'usage' ? null : activeKey}
+        onClose={requestClose}
+        bind:renaming={renamingTab}
+        usage={page === 'usage' ? 'active' : 'hidden'}
+        onUsage={openUsage}
+        onCloseUsage={closeUsage}
+        start={barStart}
+        afterTabs={barNew}
+        end={barEnd}
+      />
+    {:else}
     <header class="bar">
-      <button class="bar-btn" class:on={open} onclick={() => toggleSidebar()} title="Toggle sidebar (Ctrl+Shift+B)" aria-label="Toggle sidebar">
-        <Icon name="sidebar" />
-      </button>
+      {@render barStart()}
       {#if page === 'usage'}
         <span class="shown"><Icon name="usage" size={14} /><b>Usage and spend</b></span>
         <button class="bar-btn" onclick={closeUsage} title="Close usage" aria-label="Close usage"><Icon name="close" size={12} /></button>
@@ -906,19 +943,11 @@
       {:else}
         <span class="shown facts">Nothing open</span>
       {/if}
-      <div class="new-split">
-        <button class="bar-btn" onclick={() => newTab()} title="New shell (Ctrl+Shift+T)" aria-label="New shell"><Icon name="plus" /></button>
-        <button class="bar-btn caret" onclick={newMenu} title="New shell, Claude or Codex" aria-label="New shell, Claude or Codex">
-          <Icon name="chevronDown" size={12} />
-        </button>
-      </div>
+      {@render barNew()}
       <div class="grow"></div>
-      {#if currentZoom() !== 1}
-        <button class="bar-btn zoom" onclick={() => adjustZoom(0)} title="Reset zoom (Ctrl+0)">{zoomLabel(currentZoom())}</button>
-      {/if}
-      <UsageChip active={page === 'usage'} onOpen={openUsage} onClose={closeUsage} />
-      <button class="bar-btn" onclick={moreMenu} title="Usage, settings and shortcuts" aria-label="More"><Icon name="more" /></button>
+      {@render barEnd()}
     </header>
+    {/if}
     <div class="panes" bind:this={wrapper}>
       {#if split}
         <div
