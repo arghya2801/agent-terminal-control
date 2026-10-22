@@ -122,6 +122,8 @@ export interface Settings {
     animations: string;
     /** Multiplies animation speed: 2 is twice as fast, 0.5 half. */
     animationSpeed: number;
+    /** When the 5-hour limit resets, beside the usage chip. */
+    usageResetTime: boolean;
     /** Which Open view rows show the last line on their screen. */
     peek: 'all' | 'waiting' | 'off';
     outputGraph: boolean;

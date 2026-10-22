@@ -199,6 +199,11 @@
             <button class="btn" onclick={() => draft && (draft.ui.animationSpeed = 1)}>Reset</button>
           {/if}
         </div>
+        <label for="urt">Usage reset time</label>
+        <label class="check">
+          <input id="urt" type="checkbox" bind:checked={draft.ui.usageResetTime} />
+          <span class="muted">Show when the 5-hour limit resets, beside the usage chip</span>
+        </label>
         <label for="zm">Zoom</label>
         <input id="zm" type="number" min="0.5" max="3" step="0.1" bind:value={draft.ui.zoom} />
       </div>

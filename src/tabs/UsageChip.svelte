@@ -1,12 +1,13 @@
 <script lang="ts">
-  import { codexLimits, planLimits, resetsIn, type PlanLimit } from '../lib/plan';
+  import { onMount } from 'svelte';
+  import { chipLimit, codexLimits, planLimits, resetsIn, resetsShort, type PlanLimit } from '../lib/plan';
   import { formatUsd } from '../lib/costs';
   import { loadCodexLimits, loadTodaySpend, planState } from '../lib/limits.svelte';
-  import { refreshMs } from '../lib/stores.svelte';
+  import { appState, refreshMs } from '../lib/stores.svelte';
 
   /**
-   * The plan limit nearest to running out, in the tab bar. Hovering shows every limit and
-   * today's spend without opening anything; a click opens the usage tab.
+   * Claude's 5-hour session limit, in the pane header. Hovering shows every limit and
+   * today's spend without opening anything; a click opens the usage page.
    */
   let { active = false, onOpen, onClose }: {
     /** The usage tab is in front, so the chip closes it instead. */
@@ -20,8 +21,14 @@
 
   const claude = $derived(planState.claude ? planLimits(planState.claude) : []);
   const codex = $derived(planState.codex ? codexLimits(planState.codex) : []);
-  /** Claude's tightest limit, or Codex's when there is no Claude plan. */
-  const top = $derived([...(claude.length ? claude : codex)].sort((a, b) => b.percent - a.percent)[0] as PlanLimit | undefined);
+  const top = $derived(chipLimit(claude, codex));
+  // The reset countdown ticks between polls.
+  let now = $state(Date.now());
+  onMount(() => {
+    const clock = setInterval(() => (now = Date.now()), 30_000);
+    return () => clearInterval(clock);
+  });
+  const reset = $derived(appState.settings?.ui.usageResetTime === false ? '' : resetsShort(top?.resetsAt ?? null, now));
   const level = (p: number) => (p >= 95 ? 'full' : p >= 80 ? 'hot' : '');
 
   let peek = $state(false);
@@ -71,9 +78,12 @@
 {#if top}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="wrap" onmouseenter={enter} onmouseleave={leave}>
-    <button class="chip" class:active onclick={toggle} aria-label="{top.label}: {Math.round(top.percent)}% used. {active ? 'Close' : 'Open'} usage">
-      <span class="pct {level(top.percent)}">{Math.round(top.percent)}%</span>
-      <span class="meter"><span class="fill {level(top.percent)}" style="width: {top.percent}%"></span></span>
+    <button class="chip" class:active onclick={toggle} aria-label="{top.label}: {Math.round(top.percent)}% used, {resetsIn(top.resetsAt)}. {active ? 'Close' : 'Open'} usage">
+      <span class="stack">
+        <span class="pct {level(top.percent)}">{Math.round(top.percent)}%</span>
+        <span class="meter"><span class="fill {level(top.percent)}" style="width: {top.percent}%"></span></span>
+      </span>
+      {#if reset}<span class="reset">{reset}</span>{/if}
     </button>
     {#if peek}
       <div class="peek" role="dialog" aria-label="Plan limits">
@@ -106,9 +116,8 @@
   .chip {
     display: flex;
     height: 26px;
-    flex-direction: column;
-    justify-content: center;
-    gap: 2px;
+    align-items: center;
+    gap: 6px;
     padding: 0 8px;
     border: none;
     border-radius: 6px;
@@ -120,6 +129,17 @@
   .chip:hover,
   .chip.active {
     background: var(--bg-hover);
+  }
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .reset {
+    color: var(--fg-faint);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
   .chip .pct {
     font-size: 11px;
