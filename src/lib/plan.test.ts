@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { codexLimits, limitDuration, planLimits, weeklyBreakdown } from './plan';
+import { chipLimit, codexLimits, limitDuration, planLimits, weeklyBreakdown } from './plan';
 
 // Trimmed from a real response, codename fields included.
 const real = {
@@ -19,6 +19,21 @@ const real = {
     ],
   },
 };
+
+describe('chipLimit', () => {
+  it('shows the 5-hour session even when a weekly limit is fuller, in both response shapes', () => {
+    expect(chipLimit(planLimits(real), [])?.label).toBe('Current session');
+    const { limits: _, ...old } = real;
+    expect(chipLimit(planLimits(old), [])?.key).toBe('five_hour');
+  });
+
+  it('falls back to the fullest limit, Claude first, then Codex', () => {
+    const weekly = planLimits({ limits: [{ kind: 'weekly_all', percent: 40, resets_at: null }, { kind: 'weekly_opus', percent: 70, resets_at: null }] });
+    expect(chipLimit(weekly, [])?.percent).toBe(70);
+    const codex = [{ key: 'codex:primary', label: 'Codex · 5h', percent: 12, resetsAt: null }];
+    expect(chipLimit([], codex)).toBe(codex[0]);
+  });
+});
 
 describe('planLimits', () => {
   it('reads the limits array and ignores codename windows', () => {

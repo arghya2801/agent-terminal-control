@@ -34,6 +34,15 @@ function isObj(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
 }
 
+/**
+ * The one limit the usage chip shows: Claude's 5-hour session, else Claude's tightest
+ * should the session window ever go missing, else Codex's tightest.
+ */
+export function chipLimit(claude: PlanLimit[], codex: PlanLimit[]): PlanLimit | undefined {
+  const session = claude.find((l) => l.key.startsWith('session:') || l.key === 'five_hour');
+  return session ?? [...(claude.length ? claude : codex)].sort((a, b) => b.percent - a.percent)[0];
+}
+
 export function planLimits(plan: Record<string, unknown>): PlanLimit[] {
   if (Array.isArray(plan.limits)) {
     return plan.limits.flatMap((l, i) => {

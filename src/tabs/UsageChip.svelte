@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { codexLimits, planLimits, resetsIn, type PlanLimit } from '../lib/plan';
+  import { chipLimit, codexLimits, planLimits, resetsIn, type PlanLimit } from '../lib/plan';
   import { formatUsd } from '../lib/costs';
   import { loadCodexLimits, loadTodaySpend, planState } from '../lib/limits.svelte';
   import { refreshMs } from '../lib/stores.svelte';
 
   /**
-   * The plan limit nearest to running out, in the tab bar. Hovering shows every limit and
-   * today's spend without opening anything; a click opens the usage tab.
+   * Claude's 5-hour session limit, in the pane header. Hovering shows every limit and
+   * today's spend without opening anything; a click opens the usage page.
    */
   let { active = false, onOpen, onClose }: {
     /** The usage tab is in front, so the chip closes it instead. */
@@ -20,8 +20,7 @@
 
   const claude = $derived(planState.claude ? planLimits(planState.claude) : []);
   const codex = $derived(planState.codex ? codexLimits(planState.codex) : []);
-  /** Claude's tightest limit, or Codex's when there is no Claude plan. */
-  const top = $derived([...(claude.length ? claude : codex)].sort((a, b) => b.percent - a.percent)[0] as PlanLimit | undefined);
+  const top = $derived(chipLimit(claude, codex));
   const level = (p: number) => (p >= 95 ? 'full' : p >= 80 ? 'hot' : '');
 
   let peek = $state(false);

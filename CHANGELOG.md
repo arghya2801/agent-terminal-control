@@ -26,6 +26,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - An Advanced settings section: PowerShell 7 or Windows PowerShell, loading the PowerShell profile, how many tabs are drawn with the GPU, where a new tab opens, confirming close, in-app notes and how long they stay, and how often plan limits refresh.
 
 ### Fixed
+- The usage chip shows Claude's 5-hour session limit, not whichever limit is fullest. Hover it for the weekly limits.
 - With the app zoomed, menus and tooltips open inside the window instead of off its edge, and dragging the sidebar edge or the notes divider keeps up with the pointer.
 - A tooltip near the right edge of the window no longer touches the edge.
 - Dragging the notes divider resizes the notes again.
