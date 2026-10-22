@@ -6,6 +6,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-22
+
 ### Changed
 - The sidebar's Open view is an inbox: agents waiting on you come first, longest-waiting first, under Waiting on you, Working and Shells headings. Each row shows how long it has been in its state, the last line on its screen and a 5-minute output graph.
 - The tab bar is gone. A header names the tab on screen with its project, branch and state; double-click the name to rename it. Tabs can no longer be dragged into order.
@@ -260,7 +262,8 @@ ATC now runs on a Go/Wails host instead of Rust/Tauri. The interface is the same
 
 First release.
 
-[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.1...v0.4.2
