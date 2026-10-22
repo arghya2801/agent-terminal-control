@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { moveIndex } from '../lib/roving';
+  import { pageZoom } from '../lib/desktop';
   import Icon, { type IconName } from '../lib/Icon.svelte';
 
   export interface MenuItem {
@@ -34,6 +35,8 @@
   } = $props();
 
   let el: HTMLDivElement;
+  /** Everything here is in on-screen pixels; the style divides by the page zoom. */
+  const zoom = pageZoom();
   /** Set once measured; until then the menu renders at the cursor. Keeping it separate
    *  from the props avoids rendering at 0,0 for a frame. */
   let clamped = $state<{ left: number; top: number } | null>(null);
@@ -52,7 +55,10 @@
     // On the body, so no transformed or clipped ancestor (the sliding sidebar) can move
     // or cut off a fixed-position menu.
     document.body.append(el);
+    // Measured without the entrance animation, which starts the menu at 94% of its size.
+    el.style.animation = 'none';
     const rect = el.getBoundingClientRect();
+    el.style.animation = '';
     clamped = {
       left: Math.max(8, Math.min(dropdown ? x - rect.width : x, window.innerWidth - rect.width - 8)),
       top: Math.max(8, Math.min(y, window.innerHeight - rect.height - 8)),
@@ -95,7 +101,7 @@
   class="menu"
   class:dropdown
   bind:this={el}
-  style="left: {pos.left}px; top: {pos.top}px; transform-origin: {origin}"
+  style="left: {pos.left / zoom}px; top: {pos.top / zoom}px; transform-origin: {origin}"
   role="menu"
   tabindex="-1"
 >

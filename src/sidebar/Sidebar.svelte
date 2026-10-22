@@ -6,6 +6,7 @@
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import Icon from '../lib/Icon.svelte';
   import { tick } from 'svelte';
+  import { pageZoom } from '../lib/desktop';
   import { activate, focusActiveTerminal, splitWith } from '../terminal/manager';
   import { enterList, listKeys, rows } from '../lib/roving';
   import {
@@ -147,7 +148,7 @@
     const h0 = notesHeight;
     handle.setPointerCapture(e.pointerId);
     // The pane sits at the bottom, so dragging up makes it taller.
-    const move = (m: PointerEvent) => setNotesHeight(h0 - (m.clientY - y0));
+    const move = (m: PointerEvent) => setNotesHeight(h0 - (m.clientY - y0) / pageZoom());
     const end = () => {
       handle.removeEventListener('pointermove', move);
       handle.removeEventListener('pointerup', end);

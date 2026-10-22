@@ -22,6 +22,7 @@
     isPermissionGranted,
     requestPermission,
     sendNotification,
+    pageZoom,
   } from './lib/desktop';
   import {
     adjustZoom,
@@ -232,7 +233,7 @@
     const startX = e.clientX;
     const startWidth = width;
     const move = (ev: PointerEvent) => {
-      const w = Math.round(startWidth + ev.clientX - startX);
+      const w = Math.round(startWidth + (ev.clientX - startX) / pageZoom());
       dragWidth = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w));
     };
     const end = () => {
