@@ -2,8 +2,10 @@
   import SessionList from './SessionList.svelte';
   import OpenList from './OpenList.svelte';
   import NotesPad from './NotesPad.svelte';
+  import TaskBox from './TaskBox.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import Icon from '../lib/Icon.svelte';
+  import { tick } from 'svelte';
   import { activate, focusActiveTerminal, splitWith } from '../terminal/manager';
   import { enterList, listKeys, rows } from '../lib/roving';
   import {
@@ -33,6 +35,8 @@
     onAsk,
     onNewTab,
     onCloseTab,
+    onRenameTab,
+    onDispatch,
   }: {
     activeKey: TabKey | null;
     activeSessionId: string | null;
@@ -52,6 +56,9 @@
     onAsk: (provider: AgentProvider) => void;
     onNewTab: () => void;
     onCloseTab: (key: TabKey) => void;
+    onRenameTab: (key: TabKey) => void;
+    /** Starts an agent on a task in the background. */
+    onDispatch: (p: Project, provider: AgentProvider, task: string) => void;
   } = $props();
 
   let refreshing = $state(false);
@@ -71,8 +78,16 @@
   /** Row last focused in each list, where Tab back into it lands. */
   let lastRow: HTMLElement | null = null;
   const visibleList = () => (view === 'open' ? openList : view === 'scratch' ? scratchList : sessionList);
-  const search = () => document.getElementById('sidebar-search')?.focus();
-  const leave = { up: search, escape: focusActiveTerminal };
+  /** The filter box shows on request, and stays while it holds a filter. */
+  let searching = $state(false);
+  /** Shows and focuses the filter, adding `text` to it: the search icon, the chord, or typing on a row. */
+  export async function openSearch(text = '') {
+    searching = true;
+    query += text;
+    await tick();
+    document.getElementById('sidebar-search')?.focus();
+  }
+  const leave = { up: () => void openSearch(), escape: focusActiveTerminal, type: (c: string) => void openSearch(c) };
 
   function onSearchKey(e: KeyboardEvent) {
     if (e.key === 'ArrowDown') {
@@ -82,9 +97,12 @@
       return;
     }
     if (e.key !== 'Escape') return;
-    // A second Esc on an empty box goes back to the terminal.
+    // A second Esc on an empty box hides it and goes back to the terminal.
     if (query) query = '';
-    else focusActiveTerminal();
+    else {
+      searching = false;
+      focusActiveTerminal();
+    }
   }
   // Re-read on every index change so the label tracks projects appearing or vanishing.
   const anyOpen = $derived.by(() => {
@@ -92,28 +110,43 @@
     return anyProjectExpanded();
   });
 
-  // The Open list's height; the notes pad takes the rest. Per machine, like the usage range.
-  const OPEN_HEIGHT_KEY = 'atc.openListHeight';
-  let openHeight = $state(200);
+  // The notes pane under the Open list: open or collapsed, and its height. Per machine,
+  // like the usage range; the list takes whatever the pane leaves.
+  const NOTES_OPEN_KEY = 'atc.notesOpen';
+  const NOTES_HEIGHT_KEY = 'atc.notesHeight';
+  let notesOpen = $state(true);
+  let notesHeight = $state(200);
+  let openView = $state<HTMLElement>();
   try {
-    openHeight = Number(localStorage.getItem(OPEN_HEIGHT_KEY)) || 200;
+    notesOpen = localStorage.getItem(NOTES_OPEN_KEY) !== '0';
+    notesHeight = Number(localStorage.getItem(NOTES_HEIGHT_KEY)) || 200;
   } catch {
-    // Storage unavailable: keep the default.
+    // Storage unavailable: keep the defaults.
   }
-  function setOpenHeight(h: number) {
-    openHeight = Math.max(60, Math.min(Math.round(h), window.innerHeight - 200));
+  function remember(key: string, value: string) {
     try {
-      localStorage.setItem(OPEN_HEIGHT_KEY, String(openHeight));
+      localStorage.setItem(key, value);
     } catch {
-      // Storage unavailable: the height just is not remembered.
+      // Storage unavailable: the choice just is not remembered.
     }
   }
-  function dragDivider(e: PointerEvent) {
+  function toggleNotes() {
+    notesOpen = !notesOpen;
+    remember(NOTES_OPEN_KEY, notesOpen ? '1' : '0');
+  }
+  /** Leaves the list at least 120px, so it never disappears behind the notes. */
+  function setNotesHeight(h: number) {
+    const most = (openView?.clientHeight ?? window.innerHeight) - 120;
+    notesHeight = Math.max(60, Math.min(Math.round(h), most));
+    remember(NOTES_HEIGHT_KEY, String(notesHeight));
+  }
+  function dragSash(e: PointerEvent) {
     const handle = e.currentTarget as HTMLElement;
     const y0 = e.clientY;
-    const h0 = openHeight;
+    const h0 = notesHeight;
     handle.setPointerCapture(e.pointerId);
-    const move = (m: PointerEvent) => setOpenHeight(h0 + m.clientY - y0);
+    // The pane sits at the bottom, so dragging up makes it taller.
+    const move = (m: PointerEvent) => setNotesHeight(h0 - (m.clientY - y0));
     const end = () => {
       handle.removeEventListener('pointermove', move);
       handle.removeEventListener('pointerup', end);
@@ -159,6 +192,13 @@
       </button>
     </div>
     <div class="actions">
+      <button
+        class="icon"
+        class:on={searching || query}
+        onclick={() => void openSearch()}
+        title="Filter, or start typing on a row"
+        aria-label="Filter"
+      ><Icon name="search" size={14} /></button>
       {#if view === 'open'}
         <button class="icon" onclick={onNewTab} title="New tab (Ctrl+Shift+T)" aria-label="New tab"><Icon name="plus" size={14} /></button>
       {:else if view === 'scratch'}
@@ -185,29 +225,32 @@
     </div>
   </header>
 
-  <div class="search">
-    <input
-      id="sidebar-search"
-      type="search"
-      placeholder={view === 'open' ? 'Filter open tabs' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
-      title="Filter by project, path, session name or branch"
-      aria-label={view === 'open' ? 'Filter open tabs' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
-      spellcheck="false"
-      autocomplete="off"
-      bind:value={query}
-      onkeydown={onSearchKey}
-    />
-  </div>
+  {#if searching || query}
+    <div class="search">
+      <input
+        id="sidebar-search"
+        type="search"
+        placeholder={view === 'open' ? 'Filter open tabs' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
+        title="Filter by project, path, session name or branch"
+        aria-label={view === 'open' ? 'Filter open tabs' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
+        spellcheck="false"
+        autocomplete="off"
+        bind:value={query}
+        onkeydown={onSearchKey}
+        onblur={() => { if (!query) searching = false; }}
+      />
+    </div>
+  {/if}
 
   <!-- Both views stay mounted and the hidden one is display:none, so switching does not
        rebuild every project and session row (#117). -->
   <!-- One tab stop per list; Up/Down move between rows (#103). The list only takes focus
        to hand it to a row, the roving-tabindex pattern, hence the ignores. -->
-  <div class="open" hidden={view !== 'open'}>
+  <div class="open" hidden={view !== 'open'} bind:this={openView}>
+    <TaskBox {activeKey} {onDispatch} />
     <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
     <div
       class="list open-list"
-      style="height: {openHeight}px"
       tabindex="0"
       role="group"
       aria-label="Open tabs"
@@ -222,6 +265,7 @@
         if (key) {
           menu = { x: e.clientX, y: e.clientY, items: [
             { label: 'Go to tab', icon: 'terminal', disabled: key === activeKey, run: () => activate(key) },
+            { label: 'Rename…', icon: 'pencil', run: () => onRenameTab(key) },
             { label: 'Split beside the current tab', icon: 'split', disabled: key === activeKey, run: () => splitWith(key) },
             { label: 'Close tab', icon: 'close', sep: true, run: () => onCloseTab(key) },
           ] };
@@ -233,26 +277,37 @@
     >
       <OpenList {tabs} {activeKey} {query} onClose={onCloseTab} />
     </div>
-    <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-    <div
-      class="divider"
-      role="separator"
-      aria-orientation="horizontal"
-      aria-label="Resize the notes"
-      aria-valuenow={openHeight}
-      tabindex="0"
-      title="Drag to resize"
-      onpointerdown={dragDivider}
-      onkeydown={(e) => {
-        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-          e.preventDefault();
-          setOpenHeight(openHeight + (e.key === 'ArrowUp' ? -20 : 20));
-        }
-      }}
-    >
-      Notes <em>notes.md</em>
-    </div>
-    <NotesPad />
+    <!-- Collapses to its header, like the Outline pane under VS Code's explorer. -->
+    <section class="notes-pane" style={notesOpen ? `height: ${notesHeight}px` : undefined}>
+      {#if notesOpen}
+        <!-- svelte-ignore a11y_no_static_element_interactions (the header's arrow keys resize too) -->
+        <div
+          class="sash"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize the notes"
+          aria-valuenow={notesHeight}
+          title="Drag to resize"
+          onpointerdown={dragSash}
+        ></div>
+      {/if}
+      <button
+        class="notes-head"
+        aria-expanded={notesOpen}
+        onclick={toggleNotes}
+        onkeydown={(e) => {
+          if (notesOpen && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            e.preventDefault();
+            setNotesHeight(notesHeight + (e.key === 'ArrowUp' ? 20 : -20));
+          }
+        }}
+        title={notesOpen ? 'Collapse the notes (arrow keys resize)' : 'Show the notes'}
+      >
+        <span class="twisty" class:expanded={notesOpen}><Icon name="chevron" size={12} /></span>
+        Notes <em>notes.md</em>
+      </button>
+      <div class="notes-body" hidden={!notesOpen}><NotesPad /></div>
+    </section>
   </div>
   {#if menu}
     <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => (menu = null)} />
@@ -398,6 +453,9 @@
     background: var(--bg-hover);
     color: var(--fg-bright);
   }
+  .icon.on {
+    color: var(--accent);
+  }
   .icon:active {
     transform: scale(0.92);
   }
@@ -413,6 +471,7 @@
     padding: 0 8px 8px;
   }
   .search input {
+    min-width: 0;
     width: 100%;
     box-sizing: border-box;
     padding: 4px 8px;
@@ -436,33 +495,75 @@
   .open[hidden] {
     display: none;
   }
-  .open-list {
+  .notes-pane {
+    position: relative;
+    display: flex;
     flex: none;
+    flex-direction: column;
+    min-height: 0;
+    border-top: 1px solid var(--border);
   }
-  .divider {
+  /* Straddles the pane's top border; the line lights up while it is the drag target. */
+  .sash {
+    position: absolute;
+    top: -3px;
+    right: 0;
+    left: 0;
+    z-index: 2;
+    height: 6px;
+    cursor: row-resize;
+  }
+  .sash:hover,
+  .sash:active {
+    box-shadow: inset 0 3px 0 -1px var(--accent);
+  }
+  .notes-head {
     display: flex;
     flex: none;
     align-items: center;
-    justify-content: space-between;
+    gap: 4px;
     height: 26px;
-    padding: 0 10px;
-    border-top: 1px solid var(--border);
+    padding: 0 10px 0 6px;
+    border: none;
+    background: transparent;
     color: var(--fg-dim);
+    font: inherit;
     font-size: 12px;
     font-weight: 600;
-    cursor: row-resize;
-    user-select: none;
+    text-align: left;
+    cursor: pointer;
   }
-  .divider:hover,
-  .divider:focus-visible {
-    border-top-color: var(--accent);
-    outline: none;
+  .notes-head:hover {
+    color: var(--fg-bright);
   }
-  .divider em {
+  .notes-head:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: -1px;
+  }
+  .notes-head em {
+    margin-left: auto;
     color: var(--fg-faint);
     font-size: 11px;
     font-style: normal;
     font-weight: 400;
+  }
+  .twisty {
+    display: flex;
+    flex-shrink: 0;
+    color: var(--fg-faint);
+    transition: transform var(--fast) var(--ease-out);
+  }
+  .twisty.expanded {
+    transform: rotate(90deg);
+  }
+  .notes-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+  }
+  .notes-body[hidden] {
+    display: none;
   }
   .list {
     flex: 1;

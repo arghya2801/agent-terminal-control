@@ -4,7 +4,9 @@
   import { cubicOut } from 'svelte/easing';
   import ProviderPicker from './lib/ProviderPicker.svelte';
   import { providerName, sessionKey } from './lib/agents';
-  import TabBar from './tabs/TabBar.svelte';
+  import InlineRename from './lib/InlineRename.svelte';
+  import ProviderIcon from './lib/ProviderIcon.svelte';
+  import StatusDot from './lib/StatusDot.svelte';
   import DebugOverlay from './debug/DebugOverlay.svelte';
   import Sidebar from './sidebar/Sidebar.svelte';
   import FindBar from './terminal/FindBar.svelte';
@@ -60,6 +62,7 @@
     activate,
     focusOtherPane,
     isSplit,
+    toggleMosaic,
     getSplitRatio,
     setSplitRatio,
     splitWith,
@@ -78,7 +81,8 @@
   import { resolveSessions, type TabRef } from './lib/sessions';
   import { zoomLabel } from './lib/zoom';
   import type { AgentProvider, Project, SessionMeta, TabKey, TabSummary } from './types';
-  import type { SessionMark } from './lib/format';
+  import { markTitle, tabMark, type SessionMark } from './lib/format';
+  import { nextWaiting, stateWord } from './lib/triage';
 
   let wrapper: HTMLDivElement;
   let tabs = $state<TabSummary[]>([]);
@@ -266,6 +270,7 @@
       attention: t.attention,
       activity: t.activity,
       projectKey: t.projectKey,
+      since: t.markSince,
     }));
     const nextActive = getActiveKey();
     // Picking a tab means the user wants the terminal, not the page covering it.
@@ -329,6 +334,23 @@
     if (!p.path) return;
     counter += 1;
     return guard(() => openTab(`plain:${counter}`, p.name, { cwd: p.path }, p.key));
+  }
+
+  /**
+   * Start an agent on `task` without leaving the current tab. The new tab has to be shown
+   * for a frame to spawn at its real size, then focus goes back.
+   */
+  function dispatch(p: Project, provider: AgentProvider, task: string) {
+    if (!p.path) return;
+    counter += 1;
+    const key: TabKey = `agent:${provider}:${counter}`;
+    const back = activeKey;
+    // Typed into PowerShell: single quotes take everything literally but a doubled quote.
+    const quoted = `'${task.replaceAll("'", "''")}'`;
+    return guard(async () => {
+      await openTab(key, task.slice(0, 40), { cwd: p.path, initialCommand: `${await agentCommand(provider)} ${quoted}` }, p.key, provider, knownSessions());
+      if (back) activate(back);
+    });
   }
 
   function knownSessions(): string[] { return appState.index.projects.flatMap(p => p.sessions.map(sessionKey)); }
@@ -420,18 +442,41 @@
     if (field) contextMenu = { x: e.clientX, y: e.clientY, items: editItems(field) };
   }
 
-  /** Usage opens as a tab after the terminals and stays there; `page` says it is in front. */
-  let usageTab = $state(false);
   function openUsage() {
-    usageTab = true;
     page = 'usage';
   }
   function closeUsage() {
-    usageTab = false;
     if (page === 'usage') page = null;
   }
 
-  /** A menu dropped from a tab bar button. */
+  /** What the pane header says about the focused tab: project, branch, state and for how long. */
+  let now = $state(Date.now());
+  const shown = $derived(tabs.find((t) => t.key === activeKey) ?? null);
+  const shownFacts = $derived.by(() => {
+    if (!shown) return '';
+    const sessionId = tabToSession.get(shown.key);
+    const branch = appState.index.projects.flatMap((p) => p.sessions).find((s) => sessionKey(s) === sessionId)?.gitBranch;
+    const state = stateWord(tabMark(shown));
+    return [
+      appState.index.projects.find((p) => p.key === shown.projectKey)?.name,
+      branch !== 'main' && branch,
+      state && `${state} ${relativeTime(shown.since, now)}`,
+    ].filter(Boolean).join(', ');
+  });
+
+  function startRename(key: TabKey) {
+    activate(key);
+    page = null;
+    renamingTab = key;
+  }
+  function finishRename(name?: string) {
+    if (renamingTab && name !== undefined) renameTab(renamingTab, name);
+    renamingTab = null;
+    // After the Enter's keypress, or the terminal gets it and the agent reads an empty answer.
+    setTimeout(focusActiveTerminal);
+  }
+
+  /** A menu dropped from a header button. */
   function menuAt(e: MouseEvent, items: MenuItem[]) {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     contextMenu = { x: r.right, y: r.bottom + 4, items, dropdown: true };
@@ -558,12 +603,12 @@
     else focusActiveTerminal();
   }
 
+  let sidebar = $state<ReturnType<typeof Sidebar>>();
   async function focusSearch() {
     if (!sidebarOpen()) await toggleSidebar();
     await tick();
-    const input = document.getElementById('sidebar-search') as HTMLInputElement | null;
-    input?.focus();
-    input?.select();
+    await sidebar?.openSearch();
+    (document.getElementById('sidebar-search') as HTMLInputElement | null)?.select();
   }
 
   /** Windows notification for a background tab, only while ATC itself is not focused. */
@@ -655,8 +700,7 @@
         break;
       }
       case 'renameTab':
-        page = null;
-        renamingTab = activeKey;
+        if (activeKey) startRename(activeKey);
         break;
       case 'openSettings':
         togglePage('settings');
@@ -688,6 +732,14 @@
       case 'focusOtherPane':
         focusOtherPane();
         break;
+      case 'jumpWaiting': {
+        const next = nextWaiting(tabs.map((t) => ({ ...t, mark: tabMark(t) })), activeKey);
+        if (next) activate(next.key);
+        break;
+      }
+      case 'toggleMosaic':
+        toggleMosaic();
+        break;
     }
   }
 
@@ -705,6 +757,7 @@
     // The tab bar's chip shows the limits all the time, not only on the usage page.
     void loadClaudeLimits();
     const limitPoll = setInterval(() => void loadClaudeLimits(), 90_000);
+    const clock = setInterval(() => (now = Date.now()), 15_000);
     // Settings decide whether the sidebar is open, and so how wide the pane is.
     // Spawning before that lands starts the PTY at the wrong width.
     void (async () => {
@@ -735,6 +788,7 @@
       offAttention();
       wrapper.removeEventListener('focusin', onPaneFocus);
       clearInterval(limitPoll);
+      clearInterval(clock);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('contextmenu', onContextMenu);
       window.removeEventListener('resize', refit);
@@ -763,29 +817,6 @@
   });
 </script>
 
-{#snippet barStart()}
-  <button class="bar-btn" class:on={open} onclick={() => toggleSidebar()} title="Toggle sidebar (Ctrl+Shift+B)" aria-label="Toggle sidebar">
-    <Icon name="sidebar" />
-  </button>
-{/snippet}
-
-{#snippet barNew()}
-  <div class="new-split">
-    <button class="bar-btn" onclick={() => newTab()} title="New shell (Ctrl+Shift+T)" aria-label="New shell"><Icon name="plus" /></button>
-    <button class="bar-btn caret" onclick={newMenu} title="New shell, Claude or Codex" aria-label="New shell, Claude or Codex">
-      <Icon name="chevronDown" size={12} />
-    </button>
-  </div>
-{/snippet}
-
-{#snippet barEnd()}
-  {#if currentZoom() !== 1}
-    <button class="bar-btn zoom" onclick={() => adjustZoom(0)} title="Reset zoom (Ctrl+0)">{zoomLabel(currentZoom())}</button>
-  {/if}
-  <UsageChip active={page === 'usage'} onOpen={openUsage} onClose={closeUsage} />
-  <button class="bar-btn" onclick={moreMenu} title="Usage, settings and shortcuts" aria-label="More"><Icon name="more" /></button>
-{/snippet}
-
 <div class="app" style="--panel: {open ? width : 0}px">
 
   <aside class="panel" inert={popup}>
@@ -806,6 +837,7 @@
         ondblclick={() => saveSidebarWidth(SIDEBAR_DEFAULT)}
       ></div>
       <Sidebar
+        bind:this={sidebar}
         {activeKey}
         {activeSessionId}
         {openProjectKeys}
@@ -821,24 +853,52 @@
         {tabs}
         onNewTab={newTab}
         onCloseTab={requestClose}
+        onRenameTab={startRename}
+        onDispatch={dispatch}
       />
       </div>
     {/if}
   </aside>
 
   <section class="main" bind:this={main} inert={popup}>
-    <TabBar
-      {tabs}
-      activeKey={page === 'usage' ? null : activeKey}
-      onClose={requestClose}
-      bind:renaming={renamingTab}
-      usage={usageTab ? (page === 'usage' ? 'active' : 'open') : 'hidden'}
-      onUsage={openUsage}
-      onCloseUsage={closeUsage}
-      start={barStart}
-      afterTabs={barNew}
-      end={barEnd}
-    />
+    <!-- In place of a tab bar: the sidebar's Open view switches tabs, this names the one shown. -->
+    <header class="bar">
+      <button class="bar-btn" class:on={open} onclick={() => toggleSidebar()} title="Toggle sidebar (Ctrl+Shift+B)" aria-label="Toggle sidebar">
+        <Icon name="sidebar" />
+      </button>
+      {#if page === 'usage'}
+        <span class="shown"><Icon name="usage" size={14} /><b>Usage and spend</b></span>
+        <button class="bar-btn" onclick={closeUsage} title="Close usage" aria-label="Close usage"><Icon name="close" size={12} /></button>
+      {:else if shown}
+        {@const mark = tabMark(shown)}
+        <span class="shown" title="{shown.title} (double-click or Ctrl+Shift+R to rename)">
+          <StatusDot {mark} title={markTitle(mark, providerName(shown.provider ?? 'claude'))} />
+          {#if shown.provider}<ProviderIcon provider={shown.provider} />{:else}<Icon name="terminal" size={12} />{/if}
+          {#if renamingTab === shown.key}
+            <InlineRename value={shown.title} onDone={finishRename} onCancel={() => finishRename()} />
+          {:else}
+            <!-- svelte-ignore a11y_no_static_element_interactions (Ctrl+Shift+R is the keyboard way) -->
+            <b class:exited={shown.exited} ondblclick={() => startRename(shown.key)}>{shown.title}</b>
+          {/if}
+          <span class="facts">{shownFacts}</span>
+        </span>
+        <button class="bar-btn" onclick={() => requestClose(shown.key)} title="Close {shown.title} (Ctrl+Shift+W)" aria-label="Close {shown.title}"><Icon name="close" size={12} /></button>
+      {:else}
+        <span class="shown facts">Nothing open</span>
+      {/if}
+      <div class="new-split">
+        <button class="bar-btn" onclick={() => newTab()} title="New shell (Ctrl+Shift+T)" aria-label="New shell"><Icon name="plus" /></button>
+        <button class="bar-btn caret" onclick={newMenu} title="New shell, Claude or Codex" aria-label="New shell, Claude or Codex">
+          <Icon name="chevronDown" size={12} />
+        </button>
+      </div>
+      <div class="grow"></div>
+      {#if currentZoom() !== 1}
+        <button class="bar-btn zoom" onclick={() => adjustZoom(0)} title="Reset zoom (Ctrl+0)">{zoomLabel(currentZoom())}</button>
+      {/if}
+      <UsageChip active={page === 'usage'} onOpen={openUsage} onClose={closeUsage} />
+      <button class="bar-btn" onclick={moreMenu} title="Usage, settings and shortcuts" aria-label="More"><Icon name="more" /></button>
+    </header>
     <div class="panes" bind:this={wrapper}>
       {#if split}
         <div
@@ -924,6 +984,45 @@
      has already taken the column back, and leaves by the window's edge. */
   .panel {
     position: relative;
+  }
+  .bar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+    height: 34px;
+    padding: 0 6px;
+    border-bottom: 1px solid var(--border);
+    background: var(--glass-chrome);
+  }
+  .grow {
+    flex: 1;
+  }
+  .shown {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    padding: 0 6px;
+    overflow: hidden;
+    color: var(--fg-bright);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .shown b {
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+  }
+  .shown b.exited {
+    opacity: 0.6;
+    text-decoration: line-through;
+  }
+  .facts {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--fg-faint);
+    text-overflow: ellipsis;
   }
   .bar-btn {
     display: grid;
@@ -1056,10 +1155,40 @@
      share its geometry and can be measured once. */
   .panes {
     position: relative;
+    overflow: hidden;
     background: var(--bg);
     flex: 1;
     min-height: 0;
     padding: 6px 0 0 8px;
+  }
+  /* The mosaic's tile names. Tiles are scaled down, so the label is scaled up to match.
+     The label carries the state colour, since xterm's canvas paints over any border. */
+  .panes :global([data-tile])::after {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 10;
+    padding: calc(4px * var(--tile-scale)) calc(8px * var(--tile-scale));
+    background: var(--bg-chrome);
+    color: var(--fg-bright);
+    content: attr(data-tile);
+    font-size: calc(12px * var(--tile-scale));
+  }
+  .panes :global([data-mark='attention'])::after {
+    background: var(--accent);
+    color: var(--bg);
+  }
+  .panes :global([data-mark='working'])::after {
+    background: var(--warn);
+    color: var(--bg);
+  }
+  .panes :global([data-mark='idle'])::after {
+    background: var(--ok);
+    color: var(--bg);
+  }
+  .panes :global([data-mark='interrupted'])::after {
+    background: var(--danger);
+    color: var(--bg);
   }
   /* Toasts and the error stack here, newest at the bottom, so they never overlap. */
   .corner {
