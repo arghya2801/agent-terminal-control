@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { codexLimits, limitDuration, planLimits, weeklyBreakdown } from './plan';
+import { chipLimit, codexLimits, limitDuration, planLimits, resetsShort, weeklyBreakdown } from './plan';
 
 // Trimmed from a real response, codename fields included.
 const real = {
@@ -19,6 +19,30 @@ const real = {
     ],
   },
 };
+
+describe('resetsShort', () => {
+  it('is short enough to sit beside the chip', () => {
+    const now = Date.parse('2026-10-22T10:00:00Z');
+    const at = (mins: number) => new Date(now + mins * 60_000).toISOString();
+    expect([resetsShort(null, now), resetsShort(at(-1), now), resetsShort(at(45), now), resetsShort(at(133), now)]).toEqual(['', 'now', '45m', '2h 13m']);
+    expect(resetsShort(at(3 * 24 * 60), now)).not.toMatch(/^\d+h/);
+  });
+});
+
+describe('chipLimit', () => {
+  it('shows the 5-hour session even when a weekly limit is fuller, in both response shapes', () => {
+    expect(chipLimit(planLimits(real), [])?.label).toBe('Current session');
+    const { limits: _, ...old } = real;
+    expect(chipLimit(planLimits(old), [])?.key).toBe('five_hour');
+  });
+
+  it('falls back to the fullest limit, Claude first, then Codex', () => {
+    const weekly = planLimits({ limits: [{ kind: 'weekly_all', percent: 40, resets_at: null }, { kind: 'weekly_opus', percent: 70, resets_at: null }] });
+    expect(chipLimit(weekly, [])?.percent).toBe(70);
+    const codex = [{ key: 'codex:primary', label: 'Codex · 5h', percent: 12, resetsAt: null }];
+    expect(chipLimit([], codex)).toBe(codex[0]);
+  });
+});
 
 describe('planLimits', () => {
   it('reads the limits array and ignores codename windows', () => {
