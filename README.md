@@ -13,8 +13,9 @@ A Windows terminal for Claude Code and Codex sessions.</p>
 
 A Windows terminal with one project tree for Claude Code and Codex sessions.
 Clicking a project opens a shell there; clicking a session resumes that conversation.
-An Open view lists every tab with its agent's state beside a notes pad, and a Usage page
-shows plan limits and what the work would have cost at API prices.
+The Open view puts the agents waiting on you first, and you can answer them, start new
+tasks and broadcast a line from the sidebar without leaving the tab you are in. A Usage
+page shows plan limits and what the work would have cost at API prices.
 
 Both CLIs run in ATC's own PowerShell and ConPTY terminals. Each CLI manages its own
 authentication, models, permissions and configuration.
@@ -26,9 +27,9 @@ stepping through `claude --resume`'s picker to find it. ATC reads
 `~/.claude/projects` (and Codex's history) directly and lists every session under the
 project it belongs to, so resuming is one click.
 
-The terminal is a real one — xterm.js over a Windows ConPTY — not a text box that
-imitates a shell. Claude Code's and Codex's TUIs, PSReadLine, colours and Ctrl+C all
-behave normally.
+Each tab is xterm.js over a Windows ConPTY, the same pseudo console Windows Terminal
+uses. Claude Code's and Codex's TUIs, PSReadLine, colours and Ctrl+C work as they do
+there.
 
 ## Requirements
 
@@ -59,11 +60,11 @@ ConPTY built into Windows unless those two files sit beside it.
 There is no auto-update. Download the new release and run the same kind of file you
 installed:
 
-- **MSI:** run the new `.msi`. It replaces the installed version in place. Close ATC
+- **MSI.** Run the new `.msi`. It replaces the installed version in place. Close ATC
   first, or Windows asks to close it or restart.
-- **Setup exe:** run the new `setup.exe`. It also upgrades in place, and closes any
+- **Setup exe.** Run the new `setup.exe`. It also upgrades in place, and closes any
   running ATC itself.
-- **`atc.exe`:** replace the file.
+- **`atc.exe`.** Replace the file.
 
 Stick to one installer type. The MSI installs per machine and the setup exe per user,
 so switching between them leaves two separate installs. Settings and notes are kept in
@@ -103,7 +104,7 @@ build times, build resource use, runtime memory, validation, and migration detai
   project name, path, session name and branch
 - Git branch shown per session; optionally group sessions by branch, or group subfolders
   under the project containing them
-- Live refresh — sessions appear as they are created, without a restart
+- Sessions appear as they are created, without a restart
 - Pinned projects sort first
 - A dot on every session with an open tab: pulsing while the agent works, green when it
   is waiting for you, blue when it finished in a background tab
@@ -153,6 +154,8 @@ build times, build resource use, runtime memory, validation, and migration detai
 - Sessions with no recorded working directory are shown but not launchable
 
 **Usage** (`Ctrl+Shift+U`)
+- The usage chip in the header shows Claude's 5-hour session limit and when it resets.
+  Hover it for every limit and today's spend; click it for this page
 - Claude and Codex plan limits, refreshed while the page is open
 - Local tokens and API-price estimates by provider, project, model and session, over any
   date range, with CSV export
@@ -168,7 +171,8 @@ build times, build resource use, runtime memory, validation, and migration detai
 
 **Configuration**
 - Settings page in the app (`Ctrl+,`), and `settings.json` applied live; edits take
-  effect without a restart
+  effect without a restart. The Advanced section has the rarer ones: shell, profile,
+  GPU drawing, close confirmation and refresh intervals
 - A list of every shortcut (`Ctrl+Shift+?`)
 
 ## Keyboard shortcuts
@@ -186,6 +190,8 @@ untouched.
 | `Ctrl+Shift+R` | Rename this tab |
 | `Ctrl+Shift+\` | Split into two panes, or back to one |
 | `Ctrl+Shift+O` | Focus the other pane |
+| `Ctrl+Shift+J` | Go to the agent that has waited longest |
+| `Ctrl+Shift+G` | Show every tab at once, or back to one |
 | `Ctrl+Shift+L` | Choose Claude or Codex in this tab's project |
 | `Ctrl+Shift+N` | Open a terminal in this tab's project |
 | `Ctrl+Shift+A` | Choose an agent in the shared scratch directory |
@@ -220,6 +226,8 @@ Configure Codex in Settings or add this block to `settings.json`:
 ```json
 "codex": {
   "command": "codex",
+  "args": [],
+  "chatArgs": ["--sandbox", "read-only"],
   "resumeArgs": ["resume", "{session}"],
   "homeDir": null
 }
@@ -241,8 +249,8 @@ histories, or convert conversations between providers.
 
 ## Settings
 
-`%APPDATA%\Agent Terminal Control\settings.json` — that is
-`C:\Users\<you>\AppData\Roaming\Agent Terminal Control\settings.json` — created on first
+Settings live in `%APPDATA%\Agent Terminal Control\settings.json`, which is
+`C:\Users\<you>\AppData\Roaming\Agent Terminal Control\settings.json`, created on first
 run. The Settings page edits it, and its **Open settings.json** button opens the file in your editor.
 Every field is optional; missing ones take their default.
 
@@ -326,7 +334,6 @@ unpriced, and totals containing them are marked partial.
 
 ## Not included
 
-- Command palette
 - More than two panes, or top/bottom splits
 - Shells other than PowerShell
 - Anything other than Windows
@@ -338,8 +345,9 @@ coalesces output on an 8ms tick and sends it through Wails events. The frontend
 acknowledges bytes once xterm has parsed them, which applies backpressure to the shell
 rather than dropping output.
 
-Session metadata comes from reading only the head of each transcript — enough for a
-label, working directory and branch — cached against file size and mtime. The working
+Session metadata comes from the head of each transcript, which holds the label, working
+directory and branch, and its last 64 KiB, which holds renames. Both are cached against
+file size and modification time. The working
 directory is read from inside the file, never decoded from the directory name, which is
 lossy. More in [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -364,7 +372,8 @@ The test loader enables a loopback debugging port in a local copy of its depende
 production binaries and the Go module cache are untouched.
 
 `scripts/` contains helpers for regenerating the icon and fixtures, capturing the window,
-and sending real keystrokes to the running app.
+and sending real keystrokes to the running app. ARCHITECTURE.md describes driving the UI
+without taking focus, and the gotchas that cost time once.
 
 ### Isolated playground
 

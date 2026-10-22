@@ -1,6 +1,9 @@
 # Codex integration validation
 
-Validated on Windows on 2026-09-20, using Codex CLI 0.155.1 and Claude Code 2.1.278.
+Validated on Windows on 2026-09-20, using Codex CLI 0.155.1 and Claude Code 2.1.278. This
+is a record of that check on the Rust host. The Go port's test results are in
+[docs/WAILS-MIGRATION.md](docs/WAILS-MIGRATION.md), and how Codex works today is in the
+README and [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Automated checks
 
@@ -46,4 +49,12 @@ completion transition and attention indicator were checked.
 
 ## Accounting correction
 
-An audit found that mixed Codex records could include a cumulative snapshot behind the latest structured response total. Treating that decrease as a reset repeatedly recounted prior tokens. Structured response records now take precedence, with legacy snapshots limited to the pre-upgrade period or legacy-only threads. A 100-response regression checks lagging snapshots, deduplication, token subsets, and the resulting price. A separate read-only audit summed unique response IDs in the reported real session and matched its recorded thread total exactly. Earlier billion-token totals and their dollar estimates were incorrect.
+Mixed Codex records could include a cumulative snapshot that lagged behind the latest
+structured response total. ATC read that drop as a counter reset and counted the earlier
+tokens again, which produced billion-token totals and dollar estimates to match.
+
+Structured response records now win. Older cumulative snapshots count only before a
+thread's first structured record, or in threads that never have one. A 100-response
+regression test covers lagging snapshots, deduplication, token subsets and the price. A
+read-only audit of the real session that showed the bug summed its unique response ids
+and matched the thread's recorded total exactly.
