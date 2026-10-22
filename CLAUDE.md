@@ -25,6 +25,7 @@ Go + Wails v2 host (`app.go`, `internal/`), Svelte 5 + TS + xterm.js 6 frontend.
 
 - Never tag or release until I've used the build and said go.
 - Bump `package.json` and `wails.json` versions together. CI rejects a mismatch.
+- Point the README's MSI and setup download links at the new version; their file names carry it.
 - Push a `v*` tag. CI builds a draft with the MSI, setup.exe and portable `atc.exe`. Publish the draft after `gh run watch` passes. Never `gh release create` with local files.
 - MSI is the recommended installer.
 
