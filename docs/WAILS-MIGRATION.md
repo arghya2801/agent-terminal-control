@@ -1,5 +1,9 @@
 # Moving ATC from Rust/Tauri to Go/Wails
 
+A report from the 0.4.0 release, measured on 29 September 2026. The numbers and test
+counts are as they were then; [ARCHITECTURE.md](../ARCHITECTURE.md) describes the app as
+it is now.
+
 In 0.4.0 the desktop host moved from Rust and Tauri to Go and Wails. The window
 contents did not change. The sidebar, terminals and every page are the same Svelte and
 xterm.js code. What changed is the program underneath, the part that starts shells,

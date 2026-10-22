@@ -31,11 +31,13 @@ Go + Wails v2 host (`app.go`, `internal/`), Svelte 5 + TS + xterm.js 6 frontend.
 
 ## Checking the UI
 
-- `scripts/shot.ps1` screenshots without focus. `scripts/sendkeys.ps1` steals my focus, so use it rarely.
+- `scripts/shot.ps1` screenshots without focus. `scripts/sendkeys.ps1` steals my focus, so use it rarely. To click and type without focus, drive the dev server page in headless Edge (ARCHITECTURE.md, Development).
 - Never kill the installed `atc.exe`. My Claude session may be in it. The dev build is `atc-dev`.
 - Blank pane after an edit means restart the dev server.
 
 ## Gotchas
+
+The longer list is in ARCHITECTURE.md; add new ones there.
 
 - Hook terminal input up before spawning the PTY, or ConPTY hangs on its ESC[6n request.
 - Spawn the PTY after layout settles, at real size. An early resize garbles resumed transcripts.
