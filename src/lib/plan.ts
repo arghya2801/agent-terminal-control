@@ -114,6 +114,17 @@ export function codexLimits(plan: Record<string, unknown>): PlanLimit[] {
 }
 
 /** "resets in 2h 10m (Tue 14:00)", for a limit's reset time. */
+/** The usage chip's short form of `resetsIn`: "45m", "2h 13m", or the day and time past two days. */
+export function resetsShort(iso: string | null, now = Date.now()): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const mins = Math.round((d.getTime() - now) / 60_000);
+  if (mins <= 0) return 'now';
+  if (mins < 60) return `${mins}m`;
+  if (mins < 48 * 60) return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  return d.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+}
+
 export function resetsIn(iso: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);

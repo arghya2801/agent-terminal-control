@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chipLimit, codexLimits, limitDuration, planLimits, weeklyBreakdown } from './plan';
+import { chipLimit, codexLimits, limitDuration, planLimits, resetsShort, weeklyBreakdown } from './plan';
 
 // Trimmed from a real response, codename fields included.
 const real = {
@@ -19,6 +19,15 @@ const real = {
     ],
   },
 };
+
+describe('resetsShort', () => {
+  it('is short enough to sit beside the chip', () => {
+    const now = Date.parse('2026-10-22T10:00:00Z');
+    const at = (mins: number) => new Date(now + mins * 60_000).toISOString();
+    expect([resetsShort(null, now), resetsShort(at(-1), now), resetsShort(at(45), now), resetsShort(at(133), now)]).toEqual(['', 'now', '45m', '2h 13m']);
+    expect(resetsShort(at(3 * 24 * 60), now)).not.toMatch(/^\d+h/);
+  });
+});
 
 describe('chipLimit', () => {
   it('shows the 5-hour session even when a weekly limit is fuller, in both response shapes', () => {

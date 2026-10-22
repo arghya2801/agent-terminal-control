@@ -14,6 +14,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - The task box is one field: the icon at its left switches between Claude and Codex, and the project line under it picks where the task runs.
 
 ### Added
+- The usage chip shows when the 5-hour limit resets, in grey beside it. Settings > Appearance > Usage reset time hides it.
 - Reply in place: a waiting agent's row shows its question and a Reply button that sends your answer without leaving the tab you are in.
 - A task box at the top of the Open view starts Claude or Codex on a task in the background.
 - Ctrl+click rows in the Open view to pick them, then send one line to all of them.
