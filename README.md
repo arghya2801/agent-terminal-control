@@ -1,4 +1,15 @@
-# ATC — Agent Terminal Control
+<p align="center"><img src="assets/atc-logo.png" width="128" alt="ATC icon: three white bars on a blue rounded square, a runway threshold"></p>
+
+<h1 align="center">ATC</h1>
+
+<p align="center">Agent Terminal Control<br>
+A Windows terminal for Claude Code and Codex sessions.</p>
+
+<p align="center"><b>Download v0.6.0:</b>
+<a href="https://github.com/arghya2801/agent-terminal-control/releases/download/v0.6.0/ATC_0.6.0_x64_en-US.msi">MSI installer</a> (recommended) |
+<a href="https://github.com/arghya2801/agent-terminal-control/releases/download/v0.6.0/ATC_0.6.0_x64-setup.exe">Setup exe</a> |
+<a href="https://github.com/arghya2801/agent-terminal-control/releases/latest/download/atc.exe">Portable atc.exe</a><br>
+<a href="https://github.com/arghya2801/agent-terminal-control/releases">Release notes and older versions</a></p>
 
 A Windows terminal with one project tree for Claude Code and Codex sessions.
 Clicking a project opens a shell there; clicking a session resumes that conversation.
