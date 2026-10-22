@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { splitChord } from './tooltip';
+  import { pageZoom } from './desktop';
 
   /**
    * One tooltip for the whole app, in place of the browser's slow native one. Any element
@@ -41,11 +42,12 @@
     const text = claim(node);
     if (!text || !node.isConnected) return;
     const r = node.getBoundingClientRect();
-    tip = { ...splitChord(text), left: r.left, top: r.bottom };
+    // Measured at the left edge, where it has room for its full width; placed below.
+    // Everything is in on-screen pixels until the style divides by the page zoom.
+    tip = { ...splitChord(text), left: 0, top: r.bottom };
     await tick();
     if (!el || target !== node) return;
-    const w = el.offsetWidth;
-    const h = el.offsetHeight;
+    const { width: w, height: h } = el.getBoundingClientRect();
     const side = node.closest<HTMLElement>('[data-tip-side]')?.dataset.tipSide;
     let left: number;
     let top: number;
@@ -102,7 +104,7 @@
 </script>
 
 {#if tip}
-  <div class="tip" role="tooltip" bind:this={el} style="left: {tip.left}px; top: {tip.top}px">
+  <div class="tip" role="tooltip" bind:this={el} style="left: {tip.left / pageZoom()}px; top: {tip.top / pageZoom()}px">
     <span>{tip.text}</span>{#if tip.chord}<kbd>{tip.chord}</kbd>{/if}
   </div>
 {/if}

@@ -15,6 +15,14 @@ describe('parseSavedTabs', () => {
     expect(parseSavedTabs(JSON.stringify(saved))).toEqual(saved);
   });
 
+  it('keeps a chat a chat, and only a literal true makes one', () => {
+    const tabs = [
+      { kind: 'agent', provider: 'codex', cwd: 'D:\s', chat: true },
+      { kind: 'agent', provider: 'codex', cwd: 'D:\s', chat: 'yes' },
+    ];
+    expect(parseSavedTabs(JSON.stringify({ tabs, active: 0 }))?.tabs.map((t) => 'chat' in t && t.chat)).toEqual([true, false]);
+  });
+
   it('treats missing, empty or corrupt storage as nothing to restore', () => {
     expect(parseSavedTabs(null)).toBeNull();
     expect(parseSavedTabs('')).toBeNull();

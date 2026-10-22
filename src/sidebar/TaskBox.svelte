@@ -16,9 +16,12 @@
 
   const projects = $derived(appState.index.projects.filter((p) => p.path && p.exists));
   let task = $state('');
-  let agent = $state<AgentProvider>('claude');
-  /** A project picked in the box; empty follows the focused tab's project. */
-  let pinned = $state('');
+  // The settings say what the box starts with; a pick made in it holds until restart.
+  let pickedAgent = $state<AgentProvider | null>(null);
+  let pickedProject = $state<string | null>(null);
+  const agent = $derived(pickedAgent ?? appState.settings?.ui.taskAgent ?? 'claude');
+  /** A project key; empty follows the focused tab's project. */
+  const pinned = $derived(pickedProject ?? appState.settings?.ui.taskProject ?? '');
   let focused = $state(false);
   let input: HTMLInputElement;
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
@@ -37,7 +40,7 @@
   function pickProject(e: MouseEvent) {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const pick = (key: string) => () => {
-      pinned = key;
+      pickedProject = key;
       void tick().then(() => input.focus());
     };
     menu = {
@@ -61,7 +64,7 @@
     <button
       type="button"
       class="agent"
-      onclick={() => (agent = other)}
+      onclick={() => (pickedAgent = other)}
       title="Agent: {providerName(agent)}. Click for {providerName(other)}"
       aria-label="Agent: {providerName(agent)}. Click for {providerName(other)}"
     ><ProviderIcon provider={agent} /></button>

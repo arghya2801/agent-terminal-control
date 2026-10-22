@@ -2,6 +2,7 @@
   import { codexLimits, planLimits, resetsIn, type PlanLimit } from '../lib/plan';
   import { formatUsd } from '../lib/costs';
   import { loadCodexLimits, loadTodaySpend, planState } from '../lib/limits.svelte';
+  import { refreshMs } from '../lib/stores.svelte';
 
   /**
    * The plan limit nearest to running out, in the tab bar. Hovering shows every limit and
@@ -15,7 +16,6 @@
   } = $props();
 
   const PEEK_DELAY = 400;
-  const CODEX_STALE = 300_000;
   const SPEND_STALE = 60_000;
 
   const claude = $derived(planState.claude ? planLimits(planState.claude) : []);
@@ -32,7 +32,7 @@
     clearTimeout(timer);
     timer = setTimeout(() => {
       peek = true;
-      if (!planState.codexMissing && Date.now() - planState.codexAt > CODEX_STALE) void loadCodexLimits();
+      if (!planState.codexMissing && Date.now() - planState.codexAt > refreshMs('codex')) void loadCodexLimits();
       if (Date.now() - spendAt > SPEND_STALE) {
         spendAt = Date.now();
         void loadTodaySpend();

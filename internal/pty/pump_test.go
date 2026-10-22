@@ -182,7 +182,7 @@ func TestResolvesAPowerShellToAnAbsoluteExistingPathWithoutAVerbatimPrefix(t *te
 func TestTheNoProfileEnvVarAddsTheFlagOnlyWhenSetToOne(t *testing.T) {
 	for value, want := range map[string]bool{"": false, "0": false, "1": true} {
 		t.Setenv("ATC_SHELL_NO_PROFILE", value)
-		args, e := shellArgs()
+		args, e := shellArgs(Options{})
 		if e != nil {
 			t.Fatal(e)
 		}

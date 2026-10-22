@@ -9,6 +9,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ### Changed
 - The sidebar's Open view is an inbox: agents waiting on you come first, longest-waiting first, under Waiting on you, Working and Shells headings. Each row shows how long it has been in its state, the last line on its screen and a 5-minute output graph.
 - The tab bar is gone. A header names the tab on screen with its project, branch and state; double-click the name to rename it. Tabs can no longer be dragged into order.
+- New chats start in the scratch directory; the separate chats folder is no longer used. Chats started there before still show in the Scratch view.
 - The sidebar filter sits behind a search icon in every view. Typing on a row starts a filter too.
 - The task box is one field: the icon at its left switches between Claude and Codex, and the project line under it picks where the task runs.
 
@@ -20,8 +21,13 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Ctrl+Shift+G shows every tab at once, labelled by state. Click one to go to it.
 - Rename in the Open view's row menu.
 - The notes pad collapses to its header, like the Outline pane in VS Code's sidebar.
+- Chat with Claude or Codex from the Scratch view's `+` or the command palette. A Claude chat has no tools or MCP servers; a Codex chat runs commands in a read-only sandbox. Restored tabs stay chats.
+- Settings for launch arguments and chat arguments per agent, the Open view's screen peek and output graph, what the task box starts with, and the terminal cursor and line height.
+- An Advanced settings section: PowerShell 7 or Windows PowerShell, loading the PowerShell profile, how many tabs are drawn with the GPU, where a new tab opens, confirming close, in-app notes and how long they stay, and how often plan limits refresh.
 
 ### Fixed
+- With the app zoomed, menus and tooltips open inside the window instead of off its edge, and dragging the sidebar edge or the notes divider keeps up with the pointer.
+- A tooltip near the right edge of the window no longer touches the edge.
 - Dragging the notes divider resizes the notes again.
 - Pressing Enter to finish renaming a tab no longer also sends Enter to the terminal.
 

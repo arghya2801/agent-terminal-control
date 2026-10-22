@@ -22,6 +22,7 @@
     isPermissionGranted,
     requestPermission,
     sendNotification,
+    pageZoom,
   } from './lib/desktop';
   import {
     adjustZoom,
@@ -29,6 +30,7 @@
     currentZoom,
     enterMs,
     initStores,
+    refreshMs,
     saveSettings,
     sidebarOpen,
     toggleSidebar,
@@ -118,17 +120,20 @@
   /** Until startup has reopened the saved tabs, saving would overwrite them. */
   let restoring = $state(true);
 
+  /** Tabs started as chats, so saving and restoring keeps their chat arguments. */
+  const chatTabs = new Set<TabKey>();
+
   let savedTabs = '';
   function saveTabs(all: Tab[]) {
     if (restoring) return;
     // Exited tabs are kept: they are still in the tab bar, and on quit every shell exits
     // just before the window goes, which must not wipe what gets restored.
     const tabs = all.map((t): SavedTab => {
-      const common = { projectKey: t.projectKey, customTitle: t.customTitle };
+      const common = { projectKey: t.projectKey, customTitle: t.customTitle, ...(chatTabs.has(t.key) ? { chat: true as const } : {}) };
       const sessionId = sessionIdOf(t);
       if (sessionId && t.cwd) return { kind: 'session', provider: t.provider ?? 'claude', sessionId, cwd: t.cwd, ...common };
       if (t.provider && t.cwd) return { kind: 'agent', provider: t.provider, cwd: t.cwd, ...common };
-      return { kind: 'shell', cwd: t.cwd, project: t.key.startsWith('project:'), ...common };
+      return { kind: 'shell', cwd: t.cwd, project: t.key.startsWith('project:'), projectKey: t.projectKey, customTitle: t.customTitle };
     });
     try {
       const active = all.findIndex((t) => t.key === activeKey);
@@ -161,14 +166,16 @@
         const label = appState.index.projects
           .flatMap((p) => p.sessions)
           .find((s) => s.id === t.sessionId && s.provider === t.provider)?.label;
-        const command = await agentCommand(t.provider, t.sessionId);
+        if (t.chat) chatTabs.add(key);
+        const command = await agentCommand(t.provider, t.sessionId, t.chat);
         await guard(() =>
           openTab(key, label ?? providerName(t.provider), { cwd: t.cwd, initialCommand: command }, t.projectKey, t.provider),
         );
       } else if (t.kind === 'agent') {
         counter += 1;
-        key = `agent:${t.provider}:${counter}`;
-        await guard(async () => openTab(key, providerName(t.provider), { cwd: t.cwd, initialCommand: await agentCommand(t.provider) }, t.projectKey, t.provider, knownSessions()));
+        key = t.chat ? `agent:${t.provider}:chat-${counter}` : `agent:${t.provider}:${counter}`;
+        if (t.chat) chatTabs.add(key);
+        await guard(async () => openTab(key, providerName(t.provider), { cwd: t.cwd, initialCommand: await agentCommand(t.provider, null, t.chat) }, t.projectKey, t.provider, knownSessions()));
       } else if (t.kind === 'shell' && t.project && t.projectKey) {
         key = `project:${t.projectKey}`;
         const name = appState.index.projects.find((p) => p.key === t.projectKey)?.name ?? 'pwsh';
@@ -226,7 +233,7 @@
     const startX = e.clientX;
     const startWidth = width;
     const move = (ev: PointerEvent) => {
-      const w = Math.round(startWidth + ev.clientX - startX);
+      const w = Math.round(startWidth + (ev.clientX - startX) / pageZoom());
       dragWidth = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w));
     };
     const end = () => {
@@ -320,6 +327,8 @@
   }
 
   function newTab() {
+    const p = appState.settings?.ui.newTabIn === 'project' ? activeProject() : undefined;
+    if (p) return newShellIn(p);
     counter += 1;
     return guard(() => openTab(`plain:${counter}`, `pwsh ${counter}`, { cwd: null }));
   }
@@ -355,26 +364,33 @@
 
   function knownSessions(): string[] { return appState.index.projects.flatMap(p => p.sessions.map(sessionKey)); }
 
-  function newAgentIn(p: Project, provider: AgentProvider) {
+  /** With `chat`, the agent starts with the chat arguments and cannot change anything. */
+  function newAgentIn(p: Project, provider: AgentProvider, chat = false) {
     if (!p.path) return;
     counter += 1;
-    const key: TabKey = `agent:${provider}:${counter}`;
+    const key: TabKey = chat ? `agent:${provider}:chat-${counter}` : `agent:${provider}:${counter}`;
+    if (chat) chatTabs.add(key);
     const existing = knownSessions();
-    return guard(async () => openTab(key, p.name, { cwd: p.path, initialCommand: await agentCommand(provider) }, p.key, provider, existing));
+    return guard(async () => openTab(key, p.name, { cwd: p.path, initialCommand: await agentCommand(provider, null, chat) }, p.key, provider, existing));
   }
 
-  /** No project: the scratch directory, or with `chats` the chats directory (#135). */
-  let picker = $state<{ project: Project | null; chats?: boolean } | null>(null);
+  /** Ask an agent, or with `chat` chat with one, in the scratch directory. */
+  function inScratch(provider: AgentProvider, chat = false) {
+    void guard(async () => {
+      const cwd = await scratchDir();
+      const name = chat ? `${providerName(provider)} chat` : `Ask ${providerName(provider)}`;
+      await newAgentIn({ key: projectKey(cwd), path: cwd, name, pinned: false, exists: true, lastActiveMs: 0, sessions: [] }, provider, chat);
+    });
+  }
+
+  /** No project: the scratch directory. */
+  let picker = $state<{ project: Project | null } | null>(null);
   function finishPicker(provider?: AgentProvider) {
     const target = picker;
     picker = null;
     if (!provider || !target) { void tick().then(focusActiveTerminal); return; }
-    if (target.project) { void newAgentIn(target.project, provider); return; }
-    void guard(async () => {
-      const cwd = await scratchDir(target.chats ? 'chats' : undefined);
-      const name = target.chats ? `${providerName(provider)} chat` : `Ask ${providerName(provider)}`;
-      await newAgentIn({ key: projectKey(cwd), path: cwd, name, pinned: false, exists: true, lastActiveMs: 0, sessions: [] }, provider);
-    });
+    if (target.project) void newAgentIn(target.project, provider);
+    else inScratch(provider);
   }
 
   /** A folder that is not a project yet: pick it, then pick the agent to start there. */
@@ -531,6 +547,8 @@
       { id: 'x:folder', label: 'Open a folder…', detail: 'Pick a folder, then Claude or Codex', icon: 'folder', run: () => void openFolder() },
       { id: 'x:claude', label: 'Ask Claude', detail: 'In the scratch directory', icon: 'agent', run: () => askAgent('claude') },
       { id: 'x:codex', label: 'Ask Codex', detail: 'In the scratch directory', icon: 'agent', run: () => askAgent('codex') },
+      { id: 'x:chat-claude', label: 'Chat with Claude', detail: 'No tools or MCP servers: it cannot run commands or touch files', icon: 'agent', run: () => inScratch('claude', true) },
+      { id: 'x:chat-codex', label: 'Chat with Codex', detail: 'Read-only sandbox: its commands cannot change files', icon: 'agent', run: () => inScratch('codex', true) },
     ];
     const pages: Command[] = [
       { id: 'g:usage', label: 'Usage and spend', icon: 'usage', chord: chordFor('openUsage'), run: openUsage },
@@ -563,10 +581,7 @@
     };
   }
 
-  function askAgent(provider: AgentProvider) {
-    picker = { project: null };
-    finishPicker(provider);
-  }
+  const askAgent = (provider: AgentProvider) => inScratch(provider);
 
   function openSession(p: Project, s: SessionMeta) {
     const cwd = s.cwd ?? p.path;
@@ -587,7 +602,7 @@
   async function requestClose(key: TabKey) {
     const tab = getTab(key);
     if (!tab) return;
-    const running = await busyWith(key);
+    const running = appState.settings?.ui.confirmClose === false ? null : await busyWith(key);
     if (!running) {
       void closeTab(key);
       return;
@@ -625,9 +640,10 @@
 
   async function notifyAttention(key: TabKey, title: string, provider: AgentProvider | null, reason: AttentionReason) {
     if (document.hasFocus()) {
+      if (appState.settings?.ui.toasts === false) return;
       const id = ++toastId;
       toasts = [...toasts.filter((t) => t.key !== key), { id, key, title, body: attentionBody(provider, reason) }].slice(-3);
-      setTimeout(() => dismissToast(id), 6000);
+      setTimeout(() => dismissToast(id), (appState.settings?.ui.toastSeconds || 6) * 1000);
       return;
     }
     if (appState.settings?.ui.notifications === false) return;
@@ -756,7 +772,6 @@
     wrapper.addEventListener('focusin', onPaneFocus);
     // The tab bar's chip shows the limits all the time, not only on the usage page.
     void loadClaudeLimits();
-    const limitPoll = setInterval(() => void loadClaudeLimits(), 90_000);
     const clock = setInterval(() => (now = Date.now()), 15_000);
     // Settings decide whether the sidebar is open, and so how wide the pane is.
     // Spawning before that lands starts the PTY at the wrong width.
@@ -787,12 +802,17 @@
       offChord();
       offAttention();
       wrapper.removeEventListener('focusin', onPaneFocus);
-      clearInterval(limitPoll);
       clearInterval(clock);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('contextmenu', onContextMenu);
       window.removeEventListener('resize', refit);
     };
+  });
+
+  // Re-armed when the refresh setting changes.
+  $effect(() => {
+    const poll = setInterval(() => void loadClaudeLimits(), refreshMs('claude'));
+    return () => clearInterval(poll);
   });
 
   // The terminal shares the wrapper's geometry, so it re-measures whenever the panel
@@ -846,7 +866,7 @@
         onOpenSession={openSession}
         onNewShell={newShellIn}
         onNewAgent={newAgentIn}
-        onNewChat={() => (picker = { project: null, chats: true })}
+        onNewChat={(provider) => inScratch(provider, true)}
         onPickAgent={(p) => (picker = { project: p })}
         onOpenFolder={openFolder}
         onAsk={askAgent}
@@ -931,7 +951,7 @@
     {/if}
     {#if picker}
       <ProviderPicker
-        title={picker.project ? `New agent in ${picker.project.name}` : picker.chats ? 'New chat' : 'Ask an agent'}
+        title={picker.project ? `New agent in ${picker.project.name}` : 'Ask an agent'}
         detail={picker.project?.path ?? null}
         onPick={finishPicker}
         onCancel={() => finishPicker()}

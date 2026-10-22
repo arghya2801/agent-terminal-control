@@ -41,10 +41,16 @@ func Defaults() Object {
 	return Object{
 		"version":  1,
 		"projects": Object{"claudeProjectsDir": nil, "pinned": []any{}, "names": Object{}, "sessionNames": Object{}},
-		"ui":       Object{"sidebarWidth": 260, "sidebarOpen": true, "sessionsPerProject": 15, "zoom": 1.0, "notifications": true, "restoreTabs": true, "theme": "ATC Dark", "groupSubfolders": false, "groupByBranch": false, "sidebarView": "open", "animations": "system", "animationSpeed": 1.0},
-		"terminal": Object{"fontFamily": "\"FiraCode Nerd Font Mono\", \"Cascadia Mono\", Consolas, monospace", "fontSize": 13, "scrollback": 10000},
-		"claude":   Object{"command": "claude", "resumeArgs": []any{"--resume", "{session}"}, "scratchDir": nil},
-		"codex":    Object{"command": "codex", "resumeArgs": []any{"resume", "{session}"}, "homeDir": nil},
+		"ui":       Object{"sidebarWidth": 260, "sidebarOpen": true, "sessionsPerProject": 15, "zoom": 1.0, "notifications": true, "restoreTabs": true, "theme": "ATC Dark", "groupSubfolders": false, "groupByBranch": false, "sidebarView": "open", "animations": "system", "animationSpeed": 1.0,
+			"peek": "all", "outputGraph": true, "taskAgent": "claude", "taskProject": "", "newTabIn": "home", "confirmClose": true,
+			"toasts": true, "toastSeconds": 6, "limitsRefreshSec": 90, "codexRefreshSec": 300},
+		"terminal": Object{"fontFamily": "\"FiraCode Nerd Font Mono\", \"Cascadia Mono\", Consolas, monospace", "fontSize": 13, "scrollback": 10000,
+			"cursorStyle": "bar", "cursorBlink": true, "lineHeight": 1.0, "shell": "auto", "loadProfile": true, "gpuTabs": 4},
+		// chatArgs start a chat. Claude gets no built-in tools and no MCP servers; `--tools=`
+		// rather than `--tools ""`, which Windows PowerShell drops. Codex has no switch for
+		// its tools or MCP servers, so it gets a read-only sandbox for commands.
+		"claude": Object{"command": "claude", "args": []any{}, "chatArgs": []any{"--tools=", "--strict-mcp-config"}, "resumeArgs": []any{"--resume", "{session}"}, "scratchDir": nil},
+		"codex":  Object{"command": "codex", "args": []any{}, "chatArgs": []any{"--sandbox", "read-only"}, "resumeArgs": []any{"resume", "{session}"}, "homeDir": nil},
 	}
 }
 func Merge(dst, src Object) {
@@ -195,7 +201,8 @@ func Scratch(s Object, config string) string {
 	return filepath.Join(config, "scratch")
 }
 
-// Chats is where ATC starts plain chat sessions (#135).
+// Chats is where ATC started chat sessions before they moved into the scratch directory.
+// Still indexed, so those older chats stay in the Scratch view.
 func Chats(config string) string { return filepath.Join(config, "chats") }
 func Quote(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
 func Argument(s string) string {
@@ -210,7 +217,9 @@ func Argument(s string) string {
 	return s
 }
 // Codex always runs with --no-daemon: its background server often fails to start under ATC (#133).
-func AgentCommand(s Object, provider, session string) string {
+// AgentCommand is the PowerShell line that starts an agent: the launch arguments, then
+// with chat the chat arguments, then the resume arguments for a session.
+func AgentCommand(s Object, provider, session string, chat bool) string {
 	cfg := Obj(s[provider])
 	exe := Str(cfg["command"])
 	if exe != "claude" && exe != "codex" {
@@ -220,10 +229,17 @@ func AgentCommand(s Object, provider, session string) string {
 	if provider == "codex" {
 		parts = append(parts, "--no-daemon")
 	}
-	if session != "" {
-		for _, a := range Arr(cfg["resumeArgs"]) {
+	add := func(key string) {
+		for _, a := range Arr(cfg[key]) {
 			parts = append(parts, Argument(strings.ReplaceAll(Str(a), "{session}", session)))
 		}
+	}
+	add("args")
+	if chat {
+		add("chatArgs")
+	}
+	if session != "" {
+		add("resumeArgs")
 	}
 	cmd := strings.Join(parts, " ")
 	if provider == "codex" && strings.TrimSpace(Str(cfg["homeDir"])) != "" {

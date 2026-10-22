@@ -7,7 +7,7 @@
  *
  * - `term.onData` must be wired before `pty_spawn`. ConPTY stalls at startup until a
  *   terminal answers its cursor-position request, and xterm only answers if listening.
- * - At most WEBGL_TABS recently used tabs hold a WebGL context; WebView2 caps them at
+ * - At most `gpuTabs` (a setting, 4 by default) recently used tabs hold a WebGL context; WebView2 caps them at
  *   ~16 and silently kills the oldest beyond that.
  */
 
@@ -108,15 +108,19 @@ let focusedPane: 0 | 1 = 0;
 /** WebGL contexts by tab, least recently activated first. Kept across switches:
  *  recreating one (and its glyph atlas) on every switch made switching lag (#117). */
 const webgl = new Map<TabKey, WebglAddon>();
-// ponytail: a fixed small cap under WebView2's ~16; make it adaptive only if split panes
-// ever need more visible at once.
-const WEBGL_TABS = 4;
 let wrapper: HTMLElement | null = null;
 /** Latest settings-driven appearance; theme.ts stays the fallback. */
-let termOptions = {
+let termOptions: TerminalSettings = {
   fontFamily: defaultFontFamily,
   fontSize: defaultFontSize,
   scrollback: defaultScrollback,
+  cursorStyle: 'bar',
+  cursorBlink: true,
+  lineHeight: 1,
+  shell: 'auto',
+  loadProfile: true,
+  // Well under WebView2's limit of about 16 contexts.
+  gpuTabs: 4,
 };
 /** App zoom. The UI zooms with CSS `zoom`, which xterm cannot measure through (rows come
  *  out wrong and the prompt drops below a blank band), so the terminal area cancels it
@@ -273,8 +277,9 @@ export async function openTab(
     fontSize: zoomedFontSize(),
     theme: termTheme,
     scrollback: termOptions.scrollback,
-    cursorBlink: true,
-    cursorStyle: 'bar',
+    cursorBlink: termOptions.cursorBlink,
+    cursorStyle: termOptions.cursorStyle,
+    lineHeight: termOptions.lineHeight,
     allowProposedApi: true, // required by addon-unicode11
   });
 
@@ -435,7 +440,7 @@ export async function openTab(
     }
   };
 
-  tab.ptyId = await ptySpawn({ ...opts, cols: dims.cols, rows: dims.rows }, channel);
+  tab.ptyId = await ptySpawn({ ...opts, cols: dims.cols, rows: dims.rows, shell: termOptions.shell, noProfile: !termOptions.loadProfile }, channel);
   notify();
   return tab;
 }
@@ -476,17 +481,26 @@ export function cycleTab(delta: number) {
  * Font size changes the cell size, so this must refit: the shell would otherwise keep
  * wrapping at the old column count.
  */
+/** Takes effect in open tabs too, except the shell settings, which apply to new tabs. */
 export function applyTerminalSettings(s: TerminalSettings) {
   termOptions = {
+    ...s,
     fontFamily: s.fontFamily || defaultFontFamily,
     fontSize: s.fontSize || defaultFontSize,
     scrollback: s.scrollback ?? defaultScrollback,
+    lineHeight: s.lineHeight || 1,
   };
   for (const t of tabs.values()) {
-    t.term.options.fontFamily = termOptions.fontFamily;
-    t.term.options.fontSize = zoomedFontSize();
-    t.term.options.scrollback = termOptions.scrollback;
+    Object.assign(t.term.options, {
+      fontFamily: termOptions.fontFamily,
+      fontSize: zoomedFontSize(),
+      scrollback: termOptions.scrollback,
+      cursorStyle: termOptions.cursorStyle,
+      cursorBlink: termOptions.cursorBlink,
+      lineHeight: termOptions.lineHeight,
+    });
   }
+  trimWebgl();
   refit();
 }
 
@@ -566,6 +580,7 @@ function useWebgl(key: TabKey, term: Terminal) {
     webgl.set(key, had);
     return;
   }
+  if (termOptions.gpuTabs < 1) return;
   try {
     const addon = new WebglAddon();
     // Contexts are lost on OOM or system resume; fall back rather than render nothing.
@@ -578,8 +593,13 @@ function useWebgl(key: TabKey, term: Terminal) {
   } catch {
     // Software rendering or RDP: the DOM renderer is correct, just slower.
   }
+  trimWebgl();
+}
+
+/** Disposing a tab's WebGL addon puts it back on the DOM renderer. */
+function trimWebgl() {
   for (const [old, addon] of webgl) {
-    if (webgl.size <= WEBGL_TABS) break;
+    if (webgl.size <= termOptions.gpuTabs) break;
     addon.dispose();
     webgl.delete(old);
   }

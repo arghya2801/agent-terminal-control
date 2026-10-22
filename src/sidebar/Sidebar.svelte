@@ -6,6 +6,7 @@
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import Icon from '../lib/Icon.svelte';
   import { tick } from 'svelte';
+  import { pageZoom } from '../lib/desktop';
   import { activate, focusActiveTerminal, splitWith } from '../terminal/manager';
   import { enterList, listKeys, rows } from '../lib/roving';
   import {
@@ -48,7 +49,8 @@
     onOpenSession: (p: Project, s: SessionMeta) => void;
     onNewShell: (p: Project) => void;
     onNewAgent: (p: Project, provider: AgentProvider) => void;
-    onNewChat: () => void;
+    /** A chat in the scratch directory that cannot change anything. */
+    onNewChat: (provider: AgentProvider) => void;
     /** Asks Claude or Codex, then starts it in the project (#146). */
     onPickAgent: (p: Project) => void;
     onOpenFolder: () => void;
@@ -62,7 +64,7 @@
   } = $props();
 
   let refreshing = $state(false);
-  let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  let menu = $state<{ x: number; y: number; items: MenuItem[]; dropdown?: boolean } | null>(null);
 
   const view = $derived(sidebarView());
   const working = $derived(tabs.filter((t) => tabMark(t) === 'working').length);
@@ -146,7 +148,7 @@
     const h0 = notesHeight;
     handle.setPointerCapture(e.pointerId);
     // The pane sits at the bottom, so dragging up makes it taller.
-    const move = (m: PointerEvent) => setNotesHeight(h0 - (m.clientY - y0));
+    const move = (m: PointerEvent) => setNotesHeight(h0 - (m.clientY - y0) / pageZoom());
     const end = () => {
       handle.removeEventListener('pointermove', move);
       handle.removeEventListener('pointerup', end);
@@ -202,7 +204,20 @@
       {#if view === 'open'}
         <button class="icon" onclick={onNewTab} title="New tab (Ctrl+Shift+T)" aria-label="New tab"><Icon name="plus" size={14} /></button>
       {:else if view === 'scratch'}
-        <button class="icon" onclick={onNewChat} title="New chat with Claude or Codex" aria-label="New chat"><Icon name="plus" size={14} /></button>
+        <button
+          class="icon"
+          onclick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            menu = { x: r.right, y: r.bottom + 4, dropdown: true, items: [
+              { label: 'Ask Claude', icon: 'agent', run: () => onAsk('claude') },
+              { label: 'Ask Codex', icon: 'agent', run: () => onAsk('codex') },
+              { label: 'Chat with Claude, no tools', icon: 'agent', sep: true, run: () => onNewChat('claude') },
+              { label: 'Chat with Codex, read-only sandbox', icon: 'agent', run: () => onNewChat('codex') },
+            ] };
+          }}
+          title="Ask an agent, or chat with one that cannot change anything"
+          aria-label="New in scratch"
+        ><Icon name="plus" size={14} /></button>
       {:else}
       <button
         class="icon"
@@ -310,7 +325,7 @@
     </section>
   </div>
   {#if menu}
-    <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => (menu = null)} />
+    <ContextMenu x={menu.x} y={menu.y} items={menu.items} dropdown={menu.dropdown} onClose={() => (menu = null)} />
   {/if}
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
   <div

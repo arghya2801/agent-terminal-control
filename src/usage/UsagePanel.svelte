@@ -7,7 +7,7 @@
   import { save } from '../lib/desktop';
   import { codexUsageStop, usageCosts, writeTextFile } from '../lib/ipc';
   import { loadClaudeLimits, loadCodexLimits, planState } from '../lib/limits.svelte';
-  import { appState } from '../lib/stores.svelte';
+  import { appState, refreshMs } from '../lib/stores.svelte';
   import { cacheHitRate, chartData, dailyTotals, hourToLocalDay, rollingAverage, sessionStats, streaks, usageBlocks, formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv, weekHeatmap, type Split, type UsageBlock } from '../lib/costs';
   import {
     clampDays,
@@ -53,8 +53,6 @@
   /** Ticks so "updated 3m ago" stays current while the page sits open. */
   let now = $state(Date.now());
   /** Limits move slowly, and the endpoint rate-limits, so poll gently. */
-  const PLAN_REFRESH_MS = 90_000;
-  const CODEX_REFRESH_MS = 300_000;
 
   const limits = $derived(plan ? planLimits(plan) : []);
   const breakdown = $derived(plan ? weeklyBreakdown(plan) : []);
@@ -348,12 +346,12 @@
   onMount(() => {
     restoreRange();
     // The app polls Claude's limits already; only a stale answer is refreshed here.
-    if (Date.now() - planState.claudeAt > PLAN_REFRESH_MS) void loadPlan();
-    if (Date.now() - planState.codexAt > CODEX_REFRESH_MS) void loadCodex();
+    if (Date.now() - planState.claudeAt > refreshMs('claude')) void loadPlan();
+    if (Date.now() - planState.codexAt > refreshMs('codex')) void loadCodex();
     void loadCosts();
-    const poll = setInterval(() => void loadCosts(), PLAN_REFRESH_MS);
+    const poll = setInterval(() => void loadCosts(), refreshMs('claude'));
     // Each Codex read starts a `codex app-server` process, so it refreshes less often.
-    const codexPoll = setInterval(() => void loadCodex(), CODEX_REFRESH_MS);
+    const codexPoll = setInterval(() => void loadCodex(), refreshMs('codex'));
     const tick = setInterval(() => (now = Date.now()), 30_000);
     return () => {
       void codexUsageStop();

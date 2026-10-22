@@ -42,6 +42,13 @@ export function setZoom(zoom: number) {
   document.documentElement.style.zoom = String(zoom);
   window.dispatchEvent(new Event('resize'));
 }
+/**
+ * The CSS zoom set above. Mouse and getBoundingClientRect positions are on-screen pixels,
+ * but a fixed element's `left`/`top` are zoomed again, so they are divided by this.
+ */
+export function pageZoom(): number {
+  return Number(document.documentElement.style.zoom) || 1;
+}
 export function save(options: { defaultPath: string; filters: { name: string; extensions: string[] }[] }): Promise<string | null> {
   return invoke('save_dialog', { options });
 }

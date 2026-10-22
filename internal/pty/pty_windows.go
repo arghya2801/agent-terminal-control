@@ -28,6 +28,9 @@ type Options struct {
 	Cols           int    `json:"cols"`
 	Rows           int    `json:"rows"`
 	InitialCommand string `json:"initialCommand"`
+	// Shell is "pwsh" or "powershell" to prefer that one; anything else prefers pwsh.
+	Shell     string `json:"shell"`
+	NoProfile bool   `json:"noProfile"`
 }
 type Stats struct {
 	BytesOut           uint64 `json:"bytesOut"`
@@ -60,8 +63,19 @@ func dimension(n int) int16 {
 	}
 	return int16(n)
 }
-func Shell() (string, error) {
-	for _, candidate := range []string{os.Getenv("ProgramFiles") + `\PowerShell\7\pwsh.exe`, "pwsh.exe", os.Getenv("SystemRoot") + `\System32\WindowsPowerShell\v1.0\powershell.exe`, "powershell.exe"} {
+// Shell finds PowerShell, 7 first, then Windows PowerShell.
+func Shell() (string, error) { return shellFor("") }
+
+// shellFor finds the PowerShell that pref names, "pwsh" or "powershell", and falls back
+// to the other one when it is not installed.
+func shellFor(pref string) (string, error) {
+	pwsh := []string{os.Getenv("ProgramFiles") + `\PowerShell\7\pwsh.exe`, "pwsh.exe"}
+	classic := []string{os.Getenv("SystemRoot") + `\System32\WindowsPowerShell\v1.0\powershell.exe`, "powershell.exe"}
+	candidates := append(pwsh, classic...)
+	if pref == "powershell" {
+		candidates = append(classic, pwsh...)
+	}
+	for _, candidate := range candidates {
 		if path, e := exec.LookPath(candidate); e == nil {
 			return path, nil
 		}
@@ -69,7 +83,7 @@ func Shell() (string, error) {
 	return "", fmt.Errorf("no PowerShell installation found")
 }
 func Spawn(opts Options, emit func(Event)) (*Session, error) {
-	args, e := shellArgs()
+	args, e := shellArgs(opts)
 	if e != nil {
 		return nil, e
 	}
@@ -77,14 +91,14 @@ func Spawn(opts Options, emit func(Event)) (*Session, error) {
 }
 
 // shellArgs is the interactive shell command line: PowerShell without its banner, and
-// without the user's profile only when ATC_SHELL_NO_PROFILE is exactly "1".
-func shellArgs() ([]string, error) {
-	shell, e := Shell()
+// without the user's profile when the settings say so or ATC_SHELL_NO_PROFILE is "1".
+func shellArgs(opts Options) ([]string, error) {
+	shell, e := shellFor(opts.Shell)
 	if e != nil {
 		return nil, e
 	}
 	args := []string{shell, "-NoLogo"}
-	if os.Getenv("ATC_SHELL_NO_PROFILE") == "1" {
+	if opts.NoProfile || os.Getenv("ATC_SHELL_NO_PROFILE") == "1" {
 		args = append(args, "-NoProfile")
 	}
 	return args, nil
