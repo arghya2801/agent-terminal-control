@@ -76,6 +76,11 @@ export function claudeUsage(): Promise<Record<string, unknown>> { return App.Cla
 /** With `chat`, the agent starts with the chat arguments from settings: no tools for Claude, a read-only sandbox for Codex. */
 export function agentCommand(provider: AgentProvider, sessionId: string | null = null, chat = false): Promise<string> { return App.AgentCommand(provider, sessionId ?? '', chat); }
 
+export interface GitChanges { files: number; insertions: number; deletions: number; untracked: number }
+
+/** What changed in a working tree since HEAD; null outside git. */
+export function gitChanges(dir: string): Promise<GitChanges | null> { return App.GitChanges(dir); }
+
 /** Null when the Codex CLI is not installed. */
 export function codexUsage(): Promise<Record<string, unknown> | null> { return App.CodexUsage(); }
 export function codexUsageStop(): Promise<void> { return App.CodexUsageStop(); }

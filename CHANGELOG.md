@@ -6,6 +6,10 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Added
+- Queue a message for a working agent: hover its row in the Open view and choose Queue, or right-click it. ATC types it in when the agent stops. The queued text shows under the row, where it can be edited or cancelled, and is dropped if the tab exits.
+- What each agent has changed: the header shows files changed, insertions and deletions in the tab's folder, and the Open view row's tooltip lists them. It refreshes whenever the agent stops working, and only appears in git repositories.
+
 ### Fixed
 - When Claude's usage endpoint answers 429, ATC backs off: it waits for `Retry-After`, or doubles its wait from 2 minutes up to 30, and sends no usage checks until then. The last numbers stay on screen with the retry time.
 

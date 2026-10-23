@@ -80,7 +80,7 @@
   import type { IconName } from './lib/Icon.svelte';
   import { relativeTime } from './lib/format';
   import { parseSavedTabs, type SavedTab } from './lib/restore';
-  import { agentCommand, pickFolder, scratchDir } from './lib/ipc';
+  import { agentCommand, gitChanges, pickFolder, scratchDir, type GitChanges } from './lib/ipc';
   import { projectKey } from './lib/paths';
   import { resolveSessions, type TabRef } from './lib/sessions';
   import { zoomLabel } from './lib/zoom';
@@ -278,6 +278,8 @@
       exited: t.exited,
       attention: t.attention,
       done: t.done,
+      queued: t.queued,
+      cwd: t.cwd,
       activity: t.activity,
       projectKey: t.projectKey,
       since: t.markSince,
@@ -481,6 +483,18 @@
   $effect(() => {
     void appState.index;
     if (tabs.some((t) => t.provider)) void untrack(loadContext);
+  });
+  // What each tab's agent has changed, read when it stops working rather than on a timer (#162).
+  let changes = $state<Record<TabKey, GitChanges | null>>({});
+  const lastMark = new Map<TabKey, string>();
+  $effect(() => {
+    for (const t of tabs) {
+      const mark = tabMark(t);
+      const was = lastMark.get(t.key);
+      lastMark.set(t.key, mark);
+      if (!t.cwd || mark === 'working' || mark === was) continue;
+      void gitChanges(t.cwd).then((c) => (changes = { ...changes, [t.key]: c }), () => {});
+    }
   });
   /** How full each agent tab's context window is, 0..1. */
   const contextFill = $derived(
@@ -900,6 +914,7 @@
         {activeKey}
         {activeSessionId}
         {contextFill}
+        {changes}
         {openProjectKeys}
         {sessionMarks}
         onOpenProject={openProject}
@@ -956,7 +971,7 @@
           {#if shownState}<span class="facts">{shownState}</span>{/if}
         </span>
         <div class="grow"></div>
-        <HeaderStats tabKey={shown.key} sessionKey={shownSession} working={mark === 'working'} />
+        <HeaderStats tabKey={shown.key} sessionKey={shownSession} working={mark === 'working'} changes={changes[shown.key]} />
       {:else}
         <span class="shown facts">Nothing open</span>
         <div class="grow"></div>

@@ -71,6 +71,14 @@ export function sparkPath(h: number[]): string {
   return h.map((v, i) => (v ? `M${i * 2 + 0.5} 10V${10 - Math.max(1, (v / top) * 10)}` : '')).join('');
 }
 
+/** "3 files, +40 −12, 2 untracked": what an agent has changed in its working tree. */
+export function changesText(c: { files: number; insertions: number; deletions: number; untracked: number }): string {
+  return [
+    c.files && `${c.files} file${c.files === 1 ? '' : 's'} changed, +${c.insertions} −${c.deletions}`,
+    c.untracked && `${c.untracked} untracked`,
+  ].filter(Boolean).join(', ') || 'No changes';
+}
+
 export function tabMark(t: { exited: boolean; attention: boolean; activity: Activity | null }): TabMark {
   return t.exited ? 'exited' : t.attention ? 'attention' : (t.activity ?? 'open');
 }

@@ -1,23 +1,26 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import Highlight from '../lib/Highlight.svelte';
   import Icon from '../lib/Icon.svelte';
-  import { markTitle, relativeTime, sparkPath, tabMark } from '../lib/format';
+  import { changesText, markTitle, relativeTime, sparkPath, tabMark } from '../lib/format';
+  import type { GitChanges } from '../lib/ipc';
   import { providerName } from '../lib/agents';
   import StatusDot from '../lib/StatusDot.svelte';
   import { appState } from '../lib/stores.svelte';
   import { isWaiting, peekLine, stateWord, triageGroup, triageOrder } from '../lib/triage';
-  import { activate, markDone, outputHistory, screenLines, sendText } from '../terminal/manager';
+  import { activate, focusActiveTerminal, markDone, outputHistory, queuePrompt, screenLines, sendText } from '../terminal/manager';
   import type { TabKey, TabSummary } from '../types';
 
   /** The sidebar's Open view: every tab, most urgent first, under a heading per state (#132). */
-  let { tabs, activeKey, query, contextFill, onClose }: {
+  let { tabs, activeKey, query, contextFill, changes, onClose }: {
     tabs: TabSummary[];
     activeKey: TabKey | null;
     query: string;
     /** How full each agent tab's context window is, 0..1. */
     contextFill: Map<TabKey, number>;
+    /** What each tab's agent has changed in its working tree; null outside git. */
+    changes: Record<TabKey, GitChanges | null>;
     /** Asks first when something is still running in the tab. */
     onClose: (key: TabKey) => void;
   } = $props();
@@ -39,6 +42,23 @@
     const hits = q ? tabs.filter((t) => `${t.title} ${projectName(t.projectKey)}`.toLowerCase().includes(q)) : tabs;
     return triageOrder(hits.map((t) => ({ ...t, mark: tabMark(t), group: triageGroup(tabMark(t), t.done) })));
   });
+
+  // --- queue: a message for a working agent, typed in when it stops (#158).
+  let queuing = $state<TabKey | null>(null);
+  let draft = $state('');
+  export async function startQueue(key: TabKey) {
+    queuing = key;
+    draft = tabs.find((t) => t.key === key)?.queued ?? '';
+    await tick();
+    document.getElementById(`queue-${key}`)?.focus();
+  }
+  function saveQueue(e: SubmitEvent) {
+    e.preventDefault();
+    if (queuing) queuePrompt(queuing, draft);
+    queuing = null;
+    // After the Enter's keypress, or the tab on screen gets an Enter too.
+    setTimeout(focusActiveTerminal);
+  }
 
   // --- broadcast: Ctrl+click picks tabs, the bar below types into all of them.
   let picked = $state(new Set<TabKey>());
@@ -89,7 +109,7 @@
     onclick={(e) => pick(e, tab.key)}
     onmousedown={(e) => { if (e.button === 1) e.preventDefault(); }}
     onauxclick={(e) => { if (e.button === 1) onClose(tab.key); }}
-    title="{tab.title} · {s} (Ctrl+click to pick for broadcast, middle-click to close)"
+    title={[`${tab.title} · ${s}`, changes[tab.key] && changesText(changes[tab.key]!), '(Ctrl+click to pick for broadcast, middle-click to close)'].filter(Boolean).join('\n')}
   >
     <StatusDot mark={tab.mark} title={s} />
     <span class="icon">{#if tab.provider}<ProviderIcon provider={tab.provider} />{:else}<Icon name="terminal" size={12} />{/if}</span>
@@ -99,9 +119,31 @@
     {#if !wait && graph}<svg class="spark" viewBox="0 0 60 10" preserveAspectRatio="none" aria-hidden="true"><path d={sparkPath((void now, outputHistory(tab.key)))} /></svg>{/if}
   </button>
   {#if wait && !tab.exited}
-    <button class="done-btn" onclick={() => markDone(tab.key)} aria-label="Mark {tab.title} done" title="Done: move it out of Waiting on you until it works again"><Icon name="check" size={12} /></button>
+    <button class="hover-btn" onclick={() => markDone(tab.key)} aria-label="Mark {tab.title} done" title="Done: move it out of Waiting on you until it works again"><Icon name="check" size={12} /></button>
+  {:else if tab.mark === 'working' && queuing !== tab.key}
+    <button class="hover-btn" onclick={() => startQueue(tab.key)} aria-label="Queue a message for {tab.title}" title="Type the next message; it is sent when the agent stops">Queue</button>
   {/if}
   </div>
+  {#if queuing === tab.key}
+    <form class="queue" onsubmit={saveQueue}>
+      <input
+        id="queue-{tab.key}"
+        bind:value={draft}
+        placeholder="Sent when {tab.provider ? providerName(tab.provider) : 'it'} stops, Enter to queue"
+        aria-label="Queue a message for {tab.title}"
+        spellcheck="false"
+        autocomplete="off"
+        onkeydown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); queuing = null; focusActiveTerminal(); } }}
+        onblur={() => (queuing = null)}
+      />
+    </form>
+  {:else if tab.queued}
+    <div class="queued">
+      <span title={tab.queued}>Next: {tab.queued}</span>
+      <button onclick={() => startQueue(tab.key)} aria-label="Edit the queued message" title="Edit"><Icon name="pencil" size={11} /></button>
+      <button onclick={() => queuePrompt(tab.key, null)} aria-label="Cancel the queued message" title="Cancel"><Icon name="close" size={11} /></button>
+    </div>
+  {/if}
 {/each}
 
 {#if live.length > 0}
@@ -230,7 +272,7 @@
   .item {
     position: relative;
   }
-  .done-btn {
+  .hover-btn {
     position: absolute;
     top: 3px;
     right: 6px;
@@ -241,16 +283,51 @@
     border-radius: 5px;
     background: var(--bg-chrome);
     color: var(--fg-dim);
+    font: inherit;
+    font-size: 11px;
+    line-height: 1.2;
     cursor: pointer;
     opacity: 0;
   }
-  .item:hover .done-btn,
-  .done-btn:focus-visible {
+  .item:hover .hover-btn,
+  .hover-btn:focus-visible {
     opacity: 1;
   }
-  .done-btn:hover {
-    border-color: var(--ok);
-    color: var(--ok);
+  .hover-btn:hover {
+    border-color: var(--accent);
+    color: var(--fg-bright);
+  }
+  .queue {
+    padding: 0 10px 6px 42px;
+  }
+  .queued {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 10px 6px 42px;
+    color: var(--accent);
+    font-size: 11px;
+  }
+  .queued span {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .queued button {
+    display: grid;
+    place-items: center;
+    padding: 2px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--fg-faint);
+    cursor: pointer;
+  }
+  .queued button:hover {
+    background: var(--bg-hover);
+    color: var(--fg-bright);
   }
   input {
     box-sizing: border-box;

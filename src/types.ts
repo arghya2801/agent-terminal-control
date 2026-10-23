@@ -83,6 +83,10 @@ export interface TabSummary {
   attention: boolean;
   /** Marked done in the Open view; back to waiting once the agent works again. */
   done: boolean;
+  /** Sent when the agent next stops working. */
+  queued: string | null;
+  /** The directory the shell started in; null for the default. */
+  cwd: string | null;
   /** Claude's or Codex's state; null for a plain shell. */
   activity: 'working' | 'idle' | 'interrupted' | null;
   projectKey: string | null;

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -198,6 +199,30 @@ func TestBackoffHonoursRetryAfterThenDoublesUpToHalfAnHour(t *testing.T) {
 	b.hit("", now)
 	if b.wait != 2*time.Minute {
 		t.Fatal("a success did not reset the wait", b.wait)
+	}
+}
+func TestGitChangesCountsTheDiffAndUntrackedFiles(t *testing.T) {
+	dir := t.TempDir()
+	a := NewApp(t.TempDir())
+	if c, e := a.GitChanges(dir); c != nil || e != nil {
+		t.Fatal("a plain folder reported changes")
+	}
+	run := func(args ...string) {
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@t"}, args...)...)
+		if out, e := cmd.CombinedOutput(); e != nil {
+			t.Fatal(string(out))
+		}
+	}
+	run("init", "-q")
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\n"), 0600)
+	run("add", ".")
+	run("commit", "-qm", "first")
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("two\nthree\n"), 0600)
+	os.WriteFile(filepath.Join(dir, "new file.txt"), []byte("x"), 0600)
+	c, e := a.GitChanges(dir)
+	got := core.Obj(c)
+	if got["files"] != int64(1) || got["insertions"] != int64(2) || got["deletions"] != int64(1) || got["untracked"] != int64(1) || e != nil {
+		t.Fatal(got, e)
 	}
 }
 func TestClaudeUsageHonorsIsolatedHome(t *testing.T) {

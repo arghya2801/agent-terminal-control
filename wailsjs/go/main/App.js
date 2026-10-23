@@ -26,6 +26,10 @@ export function FrontendReady(arg1) {
   return window['go']['main']['App']['FrontendReady'](arg1);
 }
 
+export function GitChanges(arg1) {
+  return window['go']['main']['App']['GitChanges'](arg1);
+}
+
 export function IndexScan(arg1) {
   return window['go']['main']['App']['IndexScan'](arg1);
 }

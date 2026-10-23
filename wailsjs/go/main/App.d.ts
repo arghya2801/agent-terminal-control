@@ -15,6 +15,8 @@ export function FolderDialog():Promise<any>;
 
 export function FrontendReady(arg1:string):Promise<void>;
 
+export function GitChanges(arg1:string):Promise<any>;
+
 export function IndexScan(arg1:boolean):Promise<any>;
 
 export function ListThemes():Promise<Array<any>>;

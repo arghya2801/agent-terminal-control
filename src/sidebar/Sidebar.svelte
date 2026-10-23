@@ -6,7 +6,7 @@
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import Icon from '../lib/Icon.svelte';
   import { onMount, tick } from 'svelte';
-  import { newerRelease, openUrl } from '../lib/ipc';
+  import { newerRelease, openUrl, type GitChanges } from '../lib/ipc';
   import { pageZoom } from '../lib/desktop';
   import { activate, focusActiveTerminal, markDone, splitWith } from '../terminal/manager';
   import { isWaiting } from '../lib/triage';
@@ -26,6 +26,7 @@
     activeKey,
     activeSessionId,
     contextFill,
+    changes,
     tabs,
     openProjectKeys,
     sessionMarks,
@@ -46,6 +47,8 @@
     activeSessionId: string | null;
     /** How full each agent tab's context window is, 0..1. */
     contextFill: Map<TabKey, number>;
+    /** What each tab's agent has changed in its working tree; null outside git. */
+    changes: Record<TabKey, GitChanges | null>;
     tabs: TabSummary[];
     openProjectKeys: Set<string>;
     /** Sessions with a live tab, by id. */
@@ -69,6 +72,7 @@
   } = $props();
 
   let refreshing = $state(false);
+  let openRows = $state<OpenList>();
   /** A newer release on GitHub, checked once per launch (#172). */
   let update = $state<{ version: string; url: string } | null>(null);
   onMount(() => {
@@ -290,6 +294,7 @@
         if (key) {
           menu = { x: e.clientX, y: e.clientY, items: [
             { label: 'Go to tab', icon: 'terminal', disabled: key === activeKey, run: () => activate(key) },
+            { label: 'Queue a message…', icon: 'pencil', disabled: !tabs.some((t) => t.key === key && tabMark(t) === 'working'), run: () => openRows?.startQueue(key) },
             { label: 'Mark done', icon: 'check', disabled: !tabs.some((t) => t.key === key && isWaiting(tabMark(t)) && !t.done), run: () => markDone(key) },
             { label: 'Rename…', icon: 'pencil', run: () => onRenameTab(key) },
             { label: 'Split beside the current tab', icon: 'split', disabled: key === activeKey, run: () => splitWith(key) },
@@ -301,7 +306,7 @@
         menu = { x: e.clientX, y: e.clientY, items: [{ label: 'New agent in…' }, ...items] };
       }}
     >
-      <OpenList {tabs} {activeKey} {query} {contextFill} onClose={onCloseTab} />
+      <OpenList bind:this={openRows} {tabs} {activeKey} {query} {contextFill} {changes} onClose={onCloseTab} />
     </div>
     <!-- Collapses to its header, like the Outline pane under VS Code's explorer. -->
     <section class="notes-pane" style={notesOpen ? `height: ${notesHeight}px` : undefined}>
