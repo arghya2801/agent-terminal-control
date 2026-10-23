@@ -417,7 +417,7 @@ func (idx *Index) Scan(settings Object, force bool) Object {
 			Files   map[string]*cachedSession
 		}{1, idx.cache})
 	}
-	sort.SliceStable(sessions, func(i, j int) bool { return number(sessions[i]["mtimeMs"]) > number(sessions[j]["mtimeMs"]) })
+	sort.Slice(sessions, func(i, j int) bool { return newerFirst(sessions[i], sessions[j]) })
 	unique := []Object{}
 	ids := map[string]bool{}
 	for _, s := range sessions {
@@ -429,6 +429,17 @@ func (idx *Index) Scan(settings Object, force bool) Object {
 	}
 	return BuildProjects(unique, settings)
 }
+
+// newerFirst orders sessions by last write, then by provider and id. Without the tiebreak,
+// sessions written in the same millisecond (a fresh checkout's fixtures) came out in the
+// order Go's map iteration visited the providers, which differs between scans.
+func newerFirst(a, b Object) bool {
+	if x, y := number(a["mtimeMs"]), number(b["mtimeMs"]); x != y {
+		return x > y
+	}
+	return Str(a["provider"])+":"+Str(a["id"]) < Str(b["provider"])+":"+Str(b["id"])
+}
+
 func BuildProjects(sessions []Object, settings Object) Object {
 	projects := map[string]Object{}
 	order := map[string]int64{}
@@ -493,7 +504,7 @@ func BuildProjects(sessions []Object, settings Object) Object {
 	out := []any{}
 	for _, p := range projects {
 		a := Arr(p["sessions"])
-		sort.SliceStable(a, func(i, j int) bool { return number(Obj(a[i])["mtimeMs"]) > number(Obj(a[j])["mtimeMs"]) })
+		sort.Slice(a, func(i, j int) bool { return newerFirst(Obj(a[i]), Obj(a[j])) })
 		out = append(out, p)
 	}
 	sort.Slice(out, func(i, j int) bool {
