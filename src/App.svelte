@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick, untrack } from 'svelte';
+  import { onMount, tick, untrack, type Snippet } from 'svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import ProviderPicker from './lib/ProviderPicker.svelte';
@@ -18,6 +18,7 @@
   import Icon from './lib/Icon.svelte';
   import Tooltip from './lib/Tooltip.svelte';
   import UsageChip from './tabs/UsageChip.svelte';
+  import HeaderStats from './tabs/HeaderStats.svelte';
   import { loadClaudeLimits } from './lib/limits.svelte';
   import {
     isPermissionGranted,
@@ -276,6 +277,7 @@
       title: displayTitle(t),
       exited: t.exited,
       attention: t.attention,
+      done: t.done,
       activity: t.activity,
       projectKey: t.projectKey,
       since: t.markSince,
@@ -466,19 +468,18 @@
     if (page === 'usage') page = null;
   }
 
-  /** What the pane header says about the focused tab: project, branch, state and for how long. */
+  /** What the pane header says about the focused tab: where it is, its state and for how long. */
   let now = $state(Date.now());
   const shown = $derived(tabs.find((t) => t.key === activeKey) ?? null);
-  const shownFacts = $derived.by(() => {
-    if (!shown) return '';
-    const sessionId = tabToSession.get(shown.key);
-    const branch = appState.index.projects.flatMap((p) => p.sessions).find((s) => sessionKey(s) === sessionId)?.gitBranch;
-    const state = stateWord(tabMark(shown));
-    return [
-      appState.index.projects.find((p) => p.key === shown.projectKey)?.name,
-      branch !== 'main' && branch,
-      state && `${state} ${relativeTime(shown.since, now)}`,
-    ].filter(Boolean).join(', ');
+  const shownSession = $derived(shown ? (tabToSession.get(shown.key) ?? null) : null);
+  const shownWhere = $derived.by(() => {
+    if (!shown) return [];
+    const branch = appState.index.projects.flatMap((p) => p.sessions).find((s) => sessionKey(s) === shownSession)?.gitBranch;
+    return [appState.index.projects.find((p) => p.key === shown.projectKey)?.name, branch].filter((x): x is string => !!x);
+  });
+  const shownState = $derived.by(() => {
+    const state = shown ? stateWord(tabMark(shown)) : '';
+    return state && `${state} ${relativeTime(shown!.since, now)}`;
   });
 
   function startRename(key: TabKey) {
@@ -854,11 +855,12 @@
   </div>
 {/snippet}
 
-{#snippet barEnd()}
+{#snippet barEnd(actions?: Snippet)}
   {#if currentZoom() !== 1}
     <button class="bar-btn zoom" onclick={() => adjustZoom(0)} title="Reset zoom (Ctrl+0)">{zoomLabel(currentZoom())}</button>
   {/if}
   <UsageChip active={page === 'usage'} onOpen={openUsage} onClose={closeUsage} />
+  {@render actions?.()}
   <button class="bar-btn" onclick={moreMenu} title="Usage, settings and shortcuts" aria-label="More"><Icon name="more" /></button>
 {/snippet}
 
@@ -931,21 +933,26 @@
         <span class="shown" title="{shown.title} (double-click or Ctrl+Shift+R to rename)">
           <StatusDot {mark} title={markTitle(mark, providerName(shown.provider ?? 'claude'))} />
           {#if shown.provider}<ProviderIcon provider={shown.provider} />{:else}<Icon name="terminal" size={12} />{/if}
+          {#each shownWhere as part}<span class="where">{part}</span><span class="sep">/</span>{/each}
           {#if renamingTab === shown.key}
             <InlineRename value={shown.title} onDone={finishRename} onCancel={() => finishRename()} />
           {:else}
             <!-- svelte-ignore a11y_no_static_element_interactions (Ctrl+Shift+R is the keyboard way) -->
             <b class:exited={shown.exited} ondblclick={() => startRename(shown.key)}>{shown.title}</b>
           {/if}
-          <span class="facts">{shownFacts}</span>
+          {#if shownState}<span class="facts">{shownState}</span>{/if}
         </span>
-        <button class="bar-btn" onclick={() => requestClose(shown.key)} title="Close {shown.title} (Ctrl+Shift+W)" aria-label="Close {shown.title}"><Icon name="close" size={12} /></button>
+        <div class="grow"></div>
+        <HeaderStats tabKey={shown.key} sessionKey={shownSession} working={mark === 'working'} />
       {:else}
         <span class="shown facts">Nothing open</span>
+        <div class="grow"></div>
       {/if}
-      {@render barNew()}
-      <div class="grow"></div>
-      {@render barEnd()}
+      {#snippet actions()}
+        {@render barNew()}
+        {#if shown}<button class="bar-btn" onclick={() => requestClose(shown.key)} title="Close {shown.title} (Ctrl+Shift+W)" aria-label="Close {shown.title}"><Icon name="close" size={12} /></button>{/if}
+      {/snippet}
+      {@render barEnd(actions)}
     </header>
     {/if}
     <div class="panes" bind:this={wrapper}>
@@ -1066,6 +1073,16 @@
   .shown b.exited {
     opacity: 0.6;
     text-decoration: line-through;
+  }
+  .where,
+  .sep {
+    flex: none;
+    color: var(--fg-dim);
+    font-weight: 400;
+  }
+  .sep {
+    margin: 0 -2px;
+    color: var(--fg-faint);
   }
   .facts {
     min-width: 0;

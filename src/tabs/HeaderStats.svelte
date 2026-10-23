@@ -1,0 +1,69 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { formatTokens, monetary, modelLabel, sessionStats } from '../lib/costs';
+  import { sparkPath } from '../lib/format';
+  import { loadCosts, planState } from '../lib/limits.svelte';
+  import { outputHistory } from '../terminal/manager';
+  import type { TabKey } from '../types';
+
+  /** The pane header's right side: the session's model, cost and cache use, and the tab's output graph. */
+  let { tabKey, sessionKey, working }: { tabKey: TabKey; sessionKey: string | null; working: boolean } = $props();
+
+  const stats = $derived(sessionKey ? sessionStats(planState.costRows, sessionKey) : null);
+
+  let now = $state(Date.now());
+  onMount(() => {
+    const clock = setInterval(() => (now = Date.now()), 5_000);
+    return () => clearInterval(clock);
+  });
+  // ponytail: every poll ships all cost rows over IPC; ask Go for one session's totals if that gets slow.
+  $effect(() => {
+    if (!sessionKey) return;
+    void loadCosts();
+    const poll = setInterval(loadCosts, 60_000);
+    return () => clearInterval(poll);
+  });
+</script>
+
+<div class="stats">
+  {#if stats}
+    <span title="Model used most recently">{modelLabel(stats.model)}</span>
+    <span title="This session's cost at API prices">{monetary(stats)}</span>
+    <span title="Tokens this session">{formatTokens(stats.tokens)} <small>tokens</small></span>
+    <span title="Share of input read from the prompt cache">{Math.round(stats.cacheShare * 100)}% <small>cache</small></span>
+  {/if}
+  <svg class:working viewBox="0 0 60 10" preserveAspectRatio="none" aria-label="Output, last 5 minutes"><path d={sparkPath((void now, outputHistory(tabKey)))} /></svg>
+</div>
+
+<style>
+  .stats {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 14px;
+    padding: 0 10px;
+    color: var(--fg-dim);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  small {
+    color: var(--fg-faint);
+    font-size: inherit;
+  }
+  svg {
+    width: 60px;
+    height: 10px;
+    border-bottom: 1px solid var(--border);
+    stroke: var(--fg-faint);
+    stroke-width: 1.5;
+  }
+  svg.working {
+    stroke: var(--warn);
+  }
+  @media (max-width: 900px) {
+    .stats {
+      display: none;
+    }
+  }
+</style>

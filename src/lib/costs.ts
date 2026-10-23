@@ -194,6 +194,12 @@ export function formatUsd(n: number): string {
   return n >= 100 ? `$${n.toFixed(0)}` : `$${n.toFixed(2)}`;
 }
 
+/** `claude-haiku-4-5-20251001` as `Haiku 4.5`; other providers' names as they are. */
+export function modelLabel(model: string): string {
+  const m = /^claude-([a-z]+)((?:-\d{1,2})+)(?:-\d{8})?$/.exec(model);
+  return m ? `${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2].slice(1).replace(/-/g, '.')}` : model;
+}
+
 export function formatTokens(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
   if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
@@ -415,6 +421,8 @@ export interface SessionStats {
   /** First and last UTC hour with usage; transcripts carry no finer duration. */
   firstHour: string;
   lastHour: string;
+  /** The model of the latest hour. */
+  model: string;
   byModel: { model: string; input: number; output: number; cacheRead: number; cacheWrite: number; cost: number | null }[];
 }
 
@@ -447,6 +455,7 @@ export function sessionStats(rows: CostRow[], key: string): SessionStats | null 
     cacheShare: fed ? cacheRead / fed : 0,
     firstHour: hours[0],
     lastHour: hours[hours.length - 1],
+    model: mine.reduce((a, r) => (r.hour > a.hour ? r : a)).model,
     byModel: [...models.values()].sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0)),
   };
 }

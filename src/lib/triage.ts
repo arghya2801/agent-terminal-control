@@ -8,16 +8,21 @@ export interface Triaged {
   mark: TabMark;
   /** When the tab entered `mark`. */
   since: number;
+  /** Marked done by the user: waiting, but not on you. Cleared when the agent works again. */
+  done?: boolean;
 }
+
+/** Done agents sort after shells, before exited tabs. */
+const rank = (t: Triaged) => (t.done && isWaiting(t.mark) ? 4.5 : URGENCY[t.mark]);
 
 /** Urgency, then whoever has been in that state longest. Stable for equal entries. */
 export function triageOrder<T extends Triaged>(tabs: T[]): T[] {
-  return [...tabs].sort((a, b) => URGENCY[a.mark] - URGENCY[b.mark] || a.since - b.since);
+  return [...tabs].sort((a, b) => rank(a) - rank(b) || a.since - b.since);
 }
 
 /** The agent that has waited longest for you, other than the one on screen. */
 export function nextWaiting<T extends Triaged>(tabs: T[], activeKey: string | null): T | null {
-  return triageOrder(tabs).find((t) => t.key !== activeKey && isWaiting(t.mark)) ?? null;
+  return triageOrder(tabs).find((t) => t.key !== activeKey && isWaiting(t.mark) && !t.done) ?? null;
 }
 
 /** Blocked until you answer: finished, stopped or idle. */
@@ -26,8 +31,8 @@ export function isWaiting(mark: TabMark): boolean {
 }
 
 /** The Open view's section for a mark. Rows in triage order keep each section together. */
-export function triageGroup(mark: TabMark): string {
-  return isWaiting(mark) ? 'Waiting on you' : { working: 'Working', open: 'Shells', exited: 'Exited' }[mark as 'working' | 'open' | 'exited'];
+export function triageGroup(mark: TabMark, done = false): string {
+  return isWaiting(mark) ? (done ? 'Done' : 'Waiting on you') : { working: 'Working', open: 'Shells', exited: 'Exited' }[mark as 'working' | 'open' | 'exited'];
 }
 
 /** What the row says about how long it has been in its state. */

@@ -69,6 +69,8 @@ export interface Tab {
   claudeName: string | null;
   /** Something happened in this tab while it was in the background; cleared on focus. */
   attention: boolean;
+  /** Moved out of "Waiting on you" by the user; cleared when the agent starts working. */
+  done: boolean;
   /** Canonical key of the sidebar project this tab belongs to, if any. */
   projectKey: string | null;
   /** When the tab was opened. Identifies which session Claude went on to create. */
@@ -169,6 +171,7 @@ function notify() {
     if (mark !== t.mark) {
       t.mark = mark;
       t.markSince = now;
+      if (mark === 'working') t.done = false;
       if (mosaic) layout();
     }
   }
@@ -369,6 +372,7 @@ export async function openTab(
     activity: null,
     claudeName: null,
     attention: false,
+    done: false,
     projectKey,
     startedAt: Date.now(),
     lastOutputAt: Date.now(),
@@ -766,6 +770,14 @@ export function sendText(key: TabKey, text: string) {
   const id = tab.ptyId;
   void ptyWrite(id, text).then(() => setTimeout(() => void ptyWrite(id, '\r'), 50));
   // Answered: no longer waiting on you, though it was never shown.
+  tab.attention = false;
+  notify();
+}
+
+export function markDone(key: TabKey) {
+  const tab = tabs.get(key);
+  if (!tab) return;
+  tab.done = true;
   tab.attention = false;
   notify();
 }

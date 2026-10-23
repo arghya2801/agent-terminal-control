@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { chipLimit, codexLimits, planLimits, resetsIn, resetsShort, type PlanLimit } from '../lib/plan';
   import { formatUsd } from '../lib/costs';
-  import { loadCodexLimits, loadTodaySpend, planState } from '../lib/limits.svelte';
+  import { loadCodexLimits, loadCosts, planState } from '../lib/limits.svelte';
   import { appState, refreshMs } from '../lib/stores.svelte';
 
   /**
@@ -42,7 +42,7 @@
       if (!planState.codexMissing && Date.now() - planState.codexAt > refreshMs('codex')) void loadCodexLimits();
       if (Date.now() - spendAt > SPEND_STALE) {
         spendAt = Date.now();
-        void loadTodaySpend();
+        void loadCosts();
       }
     }, peek ? 0 : PEEK_DELAY);
   }
@@ -79,10 +79,8 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="wrap" onmouseenter={enter} onmouseleave={leave}>
     <button class="chip" class:active onclick={toggle} aria-label="{top.label}: {Math.round(top.percent)}% used, {resetsIn(top.resetsAt)}. {active ? 'Close' : 'Open'} usage">
-      <span class="stack">
-        <span class="pct {level(top.percent)}">{Math.round(top.percent)}%</span>
-        <span class="meter"><span class="fill {level(top.percent)}" style="width: {top.percent}%"></span></span>
-      </span>
+      <span class="pct {level(top.percent)}">{Math.round(top.percent)}%</span>
+      <span class="meter"><span class="fill {level(top.percent)}" style="width: {top.percent}%"></span></span>
       {#if reset}<span class="reset">{reset}</span>{/if}
     </button>
     {#if peek}
@@ -130,11 +128,6 @@
   .chip.active {
     background: var(--bg-hover);
   }
-  .stack {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
   .reset {
     color: var(--fg-faint);
     font-size: 11px;
@@ -143,7 +136,6 @@
   }
   .chip .pct {
     font-size: 11px;
-    line-height: 1;
   }
   .chip .meter {
     width: 32px;

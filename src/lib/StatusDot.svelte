@@ -15,11 +15,10 @@
     border-radius: 50%;
     transition: background-color var(--enter), box-shadow var(--enter);
   }
-  .open {
-    box-shadow: inset 0 0 0 1px var(--fg-faint);
-  }
+  /* Idle and seen asks nothing of you, so it looks like a plain shell: colour means act or wait. */
+  .open,
   .idle {
-    background: var(--ok);
+    box-shadow: inset 0 0 0 1px var(--fg-faint);
   }
   .interrupted {
     background: var(--danger);

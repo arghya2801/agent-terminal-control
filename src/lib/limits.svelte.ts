@@ -1,5 +1,6 @@
 import { claudeUsage, codexUsage, usageCosts } from './ipc';
 import { dailyTotals, localDay } from './costs';
+import type { CostRow } from '../types';
 
 /**
  * Plan limits for the whole app. The tab bar's chip, its hover peek and the usage page
@@ -18,6 +19,8 @@ export const planState = $state({
   codexAt: 0,
   /** Today's API-equivalent spend, for the peek; null until read or when unreadable. */
   today: null as number | null,
+  /** Every transcript's usage by hour, for the header's session stats. */
+  costRows: [] as CostRow[],
 });
 
 export async function loadClaudeLimits() {
@@ -52,9 +55,10 @@ export async function loadCodexLimits() {
   }
 }
 
-export async function loadTodaySpend() {
+export async function loadCosts() {
   try {
-    planState.today = dailyTotals(await usageCosts(), 'cost').get(localDay(new Date())) ?? 0;
+    planState.costRows = await usageCosts();
+    planState.today = dailyTotals(planState.costRows, 'cost').get(localDay(new Date())) ?? 0;
   } catch {
     planState.today = null;
   }

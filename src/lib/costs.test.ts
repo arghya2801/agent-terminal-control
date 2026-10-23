@@ -6,6 +6,7 @@ import {
   streaks,
   usageBlocks,
   sessionStats,
+  modelLabel,
   monetary,
   formatTokens,
   formatUsd,
@@ -355,6 +356,13 @@ describe('sessionStats', () => {
     expect(s.byModel.map((m) => m.model)).toEqual(['claude-opus-5', 'claude-haiku-4-5']);
     expect(s.cacheShare).toBeCloseTo(30 / 50);
     expect([s.firstHour, s.lastHour]).toEqual(['2026-09-10T12', '2026-09-10T14']);
+    expect(s.model).toBe('claude-haiku-4-5');
     expect(sessionStats(rows, 'codex:s1')).toBeNull();
+  });
+});
+
+describe('modelLabel', () => {
+  it('shortens Claude model ids and leaves others alone', () => {
+    expect(['claude-opus-5', 'claude-haiku-4-5-20251001', 'gpt-5.1-codex'].map(modelLabel)).toEqual(['Opus 5', 'Haiku 4.5', 'gpt-5.1-codex']);
   });
 });

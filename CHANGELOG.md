@@ -6,6 +6,16 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Added
+- Mark a waiting agent done with the check on its row, or from its right-click menu. It moves to a Done section below Shells and comes back to Waiting on you the next time it works and stops.
+
+### Changed
+- The Reply button is gone from the Open view.
+- The usage chip puts its percent, meter and reset time on one line.
+- The pane header reads as a path: project / branch / tab name, then its state. The branch shows on `main` too.
+- The header's right side shows the session's model, cost, tokens and cache share, and the tab's 5-minute output graph. New and close moved next to the usage chip, so the name no longer looks like a tab.
+- An idle agent you have already seen gets a hollow ring instead of a green dot. Colour now means it needs you or is working.
+
 ## [0.6.0] - 2026-10-22
 
 ### Changed
