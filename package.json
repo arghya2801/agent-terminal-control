@@ -15,6 +15,7 @@
     "lint": "npm run lint:go && npm run check",
     "check": "svelte-check --tsconfig ./tsconfig.app.json --config ./svelte.config.js",
     "test:e2e": "node e2e/run.mjs",
+    "bindings": "node -e \"import('./scripts/wails-cli.mjs').then((m) => m.runWails(['generate', 'module']))\"",
     "desktop:build": "node scripts/build.mjs",
     "desktop:dev": "node scripts/dev.mjs",
     "test:go": "go test ./...",

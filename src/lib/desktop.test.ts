@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Channel, invoke, listen } from './desktop';
+import { Channel, listen } from './desktop';
+import { indexRefresh } from './ipc';
 
 afterEach(() => { delete (window as any).go; delete (window as any).runtime; });
 describe('Wails desktop transport', () => {
-  it('passes command arguments and returns host results', async () => {
+  it('passes command arguments to the bound method and returns its result', async () => {
     const call = vi.fn().mockResolvedValue({ projects: [] });
-    (window as any).go = { main: { App: { Invoke: call } } };
-    expect(await invoke('index_refresh', { force: true })).toEqual({ projects: [] });
-    expect(call).toHaveBeenCalledWith('index_refresh', { force: true });
+    (window as any).go = { main: { App: { IndexScan: call } } };
+    expect(await indexRefresh(true)).toEqual({ projects: [] });
+    expect(call).toHaveBeenCalledWith(true);
   });
-  it('rejects when the backend is unavailable', async () => { await expect(invoke('settings_get')).rejects.toThrow('desktop backend'); });
   it('delivers event payloads and unsubscribes', async () => {
     let receive: (value: unknown) => void = () => {};
     const off = vi.fn();

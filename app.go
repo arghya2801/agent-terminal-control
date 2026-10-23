@@ -275,207 +275,252 @@ func (a *App) session(id string) (*pty.Session, error) {
 }
 
 // Invoke is the single reviewed desktop command boundary used by the typed frontend.
-func (a *App) Invoke(command string, args core.Object) (any, error) {
-	s := a.getSettings()
-	str := func(k string) string { return core.Str(args[k]) }
-	switch command {
-	case "frontend_ready":
-		a.mu.Lock()
-		old := []*pty.Session{}
-		if a.pageID != str("pageID") {
-			for _, p := range a.ptys {
-				old = append(old, p)
-			}
-			a.ptys = map[string]*pty.Session{}
-			a.pageID = str("pageID")
+// The frontend's command surface. Wails binds every exported method on App and generates
+// typed TypeScript for it in wailsjs/go/main, so a wrong name or argument fails the build.
+
+// FrontendReady kills the shells of a page that was replaced by a full reload.
+func (a *App) FrontendReady(pageID string) {
+	a.mu.Lock()
+	old := []*pty.Session{}
+	if a.pageID != pageID {
+		for _, p := range a.ptys {
+			old = append(old, p)
 		}
-		a.mu.Unlock()
-		for _, p := range old {
-			p.Kill()
-			select {
-			case <-p.Done():
-			case <-time.After(2 * time.Second):
-			}
+		a.ptys = map[string]*pty.Session{}
+		a.pageID = pageID
+	}
+	a.mu.Unlock()
+	for _, p := range old {
+		p.Kill()
+		select {
+		case <-p.Done():
+		case <-time.After(2 * time.Second):
 		}
-		return nil, nil
-	case "settings_get":
-		return s, nil
-	case "settings_set":
-		a.diskMu.Lock()
-		defer a.diskMu.Unlock()
-		data, err := json.Marshal(args["settings"])
-		if err != nil {
-			return nil, err
-		}
-		next, err := core.ParseSettings(data)
-		if err != nil {
-			return nil, err
-		}
-		if e := core.Save(filepath.Join(a.config, "settings.json"), next); e != nil {
-			return nil, e
-		}
-		a.mu.Lock()
-		a.settings = next
-		a.lastSettings = jsonText(next)
-		a.mu.Unlock()
-		if core.ProjectionChanged(s, next, a.config) {
-			a.arm()
-			a.emit("index://updated", a.index.Scan(next, false))
-		}
-		return nil, nil
-	case "notes_get":
-		a.mu.Lock()
-		defer a.mu.Unlock()
-		return a.notes, nil
-	case "notes_set":
-		a.diskMu.Lock()
-		defer a.diskMu.Unlock()
-		text, ok := args["text"].(string)
-		if !ok {
-			return nil, fmt.Errorf("notes must be text")
-		}
-		if e := core.WriteFile(filepath.Join(a.config, "notes.md"), []byte(text)); e != nil {
-			return nil, e
-		}
-		a.mu.Lock()
-		a.notes = text
-		a.mu.Unlock()
-		return nil, nil
-	case "index_snapshot", "index_refresh":
-		return a.index.Scan(s, core.Bool(args["force"])), nil
-	case "usage_costs":
-		return a.costs.Rows(s, a.config), nil
-	case "newer_release":
-		return newerRelease(appVersion), nil
-	case "usage_context":
-		return a.costs.Context(s, a.config), nil
-	case "agent_command":
-		provider := str("provider")
-		if provider != "claude" && provider != "codex" {
-			return nil, fmt.Errorf("unknown provider: %s", provider)
-		}
-		return core.AgentCommand(s, provider, str("sessionId"), core.Bool(args["chat"])), nil
-	case "pty_spawn":
-		var opts pty.Options
-		b, _ := json.Marshal(args["opts"])
-		if e := json.Unmarshal(b, &opts); e != nil {
-			return nil, e
-		}
-		channel := str("channel")
-		if channel == "" {
-			return nil, fmt.Errorf("missing PTY event channel")
-		}
-		id := pty.ID()
-		p, e := pty.Spawn(opts, func(event pty.Event) { a.emit(channel, event) })
-		if e != nil {
-			return nil, e
-		}
-		a.mu.Lock()
-		a.ptys[id] = p
-		a.mu.Unlock()
-		return id, nil
-	case "pty_write", "pty_resize", "pty_ack", "pty_kill", "pty_busy", "pty_stats":
-		p, e := a.session(str("id"))
-		if e != nil {
-			return nil, e
-		}
-		switch command {
-		case "pty_write":
-			return nil, p.Write(str("data"))
-		case "pty_resize":
-			return nil, p.Resize(int(core.Num(args["cols"])), int(core.Num(args["rows"])))
-		case "pty_ack":
-			p.Ack(uint64(max(0, core.Num(args["bytes"]))))
-		case "pty_kill":
-			p.Kill()
-			a.mu.Lock()
-			delete(a.ptys, str("id"))
-			a.mu.Unlock()
-		case "pty_busy":
-			return p.Busy(), nil
-		case "pty_stats":
-			return p.Stats(), nil
-		}
-		return nil, nil
-	case "scratch_dir":
-		dir := core.Scratch(s, a.config)
-		return dir, os.MkdirAll(dir, 0700)
-	case "list_themes":
-		out := []any{}
-		files, _ := os.ReadDir(filepath.Join(a.config, "themes"))
-		for _, f := range files {
-			if f.IsDir() || !strings.EqualFold(filepath.Ext(f.Name()), ".json") {
-				continue
-			}
-			b, e := os.ReadFile(filepath.Join(a.config, "themes", f.Name()))
-			var palette any
-			if e == nil && json.Unmarshal(b, &palette) == nil {
-				out = append(out, core.Object{"stem": strings.TrimSuffix(f.Name(), filepath.Ext(f.Name())), "palette": palette})
-			}
-		}
-		return out, nil
-	case "open_settings_file":
-		path := filepath.Join(a.config, "settings.json")
-		if _, e := os.Stat(path); os.IsNotExist(e) {
-			if e = core.Save(path, s); e != nil {
-				return nil, e
-			}
-		}
-		return nil, openTarget(path)
-	case "open_in_explorer":
-		path := str("path")
-		// ShellExecute "open" on a file runs it; folders are all the sidebar opens.
-		if st, e := os.Stat(path); e != nil {
-			return nil, e
-		} else if !st.IsDir() {
-			return nil, fmt.Errorf("not a folder: %s", path)
-		}
-		return nil, openTarget(path)
-	case "open_url":
-		url := str("url")
-		if !validURL(url) {
-			return nil, fmt.Errorf("not a web link: %s", url)
-		}
-		return nil, openTarget(url)
-	case "write_text_file":
-		return nil, os.WriteFile(str("path"), []byte(str("contents")), 0600)
-	case "save_dialog":
-		opts := core.Obj(args["options"])
-		filters := []wr.FileFilter{}
-		for _, v := range core.Arr(opts["filters"]) {
-			f := core.Obj(v)
-			patterns := []string{}
-			for _, ext := range core.Arr(f["extensions"]) {
-				patterns = append(patterns, "*."+core.Str(ext))
-			}
-			filters = append(filters, wr.FileFilter{DisplayName: core.Str(f["name"]), Pattern: strings.Join(patterns, ";")})
-		}
-		path, e := wr.SaveFileDialog(a.ctx, wr.SaveDialogOptions{DefaultFilename: core.Str(opts["defaultPath"]), Filters: filters})
-		return core.Nullable(path), e
-	case "folder_dialog":
-		path, e := wr.OpenDirectoryDialog(a.ctx, wr.OpenDialogOptions{Title: "Open a folder"})
-		return core.Nullable(path), e
-	case "notification_permission":
-		return wr.CheckNotificationAuthorization(a.ctx)
-	case "notification_request":
-		return wr.RequestNotificationAuthorization(a.ctx)
-	case "notification_send":
-		o := core.Obj(args["options"])
-		return nil, wr.SendNotification(a.ctx, wr.NotificationOptions{Title: core.Str(o["title"]), Body: core.Str(o["body"])})
-	case "claude_usage":
-		return claudeUsage()
-	case "codex_usage":
-		return a.limits.read(s)
-	case "codex_usage_stop":
-		a.limits.stop()
-		return nil, nil
-	case "open_devtools":
-		// Wails handles Ctrl+Shift+F12 natively in debug builds.
-		return nil, nil
-	default:
-		return nil, fmt.Errorf("unknown command: %s", command)
 	}
 }
+
+func (a *App) SettingsGet() core.Object { return a.getSettings() }
+
+func (a *App) SettingsSet(settings any) error {
+	a.diskMu.Lock()
+	defer a.diskMu.Unlock()
+	s := a.getSettings()
+	data, err := json.Marshal(settings)
+	if err != nil {
+		return err
+	}
+	next, err := core.ParseSettings(data)
+	if err != nil {
+		return err
+	}
+	if e := core.Save(filepath.Join(a.config, "settings.json"), next); e != nil {
+		return e
+	}
+	a.mu.Lock()
+	a.settings = next
+	a.lastSettings = jsonText(next)
+	a.mu.Unlock()
+	if core.ProjectionChanged(s, next, a.config) {
+		a.arm()
+		a.emit("index://updated", a.index.Scan(next, false))
+	}
+	return nil
+}
+
+func (a *App) NotesGet() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.notes
+}
+
+func (a *App) NotesSet(text string) error {
+	a.diskMu.Lock()
+	defer a.diskMu.Unlock()
+	if e := core.WriteFile(filepath.Join(a.config, "notes.md"), []byte(text)); e != nil {
+		return e
+	}
+	a.mu.Lock()
+	a.notes = text
+	a.mu.Unlock()
+	return nil
+}
+
+// IndexScan returns the sidebar's projects and sessions; force rereads every transcript.
+func (a *App) IndexScan(force bool) any { return a.index.Scan(a.getSettings(), force) }
+
+func (a *App) UsageCosts() []any { return a.costs.Rows(a.getSettings(), a.config) }
+
+func (a *App) UsageContext() core.Object { return a.costs.Context(a.getSettings(), a.config) }
+
+func (a *App) NewerRelease() any { return newerRelease(appVersion) }
+
+func (a *App) AgentCommand(provider, sessionID string, chat bool) (string, error) {
+	if provider != "claude" && provider != "codex" {
+		return "", fmt.Errorf("unknown provider: %s", provider)
+	}
+	return core.AgentCommand(a.getSettings(), provider, sessionID, chat), nil
+}
+
+// PtySpawn starts a shell and streams its output as events on channel.
+func (a *App) PtySpawn(opts pty.Options, channel string) (string, error) {
+	if channel == "" {
+		return "", fmt.Errorf("missing PTY event channel")
+	}
+	id := pty.ID()
+	p, e := pty.Spawn(opts, func(event pty.Event) { a.emit(channel, event) })
+	if e != nil {
+		return "", e
+	}
+	a.mu.Lock()
+	a.ptys[id] = p
+	a.mu.Unlock()
+	return id, nil
+}
+
+func (a *App) PtyWrite(id, data string) error {
+	p, e := a.session(id)
+	if e != nil {
+		return e
+	}
+	return p.Write(data)
+}
+
+func (a *App) PtyResize(id string, cols, rows int) error {
+	p, e := a.session(id)
+	if e != nil {
+		return e
+	}
+	return p.Resize(cols, rows)
+}
+
+func (a *App) PtyAck(id string, bytes int64) error {
+	p, e := a.session(id)
+	if e != nil {
+		return e
+	}
+	p.Ack(uint64(max(0, bytes)))
+	return nil
+}
+
+func (a *App) PtyKill(id string) error {
+	p, e := a.session(id)
+	if e != nil {
+		return e
+	}
+	p.Kill()
+	a.mu.Lock()
+	delete(a.ptys, id)
+	a.mu.Unlock()
+	return nil
+}
+
+// PtyBusy names what is still running in the shell, or is null.
+func (a *App) PtyBusy(id string) (any, error) {
+	p, e := a.session(id)
+	if e != nil {
+		return nil, e
+	}
+	return p.Busy(), nil
+}
+
+func (a *App) PtyStats(id string) (pty.Stats, error) {
+	p, e := a.session(id)
+	if e != nil {
+		return pty.Stats{}, e
+	}
+	return p.Stats(), nil
+}
+
+func (a *App) ScratchDir() (string, error) {
+	dir := core.Scratch(a.getSettings(), a.config)
+	return dir, os.MkdirAll(dir, 0700)
+}
+
+func (a *App) ListThemes() []any {
+	out := []any{}
+	files, _ := os.ReadDir(filepath.Join(a.config, "themes"))
+	for _, f := range files {
+		if f.IsDir() || !strings.EqualFold(filepath.Ext(f.Name()), ".json") {
+			continue
+		}
+		b, e := os.ReadFile(filepath.Join(a.config, "themes", f.Name()))
+		var palette any
+		if e == nil && json.Unmarshal(b, &palette) == nil {
+			out = append(out, core.Object{"stem": strings.TrimSuffix(f.Name(), filepath.Ext(f.Name())), "palette": palette})
+		}
+	}
+	return out
+}
+
+func (a *App) OpenSettingsFile() error {
+	path := filepath.Join(a.config, "settings.json")
+	if _, e := os.Stat(path); os.IsNotExist(e) {
+		if e = core.Save(path, a.getSettings()); e != nil {
+			return e
+		}
+	}
+	return openTarget(path)
+}
+
+func (a *App) OpenInExplorer(path string) error {
+	// ShellExecute "open" on a file runs it; folders are all the sidebar opens.
+	if st, e := os.Stat(path); e != nil {
+		return e
+	} else if !st.IsDir() {
+		return fmt.Errorf("not a folder: %s", path)
+	}
+	return openTarget(path)
+}
+
+func (a *App) OpenURL(url string) error {
+	if !validURL(url) {
+		return fmt.Errorf("not a web link: %s", url)
+	}
+	return openTarget(url)
+}
+
+func (a *App) WriteTextFile(path, contents string) error {
+	return os.WriteFile(path, []byte(contents), 0600)
+}
+
+type FileFilter struct {
+	Name       string   `json:"name"`
+	Extensions []string `json:"extensions"`
+}
+
+// SaveDialog returns the chosen path, or null when cancelled.
+func (a *App) SaveDialog(defaultPath string, filters []FileFilter) (any, error) {
+	wf := []wr.FileFilter{}
+	for _, f := range filters {
+		patterns := []string{}
+		for _, ext := range f.Extensions {
+			patterns = append(patterns, "*."+ext)
+		}
+		wf = append(wf, wr.FileFilter{DisplayName: f.Name, Pattern: strings.Join(patterns, ";")})
+	}
+	path, e := wr.SaveFileDialog(a.ctx, wr.SaveDialogOptions{DefaultFilename: defaultPath, Filters: wf})
+	return core.Nullable(path), e
+}
+
+// FolderDialog returns the chosen folder, or null when cancelled.
+func (a *App) FolderDialog() (any, error) {
+	path, e := wr.OpenDirectoryDialog(a.ctx, wr.OpenDialogOptions{Title: "Open a folder"})
+	return core.Nullable(path), e
+}
+
+func (a *App) NotificationPermission() (bool, error) { return wr.CheckNotificationAuthorization(a.ctx) }
+
+func (a *App) NotificationRequest() (bool, error) { return wr.RequestNotificationAuthorization(a.ctx) }
+
+func (a *App) NotificationSend(title, body string) error {
+	return wr.SendNotification(a.ctx, wr.NotificationOptions{Title: title, Body: body})
+}
+
+func (a *App) ClaudeUsage() (any, error) { return claudeUsage() }
+
+func (a *App) CodexUsage() (any, error) { return a.limits.read(a.getSettings()) }
+
+func (a *App) CodexUsageStop() { a.limits.stop() }
 
 // newerRelease is the latest GitHub release when it is newer than the running build, else
 // nil. Offline or rate-limited simply means no notice.

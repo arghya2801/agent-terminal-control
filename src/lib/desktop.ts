@@ -1,15 +1,9 @@
-/** Desktop transport. The UI talks to Go through one typed command boundary. */
+/** Desktop transport: Wails events, window chrome, and the dialogs and notifications. */
+import * as App from '../../wailsjs/go/main/App';
 import type { PtyEvent } from '../types';
 
 type Runtime = { EventsOn(name: string, callback: (value: unknown) => void): () => void; WindowSetLightTheme(): void; WindowSetDarkTheme(): void };
-type Host = Window & { go?: { main: { App: { Invoke(command: string, args: Record<string, unknown>): Promise<unknown> } } }; runtime?: Runtime };
-const host = () => window as Host;
-
-export function invoke<T = void>(command: string, args: Record<string, unknown> = {}): Promise<T> {
-  const api = host().go?.main.App;
-  if (!api) return Promise.reject(new Error('The ATC desktop backend is unavailable. Start the app with Wails.'));
-  return api.Invoke(command, args) as Promise<T>;
-}
+const host = () => window as Window & { runtime?: Runtime };
 
 export class Channel<T> {
   readonly name = `pty:${crypto.randomUUID()}`;
@@ -50,15 +44,15 @@ export function pageZoom(): number {
   return Number(document.documentElement.style.zoom) || 1;
 }
 export function save(options: { defaultPath: string; filters: { name: string; extensions: string[] }[] }): Promise<string | null> {
-  return invoke('save_dialog', { options });
+  return App.SaveDialog(options.defaultPath, options.filters);
 }
-export function isPermissionGranted(): Promise<boolean> { return invoke('notification_permission'); }
-export async function requestPermission(): Promise<string> { return await invoke<boolean>('notification_request') ? 'granted' : 'denied'; }
-export function sendNotification(options: { title: string; body: string }): void { void invoke('notification_send', { options }).catch(console.warn); }
+export function isPermissionGranted(): Promise<boolean> { return App.NotificationPermission(); }
+export async function requestPermission(): Promise<string> { return await App.NotificationRequest() ? 'granted' : 'denied'; }
+export function sendNotification(options: { title: string; body: string }): void { void App.NotificationSend(options.title, options.body).catch(console.warn); }
 
 /** A full page reload replaces its shells; HMR within the same document keeps them. */
 export async function frontendReady(): Promise<void> {
  const page = window as Window & { __atcPageID?: string };
  page.__atcPageID ??= crypto.randomUUID();
- await invoke("frontend_ready", { pageID: page.__atcPageID });
+ await App.FrontendReady(page.__atcPageID);
 }
