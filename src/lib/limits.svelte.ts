@@ -1,4 +1,5 @@
-import { claudeUsage, codexUsage, usageContext, usageCosts } from './ipc';
+import { claudeUsage, codexUsage, limitsHistory, usageContext, usageCosts } from './ipc';
+import { codexLimits, planLimits, type PlanLimit } from './plan';
 import { dailyTotals, localDay } from './costs';
 import type { CostRow } from '../types';
 
@@ -21,6 +22,9 @@ export const planState = $state({
   today: null as number | null,
   /** Every transcript's usage by hour, for the header's session stats. */
   costRows: [] as CostRow[],
+  /** Past readings, for how fast each limit fills (#27, #161). */
+  claudeHistory: [] as { t: number; limits: PlanLimit[] }[],
+  codexHistory: [] as { t: number; limits: PlanLimit[] }[],
   /** How full each session's context window is, by `provider:sessionId`. */
   context: {} as Record<string, { used: number; window: number }>,
 });
@@ -54,6 +58,18 @@ export async function loadCodexLimits() {
   } finally {
     planState.codexAt = Date.now();
     planState.codexLoading = false;
+  }
+}
+
+export async function loadLimitsHistory() {
+  try {
+    const all = await limitsHistory();
+    const read = (provider: 'claude' | 'codex', parse: (b: Record<string, unknown>) => PlanLimit[]) =>
+      all.filter((h) => h.provider === provider).map((h) => ({ t: h.t, limits: parse(h.body) }));
+    planState.claudeHistory = read('claude', planLimits);
+    planState.codexHistory = read('codex', codexLimits);
+  } catch {
+    // No history yet means no forecast, not an error.
   }
 }
 

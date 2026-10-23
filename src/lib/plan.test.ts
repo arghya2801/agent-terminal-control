@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chipLimit, codexLimits, limitDuration, planLimits, resetsShort, weeklyBreakdown } from './plan';
+import { chipLimit, codexLimits, forecast, limitDuration, limitSeries, planLimits, resetsShort, weeklyBreakdown } from './plan';
 
 // Trimmed from a real response, codename fields included.
 const real = {
@@ -108,4 +108,32 @@ it('keeps both short and weekly Codex windows using their reported durations', (
     [10080, 'codex · 7 days', 45],
     [300, 'codex · 5 hours', 20],
   ]);
+});
+
+describe('forecast', () => {
+  const h = 3_600_000;
+  const now = Date.parse('2026-10-24T12:00:00Z');
+  const session = { key: 'session:0', label: 'Current session', percent: 50, resetsAt: new Date(now + 3 * h).toISOString() };
+
+  it('reads one window of one limit, oldest first', () => {
+    const other = { ...session, resetsAt: new Date(now - 2 * h).toISOString() };
+    const history = [
+      { t: now - 0.5 * h, limits: [session] },
+      { t: now - 6 * h, limits: [other] },
+      // Listed second this time, so its key ends in :1.
+      { t: now - 1 * h, limits: [other, { ...session, key: 'session:1', percent: 30, resetsAt: new Date(now + 3 * h + 60_000).toISOString() }] },
+    ];
+    expect(limitSeries(history, session)).toEqual([{ t: now - h, percent: 30 }, { t: now - 0.5 * h, percent: 50 }]);
+  });
+
+  it('projects the last hour of a 5-hour limit to 100%', () => {
+    // 20% an hour from 50% at now: full in 2.5 hours, before the reset at 3 hours.
+    expect(forecast([{ t: now - h, percent: 30 }, { t: now, percent: 50 }], session, now)).toBe(now + 2.5 * h);
+  });
+
+  it('says it lasts until the reset when the pace is slow or flat, and nothing without data', () => {
+    expect(forecast([{ t: now - h, percent: 45 }, { t: now, percent: 50 }], session, now)).toBe('reset');
+    expect(forecast([{ t: now - h, percent: 50 }, { t: now, percent: 50 }], session, now)).toBe('reset');
+    expect(forecast([{ t: now, percent: 50 }], session, now)).toBeNull();
+  });
 });

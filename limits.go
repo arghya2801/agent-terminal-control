@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -108,6 +109,71 @@ func claudeUsage() (any, error) {
 	}
 	body["subscriptionType"] = oauth["subscriptionType"]
 	return body, nil
+}
+
+// limitHistory appends plan-limit readings to limits-history.jsonl, one line per change.
+// The endpoints only report the current percentage, so how fast a limit fills has to
+// come from readings ATC kept.
+type limitHistory struct {
+	mu   sync.Mutex
+	last map[string]string
+}
+
+const historyKeep = 8 * 24 * time.Hour
+
+func (h *limitHistory) record(config, provider string, body any) {
+	b, e := json.Marshal(body)
+	if e != nil {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.last == nil {
+		h.last = map[string]string{}
+	}
+	if h.last[provider] == string(b) {
+		return
+	}
+	h.last[provider] = string(b)
+	line, _ := json.Marshal(core.Object{"t": time.Now().UnixMilli(), "provider": provider, "body": json.RawMessage(b)})
+	f, e := os.OpenFile(filepath.Join(config, "limits-history.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if e != nil {
+		return
+	}
+	defer f.Close()
+	f.Write(append(line, '\n'))
+}
+
+// read returns the readings of the last 8 days and drops older lines from the file.
+func (h *limitHistory) read(config string) ([]core.Object, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	path := filepath.Join(config, "limits-history.jsonl")
+	b, e := os.ReadFile(path)
+	if os.IsNotExist(e) {
+		return []core.Object{}, nil
+	} else if e != nil {
+		return nil, e
+	}
+	cutoff := time.Now().Add(-historyKeep).UnixMilli()
+	out, kept, dropped := []core.Object{}, []byte{}, false
+	for _, line := range bytes.Split(b, []byte{'\n'}) {
+		var v core.Object
+		if json.Unmarshal(line, &v) != nil {
+			dropped = dropped || len(bytes.TrimSpace(line)) > 0
+			continue
+		}
+		if int64(core.Num(v["t"])) < cutoff {
+			dropped = true
+			continue
+		}
+		out = append(out, v)
+		kept = append(append(kept, line...), '\n')
+	}
+	if dropped {
+		_ = core.WriteFile(path, kept)
+	}
+	return out, nil
 }
 
 type limitsClient struct {

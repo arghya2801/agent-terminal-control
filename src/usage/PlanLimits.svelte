@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { codexUsageStop } from '../lib/ipc';
-  import { loadClaudeLimits, loadCodexLimits, planState } from '../lib/limits.svelte';
+  import { loadClaudeLimits, loadCodexLimits, loadLimitsHistory, planState } from '../lib/limits.svelte';
   import { refreshMs } from '../lib/stores.svelte';
-  import { codexLimits, planLimits, resetsIn, weeklyBreakdown } from '../lib/plan';
+  import { codexLimits, forecast, limitSeries, planLimits, resetsIn, weeklyBreakdown, windowMinutes, type PlanLimit, type Reading } from '../lib/plan';
   import { relativeTime } from '../lib/format';
 
   /** Claude's and Codex's plan limits, from the app-wide store the header's chip shares. */
@@ -66,6 +66,19 @@
     now = Date.now();
   });
 
+  // Every new reading is also a new point on the fill line.
+  $effect(() => {
+    void planState.claudeAt;
+    void planState.codexAt;
+    void loadLimitsHistory();
+  });
+  /** The limit's readings this window, ending with the one on screen. */
+  function series(l: PlanLimit, history: { t: number; limits: PlanLimit[] }[], at: number): Reading[] {
+    const s = limitSeries(history, l);
+    return s.length && s[s.length - 1].t >= at ? s : [...s, { t: at, percent: l.percent }];
+  }
+  const when = (t: number) => new Date(t).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+
   onMount(() => {
     // The app polls Claude's limits already; only a stale answer is refreshed here.
     if (Date.now() - planState.claudeAt > refreshMs('claude')) void loadClaudeLimits();
@@ -98,6 +111,28 @@
   </div>
 {/snippet}
 
+<!-- How the window has filled so far, and when it runs out at the recent pace (#27, #161).
+     The line spans the whole window, start to reset; a dashed line carries the pace on. -->
+{#snippet pace(l: PlanLimit, s: Reading[])}
+  {@const f = forecast(s, l, now)}
+  {@const end = l.resetsAt ? Date.parse(l.resetsAt) : now}
+  {@const start = end - windowMinutes(l) * 60_000}
+  {@const x = (t: number) => ((t - start) / (end - start)) * 100}
+  {#if s.length >= 2}
+    {@const last = s[s.length - 1]}
+    <svg class="fillline" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="{l.label}, % used across this window">
+      <polyline points={s.map((r) => `${x(r.t)},${100 - r.percent}`).join(' ')} />
+      {#if typeof f === 'number'}<line class="ahead" x1={x(last.t)} y1={100 - last.percent} x2={x(f)} y2="0" />{/if}
+    </svg>
+  {/if}
+  {#if f !== null}
+    <div class="pace" class:hot={typeof f === 'number'}>
+      {typeof f === 'number' ? `At this pace it runs out ${when(f)}` : 'At this pace it lasts until the reset'}
+      <span class="muted">(estimate)</span>
+    </div>
+  {/if}
+{/snippet}
+
 <div class="plan-grid">
   <section class="plan-card" aria-label="Claude plan limits">
     <h2>
@@ -122,6 +157,7 @@
               <div class="fill" class:hot={l.percent >= 80} style="width: {l.percent}%"></div>
             </div>
             <div class="muted">{resetsIn(l.resetsAt)}</div>
+            {@render pace(l, series(l, planState.claudeHistory, planState.claudeAt || now))}
           </div>
         {/each}
       </div>
@@ -157,6 +193,7 @@
             <div class="limit-head"><span>{l.label}</span><span>{Math.round(100 - l.percent)}% remaining · {Math.round(l.percent)}% used</span></div>
             <div class="meter"><div class="fill" style="width: {l.percent}%"></div></div>
             <div class="muted">{l.resetsAt ? resetsIn(l.resetsAt) : 'Reset time unavailable'}</div>
+            {@render pace(l, series(l, planState.codexHistory, planState.codexAt || now))}
           </div>
         {/each}
       </div>
@@ -201,6 +238,33 @@
     font-size: 13px;
   }
   .pct.hot {
+    color: var(--warn);
+  }
+  .fillline {
+    display: block;
+    width: 100%;
+    height: 24px;
+    margin: 4px 0 2px;
+    overflow: visible;
+    border-bottom: 1px solid var(--border);
+  }
+  .fillline polyline,
+  .fillline line {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+  .fillline .ahead {
+    stroke: var(--warn);
+    stroke-dasharray: 3 3;
+  }
+  .pace {
+    color: var(--fg-dim);
+    font-size: 12px;
+  }
+  .pace.hot {
     color: var(--warn);
   }
   .refresh {

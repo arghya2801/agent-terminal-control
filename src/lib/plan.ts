@@ -113,6 +113,53 @@ export function codexLimits(plan: Record<string, unknown>): PlanLimit[] {
   });
 }
 
+/** One reading of a limit: when, and how much of it was used. */
+export interface Reading {
+  t: number;
+  percent: number;
+}
+
+/** A limit's window in minutes. Claude's responses don't say, so the key does. */
+export function windowMinutes(l: PlanLimit): number {
+  return l.windowMinutes ?? (/^(session|five_hour)\b/.test(l.key) ? 300 : 7 * 24 * 60);
+}
+
+/**
+ * The readings of `limit` within its current window, oldest first: the same limit with the
+ * same reset time. A reset time that moves by a few minutes between reads is the same window.
+ */
+export function limitSeries(history: { t: number; limits: PlanLimit[] }[], limit: PlanLimit): Reading[] {
+  const reset = limit.resetsAt ? Date.parse(limit.resetsAt) : NaN;
+  // Claude's keys end in the limit's position in the response, which can change.
+  const kind = (l: PlanLimit) => l.key.replace(/:\d+$/, '');
+  const sameWindow = (l: PlanLimit) => Number.isNaN(reset) || Math.abs((l.resetsAt ? Date.parse(l.resetsAt) : NaN) - reset) < 10 * 60_000;
+  return history
+    .flatMap((h) => {
+      const l = h.limits.find((x) => kind(x) === kind(limit) && sameWindow(x));
+      return l ? [{ t: h.t, percent: l.percent }] : [];
+    })
+    .sort((a, b) => a.t - b.t);
+}
+
+/**
+ * When `limit` runs out at the pace of the last fifth of its window (the last hour of a
+ * 5-hour limit, about a day and a half of a weekly one): a time, `'reset'` when it lasts
+ * until the reset, or null with too few readings to say.
+ */
+export function forecast(series: Reading[], limit: PlanLimit, now = Date.now()): number | 'reset' | null {
+  const lookback = (windowMinutes(limit) * 60_000) / 5;
+  const recent = series.filter((r) => r.t >= now - lookback);
+  if (recent.length < 2) return null;
+  const first = recent[0];
+  const last = recent[recent.length - 1];
+  if (last.t - first.t < Math.min(10 * 60_000, lookback / 6)) return null;
+  const rate = (last.percent - first.percent) / (last.t - first.t);
+  const reset = limit.resetsAt ? Date.parse(limit.resetsAt) : Infinity;
+  if (rate <= 0) return 'reset';
+  const at = last.t + (100 - last.percent) / rate;
+  return at >= reset ? 'reset' : at;
+}
+
 /** "resets in 2h 10m (Tue 14:00)", for a limit's reset time. */
 /** The usage chip's short form of `resetsIn`: "45m", "2h 13m", or the day and time past two days. */
 export function resetsShort(iso: string | null, now = Date.now()): string {
