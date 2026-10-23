@@ -41,7 +41,7 @@ func Defaults() Object {
 	return Object{
 		"version":  1,
 		"projects": Object{"claudeProjectsDir": nil, "pinned": []any{}, "names": Object{}, "sessionNames": Object{}},
-		"ui":       Object{"sidebarWidth": 260, "sidebarOpen": true, "sessionsPerProject": 15, "zoom": 1.0, "notifications": true, "restoreTabs": true, "theme": "ATC Dark", "groupSubfolders": false, "groupByBranch": false, "sidebarView": "open", "animations": "system", "animationSpeed": 1.0,
+		"ui": Object{"sidebarWidth": 260, "sidebarOpen": true, "sessionsPerProject": 15, "zoom": 1.0, "notifications": true, "restoreTabs": true, "theme": "ATC Dark", "groupSubfolders": false, "groupByBranch": false, "sidebarView": "open", "animations": "system", "animationSpeed": 1.0,
 			"usageResetTime": true, "showTabBar": false, "peek": "all", "outputGraph": true, "taskAgent": "claude", "taskProject": "", "newTabIn": "home", "confirmClose": true,
 			"toasts": true, "toastSeconds": 6, "limitsRefreshSec": 90, "codexRefreshSec": 300},
 		"terminal": Object{"fontFamily": "\"FiraCode Nerd Font Mono\", \"Cascadia Mono\", Consolas, monospace", "fontSize": 13, "scrollback": 10000,
@@ -129,6 +129,7 @@ func WriteFile(path string, b []byte) error {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
 // LegacyNotes renders the retired tasks (tasks.json, else tasks left in settings.json) as a
 // markdown checklist for notes.md, each task's notes indented under it (#132).
 func LegacyNotes(config string) string {
@@ -160,6 +161,7 @@ func LegacyNotes(config string) string {
 	}
 	return out.String()
 }
+
 // MigrateSettings copies settings.json from a pre-rename config folder. A copy, never a
 // move, and never over existing settings.
 func MigrateSettings(legacy, current string) bool {
@@ -177,7 +179,11 @@ func MigrateSettings(legacy, current string) bool {
 // ProjectionChanged reports whether a settings save changes which sessions the sidebar
 // shows or where they are read from. Font, zoom and view changes must not rescan (#87).
 func ProjectionChanged(prev, next Object, config string) bool {
-	same := func(k string) bool { a, _ := json.Marshal(prev[k]); b, _ := json.Marshal(next[k]); return string(a) == string(b) }
+	same := func(k string) bool {
+		a, _ := json.Marshal(prev[k])
+		b, _ := json.Marshal(next[k])
+		return string(a) == string(b)
+	}
 	return !same("projects") || !same("codex") || Scratch(prev, config) != Scratch(next, config)
 }
 func Roots(s Object) (string, string) {
@@ -204,7 +210,7 @@ func Scratch(s Object, config string) string {
 // Chats is where ATC started chat sessions before they moved into the scratch directory.
 // Still indexed, so those older chats stay in the Scratch view.
 func Chats(config string) string { return filepath.Join(config, "chats") }
-func Quote(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
+func Quote(s string) string      { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
 func Argument(s string) string {
 	if s == "" {
 		return Quote(s)
@@ -216,6 +222,7 @@ func Argument(s string) string {
 	}
 	return s
 }
+
 // Codex always runs with --no-daemon: its background server often fails to start under ATC (#133).
 // AgentCommand is the PowerShell line that starts an agent: the launch arguments, then
 // with chat the chat arguments, then the resume arguments for a session.
