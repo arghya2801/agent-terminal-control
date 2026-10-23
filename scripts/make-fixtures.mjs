@@ -3,7 +3,7 @@
 // These are SYNTHETIC rather than scrubbed copies of real transcripts. Real session
 // files contain private conversation content, and hand-controlled fixtures let each
 // file encode exactly one edge case, named in its comment below. The structure mirrors
-// what was observed in real local data (see SESSION.md > Gotchas).
+// what was observed in real local data (see ARCHITECTURE.md, Gotchas).
 //
 //   node scripts/make-fixtures.mjs
 //
