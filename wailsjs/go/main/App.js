@@ -34,6 +34,10 @@ export function IndexScan(arg1) {
   return window['go']['main']['App']['IndexScan'](arg1);
 }
 
+export function LimitsHistory() {
+  return window['go']['main']['App']['LimitsHistory']();
+}
+
 export function ListThemes() {
   return window['go']['main']['App']['ListThemes']();
 }

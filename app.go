@@ -35,6 +35,7 @@ type App struct {
 	index        core.Index
 	costs        core.Costs
 	limits       limitsClient
+	history      limitHistory
 	watcher      *fsnotify.Watcher
 	cancel       context.CancelFunc
 	lastIndex    string
@@ -557,9 +558,25 @@ func (a *App) GitChanges(dir string) (any, error) {
 	return out, nil
 }
 
-func (a *App) ClaudeUsage() (any, error) { return claudeUsage() }
+func (a *App) ClaudeUsage() (any, error) {
+	v, e := claudeUsage()
+	if e == nil {
+		a.history.record(a.config, "claude", v)
+	}
+	return v, e
+}
 
-func (a *App) CodexUsage() (any, error) { return a.limits.read(a.getSettings()) }
+func (a *App) CodexUsage() (any, error) {
+	v, e := a.limits.read(a.getSettings())
+	if e == nil && v != nil {
+		a.history.record(a.config, "codex", v)
+	}
+	return v, e
+}
+
+// LimitsHistory is every plan-limit reading of the last 8 days, oldest first, for the
+// usage page's fill graph and forecast (#27, #161).
+func (a *App) LimitsHistory() ([]core.Object, error) { return a.history.read(a.config) }
 
 func (a *App) CodexUsageStop() { a.limits.stop() }
 

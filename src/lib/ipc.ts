@@ -90,6 +90,9 @@ export function searchTranscripts(query: string): Promise<{ session: string; rol
 /** A short name for a session from the model chosen in settings. */
 export function suggestSessionName(file: string): Promise<string> { return App.SuggestSessionName(file); }
 
+/** Every plan-limit reading of the last 8 days, oldest first, as each endpoint returned it. */
+export function limitsHistory(): Promise<{ t: number; provider: 'claude' | 'codex'; body: Record<string, unknown> }[]> { return App.LimitsHistory() as never; }
+
 /** Null when the Codex CLI is not installed. */
 export function codexUsage(): Promise<Record<string, unknown> | null> { return App.CodexUsage(); }
 export function codexUsageStop(): Promise<void> { return App.CodexUsageStop(); }

@@ -19,6 +19,8 @@ export function GitChanges(arg1:string):Promise<any>;
 
 export function IndexScan(arg1:boolean):Promise<any>;
 
+export function LimitsHistory():Promise<Array<Record<string, any>>>;
+
 export function ListThemes():Promise<Array<any>>;
 
 export function NewerRelease():Promise<any>;

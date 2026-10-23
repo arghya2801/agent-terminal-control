@@ -225,6 +225,24 @@ func TestGitChangesCountsTheDiffAndUntrackedFiles(t *testing.T) {
 		t.Fatal(got, e)
 	}
 }
+func TestLimitHistoryKeepsChangesForEightDays(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "limits-history.jsonl")
+	old := fmt.Sprintf(`{"t":%d,"provider":"claude","body":{"five_hour":{"utilization":1}}}`, time.Now().Add(-9*24*time.Hour).UnixMilli())
+	os.WriteFile(path, []byte(old+"\n"), 0600)
+	var h limitHistory
+	h.record(dir, "claude", core.Object{"five_hour": core.Object{"utilization": 10}})
+	h.record(dir, "claude", core.Object{"five_hour": core.Object{"utilization": 10}})
+	h.record(dir, "codex", core.Object{"rateLimits": nil})
+	h.record(dir, "claude", core.Object{"five_hour": core.Object{"utilization": 12}})
+	got, e := h.read(dir)
+	if e != nil || len(got) != 3 || got[0]["provider"] != "claude" || got[1]["provider"] != "codex" {
+		t.Fatal(got, e)
+	}
+	if b, _ := os.ReadFile(path); strings.Contains(string(b), `"utilization":1}`) {
+		t.Fatal("a 9-day-old reading was kept")
+	}
+}
 func TestClaudeUsageHonorsIsolatedHome(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	if _, err := claudeUsage(); err == nil || !strings.Contains(err.Error(), "not signed in") {

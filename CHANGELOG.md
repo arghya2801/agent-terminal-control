@@ -7,6 +7,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ## [Unreleased]
 
 ### Added
+- How fast each plan limit fills: on the usage page, each Claude and Codex limit gets a line of % used across its window, and an estimate of when it runs out at the recent pace ("At this pace it runs out Sat, 03:24", or "lasts until the reset"). ATC keeps 8 days of readings in `limits-history.jsonl` in its config folder, so the line starts from the first reading after this update.
 - Preview a session before resuming it: press Space on a session row, or right-click it and choose Preview. Its last prompts and replies show beside the sidebar, with tool calls collapsed to their names. Enter resumes it, Esc closes.
 - Search what was said: with three or more characters in the Sessions filter, an "In transcripts" section lists sessions whose prompts or replies mention it, with the matching line. Click one to resume it.
 - Archive sessions: right-click a session and choose Archive to hide it from the sidebar without deleting anything. "Archive old sessions…" on a project archives everything older than a number of days, optionally only those under a cost. "Show archived sessions" at the bottom of the list brings them back.
