@@ -178,6 +178,28 @@ func TestHeadlessCommandsAndValidation(t *testing.T) {
 		t.Fatal(v)
 	}
 }
+func TestBackoffHonoursRetryAfterThenDoublesUpToHalfAnHour(t *testing.T) {
+	var b backoff
+	now := time.Now()
+	if b.blocked(now) != nil {
+		t.Fatal("blocked before any 429")
+	}
+	b.hit("120", now)
+	if b.blocked(now.Add(119*time.Second)) == nil || b.blocked(now.Add(121*time.Second)) != nil {
+		t.Fatal("Retry-After not honoured", b.until.Sub(now))
+	}
+	for _, want := range []time.Duration{4, 8, 16, 30, 30} {
+		b.hit("", now)
+		if b.wait != want*time.Minute {
+			t.Fatal(b.wait, want)
+		}
+	}
+	b.reset()
+	b.hit("", now)
+	if b.wait != 2*time.Minute {
+		t.Fatal("a success did not reset the wait", b.wait)
+	}
+}
 func TestClaudeUsageHonorsIsolatedHome(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	if _, err := claudeUsage(); err == nil || !strings.Contains(err.Error(), "not signed in") {

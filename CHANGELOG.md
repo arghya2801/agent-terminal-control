@@ -6,6 +6,9 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Fixed
+- When Claude's usage endpoint answers 429, ATC backs off: it waits for `Retry-After`, or doubles its wait from 2 minutes up to 30, and sends no usage checks until then. The last numbers stay on screen with the retry time.
+
 ## [0.6.1] - 2026-10-24
 
 ### Fixed
