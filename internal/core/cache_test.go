@@ -313,6 +313,15 @@ func TestIncrementalCachePreservesNativeIDAndRetriesPartialRecords(t *testing.T)
 		t.Fatal(got, reloaded.Hits)
 	}
 }
+func TestSessionsWrittenInTheSameMillisecondKeepOneOrder(t *testing.T) {
+	x := Object{"provider": "codex", "id": "b", "mtimeMs": int64(5), "cwd": nil}
+	y := Object{"provider": "claude", "id": "a", "mtimeMs": int64(5), "cwd": nil}
+	one := BuildProjects([]Object{Obj(Clone(x)), Obj(Clone(y))}, Defaults())
+	two := BuildProjects([]Object{Obj(Clone(y)), Obj(Clone(x))}, Defaults())
+	if !reflect.DeepEqual(Clone(one), Clone(two)) {
+		t.Fatal("the order sessions arrived in decided their order", one, two)
+	}
+}
 func TestMixedIndexSeparatesIdenticalIdsAndAppliesProviderRenames(t *testing.T) {
 	s := Defaults()
 	Obj(s["codex"])["homeDir"] = codexFixture(t)
