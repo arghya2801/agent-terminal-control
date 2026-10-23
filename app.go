@@ -18,22 +18,22 @@ import (
 )
 
 type App struct {
-	pageID                  string
-	diskMu                  sync.Mutex
-	watchMu                 sync.Mutex
-	ctx                     context.Context
-	config                  string
-	mu                      sync.Mutex
-	settings                core.Object
-	notes                   string
-	ptys                   map[string]*pty.Session
-	index                   core.Index
-	costs                   core.Costs
-	limits                  limitsClient
-	watcher                 *fsnotify.Watcher
-	cancel                  context.CancelFunc
-	lastIndex               string
-	lastSettings            string
+	pageID       string
+	diskMu       sync.Mutex
+	watchMu      sync.Mutex
+	ctx          context.Context
+	config       string
+	mu           sync.Mutex
+	settings     core.Object
+	notes        string
+	ptys         map[string]*pty.Session
+	index        core.Index
+	costs        core.Costs
+	limits       limitsClient
+	watcher      *fsnotify.Watcher
+	cancel       context.CancelFunc
+	lastIndex    string
+	lastSettings string
 }
 
 func NewApp(config string) *App {
@@ -195,6 +195,7 @@ func (a *App) watch() {
 		}
 	}
 }
+
 // refreshNeeded reports whether a filesystem event could change what ATC shows. Only
 // <claude root>/<project>/<session>.jsonl is a Claude session: subagent transcripts
 // write constantly and must not trigger rescans. Structural changes on the way to a root
@@ -417,8 +418,11 @@ func (a *App) Invoke(command string, args core.Object) (any, error) {
 		return nil, openTarget(path)
 	case "open_in_explorer":
 		path := str("path")
-		if _, e := os.Stat(path); e != nil {
+		// ShellExecute "open" on a file runs it; folders are all the sidebar opens.
+		if st, e := os.Stat(path); e != nil {
 			return nil, e
+		} else if !st.IsDir() {
+			return nil, fmt.Errorf("not a folder: %s", path)
 		}
 		return nil, openTarget(path)
 	case "open_url":
