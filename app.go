@@ -343,6 +343,8 @@ func (a *App) Invoke(command string, args core.Object) (any, error) {
 		return a.index.Scan(s, core.Bool(args["force"])), nil
 	case "usage_costs":
 		return a.costs.Rows(s, a.config), nil
+	case "usage_context":
+		return a.costs.Context(s, a.config), nil
 	case "agent_command":
 		provider := str("provider")
 		if provider != "claude" && provider != "codex" {

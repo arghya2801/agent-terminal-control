@@ -12,10 +12,12 @@
   import type { TabKey, TabSummary } from '../types';
 
   /** The sidebar's Open view: every tab, most urgent first, under a heading per state (#132). */
-  let { tabs, activeKey, query, onClose }: {
+  let { tabs, activeKey, query, contextFill, onClose }: {
     tabs: TabSummary[];
     activeKey: TabKey | null;
     query: string;
+    /** How full each agent tab's context window is, 0..1. */
+    contextFill: Map<TabKey, number>;
     /** Asks first when something is still running in the tab. */
     onClose: (key: TabKey) => void;
   } = $props();
@@ -68,6 +70,7 @@
 {#each shown as tab, i (tab.key)}
   {@const s = markTitle(tab.mark, providerName(tab.provider ?? 'claude'))}
   {@const wait = isWaiting(tab.mark) && !tab.done}
+  {@const fill = contextFill.get(tab.key)}
   {@const showPeek = peekRows === 'all' || (peekRows === 'waiting' && wait)}
   {@const peek = showPeek ? peekLine((void now, screenLines(tab.key)), wait ? 3 : 1) : null}
   {#if i === 0 || shown[i - 1].group !== tab.group}
@@ -91,7 +94,7 @@
     <StatusDot mark={tab.mark} title={s} />
     <span class="icon">{#if tab.provider}<ProviderIcon provider={tab.provider} />{:else}<Icon name="terminal" size={12} />{/if}</span>
     <span class="text"><Highlight text={tab.title} {query} />{#if projectName(tab.projectKey)}<small><Highlight text={projectName(tab.projectKey)} {query} /></small>{/if}</span>
-    <time>{stateWord(tab.mark)} {relativeTime(tab.since, now)}</time>
+    <time>{stateWord(tab.mark)} {relativeTime(tab.since, now)}{#if fill !== undefined}<span class="ctx" class:full={fill >= 0.8} title="Context window {Math.round(fill * 100)}% full">{Math.round(fill * 100)}%</span>{/if}</time>
     {#if peek}<span class="peek">{peek}</span>{/if}
     {#if !wait && graph}<svg class="spark" viewBox="0 0 60 10" preserveAspectRatio="none" aria-hidden="true"><path d={sparkPath((void now, outputHistory(tab.key)))} /></svg>{/if}
   </button>
@@ -180,6 +183,13 @@
   }
   .attention time {
     color: var(--accent);
+  }
+  .ctx {
+    margin-left: 6px;
+    color: var(--fg-faint);
+  }
+  .ctx.full {
+    color: var(--warn);
   }
   .peek {
     grid-column: 3 / 4;

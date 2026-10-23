@@ -99,6 +99,11 @@ export function usageCosts(): Promise<CostRow[]> {
   return invoke<CostRow[]>('usage_costs');
 }
 
+/** Each session's context window on its latest request, by `provider:sessionId`. */
+export function usageContext(): Promise<Record<string, { used: number; window: number }>> {
+  return invoke<Record<string, { used: number; window: number }>>('usage_context');
+}
+
 /** Theme files in the config directory's `themes/` folder, unvalidated. */
 export function listThemes(): Promise<{ stem: string; palette: unknown }[]> {
   return invoke<{ stem: string; palette: unknown }[]>('list_themes');

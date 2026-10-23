@@ -19,7 +19,7 @@
   import Tooltip from './lib/Tooltip.svelte';
   import UsageChip from './tabs/UsageChip.svelte';
   import HeaderStats from './tabs/HeaderStats.svelte';
-  import { loadClaudeLimits } from './lib/limits.svelte';
+  import { loadClaudeLimits, loadContext, planState } from './lib/limits.svelte';
   import {
     isPermissionGranted,
     requestPermission,
@@ -477,6 +477,18 @@
     const branch = appState.index.projects.flatMap((p) => p.sessions).find((s) => sessionKey(s) === shownSession)?.gitBranch;
     return [appState.index.projects.find((p) => p.key === shown.projectKey)?.name, branch].filter((x): x is string => !!x);
   });
+  // The index updates whenever a transcript is written, which is when context changes.
+  $effect(() => {
+    void appState.index;
+    if (tabs.some((t) => t.provider)) void untrack(loadContext);
+  });
+  /** How full each agent tab's context window is, 0..1. */
+  const contextFill = $derived(
+    new Map(tabs.flatMap((t) => {
+      const c = planState.context[tabToSession.get(t.key) ?? ''];
+      return c ? [[t.key, c.used / c.window] as const] : [];
+    })),
+  );
   const shownState = $derived.by(() => {
     const state = shown ? stateWord(tabMark(shown)) : '';
     return state && `${state} ${relativeTime(shown!.since, now)}`;
@@ -887,6 +899,7 @@
         bind:this={sidebar}
         {activeKey}
         {activeSessionId}
+        {contextFill}
         {openProjectKeys}
         {sessionMarks}
         onOpenProject={openProject}

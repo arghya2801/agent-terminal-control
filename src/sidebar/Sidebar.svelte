@@ -24,6 +24,7 @@
   let {
     activeKey,
     activeSessionId,
+    contextFill,
     tabs,
     openProjectKeys,
     sessionMarks,
@@ -42,6 +43,8 @@
   }: {
     activeKey: TabKey | null;
     activeSessionId: string | null;
+    /** How full each agent tab's context window is, 0..1. */
+    contextFill: Map<TabKey, number>;
     tabs: TabSummary[];
     openProjectKeys: Set<string>;
     /** Sessions with a live tab, by id. */
@@ -292,7 +295,7 @@
         menu = { x: e.clientX, y: e.clientY, items: [{ label: 'New agent in…' }, ...items] };
       }}
     >
-      <OpenList {tabs} {activeKey} {query} onClose={onCloseTab} />
+      <OpenList {tabs} {activeKey} {query} {contextFill} onClose={onCloseTab} />
     </div>
     <!-- Collapses to its header, like the Outline pane under VS Code's explorer. -->
     <section class="notes-pane" style={notesOpen ? `height: ${notesHeight}px` : undefined}>

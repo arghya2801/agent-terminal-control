@@ -1,4 +1,4 @@
-import { claudeUsage, codexUsage, usageCosts } from './ipc';
+import { claudeUsage, codexUsage, usageContext, usageCosts } from './ipc';
 import { dailyTotals, localDay } from './costs';
 import type { CostRow } from '../types';
 
@@ -21,6 +21,8 @@ export const planState = $state({
   today: null as number | null,
   /** Every transcript's usage by hour, for the header's session stats. */
   costRows: [] as CostRow[],
+  /** How full each session's context window is, by `provider:sessionId`. */
+  context: {} as Record<string, { used: number; window: number }>,
 });
 
 export async function loadClaudeLimits() {
@@ -52,6 +54,14 @@ export async function loadCodexLimits() {
   } finally {
     planState.codexAt = Date.now();
     planState.codexLoading = false;
+  }
+}
+
+export async function loadContext() {
+  try {
+    planState.context = await usageContext();
+  } catch {
+    // Keeps the last answer; the next transcript change asks again.
   }
 }
 

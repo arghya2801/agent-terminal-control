@@ -55,6 +55,37 @@ func TestPricesEveryTokenKindAndFastModeDoubles(t *testing.T) {
 		}
 	}
 }
+func TestOpus55HasItsOwnPriceAndCacheReadRate(t *testing.T) {
+	// 4 input + 20 output + 5 5m write + 8 1h write + 0.2 read
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, "s.jsonl"), []byte(claudeLine("m", "r", "claude-opus-5-5", "")+"\n"), 0600)
+	if rows := claudeCosts(&Costs{}, root); len(rows) != 1 || !near(Num(rows[0]["costUsd"]), 37.2) {
+		t.Fatal(rows)
+	}
+}
+func TestContextIsTheLatestRequestAgainstTheModelWindow(t *testing.T) {
+	root := t.TempDir()
+	line := func(id string, input int) string {
+		return fmt.Sprintf(`{"type":"assistant","timestamp":"2026-09-11T17:51:00Z","requestId":%q,"message":{"id":%q,"model":"claude-haiku-4-5","usage":{"input_tokens":%d,"cache_read_input_tokens":1000,"cache_creation_input_tokens":500,"output_tokens":9}}}`, id, id, input)
+	}
+	sub := filepath.Join(root, "p", "s", "subagents")
+	os.MkdirAll(sub, 0700)
+	write(t, filepath.Join(root, "p", "s.jsonl"), line("a", 10)+"\n"+line("b", 500)+"\n")
+	write(t, filepath.Join(sub, "agent.jsonl"), line("c", 90000)+"\n")
+	home := t.TempDir()
+	codex := filepath.Join(home, "sessions")
+	os.MkdirAll(codex, 0700)
+	write(t, filepath.Join(codex, "x.jsonl"), `{"timestamp":"2026-09-11T17:51:00Z","type":"session_meta","payload":{"id":"t1","timestamp":"2026-09-11T17:51:00Z"}}`+"\n"+
+		`{"timestamp":"2026-09-11T17:52:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":64600},"model_context_window":258400}}}`+"\n")
+	s := Defaults()
+	Obj(s["projects"])["claudeProjectsDir"] = root
+	Obj(s["codex"])["homeDir"] = home
+	got := Clone((&Costs{}).Context(s, home))
+	want := Object{"claude:s": Object{"used": float64(2000), "window": float64(200000)}, "codex:t1": Object{"used": float64(64600), "window": float64(258400)}}
+	if !reflect.DeepEqual(got, Clone(want)) {
+		t.Fatal(got)
+	}
+}
 func TestOlderOpusIsNotPricedAsOpus45(t *testing.T) {
 	p := prices(t.TempDir())
 	for model, want := range map[string][2]float64{"claude-opus-4-1-20250805": {15, 75}, "claude-opus-4-5-20251101": {5, 25}, "claude-sonnet-4-6": {3, 15}, "claude-sonnet-5": {2, 10}} {
