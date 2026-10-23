@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"atc/internal/core"
@@ -514,6 +517,44 @@ func (a *App) NotificationRequest() (bool, error) { return wr.RequestNotificatio
 
 func (a *App) NotificationSend(title, body string) error {
 	return wr.SendNotification(a.ctx, wr.NotificationOptions{Title: title, Body: body})
+}
+
+// GitChanges is what `git diff HEAD` and untracked files say changed in dir, or null when
+// dir is not a git working tree.
+func (a *App) GitChanges(dir string) (any, error) {
+	git := func(args ...string) (string, error) {
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		// No console at all: a hidden one fails to start (0xc0000142) under some parents.
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
+		var stderr strings.Builder
+		cmd.Stderr = &stderr
+		out, e := cmd.Output()
+		if e != nil {
+			e = fmt.Errorf("git %s: %w: %s", args[0], e, strings.TrimSpace(stderr.String()))
+		}
+		return string(out), e
+	}
+	inside, e := git("rev-parse", "--is-inside-work-tree")
+	if e != nil && strings.Contains(e.Error(), "not a git repository") || e == nil && strings.TrimSpace(inside) != "true" {
+		return nil, nil
+	} else if e != nil {
+		return nil, e
+	}
+	stat, e := git("diff", "--shortstat", "HEAD")
+	if e != nil {
+		return nil, e
+	}
+	untracked, e := git("ls-files", "--others", "--exclude-standard")
+	if e != nil {
+		return nil, e
+	}
+	lines := strings.FieldsFunc(untracked, func(r rune) bool { return r == '\n' || r == '\r' })
+	out := core.Object{"files": int64(0), "insertions": int64(0), "deletions": int64(0), "untracked": int64(len(lines))}
+	for _, m := range regexp.MustCompile(`(\d+) (file|insertion|deletion)`).FindAllStringSubmatch(stat, -1) {
+		n, _ := strconv.ParseInt(m[1], 10, 64)
+		out[map[string]string{"file": "files", "insertion": "insertions", "deletion": "deletions"}[m[2]]] = n
+	}
+	return out, nil
 }
 
 func (a *App) ClaudeUsage() (any, error) { return claudeUsage() }

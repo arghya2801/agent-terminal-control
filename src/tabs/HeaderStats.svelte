@@ -1,13 +1,20 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { formatTokens, monetary, modelLabel, sessionStats } from '../lib/costs';
-  import { sparkPath } from '../lib/format';
+  import { changesText, sparkPath } from '../lib/format';
+  import type { GitChanges } from '../lib/ipc';
   import { loadCosts, planState } from '../lib/limits.svelte';
   import { outputHistory } from '../terminal/manager';
   import type { TabKey } from '../types';
 
   /** The pane header's right side: the session's model, cost and cache use, and the tab's output graph. */
-  let { tabKey, sessionKey, working }: { tabKey: TabKey; sessionKey: string | null; working: boolean } = $props();
+  let { tabKey, sessionKey, working, changes }: {
+    tabKey: TabKey;
+    sessionKey: string | null;
+    working: boolean;
+    /** The working tree's changes since HEAD, read when the agent last stopped; null outside git. */
+    changes?: GitChanges | null;
+  } = $props();
 
   const stats = $derived(sessionKey ? sessionStats(planState.costRows, sessionKey) : null);
   const context = $derived(sessionKey ? planState.context[sessionKey] : undefined);
@@ -33,6 +40,9 @@
     <span title="Tokens this session">{formatTokens(stats.tokens)} <small>tokens</small></span>
     <span title="Share of input read from the prompt cache">{Math.round(stats.cacheShare * 100)}% <small>cache</small></span>
   {/if}
+  {#if changes && (changes.files || changes.untracked)}
+    <span title="{changesText(changes)}, since the agent last stopped">{changes.files + changes.untracked} <small>files</small> <ins>+{changes.insertions}</ins> <del>−{changes.deletions}</del></span>
+  {/if}
   {#if context}
     {@const fill = context.used / context.window}
     <span class:full={fill >= 0.8} title="{formatTokens(context.used)} of {formatTokens(context.window)} tokens on the latest request">{Math.round(fill * 100)}% <small>context</small></span>
@@ -54,6 +64,16 @@
   }
   .full {
     color: var(--warn);
+  }
+  ins,
+  del {
+    text-decoration: none;
+  }
+  ins {
+    color: var(--ok);
+  }
+  del {
+    color: var(--danger);
   }
   small {
     color: var(--fg-faint);

@@ -71,6 +71,8 @@ export interface Tab {
   attention: boolean;
   /** Moved out of "Waiting on you" by the user; cleared when the agent starts working. */
   done: boolean;
+  /** Typed in for the agent once it stops working (#158); dropped if the tab exits. */
+  queued: string | null;
   /** Canonical key of the sidebar project this tab belongs to, if any. */
   projectKey: string | null;
   /** When the tab was opened. Identifies which session Claude went on to create. */
@@ -172,6 +174,13 @@ function notify() {
       t.mark = mark;
       t.markSince = now;
       if (mark === 'working') t.done = false;
+      if (mark === 'exited') t.queued = null;
+      if ((mark === 'idle' || mark === 'attention') && t.queued) {
+        const text = t.queued;
+        t.queued = null;
+        // After this notify: sendText notifies again.
+        setTimeout(() => sendText(t.key, text));
+      }
       if (mosaic) layout();
     }
   }
@@ -373,6 +382,7 @@ export async function openTab(
     claudeName: null,
     attention: false,
     done: false,
+    queued: null,
     projectKey,
     startedAt: Date.now(),
     lastOutputAt: Date.now(),
@@ -771,6 +781,14 @@ export function sendText(key: TabKey, text: string) {
   void ptyWrite(id, text).then(() => setTimeout(() => void ptyWrite(id, '\r'), 50));
   // Answered: no longer waiting on you, though it was never shown.
   tab.attention = false;
+  notify();
+}
+
+/** Sets or, with null, cancels the message sent when the tab's agent next stops working. */
+export function queuePrompt(key: TabKey, text: string | null) {
+  const tab = tabs.get(key);
+  if (!tab || tab.exited) return;
+  tab.queued = text?.trim() || null;
   notify();
 }
 
