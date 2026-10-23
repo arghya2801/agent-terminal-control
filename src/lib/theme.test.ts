@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { applyPalette, cssVariables, isLight, parsePalette, type Palette } from './theme';
 import { builtinThemes, DEFAULT_THEME, findTheme } from './themes';
