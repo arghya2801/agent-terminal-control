@@ -24,6 +24,9 @@ type usageFile struct {
 type Costs struct {
 	mu    sync.Mutex
 	files map[string]*usageFile
+	// Every row last written to usage-history.json, and its bytes.
+	ledger []Object
+	saved  []byte
 }
 type tokens struct{ input, output, cached, write, reasoning, total int64 }
 
@@ -193,7 +196,34 @@ func (c *Costs) Rows(settings Object, config string) []any {
 	rates := prices(config)
 	out := c.claudeRows(paths["claude"], rates)
 	out = append(out, c.codexRows(paths["codex"], rates)...)
-	return out
+	return c.remember(config, out)
+}
+
+// remember keeps rows for sessions whose transcripts are gone. Claude Code deletes
+// transcripts after 30 days by default, which used to drop those days from the history.
+// ponytail: rewrites the whole ledger when anything changes; split it by month if it grows large.
+func (c *Costs) remember(config string, fresh []any) []any {
+	path := filepath.Join(config, "usage-history.json")
+	if c.ledger == nil {
+		b, _ := os.ReadFile(path)
+		_ = json.Unmarshal(b, &c.ledger)
+	}
+	live := map[string]bool{}
+	for _, r := range fresh {
+		live[Str(Obj(r)["provider"])+":"+Str(Obj(r)["sessionId"])] = true
+	}
+	for _, r := range c.ledger {
+		if !live[Str(r["provider"])+":"+Str(r["sessionId"])] {
+			fresh = append(fresh, r)
+		}
+	}
+	if b, e := json.Marshal(fresh); e == nil && string(b) != string(c.saved) {
+		c.saved = b
+		_ = WriteFile(path, b)
+		c.ledger = nil
+		_ = json.Unmarshal(b, &c.ledger)
+	}
+	return fresh
 }
 func (c *Costs) claudeRows(paths []string, rates Object) []any {
 	dedup := map[string]Object{}

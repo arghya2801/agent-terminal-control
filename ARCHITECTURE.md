@@ -130,6 +130,10 @@ older cumulative records count before that point, and a counter reset starts a n
 epoch. Prices match exact model names or known dated snapshots. An unknown model stays
 unpriced and marks its totals partial.
 
+Claude Code deletes transcripts after `cleanupPeriodDays` (30 by default). `Costs.remember`
+keeps every row in `usage-history.json` in the config folder. A session with a transcript
+on disk is recounted from it; one without keeps its saved rows.
+
 Claude's plan limits use the credentials in `CLAUDE_CONFIG_DIR`, else `~/.claude`, and
 never leave Go. Codex limits start the configured CLI as `codex app-server`, run
 initialize and `account/rateLimits/read`, then stop it. One provider failing never hides

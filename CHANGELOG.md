@@ -7,6 +7,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ## [Unreleased]
 
 ### Fixed
+- Usage history keeps sessions whose transcripts are gone. Claude Code deletes transcripts after 30 days, and their days used to vanish from the usage page. ATC now keeps every row it has seen in `usage-history.json` in its config folder.
 - Show in Explorer only opens folders. Given a file path, it used to run the file.
 
 ### Added
