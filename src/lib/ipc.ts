@@ -65,6 +65,11 @@ export function openInExplorer(path: string): Promise<void> {
 }
 
 /** Open an http(s) link in the default browser. */
+/** The latest release when it is newer than this build, or null. */
+export function newerRelease(): Promise<{ version: string; url: string } | null> {
+  return invoke<{ version: string; url: string } | null>('newer_release');
+}
+
 export function openUrl(url: string): Promise<void> {
   return invoke('open_url', { url });
 }

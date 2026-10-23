@@ -12,6 +12,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Show in Explorer only opens folders. Given a file path, it used to run the file.
 
 ### Added
+- When a newer release is on GitHub, the sidebar footer says so ("0.7.0 is out") and links to its page. ATC checks once per launch and never downloads anything.
 - Context window fill per agent tab: the header shows "42% context", and Open view rows show the percent next to their state. It turns amber at 80%.
 - Mark a waiting agent done with the check on its row, or from its right-click menu. It moves to a Done section below Shells and comes back to Waiting on you the next time it works and stops.
 

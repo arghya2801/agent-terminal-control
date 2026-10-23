@@ -5,7 +5,8 @@
   import TaskBox from './TaskBox.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import Icon from '../lib/Icon.svelte';
-  import { tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
+  import { newerRelease, openUrl } from '../lib/ipc';
   import { pageZoom } from '../lib/desktop';
   import { activate, focusActiveTerminal, markDone, splitWith } from '../terminal/manager';
   import { isWaiting } from '../lib/triage';
@@ -68,6 +69,11 @@
   } = $props();
 
   let refreshing = $state(false);
+  /** A newer release on GitHub, checked once per launch (#172). */
+  let update = $state<{ version: string; url: string } | null>(null);
+  onMount(() => {
+    newerRelease().then((r) => (update = r), () => {});
+  });
   let menu = $state<{ x: number; y: number; items: MenuItem[]; dropdown?: boolean } | null>(null);
 
   const view = $derived(sidebarView());
@@ -392,6 +398,9 @@
     {:else}
       {appState.index.projects.filter((p) => !p.kind).length} projects, {appState.index.sessionCount - scratchSessions} sessions
     {/if}
+    {#if update}
+      <button class="update" onclick={() => void openUrl(update!.url)} title="Open the release page to download it">{update.version} is out</button>
+    {/if}
   </footer>
 </div>
 
@@ -594,10 +603,24 @@
     outline-offset: -1px;
   }
   footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
     padding: 6px 10px;
     border-top: 1px solid var(--border);
     color: var(--fg-faint);
     font-size: 11px;
     font-variant-numeric: tabular-nums;
+  }
+  .update {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    cursor: pointer;
+  }
+  .update:hover {
+    text-decoration: underline;
   }
 </style>
