@@ -58,6 +58,16 @@ func TestAppVersionComesFromWailsJSON(t *testing.T) {
 		t.Fatalf("wails.json says %q, package.json says %q", appVersion, pkg.Version)
 	}
 }
+func TestNewerComparesVersionsNumerically(t *testing.T) {
+	for _, c := range []struct {
+		a, b string
+		want bool
+	}{{"0.10.0", "0.9.3", true}, {"0.6.0", "0.6.0", false}, {"0.6", "0.6.1", false}, {"1.0.0", "0.99.99", true}} {
+		if newer(c.a, c.b) != c.want {
+			t.Error(c)
+		}
+	}
+}
 func TestLinksAndCommands(t *testing.T) {
 	for _, url := range []string{"https://github.com/a/b?c=1&d=2", "HTTP://x.y", "https://www.google.com/maps/@51.5,-0.12,14z"} {
 		if !validURL(url) {

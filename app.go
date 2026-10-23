@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -343,6 +345,8 @@ func (a *App) Invoke(command string, args core.Object) (any, error) {
 		return a.index.Scan(s, core.Bool(args["force"])), nil
 	case "usage_costs":
 		return a.costs.Rows(s, a.config), nil
+	case "newer_release":
+		return newerRelease(appVersion), nil
 	case "usage_context":
 		return a.costs.Context(s, a.config), nil
 	case "agent_command":
@@ -472,6 +476,44 @@ func (a *App) Invoke(command string, args core.Object) (any, error) {
 		return nil, fmt.Errorf("unknown command: %s", command)
 	}
 }
+
+// newerRelease is the latest GitHub release when it is newer than the running build, else
+// nil. Offline or rate-limited simply means no notice.
+func newerRelease(current string) any {
+	c := http.Client{Timeout: 15 * time.Second}
+	res, e := c.Get("https://api.github.com/repos/arghya2801/agent-terminal-control/releases/latest")
+	if e != nil {
+		return nil
+	}
+	defer res.Body.Close()
+	var r struct {
+		Tag string `json:"tag_name"`
+		URL string `json:"html_url"`
+	}
+	if res.StatusCode != http.StatusOK || json.NewDecoder(res.Body).Decode(&r) != nil || !newer(strings.TrimPrefix(r.Tag, "v"), current) || !validURL(r.URL) {
+		return nil
+	}
+	return core.Object{"version": strings.TrimPrefix(r.Tag, "v"), "url": r.URL}
+}
+
+// newer compares dotted versions number by number; a missing part counts as 0.
+func newer(a, b string) bool {
+	x, y := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < max(len(x), len(y)); i++ {
+		var m, n int
+		if i < len(x) {
+			m, _ = strconv.Atoi(x[i])
+		}
+		if i < len(y) {
+			n, _ = strconv.Atoi(y[i])
+		}
+		if m != n {
+			return m > n
+		}
+	}
+	return false
+}
+
 func validURL(url string) bool {
 	lower := strings.ToLower(url)
 	if !(strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")) || len(url) <= 8 {
