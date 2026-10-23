@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { Terminal } from '@xterm/xterm';
 import { decodeOsc52 } from './osc52';
