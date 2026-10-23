@@ -80,6 +80,9 @@ func TestLinksAndCommands(t *testing.T) {
 	if _, e := a.Invoke("agent_command", core.Object{"provider": "wrong"}); e == nil {
 		t.Fatal("invalid provider accepted")
 	}
+	if _, e := a.Invoke("open_in_explorer", core.Object{"path": os.Args[0]}); e == nil {
+		t.Fatal("opened a file, which would run it")
+	}
 }
 func TestLimitResponseNotificationsErrorsCancellation(t *testing.T) {
 	messages := make(chan core.Object, 4)

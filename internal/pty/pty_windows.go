@@ -63,6 +63,7 @@ func dimension(n int) int16 {
 	}
 	return int16(n)
 }
+
 // Shell finds PowerShell, 7 first, then Windows PowerShell.
 func Shell() (string, error) { return shellFor("") }
 
@@ -426,6 +427,7 @@ func KillTree(pid uint32) {
 	}
 	kill(pid)
 }
+
 var nextID atomic.Uint64
 
 func ID() string { return fmt.Sprintf("pty-%d", nextID.Add(1)) }

@@ -220,6 +220,10 @@ Things that cost time once. Add to this list.
   `D--Coding-game-tracker-app`. Read `cwd` from the JSONL, never decode the name.
 - List `*.jsonl` one level deep. `<session>/subagents/*.jsonl` would double the sessions.
 - The first human message can be past line 11 or byte 47k, after file-history snapshots.
+- `ai-title` often sits below the first user turn. Only an `ai-title` ends the parse early;
+  stopping at the first message labels sessions that open with "." by their uuid.
+- Human turns are the ones with `origin.kind == "human"`. Older files have no `origin`, so
+  the `<command-name>` and `<local-command-caveat>` string checks stay as a fallback.
 - `core.Resolve` strips the `\\?\` prefix that symlink resolution adds. PowerShell and
   ConPTY handle it badly, and it never string-matches a transcript's `cwd`.
 - A parser change does nothing visible until the cache goes. Bump the `Version` the index

@@ -201,7 +201,7 @@ func TestDownloadedPricesReplaceTheBuiltInTable(t *testing.T) {
 func TestEstimatesCachedInputWritesAndOutputWithoutDoubleCountingReasoning(t *testing.T) {
 	rates := prices(t.TempDir())
 	row := Object{"input": int64(100000), "cacheRead": int64(800000), "cacheWrite": int64(100000), "output": int64(20000), "reasoning": int64(10000)}
-	for model, want := range map[string]float64{"gpt-6-astra": 4.05, "gpt-6-astra-2026-09-01": 4.05, "gpt-6-sol": 0.81, "gpt-6.1-sol": 0.73,"gpt-6-luna-2026-09-22": 0.0405, "gpt-5.5": 1.5} {
+	for model, want := range map[string]float64{"gpt-6-astra": 4.05, "gpt-6-astra-2026-09-01": 4.05, "gpt-6-sol": 0.81, "gpt-6.1-sol": 0.73, "gpt-6-luna-2026-09-22": 0.0405, "gpt-5.5": 1.5} {
 		row["model"] = model
 		priceCodexRow(row, rates)
 		if row["costUsd"] == nil || math.Abs(Num(row["costUsd"])-want) > 1e-10 {

@@ -49,6 +49,7 @@ func newRow(provider, hour, id, cwd, model string) Object {
 	}
 	return Object{"provider": provider, "hour": hour, "sessionId": id, "projectKey": key, "projectPath": Nullable(cwd), "model": model, "input": int64(0), "output": int64(0), "cacheWrite": int64(0), "cacheRead": int64(0), "reasoning": int64(0), "totalTokens": int64(0), "costUsd": nil, "unpriced": false}
 }
+
 const pricesURL = "https://raw.githubusercontent.com/arghya2801/agent-terminal-control/main/internal/core/prices.json"
 
 // RefreshPrices caches the table from main, so a new model needs a commit, not a release.

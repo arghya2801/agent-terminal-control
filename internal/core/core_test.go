@@ -140,6 +140,7 @@ func TestFixtureCostsStable(t *testing.T) {
 		}
 	}
 }
+
 // rust-contract.json is the index and cost output of the retired Rust implementation over
 // the fixture corpus, frozen when Go replaced it. Only regenerate it (from this Go output)
 // for a deliberate behaviour change, never to make a regression pass.

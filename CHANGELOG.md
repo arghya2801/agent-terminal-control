@@ -6,6 +6,9 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Fixed
+- Show in Explorer only opens folders. Given a file path, it used to run the file.
+
 ### Added
 - Mark a waiting agent done with the check on its row, or from its right-click menu. It moves to a Done section below Shells and comes back to Waiting on you the next time it works and stops.
 

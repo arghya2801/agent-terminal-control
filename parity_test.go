@@ -253,6 +253,7 @@ func TestTheThemeOrderIsStable(t *testing.T) {
 		t.Fatal(s)
 	}
 }
+
 // --- pty/registry.rs
 
 func TestUnknownTerminalIdsAreReportedNotPanickedOn(t *testing.T) {
