@@ -14,6 +14,38 @@ export namespace main {
 	        this.extensions = source["extensions"];
 	    }
 	}
+	export class Hit {
+	    session: string;
+	    role: string;
+	    snippet: string;
+	    time: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Hit(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.session = source["session"];
+	        this.role = source["role"];
+	        this.snippet = source["snippet"];
+	        this.time = source["time"];
+	    }
+	}
+	export class Turn {
+	    role: string;
+	    text: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Turn(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.role = source["role"];
+	        this.text = source["text"];
+	    }
+	}
 
 }
 

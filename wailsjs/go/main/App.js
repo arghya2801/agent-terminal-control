@@ -110,12 +110,24 @@ export function ScratchDir() {
   return window['go']['main']['App']['ScratchDir']();
 }
 
+export function SearchTranscripts(arg1) {
+  return window['go']['main']['App']['SearchTranscripts'](arg1);
+}
+
+export function SessionPreview(arg1) {
+  return window['go']['main']['App']['SessionPreview'](arg1);
+}
+
 export function SettingsGet() {
   return window['go']['main']['App']['SettingsGet']();
 }
 
 export function SettingsSet(arg1) {
   return window['go']['main']['App']['SettingsSet'](arg1);
+}
+
+export function SuggestSessionName(arg1) {
+  return window['go']['main']['App']['SuggestSessionName'](arg1);
 }
 
 export function UsageContext() {

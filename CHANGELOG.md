@@ -7,6 +7,10 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ## [Unreleased]
 
 ### Added
+- Preview a session before resuming it: press Space on a session row, or right-click it and choose Preview. Its last prompts and replies show beside the sidebar, with tool calls collapsed to their names. Enter resumes it, Esc closes.
+- Search what was said: with three or more characters in the Sessions filter, an "In transcripts" section lists sessions whose prompts or replies mention it, with the matching line. Click one to resume it.
+- Archive sessions: right-click a session and choose Archive to hide it from the sidebar without deleting anything. "Archive old sessions…" on a project archives everything older than a number of days, optionally only those under a cost. "Show archived sessions" at the bottom of the list brings them back.
+- Rename with Haiku or Luna: right-click a session and a small model suggests a name from its opening prompts and latest reply. The suggestion opens in the rename box. Settings > Names picks Claude Haiku (the default) or Codex Luna; it runs through the installed CLI and leaves no session behind.
 - Queue a message for a working agent: hover its row in the Open view and choose Queue, or right-click it. ATC types it in when the agent stops. The queued text shows under the row, where it can be edited or cancelled, and is dropped if the tab exits.
 - What each agent has changed: the header shows files changed, insertions and deletions in the tab's folder, and the Open view row's tooltip lists them. It refreshes whenever the agent stops working, and only appears in git repositories.
 
