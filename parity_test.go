@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"atc/internal/core"
+	"atc/internal/pty"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -192,11 +193,11 @@ func TestTheSettingsStoreSharesUpdates(t *testing.T) {
 	a.load()
 	s := a.getSettings()
 	core.Obj(s["ui"])["sidebarOpen"] = false
-	if _, e := a.Invoke("settings_set", core.Object{"settings": s}); e != nil {
+	if e := a.SettingsSet(s); e != nil {
 		t.Fatal(e)
 	}
-	got, _ := a.Invoke("settings_get", nil)
-	if core.Obj(core.Obj(got)["ui"])["sidebarOpen"] != false {
+	got := a.SettingsGet()
+	if core.Obj(got["ui"])["sidebarOpen"] != false {
 		t.Fatal(got)
 	}
 }
@@ -207,9 +208,8 @@ func TestAnExplicitIndexRefreshAlwaysReports(t *testing.T) {
 	core.Obj(a.settings["projects"])["claudeProjectsDir"] = filepath.Join(a.config, "claude")
 	core.Obj(a.settings["codex"])["homeDir"] = filepath.Join(a.config, "codex")
 	for i := 0; i < 2; i++ {
-		v, e := a.Invoke("index_refresh", core.Object{"force": false})
-		if e != nil || core.Obj(v)["projects"] == nil {
-			t.Fatal(v, e)
+		if v := a.IndexScan(false); core.Obj(v)["projects"] == nil {
+			t.Fatal(v)
 		}
 	}
 }
@@ -226,12 +226,8 @@ func themes(t *testing.T, files map[string]string) []string {
 			os.WriteFile(filepath.Join(a.config, "themes", name), []byte(body), 0600)
 		}
 	}
-	v, e := a.Invoke("list_themes", nil)
-	if e != nil {
-		t.Fatal(e)
-	}
 	stems := []string{}
-	for _, th := range core.Arr(v) {
+	for _, th := range a.ListThemes() {
 		stems = append(stems, core.Str(core.Obj(th)["stem"]))
 	}
 	return stems
@@ -259,9 +255,11 @@ func TestTheThemeOrderIsStable(t *testing.T) {
 func TestUnknownTerminalIdsAreReportedNotPanickedOn(t *testing.T) {
 	a := NewApp(t.TempDir())
 	a.load()
-	for _, command := range []string{"pty_write", "pty_resize", "pty_kill", "pty_ack", "pty_busy", "pty_stats"} {
-		if _, e := a.Invoke(command, core.Object{"id": "nope", "data": "x", "cols": 10.0, "rows": 10.0}); e == nil {
-			t.Error(command, "accepted an unknown id")
+	_, busy := a.PtyBusy("nope")
+	_, stats := a.PtyStats("nope")
+	for i, e := range []error{a.PtyWrite("nope", "x"), a.PtyResize("nope", 10, 10), a.PtyKill("nope"), a.PtyAck("nope", 1), busy, stats} {
+		if e == nil {
+			t.Error(i, "accepted an unknown id")
 		}
 	}
 }
@@ -275,22 +273,22 @@ func TestKillingTerminalsRemovesThemAndKillAllTearsDownEverySession(t *testing.T
 	a.load()
 	ids := []string{}
 	for i := 0; i < 3; i++ {
-		v, e := a.Invoke("pty_spawn", core.Object{"channel": "test", "opts": core.Object{"cols": 80, "rows": 24}})
+		v, e := a.PtySpawn(pty.Options{Cols: 80, Rows: 24}, "test")
 		if e != nil {
 			t.Fatal(e)
 		}
-		ids = append(ids, core.Str(v))
+		ids = append(ids, v)
 	}
-	if _, e := a.Invoke("pty_resize", core.Object{"id": ids[0], "cols": 100.0, "rows": 30.0}); e != nil {
+	if e := a.PtyResize(ids[0], 100, 30); e != nil {
 		t.Fatal("resize did not reach a live session", e)
 	}
 	a.mu.Lock()
 	first := a.ptys[ids[0]]
 	a.mu.Unlock()
-	if _, e := a.Invoke("pty_kill", core.Object{"id": ids[0]}); e != nil {
+	if e := a.PtyKill(ids[0]); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := a.Invoke("pty_write", core.Object{"id": ids[0], "data": "x"}); e == nil {
+	if e := a.PtyWrite(ids[0], "x"); e == nil {
 		t.Fatal("a killed session still accepted input")
 	}
 	select {

@@ -1,14 +1,12 @@
 <script lang="ts">
-  import { onMount, untrack } from 'svelte';
+  import { onMount } from 'svelte';
   import { sessionKey, providerName } from '../lib/agents';
   import Page from '../lib/Page.svelte';
   import SectionNav from '../lib/SectionNav.svelte';
-  import Icon from '../lib/Icon.svelte';
   import { save } from '../lib/desktop';
-  import { codexUsageStop, usageCosts, writeTextFile } from '../lib/ipc';
-  import { loadClaudeLimits, loadCodexLimits, planState } from '../lib/limits.svelte';
+  import { usageCosts, writeTextFile } from '../lib/ipc';
   import { appState, refreshMs } from '../lib/stores.svelte';
-  import { cacheHitRate, chartData, dailyTotals, hourToLocalDay, rollingAverage, sessionStats, streaks, usageBlocks, formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv, weekHeatmap, type Split, type UsageBlock } from '../lib/costs';
+  import { sessionStats, formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv, type Split } from '../lib/costs';
   import {
     clampDays,
     isActive,
@@ -20,76 +18,19 @@
     type Dates,
     type Selection,
   } from '../lib/range';
-  import { codexLimits, planLimits, resetsIn, weeklyBreakdown } from '../lib/plan';
-  import { relativeTime } from '../lib/format';
   import type { AgentProvider, CostRow } from '../types';
+  import PlanLimits from './PlanLimits.svelte';
+  import SpendBars from './SpendBars.svelte';
+  import WeekHeat from './WeekHeat.svelte';
+  import YearCalendar from './YearCalendar.svelte';
+  import UsageBlocks from './UsageBlocks.svelte';
+  import CacheRate from './CacheRate.svelte';
+  import Breakdown from './Breakdown.svelte';
+  import './usage.css';
 
+  /** The usage page: plan limits, then local spend over a range in one of several views. */
   let { onClose, sessionKey: current = null }: { onClose: () => void; sessionKey?: string | null } =
     $props();
-
-  // Limits come from the app-wide store the tab bar's chip shares.
-  const codexPlan = $derived(planState.codex);
-  const codexError = $derived(planState.codexError);
-  const codexLoading = $derived(planState.codexLoading);
-  const loadCodex = loadCodexLimits;
-  const CODEX_ROWS_KEY = 'atc.usage.codexRows';
-  const lastCodexRows = readRows(CODEX_ROWS_KEY, 2);
-  let codexRows = $state(lastCodexRows);
-  /** Not installed last time either: reserving a card that then vanishes is worse than none. */
-  const codexMissing = $derived(planState.codexAt ? planState.codexMissing : lastCodexRows === 0);
-  const codexWindows = $derived(codexPlan ? codexLimits(codexPlan) : []);
-  $effect(() => {
-    if (!planState.codexAt || planState.codexError) return;
-    const n = planState.codex === null ? 0 : codexWindows.length;
-    codexRows = rememberRows(CODEX_ROWS_KEY, n, untrack(() => codexRows));
-  });
-
-  // --- plan limits
-  const plan = $derived(planState.claude);
-  const planError = $derived(planState.claudeError);
-  const planLoading = $derived(planState.claudeLoading);
-  const planUpdatedAt = $derived(plan ? planState.claudeAt : 0);
-  const loadPlan = loadClaudeLimits;
-  /** Ticks so "updated 3m ago" stays current while the page sits open. */
-  let now = $state(Date.now());
-  /** Limits move slowly, and the endpoint rate-limits, so poll gently. */
-
-  const limits = $derived(plan ? planLimits(plan) : []);
-  const breakdown = $derived(plan ? weeklyBreakdown(plan) : []);
-
-  // How many limit rows to reserve space for before the response lands. How many an
-  // account has varies (session, week, and per-model weeks), so remember the last count
-  // rather than guess it every time; the default only matters on the very first load.
-  const ROWS_KEY = 'atc.usage.limitRows';
-  let skeletonRows = $state(readRows(ROWS_KEY, 3));
-
-  function readRows(key: string, fallback: number): number {
-    try {
-      const raw = localStorage.getItem(key);
-      const n = Number(raw);
-      if (raw !== null && Number.isInteger(n) && n >= 0 && n <= 6) return n;
-    } catch {
-      // Storage unavailable: fall through to the default.
-    }
-    return fallback;
-  }
-
-  /** Returns the count to reserve next time; `0` is only kept for Codex being absent. */
-  function rememberRows(key: string, n: number, was: number): number {
-    if (n === was || (n === 0 && key === ROWS_KEY)) return was;
-    try {
-      localStorage.setItem(key, String(n));
-    } catch {
-      // Storage unavailable: next launch reserves the default instead.
-    }
-    return n;
-  }
-
-  $effect(() => {
-    if (!plan) return;
-    skeletonRows = rememberRows(ROWS_KEY, limits.length, untrack(() => skeletonRows));
-    now = Date.now();
-  });
 
   // --- spend
   let rows = $state<CostRow[]>([]);
@@ -191,17 +132,6 @@
     return { key, name: path?.split(/[\\/]/).filter(Boolean).pop() ?? key };
   }
 
-  let groupBy = $state<'project' | 'model' | 'session'>('project');
-  let metric = $state<'tokens' | 'cost'>('cost');
-  /** Project keys whose sessions are shown. */
-  let expanded = $state<Set<string>>(new Set());
-
-  function toggleProject(key: string) {
-    const next = new Set(expanded);
-    if (!next.delete(key)) next.add(key);
-    expanded = next;
-  }
-
   /** Session label from the sidebar index, falling back to a short id. */
   function sessionName(id: string): string {
     for (const p of appState.index.projects) {
@@ -224,7 +154,7 @@
         filters: [{ name: 'CSV', extensions: ['csv'] }],
       });
       if (!path) return;
-      await writeTextFile(path, toCsv(filteredRows, from <= to ? from : to, from <= to ? to : from, projectOf));
+      await writeTextFile(path, toCsv(filteredRows, lo, hi, projectOf));
       exportError = null;
     } catch (e) {
       exportError = String(e);
@@ -233,109 +163,18 @@
     }
   }
 
-  const summary = $derived(
-    summarize(filteredRows, from <= to ? from : to, from <= to ? to : from, projectOf),
-  );
-  const rankedProjects = $derived([...summary.byProject].sort((a, b) => b[metric] - a[metric]));
-  const rankedModels = $derived([...summary.byModel].sort((a, b) => b[metric] - a[metric]));
-  const rankedSessions = $derived([...summary.bySession].sort((a, b) => b[metric] - a[metric]));
-  const metricTotal = $derived(metric === 'tokens' ? summary.tokens : summary.total);
-  let split = $state<Split>('none');
-  let cumulative = $state(false);
+  const lo = $derived(from <= to ? from : to);
+  const hi = $derived(from <= to ? to : from);
+  const summary = $derived(summarize(filteredRows, lo, hi, projectOf));
+  let metric = $state<'tokens' | 'cost'>('cost');
   let view = $state<'bars' | 'week' | 'calendar' | 'blocks' | 'cache'>('bars');
-  let showAverage = $state(false);
-  /** 100% stacked bars, so the mix stays readable when totals swing. */
-  let share = $state(false);
-  // Token kinds have no cost of their own, and one provider needs no provider split.
-  const activeSplit = $derived<Split>((split === 'type' && metric === 'cost') || (split === 'provider' && provider !== 'all') ? 'none' : split);
-  const chart = $derived(
-    chartData(filteredRows, from <= to ? from : to, from <= to ? to : from, { metric, split: activeSplit, cumulative }, projectOf),
-  );
-  const chartMax = $derived(Math.max(0, ...chart.buckets.map((b) => b.total)));
-  const chartHourly = $derived(from === to);
-  const asShare = $derived(share && chart.series.length > 1);
-  const canAverage = $derived(!chartHourly && !cumulative && !asShare && chart.buckets.length >= 7);
-  const average = $derived(showAverage && canAverage ? rollingAverage(chart.buckets.map((b) => b.total)) : null);
-  const pct = (v: number, of: number) => `${of ? Math.round((v / of) * 100) : 0}%`;
-  /** Bucket under the pointer, for the read-out above the chart. */
-  let hovered = $state<number | null>(null);
-  const shown = $derived(hovered === null ? null : chart.buckets[hovered]);
-  /** A bar's height as a share of the chart, which the hover label sits just above. */
-  const barPct = (b: (typeof chart.buckets)[number]) => (asShare ? (b.total ? 100 : 0) : chartMax ? (b.total / chartMax) * 100 : 0);
-  /** One series keeps the accent; a split takes the categorical slots chartData assigns. */
-  // ponytail: model and project slots follow rank, so a range change can recolour a model;
-  // pin colours per name if people compare screenshots across ranges.
-  const color = (i: number) =>
-    chart.series.length === 1 ? 'var(--accent)' : chart.series[i] === 'Other' ? 'var(--series-other)' : `var(--series-${chart.slots[i] + 1})`;
-
-  const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const week = $derived(weekHeatmap(filteredRows, from <= to ? from : to, from <= to ? to : from, metric));
-  const weekMax = $derived(Math.max(0, ...week.flat()));
-  /** Four steps of the accent over the surface: one hue, light to dark. */
-  const level = (v: number, max: number) => (v > 0 && max ? Math.ceil((v / max) * 4) : 0);
-  let hoveredCell = $state<{ day: number; hour: number } | null>(null);
-
-  // Activity calendar: the last 53 weeks, Monday first, whatever the range.
-  const dayTotals = $derived(dailyTotals(filteredRows, metric));
-  const calendar = $derived.by(() => {
-    const d = new Date(`${today}T00:00:00`);
-    d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - 52 * 7);
-    return Array.from({ length: 53 }, () =>
-      Array.from({ length: 7 }, () => {
-        const day = localDay(d);
-        d.setDate(d.getDate() + 1);
-        return day;
-      }),
-    );
-  });
-  const calendarMax = $derived(Math.max(0, ...calendar.flat().map((d) => dayTotals.get(d) ?? 0)));
-  const streak = $derived(streaks([...dayTotals].filter(([, v]) => v > 0).map(([d]) => d), today));
-  const monthLabel = (week: string[]) =>
-    Number(week[0].slice(8)) <= 7 ? new Date(`${week[0]}T00:00:00`).toLocaleString(undefined, { month: 'short' }) : '';
-  let hoveredDay = $state<string | null>(null);
-
-  // 5-hour blocks within the range.
-  const blocks = $derived(usageBlocks(filteredRows, from <= to ? from : to, from <= to ? to : from));
-  const blockValue = (b: UsageBlock) => (metric === 'tokens' ? b.tokens : b.cost);
-  const blockMax = $derived(Math.max(0, ...blocks.map(blockValue)));
-  const BLOCKS_SHOWN = 50;
-  const blockWindow = (b: UsageBlock) =>
-    `${new Date(b.start).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} – ${new Date(b.end).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
-
-  // Cache hit rate per day within the range.
-  const rates = $derived(cacheHitRate(filteredRows, from <= to ? from : to, from <= to ? to : from));
-  /** The line, split where a day had no input so gaps stay gaps. */
-  const rateLines = $derived.by(() => {
-    const lines: string[] = [];
-    let line: string[] = [];
-    rates.forEach((r, i) => {
-      if (r.rate === null) {
-        if (line.length) lines.push(line.join(' '));
-        line = [];
-      } else line.push(`${i + 0.5},${100 - r.rate * 100}`);
-    });
-    if (line.length) lines.push(line.join(' '));
-    return lines;
-  });
-  const overallRate = $derived.by(() => {
-    let read = 0;
-    let fed = 0;
-    for (const r of filteredRows) {
-      const day = hourToLocalDay(r.hour);
-      if (day < (from <= to ? from : to) || day > (from <= to ? to : from)) continue;
-      read += r.cacheRead;
-      fed += r.input + r.cacheRead + r.cacheWrite;
-    }
-    return fed ? read / fed : null;
-  });
-  let hoveredRate = $state<number | null>(null);
+  let bars = $state({ split: 'none' as Split, cumulative: false, showAverage: false, share: false });
   /** The focused tab's session, all time (#80). */
   const session = $derived(current ? sessionStats(rows, current) : null);
   const localTime = (hour: string) =>
     new Date(`${hour}:00:00Z`).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const fmt = (v: number) => (metric === 'tokens' ? `${formatTokens(v)} tokens` : formatUsd(v));
 
-  // --- section list
   const sections = $derived([
     { id: 'u-limits', label: 'Limits' },
     ...(current && (session || !costsLoaded) ? [{ id: 'u-session', label: "This tab's session" }] : []),
@@ -345,113 +184,17 @@
 
   onMount(() => {
     restoreRange();
-    // The app polls Claude's limits already; only a stale answer is refreshed here.
-    if (Date.now() - planState.claudeAt > refreshMs('claude')) void loadPlan();
-    if (Date.now() - planState.codexAt > refreshMs('codex')) void loadCodex();
     void loadCosts();
     const poll = setInterval(() => void loadCosts(), refreshMs('claude'));
-    // Each Codex read starts a `codex app-server` process, so it refreshes less often.
-    const codexPoll = setInterval(() => void loadCodex(), refreshMs('codex'));
-    const tick = setInterval(() => (now = Date.now()), 30_000);
-    return () => {
-      void codexUsageStop();
-      clearInterval(poll);
-      clearInterval(codexPoll);
-      clearInterval(tick);
-    };
+    return () => clearInterval(poll);
   });
 </script>
 
-<!-- Same markup as the real rows, so the space reserved is the space they take and
-     nothing below moves when they arrive. -->
-{#snippet ghostLimits(n: number, label: string)}
-  <div class="limits" aria-busy="true" aria-label={label}>
-    {#each { length: n } as _, i (i)}
-      <div class="limit">
-        <div class="limit-head">
-          <span class="ghost" style="width: 11ch"></span>
-          <span class="ghost" style="width: 7ch"></span>
-        </div>
-        <div class="meter"></div>
-        <div class="muted"><span class="ghost" style="width: 18ch"></span></div>
-      </div>
-    {/each}
-  </div>
-{/snippet}
-
 <Page title="Usage" wide {onClose}>
   <SectionNav {sections}>
+  <div class="usage">
   <span id="u-limits" class="anchor"></span>
-  <div class="plan-grid">
-  <section class="plan-card" aria-label="Claude plan limits">
-  <h2>
-    Claude plan limits
-    {#if typeof plan?.subscriptionType === 'string'}<span class="tag">{plan.subscriptionType}</span>{/if}
-  </h2>
-  {#if planError && !plan}
-    <p class="err">{planError}</p>
-  {:else if !plan}
-    {@render ghostLimits(skeletonRows, 'Loading plan limits')}
-  {:else if limits.length === 0}
-    <p class="muted">No limits reported for this account.</p>
-  {:else}
-    <div class="limits">
-      {#each limits as l (l.key)}
-        <div class="limit">
-          <div class="limit-head">
-            <span>{l.label}</span>
-            <span class="pct" class:hot={l.percent >= 80}>{Math.round(l.percent)}% used</span>
-          </div>
-          <div class="meter">
-            <div class="fill" class:hot={l.percent >= 80} style="width: {l.percent}%"></div>
-          </div>
-          <div class="muted">{resetsIn(l.resetsAt)}</div>
-        </div>
-      {/each}
-    </div>
-    {#if breakdown.length > 0}
-      <p class="muted">
-        This week by product: {breakdown.map((b) => `${b.name} ${b.percent}%`).join(' · ')}
-      </p>
-    {/if}
-    {#if planError}
-      <!-- A failed background refresh keeps the last good numbers on screen. -->
-      <p class="err">Refresh failed: {planError}</p>
-    {/if}
-  {/if}
-  <div class="refresh">
-    <button class="btn" onclick={loadPlan} disabled={planLoading}>
-      {planLoading ? 'Refreshing…' : 'Refresh'}
-    </button>
-    {#if planUpdatedAt}
-      {@const ago = relativeTime(planUpdatedAt, now)}
-      <span class="muted">Updated {ago === 'now' ? 'just now' : `${ago} ago`}</span>
-    {/if}
-  </div>
-
-  </section>
-  {#if !codexMissing}
-  <section class="plan-card" aria-label="Codex plan limits">
-  <h2>Codex plan limits</h2>
-  {#if codexError}<p class="err">{codexError}</p>{/if}
-  {#if !codexPlan && !codexError}{@render ghostLimits(codexRows || 2, 'Loading Codex limits')}
-  {:else if codexPlan && codexWindows.length === 0}<p class="muted">No rate-limit data for this account.</p>{/if}
-  <div class="limits">
-    {#each codexWindows as l (l.key)}
-      <div class="limit">
-        <div class="limit-head"><span>{l.label}</span><span>{Math.round(100 - l.percent)}% remaining · {Math.round(l.percent)}% used</span></div>
-        <div class="meter"><div class="fill" style="width: {l.percent}%"></div></div>
-        <div class="muted">{l.resetsAt ? resetsIn(l.resetsAt) : 'Reset time unavailable'}</div>
-      </div>
-    {/each}
-  </div>
-  {#if codexPlan && !codexWindows.some(l => l.windowMinutes === 300)}
-    <p class="muted">5-hour limit: not reported by Codex for this account. ATC cannot calculate it from local token counts.</p>
-  {/if}
-  <button class="btn" onclick={loadCodex} disabled={codexLoading}>Refresh Codex limits</button>
-  </section>
-  {/if}
-  </div>
+  <PlanLimits />
 
   {#if current && (session || !costsLoaded)}
     <h2 id="u-session">This tab's session</h2>
@@ -558,353 +301,39 @@
       <button class="btn" class:primary={view === 'cache'} onclick={() => (view = 'cache')}>Cache hit rate</button>
     </div>
     {#if view === 'bars'}
-      <div class="group" aria-label="Bar options">
-        <button class="btn" class:primary={!cumulative} onclick={() => (cumulative = false)}>{chartHourly ? 'Hourly' : 'Daily'}</button>
-        <button class="btn" class:primary={cumulative} onclick={() => (cumulative = true)}>Running total</button>
-        {#if chart.series.length > 1}
-          <button class="btn" class:primary={share} aria-pressed={share} onclick={() => (share = !share)}>Share</button>
-        {/if}
-        {#if canAverage}
-          <button class="btn" class:primary={showAverage} aria-pressed={showAverage} onclick={() => (showAverage = !showAverage)}>7-day average</button>
-        {/if}
-      </div>
-    {/if}
-    {#if view === 'bars'}
-      <div class="group" aria-label="Split the chart">
-        <button class="btn" class:primary={activeSplit === 'none'} onclick={() => (split = 'none')}>Total</button>
-        <button class="btn" class:primary={activeSplit === 'model'} onclick={() => (split = 'model')}>By model</button>
-        <button class="btn" class:primary={activeSplit === 'project'} onclick={() => (split = 'project')}>By project</button>
-        {#if provider === 'all'}
-          <button class="btn" class:primary={activeSplit === 'provider'} onclick={() => (split = 'provider')}>By provider</button>
-        {/if}
-        {#if metric === 'tokens'}
-          <button class="btn" class:primary={activeSplit === 'type'} onclick={() => (split = 'type')}>By token type</button>
-        {/if}
-      </div>
-    {/if}
-    {#if view === 'week'}
-      <div class="readout muted" aria-live="polite">
-        {#if hoveredCell}
-          <strong>{WEEKDAYS[hoveredCell.day]} {String(hoveredCell.hour).padStart(2, '0')}:00</strong> · {fmt(week[hoveredCell.day][hoveredCell.hour])}
-        {:else}
-          Total per weekday and hour across the range, in local time. Hover a cell.
-        {/if}
-      </div>
-      <div class="heat" role="img" aria-label={`${metric === 'tokens' ? 'Tokens' : 'Estimated cost'} by weekday and hour`}>
-        <span></span>
-        {#each { length: 24 } as _, h (h)}<span class="heat-hour muted">{h % 6 === 0 ? String(h).padStart(2, '0') : ''}</span>{/each}
-        {#each week as hours, d (d)}
-          <span class="heat-day muted">{WEEKDAYS[d]}</span>
-          {#each hours as v, h (h)}
-            <span
-              class="cell l{level(v, weekMax)}"
-              class:hot={hoveredCell?.day === d && hoveredCell?.hour === h}
-              role="presentation"
-              onmouseenter={() => (hoveredCell = { day: d, hour: h })}
-              onmouseleave={() => (hoveredCell = null)}
-            ></span>
-          {/each}
-        {/each}
-      </div>
-      <div class="heat-scale muted">
-        Less {#each [0, 1, 2, 3, 4] as l (l)}<span class="cell l{l}"></span>{/each} More
-      </div>
+      <SpendBars
+        rows={filteredRows}
+        {lo}
+        {hi}
+        {metric}
+        {provider}
+        {fmt}
+        {projectOf}
+        onDay={showDay}
+        bind:split={bars.split}
+        bind:cumulative={bars.cumulative}
+        bind:showAverage={bars.showAverage}
+        bind:share={bars.share}
+      />
+    {:else if view === 'week'}
+      <WeekHeat rows={filteredRows} {lo} {hi} {metric} {fmt} />
     {:else if view === 'calendar'}
-      <div class="readout muted" aria-live="polite">
-        {#if hoveredDay}
-          <strong>{hoveredDay}</strong> · {fmt(dayTotals.get(hoveredDay) ?? 0)}
-        {:else}
-          {streak.active} active {streak.active === 1 ? 'day' : 'days'} · current streak {streak.current} · longest {streak.longest}. The last year, whatever the range; click a day to show it.
-        {/if}
-      </div>
-      <div class="calendar" role="img" aria-label={`${metric === 'tokens' ? 'Tokens' : 'Estimated cost'} per day over the last year`}>
-        <div class="cal-days muted"><span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span><span></span></div>
-        {#each calendar as days (days[0])}
-          <div class="cal-week">
-            <span class="cal-month muted">{monthLabel(days)}</span>
-            {#each days as day (day)}
-              {#if day > today}
-                <span class="cell future"></span>
-              {:else}
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <span
-                  class="cell l{level(dayTotals.get(day) ?? 0, calendarMax)}"
-                  class:hot={hoveredDay === day}
-                  role="presentation"
-                  onmouseenter={() => (hoveredDay = day)}
-                  onmouseleave={() => (hoveredDay = null)}
-                  onclick={() => showDay(day)}
-                ></span>
-              {/if}
-            {/each}
-          </div>
-        {/each}
-      </div>
-      <div class="heat-scale muted">
-        Less {#each [0, 1, 2, 3, 4] as l (l)}<span class="cell l{l}"></span>{/each} More
-      </div>
+      <YearCalendar rows={filteredRows} {metric} {today} {fmt} onDay={showDay} />
     {:else if view === 'blocks'}
-      <p class="muted">
-        Usage in 5-hour windows, each starting at its first activity, like Claude's session limit. Usage is
-        recorded per hour, so the edges are approximate.
-      </p>
-      {#if blocks.length === 0}
-        <p class="muted">No usage in this range.</p>
-      {:else}
-        <table class="blocks">
-          <thead>
-            <tr><th>Window</th><th class="num">Active hours</th><th class="num">Tokens</th><th class="num">Cost</th><th></th></tr>
-          </thead>
-          <tbody>
-            {#each blocks.slice(0, BLOCKS_SHOWN) as b (b.start)}
-              <tr>
-                <td>{blockWindow(b)}{#if Date.now() < b.end}<span class="now">now</span>{/if}</td>
-                <td class="num">{b.activeHours}</td>
-                <td class="num">{formatTokens(b.tokens)}</td>
-                <td class="num">{monetary({ cost: b.cost, partial: b.partial, unavailable: b.partial && b.cost === 0 })}</td>
-                <td class="bar-cell"><span class="hbar" style="width: {blockMax ? (blockValue(b) / blockMax) * 100 : 0}%"></span></td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-        {#if blocks.length > BLOCKS_SHOWN}<p class="muted">Showing the newest {BLOCKS_SHOWN} of {blocks.length} blocks.</p>{/if}
-      {/if}
-    {:else if view === 'cache'}
-      <div class="readout muted" aria-live="polite">
-        {#if hoveredRate !== null && rates[hoveredRate]}
-          <strong>{rates[hoveredRate].day}</strong> ·
-          {rates[hoveredRate].rate === null ? 'no input' : `${Math.round(rates[hoveredRate].rate! * 100)}% from cache`}
-        {:else}
-          {overallRate === null ? 'No input in this range.' : `${Math.round(overallRate * 100)}% of input tokens came from the prompt cache across the range.`}
-        {/if}
-      </div>
-      {#if rates.length > 0}
-        <div class="chart rate" role="img" aria-label="Share of input tokens read from the prompt cache, per day">
-          <span class="rate-label muted" style="top: 2px">100%</span>
-          <span class="rate-label muted" style="top: calc(50% + 2px)">50%</span>
-          <svg viewBox="0 0 {rates.length} 100" preserveAspectRatio="none" aria-hidden="true">
-            {#each [25, 50, 75] as y (y)}<line class="grid" x1="0" x2={rates.length} y1={y} y2={y} />{/each}
-            {#each rateLines as points (points)}<polyline points={points} />{/each}
-            {#if hoveredRate !== null}<line class="cross" x1={hoveredRate + 0.5} x2={hoveredRate + 0.5} y1="0" y2="100" />{/if}
-          </svg>
-          {#each rates as r, i (r.day)}
-            <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-            <div class="hit" onmouseenter={() => (hoveredRate = i)} onmouseleave={() => (hoveredRate = null)} onclick={() => showDay(r.day)}>
-              {#if r.rate !== null}<span class="rate-dot" class:hot={hoveredRate === i} style="bottom: {r.rate * 100}%"></span>{/if}
-            </div>
-          {/each}
-        </div>
-        <div class="chart-axis muted"><span>{rates[0].day}</span><span>{rates[rates.length - 1].day}</span></div>
-      {/if}
-    {:else if chart.buckets.length > 0}
-      <div class="readout muted">
-        {chartHourly ? 'Hover an hour' : 'Hover a day for its total; click it to show that day'}
-      </div>
-      <div class="chart" role="img" aria-label={`${cumulative ? 'Running total of' : ''} ${metric === 'tokens' ? 'tokens' : 'estimated cost'} per ${chartHourly ? 'hour' : 'day'}`}>
-        {#if average && chartMax}
-          <svg class="avg" viewBox="0 0 {average.length} {chartMax}" preserveAspectRatio="none" aria-hidden="true">
-            <polyline points={average.map((v, i) => `${i + 0.5},${chartMax - v}`).join(' ')} />
-          </svg>
-        {/if}
-        {#if shown && hovered !== null}
-          <!-- Its anchor slides from its left edge to its right across the chart, so it
-               never runs off either side. -->
-          {@const x = ((hovered + 0.5) / chart.buckets.length) * 100}
-          <div class="tip" aria-live="polite" style="left: {x}%; bottom: calc({barPct(shown)}% + 8px); transform: translateX(-{x}%)">
-            <strong>{shown.label}</strong>
-            <span class="tip-total">{fmt(shown.total)}</span>
-            {#if chart.series.length > 1}
-              {#each chart.series as name, i (name)}
-                {#if shown.values[i] > 0}
-                  <span class="tip-row"><span class="swatch" style="background: {color(i)}"></span>{name}<span>{asShare ? pct(shown.values[i], shown.total) : fmt(shown.values[i])}</span></span>
-                {/if}
-              {/each}
-            {/if}
-            {#if average}<span class="tip-row muted">7-day average<span>{fmt(average[hovered])}</span></span>{/if}
-          </div>
-        {/if}
-        {#each chart.buckets as b, i (b.key)}
-          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-          <div
-            class="bar-col"
-            class:pick={!chartHourly}
-            onmouseenter={() => (hovered = i)}
-            onmouseleave={() => (hovered = null)}
-            onclick={() => !chartHourly && showDay(b.key)}
-          >
-            <div class="stack" style="height: {barPct(b)}%">
-              {#each b.values as v, s (s)}
-                <!-- Grow weights summing to 100: below 1 in total, flex fills only that fraction of the bar. -->
-                {#if v > 0}<div class="seg" style="flex-grow: {(v / b.total) * 100}; background: {color(s)}"></div>{/if}
-              {/each}
-            </div>
-          </div>
-        {/each}
-      </div>
-      <div class="chart-axis muted">
-        <span>{chartHourly ? '00:00' : chart.buckets[0].key}</span><span>{chartHourly ? '23:00' : chart.buckets[chart.buckets.length - 1].key}</span>
-      </div>
-      {#if chart.series.length > 1 || average}
-        <ul class="legend">
-          {#if chart.series.length > 1}
-            {#each chart.series as name, i (name)}
-              <li><span class="swatch" style="background: {color(i)}"></span>{name}</li>
-            {/each}
-          {/if}
-          {#if average}<li><span class="swatch line"></span>7-day average</li>{/if}
-        </ul>
-      {/if}
+      <UsageBlocks rows={filteredRows} {lo} {hi} {metric} />
+    {:else}
+      <CacheRate rows={filteredRows} {lo} {hi} onDay={showDay} />
     {/if}
 
-    <h2 id="u-breakdown">Breakdown</h2>
-    <div class="group">
-      <button class="btn" class:primary={groupBy === 'project'} onclick={() => (groupBy = 'project')}>
-        By project
-      </button>
-      <button class="btn" class:primary={groupBy === 'model'} onclick={() => (groupBy = 'model')}>
-        By model
-      </button>
-      <button class="btn" class:primary={groupBy === 'session'} onclick={() => groupBy = 'session'}>By session</button>
-    </div>
-
-    <table>
-      <thead>
-        <tr>
-          <th>{groupBy === 'project' ? 'Project' : groupBy === 'model' ? 'Model' : 'Session'}</th>
-          <th class="num">Tokens</th><th class="num">Cost</th><th class="share">{metric === 'tokens' ? 'Token share' : 'Cost share'}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#if groupBy === 'session'}
-          {#each rankedSessions as s (s.key)}
-            <tr>
-              <td title={s.key}>{sessionName(s.key)}</td>
-              <td class="num">{formatTokens(s.tokens)}</td>
-              <td class="num">{monetary(s)}</td>
-              <td class="share"><div class="meter small"><div class="fill" style="width: {metricTotal ? s[metric] / metricTotal * 100 : 0}%"></div></div></td>
-            </tr>
-          {:else}
-            <tr><td colspan="4" class="muted">No usage in this range.</td></tr>
-          {/each}
-        {:else if groupBy === 'model'}
-          {#each rankedModels as m (m.key)}
-            <tr>
-              <td>{m.key.startsWith('codex:') ? 'Codex' : 'Claude'} · {m.key.slice(m.key.indexOf(':') + 1)}</td>
-              <td class="num">{formatTokens(m.tokens)}</td>
-              <td class="num">{monetary(m)}</td>
-              <td class="share">
-                <div class="meter small">
-                  <div class="fill" style="width: {metricTotal ? (m[metric] / metricTotal) * 100 : 0}%"></div>
-                </div>
-              </td>
-            </tr>
-          {:else}
-            <tr><td colspan="4" class="muted">No usage in this range.</td></tr>
-          {/each}
-        {:else}
-          {#each rankedProjects as p (p.key)}
-            {@const sessions = [...(summary.sessionsByProject.get(p.key) ?? [])].sort((a, b) => b[metric] - a[metric])}
-            <tr>
-              <td>
-                <button class="expand" onclick={() => toggleProject(p.key)} aria-expanded={expanded.has(p.key)}>
-                  <span class="twisty" class:open={expanded.has(p.key)}><Icon name="chevron" size={12} /></span>{p.name}
-                  <span class="muted">{sessions.length} session{sessions.length === 1 ? '' : 's'}</span>
-                </button>
-              </td>
-              <td class="num">{formatTokens(p.tokens)}</td>
-              <td class="num">{monetary(p)}</td>
-              <td class="share">
-                <div class="meter small">
-                  <div class="fill" style="width: {metricTotal ? (p[metric] / metricTotal) * 100 : 0}%"></div>
-                </div>
-              </td>
-            </tr>
-            {#if expanded.has(p.key)}
-              {#each sessions as s (s.key)}
-                <tr class="session">
-                  <td title={s.key}>{sessionName(s.key)}</td>
-                  <td class="num">{formatTokens(s.tokens)}</td>
-                  <td class="num">{monetary(s)}</td>
-                  <td class="share"></td>
-                </tr>
-              {/each}
-            {/if}
-          {:else}
-            <tr><td colspan="4" class="muted">No usage in this range.</td></tr>
-          {/each}
-        {/if}
-      </tbody>
-    </table>
-
-    {#if summary.unpricedModels.length > 0}
-      <p class="muted">Pricing is incomplete for: {summary.unpricedModels.join(', ')} (unknown portions are excluded from the estimate).</p>
-    {/if}
+    <Breakdown {summary} {metric} {sessionName} />
   {/if}
+  </div>
   </SectionNav>
 </Page>
 
 <style>
   .anchor {
     display: block;
-  }
-  .plan-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-    gap: 24px;
-  }
-  .plan-card {
-    min-width: 0;
-  }
-  .tag {
-    margin-left: 6px;
-    padding: 1px 6px;
-    border-radius: 8px;
-    background: var(--bg-surface);
-    color: var(--fg-dim);
-    letter-spacing: 0;
-    text-transform: none;
-  }
-  .limits {
-    display: grid;
-    gap: 14px;
-    margin-bottom: 12px;
-  }
-  .limit-head {
-    display: flex;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 4px 12px;
-    margin-bottom: 5px;
-    color: var(--fg);
-    font-size: 13px;
-  }
-  .pct.hot {
-    color: var(--warn);
-  }
-  .meter {
-    height: 8px;
-    overflow: hidden;
-    margin-bottom: 4px;
-    border-radius: 4px;
-    background: var(--bg-surface);
-  }
-  .meter.small {
-    height: 5px;
-    margin: 0;
-  }
-  .fill {
-    height: 100%;
-    border-radius: 4px;
-    background: var(--accent);
-    transition: width var(--enter) var(--ease-out);
-  }
-  .fill.hot {
-    background: var(--warn);
-  }
-  .refresh {
-    display: flex;
-    align-items: center;
-    gap: 10px;
   }
   .range .span {
     width: 4.5em;
@@ -922,359 +351,8 @@
     color: var(--fg-dim);
     font-size: 12px;
   }
-  .total {
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-    margin: 8px 0 12px;
-  }
-  .big {
-    color: var(--fg-bright);
-    font-size: 28px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-  }
-  /* Categorical slots from the dataviz reference palette, validated against every bundled
-     theme surface. light-dark() follows the color-scheme the theme sets on the root. */
-  th.num,
-  td.num {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-  }
-  .chart,
-  .legend {
-    --series-1: light-dark(#2a78d6, #3987e5);
-    --series-2: light-dark(#eb6834, #d95926);
-    --series-3: light-dark(#1baf7a, #199e70);
-    --series-4: light-dark(#eda100, #c98500);
-    --series-5: light-dark(#e87ba4, #d55181);
-    --series-other: var(--fg-faint);
-  }
   .daystep {
     display: inline-flex;
     gap: 2px;
-  }
-  .sep {
-    width: 8px;
-  }
-  .readout {
-    min-height: 18px;
-    margin-bottom: 4px;
-  }
-  .tip {
-    position: absolute;
-    z-index: 2;
-    display: flex;
-    min-width: 120px;
-    flex-direction: column;
-    gap: 2px;
-    padding: 6px 8px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--bg-chrome);
-    box-shadow: var(--shadow-pop);
-    font-size: 11px;
-    white-space: nowrap;
-    pointer-events: none;
-  }
-  .tip strong {
-    color: var(--fg-dim);
-    font-weight: 500;
-  }
-  .tip-total {
-    color: var(--fg-bright);
-    font-size: 13px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-  }
-  .tip-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .tip-row > span:last-child {
-    margin-left: auto;
-    padding-left: 12px;
-    font-variant-numeric: tabular-nums;
-  }
-  .readout strong {
-    color: var(--fg-bright);
-    font-weight: 600;
-  }
-  .legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 14px;
-    margin: 0 0 16px;
-    padding: 0;
-    color: var(--fg-dim);
-    font-size: 12px;
-    list-style: none;
-  }
-  .swatch {
-    display: inline-block;
-    width: 10px;
-    height: 10px;
-    margin-right: 6px;
-    border-radius: 2px;
-    vertical-align: -1px;
-  }
-  .chart {
-    position: relative;
-    display: flex;
-    align-items: flex-end;
-    gap: 2px;
-    height: 110px;
-    padding-bottom: 2px;
-    border-bottom: 1px solid var(--border);
-  }
-  .avg {
-    position: absolute;
-    inset: 0 0 2px;
-    width: 100%;
-    height: calc(100% - 2px);
-    overflow: visible;
-    pointer-events: none;
-  }
-  .avg polyline {
-    fill: none;
-    stroke: var(--fg-bright);
-    stroke-width: 2;
-    stroke-linejoin: round;
-    vector-effect: non-scaling-stroke;
-  }
-  .swatch.line {
-    height: 2px;
-    vertical-align: 3px;
-    background: var(--fg-bright);
-  }
-  .heat {
-    display: grid;
-    grid-template-columns: 32px repeat(24, 1fr);
-    gap: 2px;
-    align-items: center;
-    max-width: 640px;
-  }
-  .heat-hour,
-  .heat-day {
-    font-size: 10px;
-  }
-  .cell {
-    display: inline-block;
-    aspect-ratio: 1;
-    min-width: 10px;
-    border-radius: 2px;
-    background: var(--bg-surface);
-  }
-  .cell.l1 {
-    background: color-mix(in srgb, var(--accent) 30%, var(--bg-surface));
-  }
-  .cell.l2 {
-    background: color-mix(in srgb, var(--accent) 55%, var(--bg-surface));
-  }
-  .cell.l3 {
-    background: color-mix(in srgb, var(--accent) 80%, var(--bg-surface));
-  }
-  .cell.l4 {
-    background: var(--accent);
-  }
-  .cell.hot {
-    outline: 2px solid var(--fg-bright);
-  }
-  .heat-scale {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    margin: 8px 0 16px;
-    font-size: 11px;
-  }
-  .heat-scale .cell {
-    width: 10px;
-  }
-  .calendar {
-    display: flex;
-    gap: 2px;
-    max-width: 100%;
-    overflow-x: auto;
-  }
-  .cal-days,
-  .cal-week {
-    display: grid;
-    grid-template-rows: 14px repeat(7, 10px);
-    gap: 2px;
-  }
-  /* Fixed width: a month label overflows into the next weeks rather than widening its own. */
-  .cal-week {
-    grid-template-columns: 10px;
-  }
-  .cal-days {
-    padding-right: 4px;
-    font-size: 9px;
-    line-height: 10px;
-  }
-  .cal-week .cell {
-    width: 10px;
-    min-width: 10px;
-    height: 10px;
-    cursor: pointer;
-  }
-  .cal-week .cell.future {
-    visibility: hidden;
-  }
-  .cal-month {
-    overflow: visible;
-    font-size: 9px;
-    white-space: nowrap;
-  }
-  .blocks .now {
-    margin-left: 6px;
-    color: var(--accent);
-    font-size: 11px;
-  }
-  .bar-cell {
-    width: 30%;
-  }
-  .hbar {
-    display: block;
-    height: 6px;
-    border-radius: 0 3px 3px 0;
-    background: var(--accent);
-  }
-  .chart.rate {
-    gap: 0;
-  }
-  .chart.rate svg {
-    position: absolute;
-    inset: 0 0 2px;
-    width: 100%;
-    height: calc(100% - 2px);
-    overflow: visible;
-    pointer-events: none;
-  }
-  .chart.rate polyline {
-    fill: none;
-    stroke: var(--accent);
-    stroke-width: 2;
-    stroke-linejoin: round;
-    vector-effect: non-scaling-stroke;
-  }
-  .chart.rate .grid {
-    stroke: var(--border);
-    stroke-width: 1;
-    vector-effect: non-scaling-stroke;
-  }
-  .chart.rate .cross {
-    stroke: var(--fg-faint);
-    stroke-width: 1;
-    vector-effect: non-scaling-stroke;
-  }
-  .rate-label {
-    position: absolute;
-    left: 0;
-    font-size: 10px;
-  }
-  .hit {
-    position: relative;
-    flex: 1;
-    height: 100%;
-    cursor: pointer;
-  }
-  .rate-dot {
-    position: absolute;
-    left: 50%;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--accent);
-    transform: translate(-50%, 50%);
-  }
-  .rate-dot.hot {
-    width: 10px;
-    height: 10px;
-    box-shadow: 0 0 0 2px var(--bg);
-  }
-  .bar-col {
-    display: flex;
-    height: 100%;
-    flex: 1;
-    align-items: flex-end;
-  }
-  .bar-col.pick {
-    cursor: pointer;
-  }
-  .bar-col:hover .stack {
-    opacity: 0.8;
-  }
-  .stack {
-    display: flex;
-    width: 100%;
-    flex-direction: column-reverse;
-    gap: 2px;
-    overflow: hidden;
-    border-radius: 4px 4px 0 0;
-    transition: height var(--enter) var(--ease-out), opacity var(--fast);
-  }
-  .seg {
-    min-height: 1px;
-  }
-  .chart-axis {
-    display: flex;
-    justify-content: space-between;
-    margin: 4px 0 16px;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-  }
-  th {
-    padding: 6px 8px;
-    border-bottom: 1px solid var(--border);
-    color: var(--fg-faint);
-    font-weight: 500;
-    text-align: left;
-  }
-  td {
-    padding: 6px 8px;
-    border-bottom: 1px solid var(--bg-chrome);
-    color: var(--fg);
-  }
-  .group {
-    display: flex;
-    gap: 6px;
-    margin: 14px 0 8px;
-  }
-  .expand {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 0;
-    border: none;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
-  }
-  .twisty {
-    color: var(--fg-faint);
-    transition: transform var(--fast) var(--ease-out);
-  }
-  .twisty.open {
-    transform: rotate(90deg);
-  }
-  tr.session {
-    animation: atc-rise var(--enter) var(--ease-out);
-  }
-  tr.session td:first-child {
-    padding-left: 26px;
-    color: var(--fg-dim);
-  }
-  .num {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-  .share {
-    width: 120px;
   }
 </style>

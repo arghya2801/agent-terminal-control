@@ -80,7 +80,7 @@
   import type { IconName } from './lib/Icon.svelte';
   import { relativeTime } from './lib/format';
   import { parseSavedTabs, type SavedTab } from './lib/restore';
-  import { agentCommand, openDevtools, pickFolder, scratchDir } from './lib/ipc';
+  import { agentCommand, pickFolder, scratchDir } from './lib/ipc';
   import { projectKey } from './lib/paths';
   import { resolveSessions, type TabRef } from './lib/sessions';
   import { zoomLabel } from './lib/zoom';
@@ -701,7 +701,7 @@
         cycleTab(-1);
         break;
       case 'toggleDevtools':
-        void openDevtools();
+        // Debug builds of Wails open devtools on this chord themselves.
         break;
       case 'find':
         // Re-opening while already open should put the cursor back in the box.

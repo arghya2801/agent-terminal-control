@@ -1,0 +1,116 @@
+/* Shared by the usage page's views. Scoped under .usage, the panel's wrapper, so these
+   generic names stay on this page. */
+.usage table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.usage th {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-faint);
+  font-weight: 500;
+  text-align: left;
+}
+.usage td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--bg-chrome);
+  color: var(--fg);
+}
+.usage .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.usage .group {
+  display: flex;
+  gap: 6px;
+  margin: 14px 0 8px;
+}
+.usage .total {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 8px 0 12px;
+}
+.usage .big {
+  color: var(--fg-bright);
+  font-size: 28px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.usage .meter {
+  height: 8px;
+  overflow: hidden;
+  margin-bottom: 4px;
+  border-radius: 4px;
+  background: var(--bg-surface);
+}
+.usage .meter.small {
+  height: 5px;
+  margin: 0;
+}
+.usage .fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent);
+  transition: width var(--enter) var(--ease-out);
+}
+.usage .fill.hot {
+  background: var(--warn);
+}
+.usage .readout {
+  min-height: 18px;
+  margin-bottom: 4px;
+}
+.usage .readout strong {
+  color: var(--fg-bright);
+  font-weight: 600;
+}
+/* Four steps of the accent over the surface: one hue, light to dark. */
+.usage .cell {
+  display: inline-block;
+  aspect-ratio: 1;
+  min-width: 10px;
+  border-radius: 2px;
+  background: var(--bg-surface);
+}
+.usage .cell.l1 {
+  background: color-mix(in srgb, var(--accent) 30%, var(--bg-surface));
+}
+.usage .cell.l2 {
+  background: color-mix(in srgb, var(--accent) 55%, var(--bg-surface));
+}
+.usage .cell.l3 {
+  background: color-mix(in srgb, var(--accent) 80%, var(--bg-surface));
+}
+.usage .cell.l4 {
+  background: var(--accent);
+}
+.usage .cell.hot {
+  outline: 2px solid var(--fg-bright);
+}
+.usage .heat-scale {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin: 8px 0 16px;
+  font-size: 11px;
+}
+.usage .heat-scale .cell {
+  width: 10px;
+}
+.usage .chart {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 110px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--border);
+}
+.usage .chart-axis {
+  display: flex;
+  justify-content: space-between;
+  margin: 4px 0 16px;
+}

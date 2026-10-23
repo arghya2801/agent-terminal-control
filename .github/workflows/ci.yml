@@ -35,6 +35,8 @@ jobs:
       - run: npm run lint
       - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
       - run: npm run desktop:build
+      # The committed bindings must match App's methods.
+      - run: npm run bindings && git diff --exit-code wailsjs/go
 
 # End-to-end tests (npm run test:e2e, #97) drive native WebView2 windows with real input,
 # which needs an interactive Windows desktop, so they run locally only.

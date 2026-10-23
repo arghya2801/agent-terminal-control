@@ -81,16 +81,13 @@ func TestLinksAndCommands(t *testing.T) {
 	}
 	a := NewApp(t.TempDir())
 	a.load()
-	if _, e := a.Invoke("unknown", nil); e == nil {
-		t.Fatal("unknown command accepted")
-	}
-	if _, e := a.Invoke("pty_write", core.Object{"id": "missing"}); e == nil {
+	if e := a.PtyWrite("missing", ""); e == nil {
 		t.Fatal("missing terminal accepted")
 	}
-	if _, e := a.Invoke("agent_command", core.Object{"provider": "wrong"}); e == nil {
+	if _, e := a.AgentCommand("wrong", "", false); e == nil {
 		t.Fatal("invalid provider accepted")
 	}
-	if _, e := a.Invoke("open_in_explorer", core.Object{"path": os.Args[0]}); e == nil {
+	if e := a.OpenInExplorer(os.Args[0]); e == nil {
 		t.Fatal("opened a file, which would run it")
 	}
 }
@@ -139,19 +136,19 @@ func TestPersistenceReloadDoesNotLoseLatestSave(t *testing.T) {
 		}
 	}()
 	for i := 0; i < 20; i++ {
-		if _, err := a.Invoke("notes_set", core.Object{"text": fmt.Sprintf("note %d", i)}); err != nil {
+		if err := a.NotesSet(fmt.Sprintf("note %d", i)); err != nil {
 			t.Fatal(err)
 		}
 	}
 	wg.Wait()
 	a.refreshFiles()
-	if got, _ := a.Invoke("notes_get", nil); got != "note 19" {
+	if got := a.NotesGet(); got != "note 19" {
 		t.Fatal(got)
 	}
 	// An edit made outside ATC is picked up.
 	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("from an editor"), 0600)
 	a.refreshFiles()
-	if got, _ := a.Invoke("notes_get", nil); got != "from an editor" {
+	if got := a.NotesGet(); got != "from an editor" {
 		t.Fatal(got)
 	}
 }
@@ -159,17 +156,15 @@ func TestHeadlessCommandsAndValidation(t *testing.T) {
 	dir := t.TempDir()
 	a := NewApp(dir)
 	a.load()
-	for _, command := range []string{"notes_set", "settings_set"} {
-		if _, err := a.Invoke(command, nil); err == nil {
-			t.Fatalf("%s accepted missing payload", command)
-		}
+	if err := a.SettingsSet(nil); err == nil {
+		t.Fatal("SettingsSet accepted a missing payload")
 	}
-	path, err := a.Invoke("scratch_dir", nil)
-	if err != nil || !core.IsDir(core.Str(path)) {
+	path, err := a.ScratchDir()
+	if err != nil || !core.IsDir(path) {
 		t.Fatal(path, err)
 	}
 	file := filepath.Join(dir, "export.csv")
-	if _, err = a.Invoke("write_text_file", core.Object{"path": file, "contents": "name,tokens\n世界,123\n"}); err != nil {
+	if err = a.WriteTextFile(file, "name,tokens\n世界,123\n"); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(file)
@@ -179,9 +174,8 @@ func TestHeadlessCommandsAndValidation(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, "themes"), 0700)
 	os.WriteFile(filepath.Join(dir, "themes", "valid.json"), []byte(`{"background":"#123456"}`), 0600)
 	os.WriteFile(filepath.Join(dir, "themes", "bad.json"), []byte("{bad"), 0600)
-	v, err := a.Invoke("list_themes", nil)
-	if err != nil || len(core.Arr(v)) != 1 {
-		t.Fatal(v, err)
+	if v := a.ListThemes(); len(v) != 1 {
+		t.Fatal(v)
 	}
 }
 func TestClaudeUsageHonorsIsolatedHome(t *testing.T) {

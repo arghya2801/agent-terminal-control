@@ -12,7 +12,7 @@ measurements from that move.
 ```mermaid
 graph LR
   Shell[PowerShell / ConPTY] <--> PTY[internal/pty]
-  PTY <-->|events + write/resize/ack| App[app.go: Invoke]
+  PTY <-->|events + write/resize/ack| App[app.go: App methods]
   Files[transcripts + settings + notes] <--> Core[internal/core]
   Core <--> App
   App <-->|Wails binding + events| Transport[src/lib/desktop.ts]
@@ -21,11 +21,12 @@ graph LR
 
 ## Desktop boundary
 
-`main.go` embeds `dist/`, creates the Wails window, and starts and stops `App`. `app.go`
-exposes a single binding, `Invoke(command, args)`. `src/lib/ipc.ts` holds the typed
-command functions; `src/lib/desktop.ts` does the Wails calls, events, PTY channels,
-notifications, save dialogs and zoom. A failed command rejects its promise with a
-readable error.
+`main.go` embeds `dist/`, creates the Wails window, and starts and stops `App`. Every
+exported method on `App` is a command. Wails generates typed bindings for them in
+`wailsjs/go/` (`npm run bindings`), which are committed, and CI fails if they drift from
+the Go methods. `src/lib/ipc.ts` wraps them with the app's types; `src/lib/desktop.ts`
+does events, PTY channels, notifications, save dialogs and zoom. A failed command
+rejects its promise with the Go error.
 
 A PTY channel subscribes before the spawn. Output arrives as `{t:"o", d}` and exit as
 `{t:"x", code}` on the channel's own topic, and the listener detaches on exit or on a
