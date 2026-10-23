@@ -6,6 +6,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-24
+
 ### Fixed
 - Claude Opus 5.5 is priced at its own rates ($4 / $20, cache reads $0.20) instead of Opus 5's. Haiku 5.5, which showed as unpriced, is priced too, and Fable 5.1 cache reads use its $0.25 rate.
 - Usage history keeps sessions whose transcripts are gone. Claude Code deletes transcripts after 30 days, and their days used to vanish from the usage page. ATC now keeps every row it has seen in `usage-history.json` in its config folder.
@@ -280,7 +282,8 @@ ATC now runs on a Go/Wails host instead of Rust/Tauri. The interface is the same
 
 First release.
 
-[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.2...v0.4.3
