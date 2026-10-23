@@ -17,6 +17,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Mark a waiting agent done with the check on its row, or from its right-click menu. It moves to a Done section below Shells and comes back to Waiting on you the next time it works and stops.
 
 ### Changed
+- Development: commands are typed Wails bindings instead of one string switch; the usage page is split into a component per view; vite 8, vitest 5, TypeScript 6. No change in behaviour.
 - The Reply button is gone from the Open view.
 - The usage chip puts its percent, meter and reset time on one line.
 - The pane header reads as a path: project / branch / tab name, then its state. The branch shows on `main` too.
