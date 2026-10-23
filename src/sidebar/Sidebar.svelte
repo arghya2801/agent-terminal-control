@@ -7,7 +7,8 @@
   import Icon from '../lib/Icon.svelte';
   import { tick } from 'svelte';
   import { pageZoom } from '../lib/desktop';
-  import { activate, focusActiveTerminal, splitWith } from '../terminal/manager';
+  import { activate, focusActiveTerminal, markDone, splitWith } from '../terminal/manager';
+  import { isWaiting } from '../lib/triage';
   import { enterList, listKeys, rows } from '../lib/roving';
   import {
     anyProjectExpanded,
@@ -280,6 +281,7 @@
         if (key) {
           menu = { x: e.clientX, y: e.clientY, items: [
             { label: 'Go to tab', icon: 'terminal', disabled: key === activeKey, run: () => activate(key) },
+            { label: 'Mark done', icon: 'check', disabled: !tabs.some((t) => t.key === key && isWaiting(tabMark(t)) && !t.done), run: () => markDone(key) },
             { label: 'Rename…', icon: 'pencil', run: () => onRenameTab(key) },
             { label: 'Split beside the current tab', icon: 'split', disabled: key === activeKey, run: () => splitWith(key) },
             { label: 'Close tab', icon: 'close', sep: true, run: () => onCloseTab(key) },

@@ -276,6 +276,7 @@
       title: displayTitle(t),
       exited: t.exited,
       attention: t.attention,
+      done: t.done,
       activity: t.activity,
       projectKey: t.projectKey,
       since: t.markSince,

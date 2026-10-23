@@ -8,6 +8,13 @@ describe('triageOrder', () => {
     const order = triageOrder([tab('w', 'working', 1), tab('i', 'idle', 5), tab('a2', 'attention', 9), tab('a1', 'attention', 3), tab('x', 'exited', 0)]);
     expect(order.map((t) => t.key)).toEqual(['a1', 'a2', 'i', 'w', 'x']);
   });
+
+  it('moves done agents below shells and skips them when jumping', () => {
+    const tabs = [{ ...tab('d', 'idle', 0), done: true }, tab('s', 'open', 1), tab('x', 'exited', 0), tab('i', 'idle', 5)];
+    expect(triageOrder(tabs).map((t) => t.key)).toEqual(['i', 's', 'd', 'x']);
+    expect(nextWaiting(tabs, 'i')).toBeNull();
+    expect(triageGroup('idle', true)).toBe('Done');
+  });
 });
 
 describe('nextWaiting', () => {

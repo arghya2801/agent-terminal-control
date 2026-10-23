@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import Highlight from '../lib/Highlight.svelte';
   import Icon from '../lib/Icon.svelte';
@@ -8,7 +8,7 @@
   import StatusDot from '../lib/StatusDot.svelte';
   import { appState } from '../lib/stores.svelte';
   import { isWaiting, peekLine, stateWord, triageGroup, triageOrder } from '../lib/triage';
-  import { activate, focusActiveTerminal, outputHistory, screenLines, sendText } from '../terminal/manager';
+  import { activate, markDone, outputHistory, screenLines, sendText } from '../terminal/manager';
   import type { TabKey, TabSummary } from '../types';
 
   /** The sidebar's Open view: every tab, most urgent first, under a heading per state (#132). */
@@ -35,7 +35,7 @@
   const shown = $derived.by(() => {
     const q = query.trim().toLowerCase();
     const hits = q ? tabs.filter((t) => `${t.title} ${projectName(t.projectKey)}`.toLowerCase().includes(q)) : tabs;
-    return triageOrder(hits.map((t) => ({ ...t, mark: tabMark(t), group: triageGroup(tabMark(t)) })));
+    return triageOrder(hits.map((t) => ({ ...t, mark: tabMark(t), group: triageGroup(tabMark(t), t.done) })));
   });
 
   /** A 30-bar sparkline path, one bar per 10 s, scaled so a trickle stays short. */
@@ -43,24 +43,6 @@
     const h = outputHistory(key);
     const top = Math.max(4096, ...h);
     return h.map((v, i) => (v ? `M${i * 2 + 0.5} 10V${10 - Math.max(1, (v / top) * 10)}` : '')).join('');
-  }
-
-  // --- reply in place: answer a waiting agent without leaving the tab you are in.
-  let replying = $state<TabKey | null>(null);
-  let reply = $state('');
-  async function startReply(key: TabKey) {
-    replying = key;
-    reply = '';
-    await tick();
-    document.getElementById(`reply-${key}`)?.focus();
-  }
-  function sendReply(e: SubmitEvent) {
-    e.preventDefault();
-    if (!replying || !reply.trim()) return;
-    sendText(replying, reply);
-    replying = null;
-    // After the Enter's keypress, or the tab on screen gets an Enter too.
-    setTimeout(focusActiveTerminal);
   }
 
   // --- broadcast: Ctrl+click picks tabs, the bar below types into all of them.
@@ -92,12 +74,13 @@
 {/if}
 {#each shown as tab, i (tab.key)}
   {@const s = markTitle(tab.mark, providerName(tab.provider ?? 'claude'))}
-  {@const wait = isWaiting(tab.mark)}
+  {@const wait = isWaiting(tab.mark) && !tab.done}
   {@const showPeek = peekRows === 'all' || (peekRows === 'waiting' && wait)}
   {@const peek = showPeek ? peekLine((void now, screenLines(tab.key)), wait ? 3 : 1) : null}
   {#if i === 0 || shown[i - 1].group !== tab.group}
     <div class="section">{tab.group} <span class="n">{shown.filter((t) => t.group === tab.group).length}</span></div>
   {/if}
+  <div class="item">
   <button
     class="row {tab.mark}"
     class:wait
@@ -119,22 +102,10 @@
     {#if peek}<span class="peek">{peek}</span>{/if}
     {#if !wait && graph}<svg class="spark" viewBox="0 0 60 10" preserveAspectRatio="none" aria-hidden="true"><path d={spark(tab.key, now)} /></svg>{/if}
   </button>
-  {#if replying === tab.key}
-    <form class="reply" onsubmit={sendReply}>
-      <input
-        id="reply-{tab.key}"
-        bind:value={reply}
-        placeholder="Reply to {tab.provider ? providerName(tab.provider) : tab.title}, Enter to send"
-        aria-label="Reply to {tab.title}"
-        spellcheck="false"
-        autocomplete="off"
-        onkeydown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); replying = null; focusActiveTerminal(); } }}
-        onblur={() => { if (!reply.trim()) replying = null; }}
-      />
-    </form>
-  {:else if wait && !tab.exited}
-    <button class="reply-btn" onclick={() => startReply(tab.key)} title="Answer {tab.title} without leaving this tab">Reply</button>
+  {#if wait && !tab.exited}
+    <button class="done-btn" onclick={() => markDone(tab.key)} aria-label="Mark {tab.title} done" title="Done: move it out of Waiting on you until it works again"><Icon name="check" size={12} /></button>
   {/if}
+  </div>
 {/each}
 
 {#if live.length > 0}
@@ -253,23 +224,30 @@
   .working .spark {
     stroke: var(--warn);
   }
-  .reply-btn {
-    display: block;
-    margin: -2px 0 6px 42px;
-    padding: 1px 8px;
+  .item {
+    position: relative;
+  }
+  .done-btn {
+    position: absolute;
+    top: 3px;
+    right: 6px;
+    display: grid;
+    place-items: center;
+    padding: 2px 4px;
     border: 1px solid var(--border);
     border-radius: 5px;
-    background: transparent;
-    color: var(--accent);
-    font: inherit;
-    font-size: 11px;
+    background: var(--bg-chrome);
+    color: var(--fg-dim);
     cursor: pointer;
+    opacity: 0;
   }
-  .reply-btn:hover {
-    border-color: var(--accent);
+  .item:hover .done-btn,
+  .done-btn:focus-visible {
+    opacity: 1;
   }
-  .reply {
-    padding: 0 10px 8px 42px;
+  .done-btn:hover {
+    border-color: var(--ok);
+    color: var(--ok);
   }
   input {
     box-sizing: border-box;

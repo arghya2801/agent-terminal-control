@@ -81,6 +81,8 @@ export interface TabSummary {
   title: string;
   exited: boolean;
   attention: boolean;
+  /** Marked done in the Open view; back to waiting once the agent works again. */
+  done: boolean;
   /** Claude's or Codex's state; null for a plain shell. */
   activity: 'working' | 'idle' | 'interrupted' | null;
   projectKey: string | null;

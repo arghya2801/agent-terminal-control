@@ -6,6 +6,13 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Added
+- Mark a waiting agent done with the check on its row, or from its right-click menu. It moves to a Done section below Shells and comes back to Waiting on you the next time it works and stops.
+
+### Changed
+- The Reply button is gone from the Open view.
+- The usage chip puts its percent, meter and reset time on one line.
+
 ## [0.6.0] - 2026-10-22
 
 ### Changed
