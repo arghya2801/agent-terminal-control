@@ -10,9 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"atc/internal/core"
@@ -142,15 +140,10 @@ func (c *limitsClient) read(s core.Object) (any, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*limitWait)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, path, "app-server")
-	if strings.EqualFold(filepath.Ext(path), ".cmd") || strings.EqualFold(filepath.Ext(path), ".bat") {
-		shell, e := pty.Shell()
-		if e != nil {
-			return nil, e
-		}
-		cmd = exec.CommandContext(ctx, shell, "-NoLogo", "-NoProfile", "-Command", "& "+core.Quote(path)+" app-server")
+	cmd, e := agentCmd(ctx, path, "app-server")
+	if e != nil {
+		return nil, e
 	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	_, home := core.Roots(s)
 	cmd.Env = append(os.Environ(), "CODEX_HOME="+home)
 	stdout, e := cmd.StdoutPipe()

@@ -317,6 +317,16 @@
       <p class="muted hint">Empty fields use the default. A new projects directory is watched after a restart.</p>
 
       <h2 id="s-names">Names</h2>
+      <div class="grid">
+        <label for="rm">Suggest names with</label>
+        <div>
+          <select id="rm" bind:value={draft.ui.renameModel}>
+            <option value="haiku">Claude Haiku, latest</option>
+            <option value="luna">Codex Luna (gpt-6.1-luna, or gpt-6-luna on a ChatGPT sign-in)</option>
+          </select>
+          <span class="muted">Right-click a session and choose Rename with Haiku or Luna. Runs through the installed CLI.</span>
+        </div>
+      </div>
       {#each Object.keys(draft.projects.names) as path (path)}
         <div class="rename-row">
           <input class="wide" bind:value={draft.projects.names[path]} aria-label="Name for {path}" />

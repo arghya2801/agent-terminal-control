@@ -81,6 +81,15 @@ export interface GitChanges { files: number; insertions: number; deletions: numb
 /** What changed in a working tree since HEAD; null outside git. */
 export function gitChanges(dir: string): Promise<GitChanges | null> { return App.GitChanges(dir); }
 
+/** The last turns of a session's transcript, read without starting it. */
+export function sessionPreview(file: string): Promise<{ role: 'user' | 'assistant' | 'tool'; text: string }[]> { return App.SessionPreview(file) as never; }
+
+/** Sessions whose prompts or replies contain `query`, newest first, one hit each. */
+export function searchTranscripts(query: string): Promise<{ session: string; role: string; snippet: string; time: string }[]> { return App.SearchTranscripts(query); }
+
+/** A short name for a session from the model chosen in settings. */
+export function suggestSessionName(file: string): Promise<string> { return App.SuggestSessionName(file); }
+
 /** Null when the Codex CLI is not installed. */
 export function codexUsage(): Promise<Record<string, unknown> | null> { return App.CodexUsage(); }
 export function codexUsageStop(): Promise<void> { return App.CodexUsageStop(); }

@@ -15,8 +15,11 @@
   } = $props();
 
   let confirmButton: HTMLButtonElement;
+  let backdrop: HTMLDivElement;
 
   onMount(() => {
+    // On the body, so a dialog opened from the sidebar is not confined to it.
+    document.body.append(backdrop);
     // Take focus from the terminal, or Enter would go to the shell.
     confirmButton.focus();
     const onKey = (e: KeyboardEvent) => {
@@ -33,7 +36,7 @@
   });
 </script>
 
-<div class="backdrop" role="presentation" onclick={onCancel}>
+<div class="backdrop" role="presentation" bind:this={backdrop} onclick={onCancel}>
   <div
     class="dialog"
     role="alertdialog"

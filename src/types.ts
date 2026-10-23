@@ -108,6 +108,8 @@ export interface Settings {
     names: Record<string, string>;
     /** User-chosen session labels, by session uuid. */
     sessionNames: Record<string, string>;
+    /** Sessions hidden from the sidebar, by `provider:id`; still on disk (#163). */
+    archived: string[];
   };
   ui: {
     sidebarWidth: number;
@@ -147,6 +149,8 @@ export interface Settings {
     toastSeconds: number;
     limitsRefreshSec: number;
     codexRefreshSec: number;
+    /** The small model that suggests session names (#195). */
+    renameModel: 'haiku' | 'luna';
   };
   terminal: TerminalSettings;
   /** `args` go on every launch; `chatArgs` on chats too, so they cannot change anything. */

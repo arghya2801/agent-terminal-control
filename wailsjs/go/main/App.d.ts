@@ -57,9 +57,15 @@ export function SaveDialog(arg1:string,arg2:Array<main.FileFilter>):Promise<any>
 
 export function ScratchDir():Promise<string>;
 
+export function SearchTranscripts(arg1:string):Promise<Array<main.Hit>>;
+
+export function SessionPreview(arg1:string):Promise<Array<main.Turn>>;
+
 export function SettingsGet():Promise<Record<string, any>>;
 
 export function SettingsSet(arg1:any):Promise<void>;
+
+export function SuggestSessionName(arg1:string):Promise<string>;
 
 export function UsageContext():Promise<Record<string, any>>;
 

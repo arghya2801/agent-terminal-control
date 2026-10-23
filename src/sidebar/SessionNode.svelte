@@ -16,10 +16,13 @@
     mark = null,
     showBranch = true,
     renaming = false,
+    renameValue,
+    archived = false,
     onRename,
     onRenameCancel,
     onOpen,
     onMenu,
+    onPreview,
   }: {
     session: SessionMeta;
     query?: string;
@@ -30,10 +33,16 @@
     /** Off under a branch sub-header, which already says it. */
     showBranch?: boolean;
     renaming?: boolean;
+    /** What the rename box starts with, e.g. a suggested name; the label otherwise. */
+    renameValue?: string;
+    /** Hidden from the sidebar unless archived sessions are shown (#163). */
+    archived?: boolean;
     onRename: (name: string) => void;
     onRenameCancel: () => void;
     onOpen: (session: SessionMeta) => void;
     onMenu: (e: MouseEvent, session: SessionMeta) => void;
+    /** Space on the row: its last turns, without resuming it (#160). */
+    onPreview: (session: SessionMeta, row: HTMLElement) => void;
   } = $props();
 
   // Without a directory there is nothing safe to launch in: the only other candidate
@@ -49,7 +58,7 @@
 {#if renaming}
   <div class="session">
     <ProviderIcon provider={session.provider} />
-    <InlineRename value={session.label} onDone={onRename} onCancel={onRenameCancel} />
+    <InlineRename value={renameValue ?? session.label} onDone={onRename} onCancel={onRenameCancel} />
   </div>
 {:else}
 <button
@@ -57,10 +66,12 @@
   data-row
   tabindex="-1"
   class:active
+  class:archived
   class:disabled={!launchable}
   disabled={!launchable}
   onclick={() => onOpen(session)}
   oncontextmenu={(e) => onMenu(e, session)}
+  onkeydown={(e) => { if (e.key === ' ') { e.preventDefault(); onPreview(session, e.currentTarget); } }}
   title={launchable
     ? `Resume ${session.label}\n${session.id}`
     : 'This session did not record a working directory, so it cannot be resumed'}
@@ -81,6 +92,9 @@
 {/if}
 
 <style>
+  .session.archived {
+    opacity: 0.55;
+  }
   .session {
     position: relative;
     display: flex;
