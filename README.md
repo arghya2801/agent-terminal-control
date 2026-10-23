@@ -5,9 +5,9 @@
 <p align="center">Agent Terminal Control<br>
 A Windows terminal for Claude Code and Codex sessions.</p>
 
-<p align="center"><b>Download v0.6.1:</b>
-<a href="https://github.com/arghya2801/agent-terminal-control/releases/download/v0.6.1/ATC_0.6.1_x64_en-US.msi">MSI installer</a> (recommended) |
-<a href="https://github.com/arghya2801/agent-terminal-control/releases/download/v0.6.1/ATC_0.6.1_x64-setup.exe">Setup exe</a> |
+<p align="center"><b>Download v0.6.2:</b>
+<a href="https://github.com/arghya2801/agent-terminal-control/releases/download/v0.6.2/ATC_0.6.2_x64_en-US.msi">MSI installer</a> (recommended) |
+<a href="https://github.com/arghya2801/agent-terminal-control/releases/download/v0.6.2/ATC_0.6.2_x64-setup.exe">Setup exe</a> |
 <a href="https://github.com/arghya2801/agent-terminal-control/releases/latest/download/atc.exe">Portable atc.exe</a><br>
 <a href="https://github.com/arghya2801/agent-terminal-control/releases">Release notes and older versions</a></p>
 

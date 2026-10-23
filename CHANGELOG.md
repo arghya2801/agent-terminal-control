@@ -6,6 +6,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-10-24
+
 ### Added
 - How fast each plan limit fills: on the usage page, each Claude and Codex limit gets a line of % used across its window, and an estimate of when it runs out at the recent pace ("At this pace it runs out Sat, 03:24", or "lasts until the reset"). ATC keeps 8 days of readings in `limits-history.jsonl` in its config folder, so the line starts from the first reading after this update.
 - Preview a session before resuming it: press Space on a session row, or right-click it and choose Preview. Its last prompts and replies show beside the sidebar, with tool calls collapsed to their names. Enter resumes it, Esc closes.
@@ -294,7 +296,8 @@ ATC now runs on a Go/Wails host instead of Rust/Tauri. The interface is the same
 
 First release.
 
-[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.4.3...v0.5.0
