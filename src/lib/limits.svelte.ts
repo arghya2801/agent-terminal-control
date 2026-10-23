@@ -32,7 +32,7 @@ export async function loadClaudeLimits() {
     planState.claude = await claudeUsage();
     planState.claudeError = null;
   } catch (e) {
-    planState.claudeError = String(e);
+    planState.claudeError = e instanceof Error ? e.message : String(e);
   } finally {
     planState.claudeAt = Date.now();
     planState.claudeLoading = false;

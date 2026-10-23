@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -18,7 +19,54 @@ import (
 	"atc/internal/pty"
 )
 
+// backoff spaces out usage checks after a 429. Every ATC and Claude Code itself share the
+// account's limit, so asking again on schedule only extends it (#192).
+type backoff struct {
+	mu    sync.Mutex
+	until time.Time
+	wait  time.Duration
+}
+
+var claudeBackoff backoff
+
+// hit records a 429: Retry-After when the server sends seconds, else double the last wait,
+// from 2 minutes up to 30.
+func (b *backoff) hit(retryAfter string, now time.Time) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if s, e := strconv.Atoi(retryAfter); e == nil && s > 0 {
+		b.wait = time.Duration(s) * time.Second
+	} else {
+		b.wait = min(30*time.Minute, max(2*time.Minute, 2*b.wait))
+	}
+	b.until = now.Add(b.wait)
+	return b.err()
+}
+
+// blocked is the error to return without asking, or nil when a request may go out.
+func (b *backoff) blocked(now time.Time) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if now.Before(b.until) {
+		return b.err()
+	}
+	return nil
+}
+
+func (b *backoff) reset() {
+	b.mu.Lock()
+	b.wait = 0
+	b.mu.Unlock()
+}
+
+func (b *backoff) err() error {
+	return fmt.Errorf("Claude is rate-limiting usage checks; retrying at %s", b.until.Local().Format("15:04"))
+}
+
 func claudeUsage() (any, error) {
+	if e := claudeBackoff.blocked(time.Now()); e != nil {
+		return nil, e
+	}
 	home := os.Getenv("CLAUDE_CONFIG_DIR")
 	if home == "" {
 		home = filepath.Join(core.Home(), ".claude")
@@ -49,9 +97,13 @@ func claudeUsage() (any, error) {
 		return nil, fmt.Errorf("usage request failed: %w", e)
 	}
 	defer res.Body.Close()
+	if res.StatusCode == http.StatusTooManyRequests {
+		return nil, claudeBackoff.hit(res.Header.Get("Retry-After"), time.Now())
+	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return nil, fmt.Errorf("usage request failed: HTTP %d", res.StatusCode)
 	}
+	claudeBackoff.reset()
 	var body core.Object
 	if e = json.NewDecoder(res.Body).Decode(&body); e != nil {
 		return nil, fmt.Errorf("usage response unreadable: %w", e)
