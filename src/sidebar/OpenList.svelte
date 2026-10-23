@@ -3,7 +3,7 @@
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import Highlight from '../lib/Highlight.svelte';
   import Icon from '../lib/Icon.svelte';
-  import { markTitle, relativeTime, tabMark } from '../lib/format';
+  import { markTitle, relativeTime, sparkPath, tabMark } from '../lib/format';
   import { providerName } from '../lib/agents';
   import StatusDot from '../lib/StatusDot.svelte';
   import { appState } from '../lib/stores.svelte';
@@ -37,13 +37,6 @@
     const hits = q ? tabs.filter((t) => `${t.title} ${projectName(t.projectKey)}`.toLowerCase().includes(q)) : tabs;
     return triageOrder(hits.map((t) => ({ ...t, mark: tabMark(t), group: triageGroup(tabMark(t), t.done) })));
   });
-
-  /** A 30-bar sparkline path, one bar per 10 s, scaled so a trickle stays short. */
-  function spark(key: TabKey, _tick: number): string {
-    const h = outputHistory(key);
-    const top = Math.max(4096, ...h);
-    return h.map((v, i) => (v ? `M${i * 2 + 0.5} 10V${10 - Math.max(1, (v / top) * 10)}` : '')).join('');
-  }
 
   // --- broadcast: Ctrl+click picks tabs, the bar below types into all of them.
   let picked = $state(new Set<TabKey>());
@@ -100,7 +93,7 @@
     <span class="text"><Highlight text={tab.title} {query} />{#if projectName(tab.projectKey)}<small><Highlight text={projectName(tab.projectKey)} {query} /></small>{/if}</span>
     <time>{stateWord(tab.mark)} {relativeTime(tab.since, now)}</time>
     {#if peek}<span class="peek">{peek}</span>{/if}
-    {#if !wait && graph}<svg class="spark" viewBox="0 0 60 10" preserveAspectRatio="none" aria-hidden="true"><path d={spark(tab.key, now)} /></svg>{/if}
+    {#if !wait && graph}<svg class="spark" viewBox="0 0 60 10" preserveAspectRatio="none" aria-hidden="true"><path d={sparkPath((void now, outputHistory(tab.key)))} /></svg>{/if}
   </button>
   {#if wait && !tab.exited}
     <button class="done-btn" onclick={() => markDone(tab.key)} aria-label="Mark {tab.title} done" title="Done: move it out of Waiting on you until it works again"><Icon name="check" size={12} /></button>

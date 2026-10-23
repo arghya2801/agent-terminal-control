@@ -65,6 +65,12 @@ export function markTitle(mark: TabMark, agent: string): string {
   }[mark];
 }
 
+/** A 30-bar sparkline path in a 60x10 box, one bar per 10 s, scaled so a trickle stays short. */
+export function sparkPath(h: number[]): string {
+  const top = Math.max(4096, ...h);
+  return h.map((v, i) => (v ? `M${i * 2 + 0.5} 10V${10 - Math.max(1, (v / top) * 10)}` : '')).join('');
+}
+
 export function tabMark(t: { exited: boolean; attention: boolean; activity: Activity | null }): TabMark {
   return t.exited ? 'exited' : t.attention ? 'attention' : (t.activity ?? 'open');
 }

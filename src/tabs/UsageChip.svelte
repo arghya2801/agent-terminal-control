@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { chipLimit, codexLimits, planLimits, resetsIn, resetsShort, type PlanLimit } from '../lib/plan';
   import { formatUsd } from '../lib/costs';
-  import { loadCodexLimits, loadTodaySpend, planState } from '../lib/limits.svelte';
+  import { loadCodexLimits, loadCosts, planState } from '../lib/limits.svelte';
   import { appState, refreshMs } from '../lib/stores.svelte';
 
   /**
@@ -42,7 +42,7 @@
       if (!planState.codexMissing && Date.now() - planState.codexAt > refreshMs('codex')) void loadCodexLimits();
       if (Date.now() - spendAt > SPEND_STALE) {
         spendAt = Date.now();
-        void loadTodaySpend();
+        void loadCosts();
       }
     }, peek ? 0 : PEEK_DELAY);
   }
