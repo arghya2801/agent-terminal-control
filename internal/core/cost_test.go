@@ -138,6 +138,19 @@ func TestAShrunkenTranscriptIsReadAgainFromTheStart(t *testing.T) {
 		t.Fatal(n)
 	}
 }
+func TestUsageOutlivesADeletedTranscript(t *testing.T) {
+	root := t.TempDir()
+	p := filepath.Join(root, "s.jsonl")
+	write(t, p, claudeLine("m1", "r1", "claude-opus-5", "")+"\n")
+	var c Costs
+	claudeCosts(&c, root)
+	os.Remove(p)
+	for _, c := range []*Costs{&c, {}} {
+		if n := totalInput(claudeCosts(c, root)); n != 1000000 {
+			t.Fatal("a cleaned-up transcript took its usage with it", n)
+		}
+	}
+}
 func TestRowsCarryTheSessionAndSplitByIt(t *testing.T) {
 	root := t.TempDir()
 	proj := filepath.Join(root, "proj")
