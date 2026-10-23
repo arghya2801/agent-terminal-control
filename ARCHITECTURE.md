@@ -134,6 +134,11 @@ Claude Code deletes transcripts after `cleanupPeriodDays` (30 by default). `Cost
 keeps every row in `usage-history.json` in the config folder. A session with a transcript
 on disk is recounted from it; one without keeps its saved rows.
 
+`Costs.Context` reports each session's latest request against its model's window:
+Claude's input plus cache tokens over the `context` size in `prices.json` (200K when a
+model has none), Codex's `last_token_usage` over its own `model_context_window`. The app
+asks again whenever the index updates, which is whenever a transcript is written.
+
 Claude's plan limits use the credentials in `CLAUDE_CONFIG_DIR`, else `~/.claude`, and
 never leave Go. Codex limits start the configured CLI as `codex app-server`, run
 initialize and `account/rateLimits/read`, then stop it. One provider failing never hides

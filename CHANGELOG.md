@@ -7,10 +7,12 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ## [Unreleased]
 
 ### Fixed
+- Claude Opus 5.5 is priced at its own rates ($4 / $20, cache reads $0.20) instead of Opus 5's. Haiku 5.5, which showed as unpriced, is priced too, and Fable 5.1 cache reads use its $0.25 rate.
 - Usage history keeps sessions whose transcripts are gone. Claude Code deletes transcripts after 30 days, and their days used to vanish from the usage page. ATC now keeps every row it has seen in `usage-history.json` in its config folder.
 - Show in Explorer only opens folders. Given a file path, it used to run the file.
 
 ### Added
+- Context window fill per agent tab: the header shows "42% context", and Open view rows show the percent next to their state. It turns amber at 80%.
 - Mark a waiting agent done with the check on its row, or from its right-click menu. It moves to a Done section below Shells and comes back to Waiting on you the next time it works and stops.
 
 ### Changed

@@ -10,6 +10,7 @@
   let { tabKey, sessionKey, working }: { tabKey: TabKey; sessionKey: string | null; working: boolean } = $props();
 
   const stats = $derived(sessionKey ? sessionStats(planState.costRows, sessionKey) : null);
+  const context = $derived(sessionKey ? planState.context[sessionKey] : undefined);
 
   let now = $state(Date.now());
   onMount(() => {
@@ -32,6 +33,10 @@
     <span title="Tokens this session">{formatTokens(stats.tokens)} <small>tokens</small></span>
     <span title="Share of input read from the prompt cache">{Math.round(stats.cacheShare * 100)}% <small>cache</small></span>
   {/if}
+  {#if context}
+    {@const fill = context.used / context.window}
+    <span class:full={fill >= 0.8} title="{formatTokens(context.used)} of {formatTokens(context.window)} tokens on the latest request">{Math.round(fill * 100)}% <small>context</small></span>
+  {/if}
   <svg class:working viewBox="0 0 60 10" preserveAspectRatio="none" aria-label="Output, last 5 minutes"><path d={sparkPath((void now, outputHistory(tabKey)))} /></svg>
 </div>
 
@@ -46,6 +51,9 @@
     font-size: 11px;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+  }
+  .full {
+    color: var(--warn);
   }
   small {
     color: var(--fg-faint);

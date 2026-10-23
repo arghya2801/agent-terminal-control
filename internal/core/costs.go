@@ -115,6 +115,59 @@ func addNumber(m Object, k string, n int64) { m[k] = number(m[k]) + n }
 func (c *Costs) Rows(settings Object, config string) []any {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	paths := c.scan(settings)
+	rates := prices(config)
+	out := c.claudeRows(paths["claude"], rates)
+	out = append(out, c.codexRows(paths["codex"], rates)...)
+	return c.remember(config, out)
+}
+
+// Context is how full each session's context window was on its latest request, keyed
+// `provider:sessionId`: the tokens sent and the model's window.
+func (c *Costs) Context(settings Object, config string) Object {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	paths := c.scan(settings)
+	rates := prices(config)
+	out := Object{}
+	for _, path := range paths["claude"] {
+		f := c.files[path]
+		// Subagent transcripts carry the parent's sessionId; their context is their own.
+		if f == nil || len(f.records) == 0 || filepath.Base(filepath.Dir(path)) == "subagents" {
+			continue
+		}
+		v := f.records[len(f.records)-1]
+		m := Obj(v["message"])
+		u := Obj(m["usage"])
+		used := number(u["input_tokens"]) + number(u["cache_read_input_tokens"]) + number(u["cache_creation_input_tokens"])
+		window := int64(200_000)
+		if p := priceFor(rates, "claude", Str(m["model"])); p != nil && number(p["context"]) > 0 {
+			window = number(p["context"])
+		}
+		// ponytail: a model with an unlisted 1M window shows as over 200K; list it in prices.json.
+		if used > window {
+			window = 1_000_000
+		}
+		out["claude:"+f.id] = Object{"used": used, "window": window}
+	}
+	for _, path := range paths["codex"] {
+		f := c.files[path]
+		if f == nil {
+			continue
+		}
+		for i := len(f.records) - 1; i >= 0; i-- {
+			info := Obj(Obj(f.records[i]["payload"])["info"])
+			if w := number(info["model_context_window"]); w > 0 {
+				out["codex:"+f.id] = Object{"used": number(Obj(info["last_token_usage"])["input_tokens"]), "window": w}
+				break
+			}
+		}
+	}
+	return out
+}
+
+// scan brings every transcript's usage records up to date and returns the paths by provider.
+func (c *Costs) scan(settings Object) map[string][]string {
 	if c.files == nil {
 		c.files = map[string]*usageFile{}
 	}
@@ -193,10 +246,7 @@ func (c *Costs) Rows(settings Object, config string) []any {
 			delete(c.files, p)
 		}
 	}
-	rates := prices(config)
-	out := c.claudeRows(paths["claude"], rates)
-	out = append(out, c.codexRows(paths["codex"], rates)...)
-	return c.remember(config, out)
+	return paths
 }
 
 // remember keeps rows for sessions whose transcripts are gone. Claude Code deletes
@@ -278,7 +328,11 @@ func (c *Costs) claudeRows(paths []string, rates Object) []any {
 		addNumber(r, "cacheWrite", w5+w1)
 		addNumber(r, "totalTokens", i+o+cr+w5+w1)
 		if p := priceFor(rates, "claude", model); p != nil {
-			cost := (float64(i)*Num(p["input"]) + float64(o)*Num(p["output"]) + float64(w5)*Num(p["input"])*1.25 + float64(w1)*Num(p["input"])*2 + float64(cr)*Num(p["input"])*0.1) / 1e6
+			cacheRead := Num(p["input"]) * 0.1
+			if _, ok := p["cacheRead"]; ok {
+				cacheRead = Num(p["cacheRead"])
+			}
+			cost := (float64(i)*Num(p["input"]) + float64(o)*Num(p["output"]) + float64(w5)*Num(p["input"])*1.25 + float64(w1)*Num(p["input"])*2 + float64(cr)*cacheRead) / 1e6
 			if u["speed"] == "fast" {
 				cost *= 2
 			}
