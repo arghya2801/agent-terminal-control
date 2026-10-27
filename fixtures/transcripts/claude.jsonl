@@ -1,5 +1,6 @@
 {"type":"mode","mode":"normal"}
-{"type":"user","uuid":"u1","parentUuid":null,"isSidechain":false,"timestamp":"2026-10-27T10:00:00.000Z","origin":{"kind":"human"},"message":{"role":"user","content":"fix the flaky resize test"}}
+{"type":"ai-title","aiTitle":"Fix the flaky resize test"}
+{"type":"user","uuid":"u1","parentUuid":null,"isSidechain":false,"timestamp":"2026-10-27T10:00:00.000Z","cwd":"D:\\Coding\\game_tracker_app","origin":{"kind":"human"},"message":{"role":"user","content":"fix the flaky resize test"}}
 {"type":"assistant","uuid":"a1","parentUuid":"u1","isSidechain":false,"timestamp":"2026-10-27T10:00:01.000Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"The resize runs before layout."}]}}
 {"type":"assistant","uuid":"a2","parentUuid":"a1","isSidechain":false,"timestamp":"2026-10-27T10:00:02.000Z","message":{"role":"assistant","content":[{"type":"text","text":"I'll look at the resize path first."}]}}
 {"type":"assistant","uuid":"a3","parentUuid":"a2","isSidechain":false,"timestamp":"2026-10-27T10:00:03.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"src/terminal/manager.ts"}}]}}

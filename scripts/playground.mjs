@@ -12,14 +12,18 @@ function copyFixtures(source, target, projects) {
   for (const entry of readdirSync(source, { withFileTypes: true })) {
     const from = join(source, entry.name), to = join(target, entry.name);
     if (entry.isDirectory()) copyFixtures(from, to, projects);
-    else if (!existsSync(to)) {
-      let text = readFileSync(from, 'utf8');
-      for (const name of PROJECTS) {
-        text = text.replaceAll(JSON.stringify(`D:\\Coding\\${name}`).slice(1, -1), JSON.stringify(join(projects, name)).slice(1, -1));
-      }
-      writeFileSync(to, text);
-    }
+    else copyFixture(from, to, projects);
   }
+}
+
+function copyFixture(from, to, projects) {
+  if (existsSync(to)) return;
+  mkdirSync(dirname(to), { recursive: true });
+  let text = readFileSync(from, 'utf8');
+  for (const name of PROJECTS) {
+    text = text.replaceAll(JSON.stringify(`D:\\Coding\\${name}`).slice(1, -1), JSON.stringify(join(projects, name)).slice(1, -1));
+  }
+  writeFileSync(to, text);
 }
 
 /**
@@ -33,6 +37,10 @@ export function preparePlayground(config, extra = {}) {
   for (const name of PROJECTS) mkdirSync(join(projects, name), { recursive: true });
   copyFixtures(join(root, 'fixtures', 'claude-projects'), join(claude, 'projects'), projects);
   copyFixtures(join(root, 'fixtures', 'codex'), codex, projects);
+  // Conversations for the chat view. Not in the corpus above: its index output is frozen.
+  const chats = join(root, 'fixtures', 'transcripts');
+  copyFixture(join(chats, 'claude.jsonl'), join(claude, 'projects', 'D--Coding-game-tracker-app', '12121212-9999-4999-8999-121212121212.jsonl'), projects);
+  copyFixture(join(chats, 'codex.jsonl'), join(codex, 'sessions', '2026', '10', '27', 'rollout-2026-10-27T10-00-00-chat.jsonl'), projects);
   const settingsPath = join(config, 'settings.json');
   const settings = existsSync(settingsPath) ? JSON.parse(readFileSync(settingsPath, 'utf8')) : {};
   settings.projects = { ...settings.projects, claudeProjectsDir: join(claude, 'projects') };
