@@ -44,6 +44,7 @@ failed spawn. The other events are `index://updated`, `settings://updated` and
 | `internal/core/settings.go` | Defaults, paths, atomic saves, agent command lines and quoting |
 | `internal/core/validate.go` | Settings JSON validation and legacy defaults |
 | `internal/core/index.go` | Claude and Codex discovery, metadata, grouping, the disk cache |
+| `internal/core/transcript.go` | Transcript records as chat items, for both providers |
 | `internal/core/costs.go` | Incremental token accounting, deduplication and pricing |
 | `internal/core/prices.json` | Built-in prices; files in the config directory override them |
 
@@ -161,6 +162,7 @@ the other. The header's usage chip shows Claude's 5-hour session limit (`chipLim
 | `src/lib/restore.ts` | Parsing saved tabs, which are untrusted |
 | `src/settings/SettingsPanel.svelte` | The settings page, saving a moment after each edit |
 | `src/usage/UsagePanel.svelte`, `src/tabs/UsageChip.svelte` | The usage page and the header chip |
+| `src/chat/` | The chat view: following a transcript, the item list, markdown, tool lines, the waiting dock |
 
 A tab's state comes from its terminal title. Claude prefixes `✳` when idle and spins
 `◐`/`◑` while working; Codex state comes from its session file. `tabMark` turns that into
@@ -177,6 +179,42 @@ after startup. The terminal area undoes that zoom and scales its font, or xterm 
 wrong. Pointer and `getBoundingClientRect` positions are on-screen pixels, while a fixed
 element's `left` and `top` are zoomed again, so menus, tooltips and drags divide by
 `pageZoom()` from `src/lib/desktop.ts`.
+
+## Chat view
+
+Agent tabs show a chat over their terminal. The CLI runs in the PTY with the same command
+line as before. The chat reads the transcript it writes and types into the same PTY.
+
+`core.TranscriptRead` turns records into one item list for both providers: `user`,
+`assistant`, `thinking`, `tool`, `result`, `turn` and `notice`. A `result` carries the id
+of the `tool` it answers, and `merge` in `src/chat/merge.ts` folds it in. The cursor is a
+byte offset plus the uuid of the last Claude record read. `ReadRecords` stops before a
+partial line, so a read during a write is safe. Outputs are capped at 8 KiB, texts at
+64 KiB, and a full read returns the last 1,000 items.
+
+Claude writes one record per content block, so the chat updates per block, not per token.
+A rewind writes a typed prompt whose parent is an older record. The reader drops the items
+after that parent, and when the parent came before the cursor it reads the whole file
+again and sets `reset`. `/compact` writes a `compact_boundary` with no parent, shown as a
+notice; the history above it stays.
+
+`App.TranscriptRead` checks the path with the same `transcript` guard as the session
+preview and remembers it. A write to a remembered file emits `transcript://changed` with
+its path, and `src/chat/transcript.svelte.ts` reads on from the cursor, one read at a time
+per file.
+
+Each agent tab has a `chatHost` inside its pane container, so split, mosaic and the zoom
+cancel apply to the chat as they do to the terminal. `setView` hides one of the two with
+`visibility`, and App portals a `ChatView` into each host. The host sets the page zoom
+back, since the wrapper cancels it for xterm. `ui.agentView` picks what a new tab shows.
+
+The message box sends through `sendText`. Text with a newline goes through `term.paste`,
+which brackets it when the CLI turned bracketed paste on, then Enter 50 ms later. Stop
+sends Esc.
+
+Permission prompts, AskUserQuestion and plan approval are drawn by the TUI and reach the
+transcript only once answered. When the newest call has no result and the tab is `idle` or
+`attention`, the waiting dock shows it, with a button that switches to the terminal.
 
 ## Gotchas
 
@@ -238,6 +276,18 @@ Things that cost time once. Add to this list.
   ConPTY handle it badly, and it never string-matches a transcript's `cwd`.
 - A parser change does nothing visible until the cache goes. Bump the `Version` the index
   cache writes in `internal/core/index.go`.
+- Parallel tool calls make `parentUuid` a tree: each `tool_result` points at its own
+  `tool_use`, not at the record before it. Treating every such jump as a rewind reloads
+  constantly. Only a typed prompt can start a rewind.
+- Each time Codex starts it writes `thread_settings_applied` into existing threads in its
+  home, which changes their modification time without any new turn.
+
+**Chat view**
+- `content-visibility: auto` lays out offscreen items late, and the waiting dock shrinks
+  the list when it opens. Scrolling to the bottom when items change falls short; the chat
+  pins from a ResizeObserver on the list and its content.
+- The fixture conversations live in `fixtures/transcripts`, outside the corpus that
+  `rust-contract.json` freezes. The playground copies them in.
 
 **Tooling**
 - Bash heredocs and Python here-strings eat backslashes, and backticks in a `git commit

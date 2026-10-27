@@ -95,6 +95,16 @@ build times, build resource use, runtime memory, validation, and migration detai
 
 ## Capabilities
 
+**Chat view** (``Ctrl+` `` or the Chat / Terminal switch)
+- Claude and Codex tabs open on a log of the session: your prompts, replies as formatted
+  text, thinking folded to one line, and each tool call on one line that opens to its
+  input, output or diff
+- Read from the transcript the CLI writes. The CLI still runs in the terminal underneath,
+  started the same way, so nothing about it changes
+- The message box types into the CLI: Enter sends, Shift+Enter adds a line, Stop sends Esc
+- When the agent waits on a permission prompt, a question or a plan, the chat shows what it
+  asks, with a button to answer it in the terminal
+
 **Sidebar: sessions**
 - Projects derived from Claude and Codex transcripts, resolved to their real paths, with
   a provider icon on each session
@@ -192,6 +202,7 @@ untouched.
 | `Ctrl+Shift+O` | Focus the other pane |
 | `Ctrl+Shift+J` | Go to the agent that has waited longest |
 | `Ctrl+Shift+G` | Show every tab at once, or back to one |
+| ``Ctrl+` `` | Switch an agent tab between the chat and the terminal |
 | `Ctrl+Shift+L` | Choose Claude or Codex in this tab's project |
 | `Ctrl+Shift+N` | Open a terminal in this tab's project |
 | `Ctrl+Shift+A` | Choose an agent in the shared scratch directory |

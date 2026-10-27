@@ -8,6 +8,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ### Added
 - A chat view for agent tabs. Claude and Codex tabs open on a readable log of the session, read from the transcript the CLI writes: your prompts, replies as formatted text, and each tool call on one line that opens to its input, output or diff. The CLI still runs in the terminal underneath, unchanged. Ctrl+` or the Chat / Terminal switch in the header flips between them, and Settings > Terminal > "Agent tabs open on" picks the default. The message box types into the CLI (Enter sends, Shift+Enter adds a line), and Stop sends Esc.
+- The chat shows when an agent is waiting on you: a permission prompt, a question or a plan to approve appears above the message box with what it asks, and "Answer in terminal" switches to the terminal to answer it.
 
 ## [0.6.2] - 2026-10-24
 
