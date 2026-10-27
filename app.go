@@ -40,6 +40,7 @@ type App struct {
 	cancel       context.CancelFunc
 	lastIndex    string
 	lastSettings string
+	agents       sidecar
 }
 
 func NewApp(config string) *App {
@@ -63,6 +64,7 @@ func (a *App) shutdown(ctx context.Context) {
 		a.watcher.Close()
 	}
 	a.limits.stop()
+	a.agents.stop()
 	a.killAll()
 	wr.CleanupNotifications(ctx)
 }
@@ -282,11 +284,13 @@ func (a *App) session(id string) (*pty.Session, error) {
 // The frontend's command surface. Wails binds every exported method on App and generates
 // typed TypeScript for it in wailsjs/go/main, so a wrong name or argument fails the build.
 
-// FrontendReady kills the shells of a page that was replaced by a full reload.
+// FrontendReady kills the shells and agent sessions of a page that was replaced by a full
+// reload.
 func (a *App) FrontendReady(pageID string) {
 	a.mu.Lock()
 	old := []*pty.Session{}
-	if a.pageID != pageID {
+	replaced := a.pageID != pageID
+	if replaced {
 		for _, p := range a.ptys {
 			old = append(old, p)
 		}
@@ -294,6 +298,9 @@ func (a *App) FrontendReady(pageID string) {
 		a.pageID = pageID
 	}
 	a.mu.Unlock()
+	if replaced {
+		a.agents.stop()
+	}
 	for _, p := range old {
 		p.Kill()
 		select {

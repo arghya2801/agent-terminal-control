@@ -3,7 +3,13 @@
 import {pty} from '../models';
 import {main} from '../models';
 
+export function AgentClose(arg1:string):Promise<void>;
+
 export function AgentCommand(arg1:string,arg2:string,arg3:boolean):Promise<string>;
+
+export function AgentOpen(arg1:string,arg2:string,arg3:string,arg4:boolean,arg5:string):Promise<string>;
+
+export function AgentSend(arg1:string,arg2:Record<string, any>):Promise<void>;
 
 export function ClaudeUsage():Promise<any>;
 
