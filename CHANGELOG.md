@@ -6,6 +6,9 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Changed
+- Claude and Codex tabs are a chat instead of a terminal. Claude runs through the Claude Agent SDK and Codex through its app-server: the same CLIs, logins, settings, hooks, skills, MCP servers and session files. Replies stream in; each tool call is one line with a timer, its live output and its result; permission prompts, questions and plan approvals are cards with buttons; `/` (Claude) and `$` (Codex) list commands and skills with their descriptions; the footer picks the model and Claude's permission mode and shows the turn's running time, and each turn ends with its duration and cost. "Open in terminal" resumes the session in the CLI's own TUI. Agent tabs need Node.js 18 or later on PATH.
+
 ## [0.6.2] - 2026-10-24
 
 ### Added
