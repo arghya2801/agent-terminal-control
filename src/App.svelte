@@ -71,9 +71,12 @@
     setSplitRatio,
     splitWith,
     unsplit,
+    openAgentTab,
     type AttentionReason,
     type Tab,
   } from './terminal/manager';
+  import AgentView from './agent/AgentView.svelte';
+  import { startAgent } from './agent/agent.svelte';
   import { actionList, chordFor, matchChord, type Action } from './lib/keymap';
   import CommandPalette, { type Command } from './lib/CommandPalette.svelte';
   import ContextMenu, { type MenuItem } from './sidebar/ContextMenu.svelte';
@@ -96,6 +99,35 @@
 
   /** Which sidebar session each tab is showing. See `resolveSessions` for how. */
   const tabToSession = $derived(resolveSessions(tabSessions, appState.index.projects));
+
+  /**
+   * An agent tab: Claude or Codex through the sidecar, with the chat in place of a terminal.
+   * `session` resumes one; `task` is sent as the first message.
+   */
+  function openAgent(key: TabKey, title: string, cwd: string, projectKey: string | null, provider: AgentProvider, o: { session?: string | null; chat?: boolean; task?: string } = {}) {
+    if (o.chat) chatTabs.add(key);
+    const isNew = !getTab(key);
+    openAgentTab(key, title, cwd, projectKey, provider);
+    if (isNew) void startAgent(key, provider, cwd, o);
+  }
+
+  /** "Open in terminal": the same session, resumed in Claude's or Codex's own TUI. */
+  async function toTerminal(key: TabKey) {
+    const t = getTab(key);
+    if (!t?.provider) return;
+    const id = t.boundSession?.slice(t.boundSession.indexOf(':') + 1) ?? null;
+    const { provider, cwd, projectKey: pk } = t;
+    const title = displayTitle(t);
+    const chat = chatTabs.has(key);
+    await closeTab(key);
+    await guard(async () => openTab(id ? `session:${provider}:${id}` : key, title, { cwd, initialCommand: await agentCommand(provider, id, chat) }, pk, provider));
+  }
+
+  /** Moves an agent tab's chat into its pane, where the manager lays it out. */
+  function portal(node: HTMLElement, target: HTMLElement) {
+    target.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
 
   /** Which sessions have a tab, and what Claude is doing in each. */
   const sessionMarks = $derived.by(() => {
@@ -168,16 +200,11 @@
         const label = appState.index.projects
           .flatMap((p) => p.sessions)
           .find((s) => s.id === t.sessionId && s.provider === t.provider)?.label;
-        if (t.chat) chatTabs.add(key);
-        const command = await agentCommand(t.provider, t.sessionId, t.chat);
-        await guard(() =>
-          openTab(key, label ?? providerName(t.provider), { cwd: t.cwd, initialCommand: command }, t.projectKey, t.provider),
-        );
+        openAgent(key, label ?? providerName(t.provider), t.cwd ?? '', t.projectKey, t.provider, { session: t.sessionId, chat: t.chat });
       } else if (t.kind === 'agent') {
         counter += 1;
         key = t.chat ? `agent:${t.provider}:chat-${counter}` : `agent:${t.provider}:${counter}`;
-        if (t.chat) chatTabs.add(key);
-        await guard(async () => openTab(key, providerName(t.provider), { cwd: t.cwd, initialCommand: await agentCommand(t.provider, null, t.chat) }, t.projectKey, t.provider, knownSessions()));
+        openAgent(key, providerName(t.provider), t.cwd ?? '', t.projectKey, t.provider, { chat: t.chat });
       } else if (t.kind === 'shell' && t.project && t.projectKey) {
         key = `project:${t.projectKey}`;
         const name = appState.index.projects.find((p) => p.key === t.projectKey)?.name ?? 'pwsh';
@@ -359,24 +386,17 @@
     counter += 1;
     const key: TabKey = `agent:${provider}:${counter}`;
     const back = activeKey;
-    // Typed into PowerShell: single quotes take everything literally but a doubled quote.
-    const quoted = `'${task.replaceAll("'", "''")}'`;
-    return guard(async () => {
-      await openTab(key, task.slice(0, 40), { cwd: p.path, initialCommand: `${await agentCommand(provider)} ${quoted}` }, p.key, provider, knownSessions());
-      if (back) activate(back);
-    });
+    openAgent(key, task.slice(0, 40), p.path, p.key, provider, { task });
+    if (back) activate(back);
   }
 
-  function knownSessions(): string[] { return appState.index.projects.flatMap(p => p.sessions.map(sessionKey)); }
 
   /** With `chat`, the agent starts with the chat arguments and cannot change anything. */
   function newAgentIn(p: Project, provider: AgentProvider, chat = false) {
     if (!p.path) return;
     counter += 1;
     const key: TabKey = chat ? `agent:${provider}:chat-${counter}` : `agent:${provider}:${counter}`;
-    if (chat) chatTabs.add(key);
-    const existing = knownSessions();
-    return guard(async () => openTab(key, p.name, { cwd: p.path, initialCommand: await agentCommand(provider, null, chat) }, p.key, provider, existing));
+    openAgent(key, p.name, p.path, p.key, provider, { chat });
   }
 
   /** Ask an agent, or with `chat` chat with one, in the scratch directory. */
@@ -617,8 +637,7 @@
     // A fresh launch already bound to this conversation is reused too.
     const existing = listTabs().find(t => t.boundSession === sessionKey(s));
     if (existing) { activate(existing.key); return; }
-    return guard(async () => openTab(`session:${sessionKey(s)}`, s.label,
-      { cwd, initialCommand: await agentCommand(s.provider, s.id) }, p.key, s.provider));
+    openAgent(`session:${sessionKey(s)}`, s.label, cwd, p.key, s.provider, { session: s.id });
   }
 
   $effect(() => { bindSessions(tabToSession, appState.index.projects.flatMap(p => p.sessions)); });
@@ -983,6 +1002,14 @@
       {@render barEnd(actions)}
     </header>
     {/if}
+    {#each tabs as t (t.key)}
+      {@const tab = t.provider ? getTab(t.key) : undefined}
+      {#if tab && !tab.term && t.provider}
+        <div use:portal={tab.container}>
+          <AgentView tabKey={t.key} provider={t.provider} queued={t.queued} onTerminal={() => toTerminal(t.key)} />
+        </div>
+      {/if}
+    {/each}
     <div class="panes" bind:this={wrapper}>
       {#if split}
         <div

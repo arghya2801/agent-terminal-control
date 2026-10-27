@@ -1,13 +1,16 @@
 <script lang="ts">
-  import type { ChatItem } from '../types';
+  import type { ChatItem } from '../../sidecar/protocol';
 
-  let { item }: { item: ChatItem } = $props();
+  /** `live`: the session is still running, so a call without a result is in progress. */
+  let { item, live }: { item: ChatItem; live: boolean } = $props();
   let open = $state(false);
 
   const diff = $derived(/^(Edit|MultiEdit|apply_patch)$/.test(item.tool ?? '') || !!item.body?.startsWith('*** Begin Patch'));
   const lines = $derived(item.body?.replace(/\n$/, '').split('\n') ?? []);
-  const counts = $derived(diff ? { add: lines.filter((l) => l.startsWith('+')).length, del: lines.filter((l) => l.startsWith('-')).length } : null);
-  const status = $derived(!item.done ? 'running' : item.error ? 'failed' : 'done');
+  const counts = $derived(diff ? { add: lines.filter((l: string) => l.startsWith('+')).length, del: lines.filter((l: string) => l.startsWith('-')).length } : null);
+  const status = $derived(item.done ? (item.error ? 'failed' : 'done') : live ? 'running' : 'stopped');
+  // While it runs, the last lines of its output, so a long command shows it is alive.
+  const tail = $derived(status === 'running' && item.output ? item.output.trimEnd().split('\n').slice(-3).join('\n') : '');
 </script>
 
 <div class="tool" class:open>
@@ -16,8 +19,10 @@
     <span class="name">{item.tool}</span>
     <span class="input">{item.input}</span>
     {#if counts}<span class="counts"><span class="add">+{counts.add}</span> <span class="del">−{counts.del}</span></span>{/if}
-    <span class="status {status}">{status === 'running' ? '…' : status === 'failed' ? '✗' : '✓'}<span class="sr">{status}</span></span>
+    {#if status === 'running' && item.seconds}<span class="secs">{Math.round(item.seconds)}s</span>{/if}
+    <span class="status {status}">{status === 'running' ? '…' : status === 'failed' ? '✗' : status === 'done' ? '✓' : '–'}<span class="sr">{status}</span></span>
   </button>
+  {#if tail && !open}<pre class="tail">{tail}</pre>{/if}
   {#if open}
     <div class="detail">
       {#if item.body}
@@ -110,6 +115,24 @@
   }
   .output {
     color: var(--fg-faint);
+  }
+  .tail {
+    color: var(--fg-faint);
+    margin-left: 3ch;
+    max-height: 4.5em;
+    overflow: hidden;
+  }
+  .secs {
+    color: var(--fg-faint);
+  }
+  .dot.running {
+    color: var(--accent);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.35;
+    }
   }
   .output.error {
     color: var(--danger);

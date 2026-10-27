@@ -7,6 +7,7 @@ import * as App from '../../wailsjs/go/main/App';
 import { pty } from '../../wailsjs/go/models';
 import { Channel } from './desktop';
 import type { AgentProvider, CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot } from '../types';
+import type { AgentEvent } from '../../sidecar/protocol';
 
 export { Channel };
 
@@ -16,6 +17,16 @@ export function ptySpawn(opts: SpawnOpts, onEvent: Channel<PtyEvent>): Promise<s
 }
 
 export function ptyWrite(id: string, data: string): Promise<void> { return App.PtyWrite(id, data); }
+
+/** Start a Claude or Codex session in the sidecar, resuming `session` when set. */
+export function agentOpen(provider: AgentProvider, cwd: string, session: string | null, chat: boolean, events: Channel<AgentEvent>): Promise<string> {
+  events.attach();
+  return App.AgentOpen(provider, cwd, session ?? '', chat, events.name).catch((error) => { events.dispose(); throw error; });
+}
+
+export function agentSend(id: string, op: Record<string, unknown>): Promise<void> { return App.AgentSend(id, op); }
+
+export function agentClose(id: string): Promise<void> { return App.AgentClose(id); }
 
 export function ptyResize(id: string, cols: number, rows: number): Promise<void> { return App.PtyResize(id, cols, rows); }
 

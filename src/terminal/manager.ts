@@ -81,9 +81,10 @@ export interface Tab {
   lastOutputAt: number;
   /** Directory the shell started in; null for the default. Kept to reopen the tab. */
   cwd: string | null;
-  term: Terminal;
-  fit: FitAddon;
-  search: SearchAddon;
+  /** Null for an agent tab: its chat runs in the sidecar, not in a terminal. */
+  term: Terminal | null;
+  fit: FitAddon | null;
+  search: SearchAddon | null;
   container: HTMLDivElement;
   ptyId: string | null;
   exited: boolean;
@@ -209,6 +210,7 @@ export function outputHistory(key: TabKey): number[] {
 export function screenLines(key: TabKey): string[] {
   const tab = tabs.get(key);
   if (!tab) return [];
+  if (!tab.term) return agentPeek(key);
   const b = tab.term.buffer.active;
   const lines: string[] = [];
   for (let y = b.baseY; y < b.baseY + tab.term.rows; y++) {
@@ -263,23 +265,9 @@ export function mount(el: HTMLElement) {
   document.fonts?.ready.then(() => scheduleFit());
 }
 
-/** Focus an existing tab for `key`, or create and spawn a new one. */
-export async function openTab(
-  key: TabKey,
-  title: string,
-  opts: Omit<SpawnOpts, 'cols' | 'rows'>,
-  projectKey: string | null = null,
-  provider: AgentProvider | null = null,
-  existingSessions: string[] = [],
-): Promise<Tab> {
-  const existing = tabs.get(key);
-  if (existing) {
-    activate(key);
-    return existing;
-  }
-
+/** A tab's pane, laid out by `layout` like every other. */
+function paneContainer(key: TabKey): HTMLDivElement {
   if (!wrapper) throw new Error('terminal manager not mounted');
-
   const container = document.createElement('div');
   Object.assign(container.style, paneStyle(null));
   // In the mosaic a click picks the tile and leaves the mosaic; xterm never sees it.
@@ -295,6 +283,93 @@ export async function openTab(
     if (activeKey !== key && slotOf(panes, key) !== null) activate(key);
   });
   wrapper.appendChild(container);
+  return container;
+}
+
+/**
+ * Focus an existing tab for `key`, or create an agent tab: a pane with no terminal, which
+ * App fills with the chat. Its state comes from `setAgentState`, not from a title.
+ */
+export function openAgentTab(key: TabKey, title: string, cwd: string | null, projectKey: string | null, provider: AgentProvider): Tab {
+  const existing = tabs.get(key);
+  if (existing) {
+    activate(key);
+    return existing;
+  }
+  const container = paneContainer(key);
+  // The wrapper cancels the page zoom for xterm's sake; the chat wants it back.
+  container.style.zoom = String(zoom);
+  const now = Date.now();
+  const tab: Tab = {
+    provider, boundSession: key.startsWith('session:') ? key.slice(8) : null, existingSessions: [], codexSequence: null,
+    key, title, autoTitle: null, customTitle: null, activity: null, claudeName: null, attention: false, done: false,
+    queued: null, projectKey, startedAt: now, lastOutputAt: now, cwd, term: null, fit: null, search: null, container,
+    ptyId: null, exited: false, exitCode: null, dims: null, unacked: 0, mark: 'open', markSince: now,
+    buckets: new Array(BUCKETS).fill(0), bucketAt: Math.floor(now / BUCKET_MS),
+  };
+  tabs.set(key, tab);
+  activate(key);
+  return tab;
+}
+
+/** What an agent tab's session reports: its state, its session id, that it exited. */
+export function setAgentState(key: TabKey, s: { activity?: Activity | null; session?: string; exited?: boolean; waiting?: boolean }) {
+  const tab = tabs.get(key);
+  if (!tab || tab.term) return;
+  // A question or a permission pauses the turn: the tab waits on the user, and says so once.
+  if (s.waiting) {
+    tab.activity = 'idle';
+    flagAttention(tab, 'bell');
+  } else if (s.activity !== undefined) {
+    if (tab.activity === 'working' && s.activity === 'idle') flagAttention(tab, 'finished');
+    tab.activity = s.activity;
+  }
+  if (s.session) tab.boundSession = s.session;
+  if (s.exited) tab.exited = true;
+  notify();
+}
+
+/** Output an agent tab received, for the Open view's graph. Read on its tick, so no notify. */
+export function countOutput(key: TabKey, n: number) {
+  const tab = tabs.get(key);
+  if (!tab) return;
+  tab.lastOutputAt = Date.now();
+  roll(tab, tab.lastOutputAt);
+  tab.buckets[BUCKETS - 1] += n;
+}
+
+/** What the manager asks of the agent store, which imports the manager and not the
+ *  reverse: the Open view's peek, and Reply and queued prompts. */
+let agentHooks: { peek: (key: TabKey) => string[]; send: (key: TabKey, text: string) => void } = { peek: () => [], send: () => {} };
+export function setAgentHooks(h: typeof agentHooks) {
+  agentHooks = h;
+}
+const agentPeek = (key: TabKey) => agentHooks.peek(key);
+
+type CloseListener = (key: TabKey) => void;
+const closeListeners = new Set<CloseListener>();
+/** Called as a tab closes, so its agent session can end with it. */
+export function onClosed(fn: CloseListener): () => void {
+  closeListeners.add(fn);
+  return () => closeListeners.delete(fn);
+}
+
+/** Focus an existing tab for `key`, or create and spawn a new one. */
+export async function openTab(
+  key: TabKey,
+  title: string,
+  opts: Omit<SpawnOpts, 'cols' | 'rows'>,
+  projectKey: string | null = null,
+  provider: AgentProvider | null = null,
+  existingSessions: string[] = [],
+): Promise<Tab> {
+  const existing = tabs.get(key);
+  if (existing) {
+    activate(key);
+    return existing;
+  }
+
+  const container = paneContainer(key);
 
   const term = new Terminal({
     fontFamily: termOptions.fontFamily,
@@ -477,8 +552,9 @@ export function bindSessions(bindings: Map<TabKey, string>, sessions: SessionMet
   for (const tab of tabs.values()) {
     const id = bindings.get(tab.key);
     // Rebinds too: a /resume inside the tab moves it to another session (#75).
-    if (id && id !== tab.boundSession) { tab.boundSession = id; tab.codexSequence = null; changed = true; }
-    if (tab.provider !== 'codex' || !tab.boundSession || tab.exited) continue;
+    if (id && tab.term && id !== tab.boundSession) { tab.boundSession = id; tab.codexSequence = null; changed = true; }
+    // Agent tabs hear their state from the sidecar, live.
+    if (tab.provider !== 'codex' || !tab.term || !tab.boundSession || tab.exited) continue;
     const session = sessions.find(s => `${s.provider}:${s.id}` === tab.boundSession);
     if (!session) continue;
     const sequence = session.activitySequence ?? 0;
@@ -518,6 +594,7 @@ export function applyTerminalSettings(s: TerminalSettings) {
     lineHeight: s.lineHeight || 1,
   };
   for (const t of tabs.values()) {
+    if (!t.term) continue;
     Object.assign(t.term.options, {
       fontFamily: termOptions.fontFamily,
       fontSize: zoomedFontSize(),
@@ -534,7 +611,10 @@ export function applyTerminalSettings(s: TerminalSettings) {
 export function setTerminalZoom(z: number) {
   zoom = z;
   if (wrapper) wrapper.style.zoom = String(1 / z);
-  for (const t of tabs.values()) t.term.options.fontSize = zoomedFontSize();
+  for (const t of tabs.values()) {
+    if (t.term) t.term.options.fontSize = zoomedFontSize();
+    else t.container.style.zoom = String(z);
+  }
   refit();
 }
 
@@ -545,7 +625,7 @@ export function setTerminalZoom(z: number) {
 export function applyTheme(p: Palette) {
   termPalette = p;
   termTheme = xtermTheme(p);
-  for (const t of tabs.values()) t.term.options.theme = termTheme;
+  for (const t of tabs.values()) if (t.term) t.term.options.theme = termTheme;
 }
 
 // --- find ------------------------------------------------------------------
@@ -569,7 +649,7 @@ function bindFindResults() {
   findDisposer?.();
   findDisposer = null;
   const tab = activeKey ? tabs.get(activeKey) : null;
-  if (!tab) return;
+  if (!tab?.search) return;
   const sub = tab.search.onDidChangeResults((r) => {
     for (const l of findListeners) l({ index: r.resultIndex, count: r.resultCount });
   });
@@ -578,7 +658,7 @@ function bindFindResults() {
 
 export function findInActiveTab(query: string, direction: 1 | -1 = 1): void {
   const tab = activeKey ? tabs.get(activeKey) : null;
-  if (!tab) return;
+  if (!tab?.search) return;
   if (!query) {
     tab.search.clearDecorations();
     for (const l of findListeners) l({ index: -1, count: 0 });
@@ -591,12 +671,18 @@ export function findInActiveTab(query: string, direction: 1 | -1 = 1): void {
 
 export function clearFind(): void {
   const tab = activeKey ? tabs.get(activeKey) : null;
-  tab?.search.clearDecorations();
+  tab?.search?.clearDecorations();
 }
 
 export function focusActiveTerminal(): void {
   const tab = activeKey ? tabs.get(activeKey) : null;
-  tab?.term.focus();
+  if (tab) focusTab(tab);
+}
+
+/** The terminal, or an agent tab's message box. */
+function focusTab(tab: Tab) {
+  if (tab.term) tab.term.focus();
+  else tab.container.querySelector('textarea')?.focus();
 }
 
 /** Give the tab a WebGL context, reusing its own, and retire the least recent past the cap. */
@@ -730,9 +816,9 @@ export function activate(key: TabKey) {
   layout();
 
   const tab = tabs.get(key)!;
-  useWebgl(key, tab.term);
+  if (tab.term) useWebgl(key, tab.term);
 
-  tab.term.focus();
+  focusTab(tab);
   // Find results are per-terminal, so follow the active tab.
   bindFindResults();
   scheduleFit();
@@ -752,7 +838,8 @@ export async function closeTab(key: TabKey) {
   }
   webgl.get(key)?.dispose();
   webgl.delete(key);
-  tab.term.dispose();
+  tab.term?.dispose();
+  for (const l of closeListeners) l(key);
   tab.container.remove();
   const nearest = nearestFirst([...tabs.keys()], key);
   tabs.delete(key);
@@ -776,6 +863,11 @@ export async function closeTab(key: TabKey) {
  */
 export function sendText(key: TabKey, text: string) {
   const tab = tabs.get(key);
+  if (tab && !tab.term && !tab.exited) {
+    agentHooks.send(key, text);
+    tab.attention = false;
+    return notify();
+  }
   if (!tab?.ptyId || tab.exited) return;
   const id = tab.ptyId;
   void ptyWrite(id, text).then(() => setTimeout(() => void ptyWrite(id, '\r'), 50));
@@ -820,7 +912,7 @@ export function tabAt(node: Node): TabKey | null {
   return null;
 }
 export function hasSelection(key: TabKey): boolean {
-  return !!tabs.get(key)?.term.hasSelection();
+  return !!tabs.get(key)?.term?.hasSelection();
 }
 export async function copySelection(key: TabKey) {
   const term = tabs.get(key)?.term;
@@ -837,7 +929,7 @@ export async function pasteInto(key: TabKey) {
   term.focus();
 }
 export function selectAllIn(key: TabKey) {
-  tabs.get(key)?.term.selectAll();
+  tabs.get(key)?.term?.selectAll();
 }
 /** Drops the scrollback; the program's current line stays. */
 export function clearTerminal(key: TabKey) {
@@ -858,6 +950,7 @@ async function writeClipboard(text: string) {
 /** What closing the tab would stop: a program under its shell, or null (#106). */
 export async function busyWith(key: TabKey): Promise<string | null> {
   const tab = tabs.get(key);
+  if (tab && !tab.term) return !tab.exited && tab.activity === 'working' ? tab.provider : null;
   if (!tab?.ptyId || tab.exited) return null;
   // Unknown is treated as busy: asking once too often beats killing a running agent.
   return ptyBusy(tab.ptyId).catch(() => 'a program');
@@ -871,7 +964,7 @@ function nextLayout(): Promise<void> {
 }
 
 function measure(tab: Tab): Dims {
-  const proposed = tab.fit.proposeDimensions();
+  const proposed = tab.fit?.proposeDimensions();
   if (isUsableDims(proposed)) return { cols: proposed.cols, rows: proposed.rows };
   // A sane default beats forwarding zeroes into ConPTY.
   return { cols: 80, rows: 24 };
@@ -884,18 +977,19 @@ function measure(tab: Tab): Dims {
  */
 function fitAll() {
   const active = activeKey ? tabs.get(activeKey) : null;
-  if (!active) return;
-
-  const dims = measure(active);
+  // An agent pane has no terminal to measure; a hidden terminal sits in the same place.
+  const ref = active?.term ? active : [...tabs.values()].find((t) => t.term && slotOf(panes, t.key) === null);
   if (isSplit()) {
     for (const k of panes) {
       const t = k ? tabs.get(k) : undefined;
-      if (t) applyDims(t, measure(t));
+      if (t?.term) applyDims(t, measure(t));
     }
   }
+  if (!ref) return;
+  const dims = measure(ref);
   // Each tab tracks what it has actually been given -- so a newly opened tab is
   // corrected even when nothing about the window moved.
-  const hidden = [...tabs.values()].filter((t) => !isSplit() || slotOf(panes, t.key) === null);
+  const hidden = [...tabs.values()].filter((t) => t.term && (!isSplit() || slotOf(panes, t.key) === null));
   for (const t of panesNeedingResize(hidden, dims)) {
     applyDims(t, dims);
   }
@@ -904,7 +998,7 @@ const scheduleFit = debounce(fitAll, RESIZE_DEBOUNCE_MS);
 
 /** Resize the emulator and its PTY together, and remember what was applied. */
 function applyDims(tab: Tab, dims: Dims) {
-  if (!dimsChanged(tab.dims, dims)) return;
+  if (!tab.term || !dimsChanged(tab.dims, dims)) return;
   tab.dims = dims;
   tab.term.resize(dims.cols, dims.rows);
   // Only after a PTY exists; openTab applies dims before spawning, and passes the same
