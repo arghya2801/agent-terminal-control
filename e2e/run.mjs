@@ -40,7 +40,7 @@ mkdirSync(join(root, 'playground'), { recursive: true });
 // Screenshots and runtime memory samples land here; generated, ignored by Git.
 mkdirSync(join(root, 'benchmarks'), { recursive: true });
 const config = mkdtempSync(join(root, 'playground', 'e2e-'));
-const env = preparePlayground(config, { claude: { command: 'Write-Output' }, codex: { command: 'Write-Output' }, ui: { restoreTabs: false, notifications: false } });
+const env = preparePlayground(config, { claude: { command: 'Write-Output' }, codex: { command: 'Write-Output' }, ui: { restoreTabs: false, notifications: false, agentView: 'terminal' } });
 const driver = spawn(await edgeDriver(), ['--port=4444'], { stdio: 'inherit', windowsHide: true, env: { ...process.env, ...env, ATC_SHELL_NO_PROFILE: '1' } });
 const appChild = spawn(app, [], { stdio: 'inherit', windowsHide: false, env: { ...process.env, ...env, ATC_SHELL_NO_PROFILE: '1', WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=9224' } });
 let tests;

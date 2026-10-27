@@ -99,6 +99,17 @@ export interface Tab {
   /** Output bytes per BUCKET_MS, oldest first, ending at `bucketAt`. */
   buckets: number[];
   bucketAt: number;
+  /** What an agent tab shows. The terminal keeps running under the chat either way. */
+  view: View;
+  /** Where App puts the chat, over the terminal inside `container`. Null for shells. */
+  chatHost: HTMLDivElement | null;
+}
+
+export type View = 'chat' | 'terminal';
+/** What a new agent tab shows, from the `ui.agentView` setting. */
+let agentView: View = 'chat';
+export function setAgentView(v: View) {
+  agentView = v;
 }
 
 const BUCKET_MS = 10_000;
@@ -400,7 +411,16 @@ export async function openTab(
     markSince: Date.now(),
     buckets: new Array(BUCKETS).fill(0),
     bucketAt: Math.floor(Date.now() / BUCKET_MS),
+    view: provider ? agentView : 'terminal',
+    chatHost: null,
   };
+  if (provider) {
+    tab.chatHost = document.createElement('div');
+    // The wrapper cancels the page zoom for xterm's sake; the chat wants it back.
+    Object.assign(tab.chatHost.style, { position: 'absolute', inset: '0', zoom: String(zoom) });
+    container.appendChild(tab.chatHost);
+    applyView(tab);
+  }
   tabs.set(key, tab);
 
   term.onBell(() => {
@@ -534,7 +554,10 @@ export function applyTerminalSettings(s: TerminalSettings) {
 export function setTerminalZoom(z: number) {
   zoom = z;
   if (wrapper) wrapper.style.zoom = String(1 / z);
-  for (const t of tabs.values()) t.term.options.fontSize = zoomedFontSize();
+  for (const t of tabs.values()) {
+    t.term.options.fontSize = zoomedFontSize();
+    if (t.chatHost) t.chatHost.style.zoom = String(z);
+  }
   refit();
 }
 
@@ -596,7 +619,30 @@ export function clearFind(): void {
 
 export function focusActiveTerminal(): void {
   const tab = activeKey ? tabs.get(activeKey) : null;
-  tab?.term.focus();
+  if (tab) focusTab(tab);
+}
+
+/** The chat's message box in chat view, else the terminal. */
+function focusTab(tab: Tab) {
+  if (tab.view === 'chat') tab.chatHost?.querySelector('textarea')?.focus();
+  else tab.term.focus();
+}
+
+/** Visibility, not display: FitAddon measures a display:none terminal as zero. A hidden
+ *  child inherits its pane's visibility, so neither ever sets 'visible'. */
+function applyView(tab: Tab) {
+  if (!tab.chatHost) return;
+  if (tab.term.element) tab.term.element.style.visibility = tab.view === 'chat' ? 'hidden' : '';
+  tab.chatHost.style.visibility = tab.view === 'chat' ? '' : 'hidden';
+}
+
+export function setView(key: TabKey, view: View) {
+  const tab = tabs.get(key);
+  if (!tab?.chatHost || tab.view === view) return;
+  tab.view = view;
+  applyView(tab);
+  if (key === activeKey) focusTab(tab);
+  notify();
 }
 
 /** Give the tab a WebGL context, reusing its own, and retire the least recent past the cap. */
@@ -732,7 +778,7 @@ export function activate(key: TabKey) {
   const tab = tabs.get(key)!;
   useWebgl(key, tab.term);
 
-  tab.term.focus();
+  focusTab(tab);
   // Find results are per-terminal, so follow the active tab.
   bindFindResults();
   scheduleFit();
@@ -773,15 +819,24 @@ export async function closeTab(key: TabKey) {
 /**
  * Type `text` into a tab, as if at its prompt, and press Enter. Enter goes on its own a
  * beat later: in one write, Claude Code reads the pair as a paste and keeps the newline.
+ * Several lines go in as one paste, bracketed when the program asked for that, so the
+ * first newline does not submit the rest.
  */
 export function sendText(key: TabKey, text: string) {
   const tab = tabs.get(key);
   if (!tab?.ptyId || tab.exited) return;
   const id = tab.ptyId;
-  void ptyWrite(id, text).then(() => setTimeout(() => void ptyWrite(id, '\r'), 50));
+  const typed = text.includes('\n') ? Promise.resolve(tab.term.paste(text)) : ptyWrite(id, text);
+  void typed.then(() => setTimeout(() => void ptyWrite(id, '\r'), 50));
   // Answered: no longer waiting on you, though it was never shown.
   tab.attention = false;
   notify();
+}
+
+/** Esc, which stops the turn in Claude Code and Codex. */
+export function interrupt(key: TabKey) {
+  const tab = tabs.get(key);
+  if (tab?.ptyId && !tab.exited) void ptyWrite(tab.ptyId, '\x1b');
 }
 
 /** Sets or, with null, cancels the message sent when the tab's agent next stops working. */

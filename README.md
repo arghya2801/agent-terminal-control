@@ -279,6 +279,7 @@ Every field is optional; missing ones take their default.
     "taskProject": "",                  // "" = the focused tab's project
     "newTabIn": "home",                 // "project" opens Ctrl+Shift+T in the focused tab's project
     "confirmClose": true,               // ask before closing a tab with a program running
+    "agentView": "chat",                // what agent tabs open on: "chat" or "terminal"
     "toasts": true,                     // in-app notes while ATC is focused
     "toastSeconds": 6,
     "limitsRefreshSec": 90,             // Claude plan limits

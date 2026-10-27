@@ -232,6 +232,14 @@
         </div>
         <label for="lh">Line height</label>
         <input id="lh" type="number" min="1" max="2" step="0.05" bind:value={draft.terminal.lineHeight} />
+        <label for="av">Agent tabs open on</label>
+        <div>
+          <select id="av" bind:value={draft.ui.agentView}>
+            <option value="chat">The chat</option>
+            <option value="terminal">The terminal</option>
+          </select>
+          <span class="muted hint">Ctrl+` switches a tab between them</span>
+        </div>
       </div>
 
       <h2 id="s-sidebar">Sidebar</h2>

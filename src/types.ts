@@ -92,6 +92,37 @@ export interface TabSummary {
   projectKey: string | null;
   /** When the tab entered its current state. */
   since: number;
+  /** What an agent tab shows; shells are always 'terminal'. */
+  view: 'chat' | 'terminal';
+}
+
+/** One entry in the chat view. Go builds these in internal/core/transcript.go. */
+export interface ChatItem {
+  kind: 'user' | 'assistant' | 'thinking' | 'tool' | 'result' | 'turn' | 'notice';
+  at: number;
+  /** Ties a `result` to its `tool`. */
+  id?: string;
+  text?: string;
+  tool?: string;
+  /** The call in one line: a command, a path, a pattern. */
+  input?: string;
+  /** The whole call; edits and patches as -/+ lines. */
+  body?: string;
+  output?: string;
+  error?: boolean;
+  /** The call has its result. Set when the two are merged. */
+  done?: boolean;
+  durationMs?: number | null;
+}
+
+export interface TranscriptPage {
+  items: ChatItem[];
+  offset: number;
+  last: string;
+  /** The history was rewritten; `items` is all of it. */
+  reset: boolean;
+  /** Items left out of a full read, oldest first. */
+  dropped: number;
 }
 
 export interface IndexSnapshot {
@@ -144,6 +175,8 @@ export interface Settings {
     newTabIn: 'home' | 'project';
     /** Ask before closing a tab with something running in it. */
     confirmClose: boolean;
+    /** What an agent tab shows first. Anything but `terminal` reads as the chat. */
+    agentView: 'chat' | 'terminal';
     /** In-app notes when a background tab finishes while ATC has focus. */
     toasts: boolean;
     toastSeconds: number;

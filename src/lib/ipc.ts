@@ -6,7 +6,7 @@
 import * as App from '../../wailsjs/go/main/App';
 import { pty } from '../../wailsjs/go/models';
 import { Channel } from './desktop';
-import type { AgentProvider, CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot } from '../types';
+import type { AgentProvider, CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot, TranscriptPage } from '../types';
 
 export { Channel };
 
@@ -30,6 +30,11 @@ export function ptyKill(id: string): Promise<void> { return App.PtyKill(id); }
 export function ptyStats(id: string): Promise<StatsSnapshot> { return App.PtyStats(id); }
 
 export function indexSnapshot(): Promise<IndexSnapshot> { return App.IndexScan(false); }
+
+/** A session file's chat items after a cursor; the first read starts at offset 0. */
+export function transcriptRead(provider: AgentProvider, file: string, offset: number, last: string): Promise<TranscriptPage> {
+  return App.TranscriptRead(provider, file, offset, last) as Promise<TranscriptPage>;
+}
 
 export function indexRefresh(force = false): Promise<IndexSnapshot> { return App.IndexScan(force); }
 

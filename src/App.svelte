@@ -71,9 +71,12 @@
     setSplitRatio,
     splitWith,
     unsplit,
+    setView,
+    setAgentView,
     type AttentionReason,
     type Tab,
   } from './terminal/manager';
+  import ChatView from './chat/ChatView.svelte';
   import { actionList, chordFor, matchChord, type Action } from './lib/keymap';
   import CommandPalette, { type Command } from './lib/CommandPalette.svelte';
   import ContextMenu, { type MenuItem } from './sidebar/ContextMenu.svelte';
@@ -107,6 +110,16 @@
     }
     return marks;
   });
+
+  /** Each session's transcript, by `provider:id`, for the chat view. */
+  const sessionFiles = $derived(new Map(appState.index.projects.flatMap((p) => p.sessions.map((s) => [`${s.provider}:${s.id}`, s.file]))));
+  $effect(() => setAgentView(appState.settings?.ui.agentView === 'terminal' ? 'terminal' : 'chat'));
+
+  /** Moves a chat into the tab's own container, where the manager lays it out. */
+  function portal(node: HTMLElement, target: HTMLElement) {
+    target.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
 
   /** The sidebar row to highlight: the session the focused tab is showing. */
   const activeSessionId = $derived(activeKey ? (tabToSession.get(activeKey) ?? null) : null);
@@ -283,6 +296,7 @@
       activity: t.activity,
       projectKey: t.projectKey,
       since: t.markSince,
+      view: t.view,
     }));
     const nextActive = getActiveKey();
     // Picking a tab means the user wants the terminal, not the page covering it.
@@ -784,6 +798,11 @@
       case 'toggleMosaic':
         toggleMosaic();
         break;
+      case 'toggleView': {
+        const t = activeKey ? getTab(activeKey) : undefined;
+        if (t?.chatHost) setView(t.key, t.view === 'chat' ? 'terminal' : 'chat');
+        break;
+      }
     }
   }
 
@@ -882,6 +901,13 @@
 {/snippet}
 
 {#snippet barEnd(actions?: Snippet)}
+  {#if page !== 'usage' && shown?.provider}
+    {@const tab = shown}
+    <div class="view-switch" role="group" aria-label="Show">
+      <button class:on={tab.view === 'chat'} aria-pressed={tab.view === 'chat'} onclick={() => setView(tab.key, 'chat')} title="Chat (Ctrl+`)">Chat</button>
+      <button class:on={tab.view === 'terminal'} aria-pressed={tab.view === 'terminal'} onclick={() => setView(tab.key, 'terminal')} title="Terminal (Ctrl+`)">Terminal</button>
+    </div>
+  {/if}
   {#if currentZoom() !== 1}
     <button class="bar-btn zoom" onclick={() => adjustZoom(0)} title="Reset zoom (Ctrl+0)">{zoomLabel(currentZoom())}</button>
   {/if}
@@ -983,6 +1009,15 @@
       {@render barEnd(actions)}
     </header>
     {/if}
+    {#each tabs as t (t.key)}
+      {@const host = t.provider ? getTab(t.key)?.chatHost : null}
+      {#if host && t.provider}
+        {@const id = tabToSession.get(t.key)}
+        <div use:portal={host}>
+          <ChatView tabKey={t.key} provider={t.provider} file={id ? (sessionFiles.get(id) ?? null) : null} mark={tabMark(t)} />
+        </div>
+      {/if}
+    {/each}
     <div class="panes" bind:this={wrapper}>
       {#if split}
         <div
@@ -1162,6 +1197,37 @@
   }
   .new-split .bar-btn {
     border-radius: 0;
+  }
+  .view-switch {
+    display: flex;
+    align-self: center;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-right: 4px;
+  }
+  .view-switch button {
+    font: inherit;
+    font-size: 12px;
+    padding: 2px 10px;
+    border: none;
+    background: transparent;
+    color: var(--fg-dim);
+    cursor: pointer;
+  }
+  .view-switch button + button {
+    border-left: 1px solid var(--border);
+  }
+  .view-switch button:hover {
+    background: var(--bg-hover);
+  }
+  .view-switch button.on {
+    background: var(--bg-surface);
+    color: var(--fg-bright);
+  }
+  .view-switch button:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: -1px;
   }
   .new-split .bar-btn:hover {
     background: color-mix(in srgb, var(--fg) 8%, transparent);
