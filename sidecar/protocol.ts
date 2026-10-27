@@ -34,6 +34,8 @@ export interface Command {
 export interface Model {
   id: string;
   label: string;
+  /** The full model id an alias such as `opus` stands for. */
+  resolved?: string;
 }
 
 export interface Question {

@@ -90,12 +90,13 @@ export class Claude {
         this.live({
           t: 'ready',
           commands: init.commands.map((c) => ({ name: c.name, description: c.description, hint: c.argumentHint || undefined })),
-          models: init.models.map((m) => ({ id: m.value, label: m.displayName })),
+          models: init.models.map((m) => ({ id: m.value, label: m.displayName, resolved: m.resolvedModel })),
           mode: (init as { current_permission_mode?: string }).current_permission_mode,
           modes: MODES,
         }),
       )
-      .catch((e) => this.live({ t: 'error', message: String(e?.message ?? e) }));
+      // A session that fails to start says so in its exit.
+      .catch((e) => log(this.id, 'initialize:', String(e?.message ?? e)));
     try {
       for await (const m of this.q) this.handle(m, this.live);
       this.live({ t: 'exit' });
@@ -162,7 +163,7 @@ export class Claude {
       }
       case 'result':
         out({ t: 'working', on: false });
-        out({ t: 'item', item: { id: m.uuid, kind: 'turn', durationMs: m.duration_ms, costUsd: m.total_cost_usd } });
+        if (m.num_turns) out({ t: 'item', item: { id: m.uuid, kind: 'turn', durationMs: m.duration_ms, costUsd: m.total_cost_usd } });
         if (m.subtype !== 'success') out({ t: 'item', item: { id: `${m.uuid}:e`, kind: 'notice', text: m.errors.join('\n') || m.subtype } });
         return;
       case 'tool_progress':

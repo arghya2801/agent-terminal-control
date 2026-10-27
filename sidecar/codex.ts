@@ -66,6 +66,7 @@ export class Codex {
   private turn = '';
   private chosen: string | undefined;
   private skills = new Map<string, Obj>();
+  private closing = false;
 
   constructor(id: string, o: { cwd: string; resume?: string; exe: string; args: string[]; env?: Record<string, string> }) {
     this.id = id;
@@ -76,7 +77,7 @@ export class Codex {
     this.proc.stderr.on('data', (d) => log(id, 'codex:', String(d).trimEnd()));
     this.proc.on('exit', (code) => {
       for (const c of this.calls.values()) c.reject(new Error('Codex exited'));
-      this.live({ t: 'exit', message: code ? `Codex exited with ${code}` : undefined });
+      this.live({ t: 'exit', message: code && !this.closing ? `Codex exited with ${code}` : undefined });
     });
     this.proc.on('error', (e) => this.live({ t: 'exit', message: `Can't start Codex: ${e.message}` }));
     createInterface({ input: this.proc.stdout }).on('line', (line) => {
@@ -158,6 +159,7 @@ export class Codex {
       case 'item/completed': {
         const item = itemOf(p.item);
         if (item) this.live({ t: 'item', item });
+        else this.seen(`item ${p.item?.type}`);
         if (item?.kind === 'tool' && item.done) this.live({ t: 'result', id: item.id, output: item.output ?? '', error: !!item.error });
         return;
       }
@@ -174,9 +176,19 @@ export class Codex {
         this.live({ t: 'item', item: { id: `e${++this.n}`, kind: 'notice', text: `${p.willRetry ? 'Retrying: ' : ''}${p.error?.message ?? 'Error'}` } });
         return;
     }
+    this.seen(method);
+  }
+
+  /** Logs each thing ATC ignores once, so sidecar.log shows what a new Codex sends. */
+  private ignored = new Set<string>();
+  private seen(what: string) {
+    if (this.ignored.has(what)) return;
+    this.ignored.add(what);
+    log(this.id, 'codex ignores', what);
   }
 
   private request(rpc: number | string, method: string, p: Obj) {
+    log(this.id, 'codex asks', method, JSON.stringify(p).slice(0, 300));
     const id = `r${++this.n}`;
     let request: AgentRequest;
     if (method === 'item/commandExecution/requestApproval' || method === 'execCommandApproval') {
@@ -233,6 +245,7 @@ export class Codex {
   }
 
   close() {
+    this.closing = true;
     this.proc.kill();
   }
 }

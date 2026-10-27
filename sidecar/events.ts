@@ -69,6 +69,12 @@ export function summarize(tool: string, input: Record<string, unknown>): { input
     }
     case 'Write':
       return { input: str(input.file_path), body: clip(str(input.content)) };
+    case 'AskUserQuestion': {
+      const qs = Array.isArray(input.questions) ? input.questions : [];
+      return { input: firstLine(str(qs[0]?.question)), body: qs.map((q) => [str(q?.question), ...(q?.options ?? []).map((o: { label?: string }) => `- ${str(o?.label)}`)].join('\n')).join('\n\n') };
+    }
+    case 'ExitPlanMode':
+      return { input: 'Plan', body: clip(str(input.plan), 64 * 1024) };
     case 'TodoWrite': {
       const todos = Array.isArray(input.todos) ? input.todos : [];
       const mark = (s: string) => (s === 'completed' ? '[x]' : s === 'in_progress' ? '[~]' : '[ ]');
