@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -156,16 +157,7 @@ func Start(args []string, opts Options, emit func(Event)) (*Session, error) {
 			return nil, e
 		}
 	}
-	env := []string{}
-	for _, v := range os.Environ() {
-		k, _, _ := strings.Cut(v, "=")
-		switch strings.ToUpper(k) {
-		case "TERM", "NO_COLOR", "CLAUDECODE", "CLAUDE_PID", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_SESSION_ATTENDED", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN", "CODEX_THREAD_ID", "CODEX_INTERNAL_ORIGINATOR_OVERRIDE":
-			continue
-		}
-		env = append(env, v)
-	}
-	env = append(env, "TERM=xterm-256color")
+	env := append(ChildEnv("TERM", "NO_COLOR"), "TERM=xterm-256color")
 	sort.Slice(env, func(i, j int) bool { return strings.ToUpper(env[i]) < strings.ToUpper(env[j]) })
 	block := utf16.Encode([]rune(strings.Join(env, "\x00") + "\x00\x00"))
 	var pi windows.ProcessInformation
@@ -411,6 +403,25 @@ func (s *Session) Busy() any {
 	}
 	return nil
 }
+
+// ChildEnv is ATC's environment for a program it starts, without drop and without the
+// markers of an agent that may have launched ATC: an agent that inherits them thinks it is
+// running inside another.
+func ChildEnv(drop ...string) []string {
+	env := []string{}
+	for _, v := range os.Environ() {
+		k, _, _ := strings.Cut(v, "=")
+		switch k = strings.ToUpper(k); k {
+		case "CLAUDECODE", "CLAUDE_PID", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_SESSION_ATTENDED", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN", "CODEX_THREAD_ID", "CODEX_INTERNAL_ORIGINATOR_OVERRIDE":
+			continue
+		}
+		if !slices.Contains(drop, k) {
+			env = append(env, v)
+		}
+	}
+	return env
+}
+
 func KillTree(pid uint32) {
 	entries := Children()
 	var kill func(uint32)
