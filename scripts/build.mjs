@@ -6,5 +6,6 @@ import { ensureConpty } from './conpty.mjs';
 if (!wails) throw new Error('Install the pinned CLI: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0');
 const run = (exe, args) => execFileSync(exe, args, { cwd: root, stdio: 'inherit', windowsHide: true });
 run(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), 'build']);
+run(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), 'build', '-c', 'sidecar/vite.config.ts']);
 run(wails, ['build', '-s', '-skipbindings', '-m', '-nosyncgomod', ...process.argv.slice(2)]);
 await ensureConpty();
