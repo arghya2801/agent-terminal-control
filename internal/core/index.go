@@ -133,18 +133,7 @@ func ClaudeSession(path string, st os.FileInfo) Object {
 				}
 			}
 			if kind == "user" && Str(h["firstMessage"]) == "" && !Bool(v["isMeta"]) && !Bool(v["isSidechain"]) {
-				txt := Text(Obj(v["message"])["content"])
-				origin := Str(Obj(v["origin"])["kind"])
-				human := origin == "human"
-				if origin == "" {
-					human = true
-					for _, m := range []string{"<local-command-caveat>", "<command-name>", "<local-command-stdout>", "<system-reminder>"} {
-						if strings.Contains(txt, m) {
-							human = false
-						}
-					}
-				}
-				if human {
+				if txt, human := humanText(v); human {
 					h["firstMessage"] = txt
 				}
 			}
@@ -172,6 +161,21 @@ func ClaudeSession(path string, st os.FileInfo) Object {
 		}
 	}
 	return s
+}
+
+// humanText is a user record's text and whether a person typed it. Files older than the
+// origin field are told apart by the markers Claude wraps around everything else.
+func humanText(v Object) (string, bool) {
+	txt := Text(Obj(v["message"])["content"])
+	if origin := Str(Obj(v["origin"])["kind"]); origin != "" {
+		return txt, origin == "human"
+	}
+	for _, m := range []string{"<local-command-caveat>", "<command-name>", "<local-command-stdout>", "<system-reminder>"} {
+		if strings.Contains(txt, m) {
+			return txt, false
+		}
+	}
+	return txt, true
 }
 
 // tailAgentName is the latest `agent-name` in the last 64KB. Claude renames a session as
@@ -262,13 +266,7 @@ func (r *codexReader) update(path string, st os.FileInfo) {
 			} else if (kind == "response_item" || kind == "message") && p["role"] == "user" {
 				txt = Text(p["content"])
 			}
-			txt = strings.TrimSpace(txt)
-			for _, prefix := range []string{"# AGENTS.md instructions", "<environment_context>", "<permissions instructions>", "<instructions>", "<system-reminder>", "<developer_instructions>"} {
-				if strings.HasPrefix(txt, prefix) {
-					txt = ""
-				}
-			}
-			if txt != "" {
+			if txt = strings.TrimSpace(txt); txt != "" && !codexInjected(txt) {
 				s["label"] = Tidy(txt, false)
 				s["labelSource"] = "firstMessage"
 			}
@@ -278,6 +276,16 @@ func (r *codexReader) update(path string, st os.FileInfo) {
 		r.Meta["mtimeMs"] = st.ModTime().UnixMilli()
 		r.Meta["size"] = st.Size()
 	}
+}
+
+// codexInjected reports whether a Codex user message is context Codex added, not a prompt.
+func codexInjected(txt string) bool {
+	for _, prefix := range []string{"# AGENTS.md instructions", "<environment_context>", "<permissions instructions>", "<instructions>", "<system-reminder>", "<developer_instructions>"} {
+		if strings.HasPrefix(txt, prefix) {
+			return true
+		}
+	}
+	return false
 }
 func number(v any) int64 {
 	switch n := v.(type) {
