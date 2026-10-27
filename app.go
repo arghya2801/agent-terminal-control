@@ -40,10 +40,12 @@ type App struct {
 	cancel       context.CancelFunc
 	lastIndex    string
 	lastSettings string
+	// transcripts the chat view has read, by PathKey, so only their writes are announced.
+	transcripts map[string]string
 }
 
 func NewApp(config string) *App {
-	return &App{config: config, ptys: map[string]*pty.Session{}, index: core.Index{CachePath: filepath.Join(config, "index-go.json")}}
+	return &App{config: config, ptys: map[string]*pty.Session{}, transcripts: map[string]string{}, index: core.Index{CachePath: filepath.Join(config, "index-go.json")}}
 }
 func (a *App) startup(ctx context.Context) {
 	a.ctx, a.cancel = context.WithCancel(ctx)
@@ -186,6 +188,12 @@ func (a *App) watch() {
 			}
 			if e.Has(fsnotify.Create) && core.IsDir(e.Name) {
 				a.arm()
+			}
+			a.mu.Lock()
+			file, read := a.transcripts[core.PathKey(e.Name)]
+			a.mu.Unlock()
+			if read && e.Has(fsnotify.Write) {
+				a.emit("transcript://changed", file)
 			}
 			if c, x := core.Roots(a.getSettings()); !refreshNeeded(e, a.config, c, x) {
 				continue
@@ -357,6 +365,20 @@ func (a *App) UsageCosts() []any { return a.costs.Rows(a.getSettings(), a.config
 func (a *App) UsageContext() core.Object { return a.costs.Context(a.getSettings(), a.config) }
 
 func (a *App) NewerRelease() any { return newerRelease(appVersion) }
+
+// TranscriptRead returns a session file's chat items after a cursor (core.TranscriptRead).
+// The path comes from the page, so it must be a transcript under the Claude or Codex root.
+func (a *App) TranscriptRead(provider, file string, offset int64, last string) (core.Object, error) {
+	key := core.PathKey(filepath.Clean(file))
+	c, x := core.Roots(a.getSettings())
+	if filepath.Ext(key) != ".jsonl" || !strings.HasPrefix(key, core.PathKey(c)+`\`) && !strings.HasPrefix(key, core.PathKey(x)+`\`) {
+		return nil, fmt.Errorf("not a transcript: %s", file)
+	}
+	a.mu.Lock()
+	a.transcripts[key] = file
+	a.mu.Unlock()
+	return core.TranscriptRead(provider, file, offset, last), nil
+}
 
 func (a *App) AgentCommand(provider, sessionID string, chat bool) (string, error) {
 	if provider != "claude" && provider != "codex" {

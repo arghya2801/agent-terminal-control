@@ -134,6 +134,10 @@ export function SuggestSessionName(arg1) {
   return window['go']['main']['App']['SuggestSessionName'](arg1);
 }
 
+export function TranscriptRead(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['TranscriptRead'](arg1, arg2, arg3, arg4);
+}
+
 export function UsageContext() {
   return window['go']['main']['App']['UsageContext']();
 }

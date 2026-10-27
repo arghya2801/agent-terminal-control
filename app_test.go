@@ -179,6 +179,24 @@ func TestHeadlessCommandsAndValidation(t *testing.T) {
 		t.Fatal(v)
 	}
 }
+func TestTranscriptReadOnlyUnderTheAgentRoots(t *testing.T) {
+	dir := t.TempDir()
+	a := NewApp(dir)
+	a.load()
+	claude := filepath.Join(dir, "claude")
+	core.Obj(a.settings["projects"])["claudeProjectsDir"] = claude
+	os.MkdirAll(filepath.Join(claude, "p"), 0700)
+	file := filepath.Join(claude, "p", "s.jsonl")
+	os.WriteFile(file, []byte(`{"type":"user","uuid":"u","origin":{"kind":"human"},"message":{"content":"hi"}}`+"\n"), 0600)
+	if got, err := a.TranscriptRead("claude", file, 0, ""); err != nil || len(got["items"].([]core.Object)) != 1 {
+		t.Fatal(got, err)
+	}
+	for _, bad := range []string{filepath.Join(dir, "settings.json"), filepath.Join(claude, "..", "x.jsonl"), filepath.Join(dir, "claudeX", "s.jsonl")} {
+		if _, err := a.TranscriptRead("claude", bad, 0, ""); err == nil {
+			t.Fatal("read outside the roots:", bad)
+		}
+	}
+}
 func TestBackoffHonoursRetryAfterThenDoublesUpToHalfAnHour(t *testing.T) {
 	var b backoff
 	now := time.Now()

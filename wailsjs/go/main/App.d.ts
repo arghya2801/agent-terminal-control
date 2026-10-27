@@ -69,6 +69,8 @@ export function SettingsSet(arg1:any):Promise<void>;
 
 export function SuggestSessionName(arg1:string):Promise<string>;
 
+export function TranscriptRead(arg1:string,arg2:string,arg3:number,arg4:string):Promise<Record<string, any>>;
+
 export function UsageContext():Promise<Record<string, any>>;
 
 export function UsageCosts():Promise<Array<any>>;
