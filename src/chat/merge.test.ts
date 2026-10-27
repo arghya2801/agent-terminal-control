@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { merge } from './merge';
+import { merge, pendingCall } from './merge';
 import type { ChatItem } from '../types';
 
 const tool = (id: string): ChatItem => ({ kind: 'tool', id, tool: 'Bash', at: 0 });
@@ -20,5 +20,18 @@ describe('merge', () => {
 
   it('drops a result whose call it never saw', () => {
     expect(merge([tool('a')], [result('x', 'lost')])).toEqual([tool('a')]);
+  });
+});
+
+describe('pendingCall', () => {
+  it('finds the open call among the last run of calls', () => {
+    const items = merge([], [tool('a'), tool('b'), result('b', 'ok')]);
+    expect(pendingCall(items)?.id).toBe('a');
+    expect(pendingCall(merge(items, [result('a', 'ok')]))).toBeNull();
+  });
+
+  it('ignores a call that something else came after', () => {
+    expect(pendingCall([tool('a'), { kind: 'notice', text: 'Interrupted', at: 0 }])).toBeNull();
+    expect(pendingCall([])).toBeNull();
   });
 });

@@ -3,6 +3,7 @@
   import Markdown from './Markdown.svelte';
   import ToolLine from './ToolLine.svelte';
   import { chatOf, follow } from './transcript.svelte';
+  import { pendingCall } from './merge';
   import { getActiveKey, interrupt, sendText, setView } from '../terminal/manager';
   import { providerName } from '../lib/agents';
   import { appState } from '../lib/stores.svelte';
@@ -18,12 +19,21 @@
   const chat = $derived(file ? chatOf(file) : undefined);
   const items = $derived(chat?.items ?? []);
   const exited = $derived(mark === 'exited');
+  // A call with no result while the agent sits idle is a prompt in the TUI: a permission,
+  // a question or a plan. Only the terminal can answer it.
+  const waiting = $derived(mark === 'idle' || mark === 'attention' ? pendingCall(items) : null);
+  const asks = $derived(
+    waiting?.tool === 'AskUserQuestion' ? `${name} is asking you a question`
+    : waiting?.tool === 'ExitPlanMode' ? `${name} has a plan for you to approve`
+    : `${name} wants to run ${waiting?.tool}`,
+  );
 
   let draft = $state('');
   let list = $state<HTMLDivElement>();
   let box = $state<HTMLTextAreaElement>();
-  // Follow new items unless the user has scrolled up to read. On any growth, not on new
-  // items: offscreen items lay out late (content-visibility), so their height arrives later.
+  // Follow new items unless the user has scrolled up to read. On any resize, not on new
+  // items: offscreen items lay out late (content-visibility), and the waiting dock shrinks
+  // the list when it opens.
   let stuck = true;
   $effect(() => {
     const el = list;
@@ -31,6 +41,7 @@
     const ro = new ResizeObserver(() => {
       if (stuck) el.scrollTop = el.scrollHeight;
     });
+    ro.observe(el);
     ro.observe(el.firstElementChild!);
     return () => ro.disconnect();
   });
@@ -92,6 +103,18 @@
       {/each}
     </div>
   </div>
+
+  {#if waiting}
+    <div class="dock" role="status">
+      <p class="asks">{asks}</p>
+      {#if waiting.tool === 'ExitPlanMode'}
+        <div class="plan"><Markdown text={waiting.body ?? ''} /></div>
+      {:else}
+        <pre>{waiting.tool === 'Bash' || waiting.tool === 'AskUserQuestion' ? waiting.body : waiting.input}</pre>
+      {/if}
+      <button class="btn" onclick={() => setView(tabKey, 'terminal')}>Answer in terminal <kbd>Ctrl+`</kbd></button>
+    </div>
+  {/if}
 
   {#if exited}
     <div class="composer ended">
@@ -188,6 +211,46 @@
   }
   .empty {
     color: var(--fg-dim);
+  }
+  .dock {
+    margin: 0 20px 8px;
+    padding: 8px 12px 10px;
+    border-left: 3px solid var(--warn);
+    background: var(--bg-chrome);
+    max-width: calc(100ch - 15px);
+    animation: dock-in var(--enter) var(--ease-out);
+  }
+  @keyframes dock-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+  .asks {
+    margin: 0 0 6px;
+    color: var(--fg-bright);
+    font-weight: 600;
+  }
+  .dock pre {
+    margin: 0 0 8px;
+    max-height: 10em;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: var(--mono);
+    font-size: var(--mono-size);
+    color: var(--fg);
+  }
+  .plan {
+    max-height: 16em;
+    overflow: auto;
+    margin-bottom: 8px;
+  }
+  kbd {
+    font: inherit;
+    font-size: 11px;
+    color: var(--fg-dim);
+    margin-left: 6px;
   }
   .composer {
     display: flex;

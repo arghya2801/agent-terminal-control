@@ -14,3 +14,12 @@ export function merge(items: ChatItem[], incoming: ChatItem[]): ChatItem[] {
   }
   return out;
 }
+
+/** The call the agent is waiting on: the newest one without a result, when only other
+ *  calls follow it. Anything else after it (a reply, an interrupt) means it was let go. */
+export function pendingCall(items: ChatItem[]): ChatItem | null {
+  for (let i = items.length - 1; i >= 0 && items[i].kind === 'tool'; i--) {
+    if (!items[i].done) return items[i];
+  }
+  return null;
+}
