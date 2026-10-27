@@ -367,15 +367,12 @@ func (a *App) UsageContext() core.Object { return a.costs.Context(a.getSettings(
 func (a *App) NewerRelease() any { return newerRelease(appVersion) }
 
 // TranscriptRead returns a session file's chat items after a cursor (core.TranscriptRead).
-// The path comes from the page, so it must be a transcript under the Claude or Codex root.
 func (a *App) TranscriptRead(provider, file string, offset int64, last string) (core.Object, error) {
-	key := core.PathKey(filepath.Clean(file))
-	c, x := core.Roots(a.getSettings())
-	if filepath.Ext(key) != ".jsonl" || !strings.HasPrefix(key, core.PathKey(c)+`\`) && !strings.HasPrefix(key, core.PathKey(x)+`\`) {
-		return nil, fmt.Errorf("not a transcript: %s", file)
+	if e := transcript(a.getSettings(), file); e != nil {
+		return nil, e
 	}
 	a.mu.Lock()
-	a.transcripts[key] = file
+	a.transcripts[core.PathKey(file)] = file
 	a.mu.Unlock()
 	return core.TranscriptRead(provider, file, offset, last), nil
 }
