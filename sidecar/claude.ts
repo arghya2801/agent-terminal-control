@@ -1,6 +1,6 @@
 import { getSessionMessages, query, type ModelInfo, type PermissionResult, type PermissionUpdate, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { clip, emit, Inbox, log, summarize, textOf } from './events.ts';
-import type { AgentEvent, AgentRequest, Answer, Model } from './protocol.ts';
+import type { AgentEvent, AgentRequest, Answer, Image, Model } from './protocol.ts';
 
 /** How a Claude process starts, from settings: the CLI, its arguments, extra environment. */
 type Launch = { cwd: string; exe: string; args: string[]; env?: Record<string, string> };
@@ -184,13 +184,13 @@ export class Claude {
           if (ev?.t === 'item') out({ t: 'item', item: { ...ev.item, id: m.uuid ?? `u${++this.n}`, parent } });
           return;
         }
-        for (const b of content as Block[]) {
-          if (b.type === 'tool_result') out({ t: 'result', id: b.tool_use_id, output: clip(textOf(b.content)), error: !!b.is_error });
-          else if (b.type === 'text') {
-            const ev = promptOf(b.text);
-            if (ev?.t === 'item') out({ t: 'item', item: { ...ev.item, id: `${m.uuid ?? 'u'}:${++this.n}`, parent } });
-          }
-        }
+        const blocks = content as Block[];
+        for (const b of blocks) if (b.type === 'tool_result') out({ t: 'result', id: b.tool_use_id, output: clip(textOf(b.content)), error: !!b.is_error });
+        // A prompt with pictures: its text blocks and image blocks are one message.
+        const images = blocks.filter((b) => b.type === 'image' && b.source?.type === 'base64').map((b) => `data:${b.source.media_type};base64,${b.source.data}`);
+        const text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n');
+        const ev = text ? promptOf(text) : images.length ? { t: 'item' as const, item: { id: '', kind: 'user' as const, text: '' } } : null;
+        if (ev?.t === 'item') out({ t: 'item', item: { ...ev.item, id: m.uuid ?? `u${++this.n}`, parent, ...(images.length && ev.item.kind === 'user' ? { images } : {}) } });
         return;
       }
       case 'result':
@@ -233,12 +233,16 @@ export class Claude {
     return { behavior: 'allow', updatedInput: input, ...(answer.always && suggestions ? { updatedPermissions: suggestions } : {}) };
   }
 
-  send(text: string) {
+  send(text: string, images: Image[] = []) {
     // `/clear` starts the CLI on a fresh conversation; the view starts over with it.
     if (text.trim() === '/clear') this.live({ t: 'clear' });
-    this.live({ t: 'item', item: { id: `you${++this.n}`, kind: 'user', text } });
+    const shown = images.map((i) => `data:${i.mediaType};base64,${i.data}`);
+    this.live({ t: 'item', item: { id: `you${++this.n}`, kind: 'user', text, ...(shown.length ? { images: shown } : {}) } });
     this.live({ t: 'working', on: true });
-    this.inbox.push({ type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null, session_id: '' } as SDKUserMessage);
+    const content = images.length
+      ? [...images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mediaType, data: i.data } })), ...(text ? [{ type: 'text', text }] : [])]
+      : text;
+    this.inbox.push({ type: 'user', message: { role: 'user', content }, parent_tool_use_id: null, session_id: '' } as SDKUserMessage);
   }
 
   answer(request: string, a: Answer) {

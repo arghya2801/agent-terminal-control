@@ -25,6 +25,14 @@ export interface ChatItem {
   costUsd?: number;
   /** Codex: the turn a user message started, to rewind to. */
   turn?: string;
+  /** Images sent with a user message, as data URLs. */
+  images?: string[];
+}
+
+/** An image to send: its media type and base64 data. */
+export interface Image {
+  mediaType: string;
+  data: string;
 }
 
 export interface Command {
@@ -101,7 +109,7 @@ export type AgentOp =
   | { op: 'open'; id: string; provider: Provider; cwd: string; resume?: string; exe: string; args: string[]; env?: Record<string, string>; model?: string; effort?: string }
   | { op: 'catalog'; id: string; provider: Provider; cwd: string; exe: string; args: string[]; env?: Record<string, string> }
   | { op: 'effort'; id: string; effort: string | null }
-  | { op: 'send'; id: string; text: string }
+  | { op: 'send'; id: string; text: string; images?: Image[] }
   | { op: 'interrupt'; id: string }
   | { op: 'answer'; id: string; request: string; answer: Answer }
   | { op: 'mode'; id: string; mode: string }

@@ -6,7 +6,7 @@
 import { agentCatalog, agentClose, agentOpen, agentSend, Channel } from '../lib/ipc';
 import { countOutput, getTab, onClosed, queuePrompt, setAgentHooks, setAgentState } from '../terminal/manager';
 import { apply, emptyState, peek, type AgentState } from './apply';
-import type { AgentEvent, Answer, Model } from '../../sidecar/protocol';
+import type { AgentEvent, Answer, Image, Model } from '../../sidecar/protocol';
 import type { AgentProvider, TabKey } from '../types';
 
 /** Each tab's session. `fresh`: nothing sent and nothing resumed, so the tab can still
@@ -22,6 +22,8 @@ interface Live {
   channel: Channel<AgentEvent>;
   /** Sent once the session is ready: a task from the task box, or Reply before then. */
   queued: string[];
+  /** Images from a message sent while the agent worked, which go with the queued text. */
+  images: Image[];
 }
 const live = new Map<TabKey, Live>();
 
@@ -29,7 +31,7 @@ export async function startAgent(key: TabKey, provider: AgentProvider, cwd: stri
   if (live.has(key)) return;
   agents[key] = { ...emptyState(), fresh: !o.session && !o.task };
   const channel = new Channel<AgentEvent>();
-  const l: Live = { id: null, provider, cwd, chat: !!o.chat, channel, queued: o.task ? [o.task] : [] };
+  const l: Live = { id: null, provider, cwd, chat: !!o.chat, channel, queued: o.task ? [o.task] : [], images: [] };
   live.set(key, l);
   channel.onmessage = (ev) => receive(key, ev);
   try {
@@ -111,15 +113,16 @@ const op = (key: TabKey, o: Record<string, unknown>) => {
 
 /** A message sent while the agent works waits for the turn to end: the SDK's streaming input
  *  drops one sent mid-turn. The manager's queue sends it when the tab goes idle. */
-export function send(key: TabKey, text: string) {
+export function send(key: TabKey, text: string, images: Image[] = []) {
   const l = live.get(key);
-  if (!l || !text.trim()) return;
+  if (!l || (!text.trim() && !images.length)) return;
   if (agents[key]) agents[key].fresh = false;
+  l.images.push(...images);
   if (!l.id || !agents[key]?.ready) l.queued.push(text);
   else if (agents[key].working) {
     const had = getTab(key)?.queued;
-    queuePrompt(key, had ? `${had}\n\n${text}` : text);
-  } else op(key, { op: 'send', text });
+    queuePrompt(key, had ? `${had}\n\n${text}` : text || '(images)');
+  } else op(key, { op: 'send', text: text === '(images)' ? '' : text, images: l.images.splice(0) });
 }
 export const interrupt = (key: TabKey) => op(key, { op: 'interrupt' });
 export const answer = (key: TabKey, request: string, a: Answer) => op(key, { op: 'answer', request, answer: a });

@@ -197,7 +197,14 @@
       {#each turns as turn, i (i)}
         {@const live = i === turns.length - 1 && !!s?.working}
         <section class="turn">
-          {#if turn.prompt}<div class="prompt">{turn.prompt.text}</div>{/if}
+          {#if turn.prompt}
+            <div class="prompt">
+              {#if turn.prompt.images?.length}
+                <div class="pics">{#each turn.prompt.images as src, i (i)}<img {src} alt="Sent with the message" />{/each}</div>
+              {/if}
+              {#if turn.prompt.text}<div>{turn.prompt.text}</div>{/if}
+            </div>
+          {/if}
           {#if turn.steps.length || turn.end || live}
             {@const all = blocks(turn.steps)}
             <div class="trail" class:live class:ended={!!turn.end}>
@@ -266,7 +273,7 @@
       commands={s?.commands ?? []}
       working={!!s?.working}
       disabled={!s || s.exited}
-      onSend={(text) => send(tabKey, text)}
+      onSend={(text, images) => send(tabKey, text, images)}
       onStop={() => interrupt(tabKey)}
     >
       {#snippet toolbar()}
@@ -365,6 +372,22 @@
     font-size: 14px;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+
+  .pics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 2px 0 6px;
+  }
+  .pics:last-child {
+    margin-bottom: 2px;
+  }
+  .pics img {
+    max-height: 160px;
+    max-width: 240px;
+    border-radius: 8px;
+    object-fit: cover;
   }
 
   /* The rail: each turn's work hangs off one line, a light per tool call. */

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { matchCommands, typedCommand, type Sigil } from './commands';
-  import type { Command } from '../../sidecar/protocol';
+  import type { Command, Image } from '../../sidecar/protocol';
 
   let { name, history, sigils, commands, working, disabled, onSend, onStop, toolbar }: {
     name: string;
@@ -12,7 +12,7 @@
     commands: Command[];
     working: boolean;
     disabled: boolean;
-    onSend: (text: string) => void;
+    onSend: (text: string, images: Image[]) => void;
     onStop: () => void;
     /** Model, mode and status, along the bottom of the box. */
     toolbar?: Snippet;
@@ -43,10 +43,52 @@
   }
 
   function send() {
-    if (!text.trim() || disabled) return;
-    onSend(text.trim());
+    if ((!text.trim() && !images.length) || disabled) return;
+    onSend(text.trim(), images.map(({ mediaType, data }) => ({ mediaType, data })));
     text = '';
+    images = [];
+    problem = '';
     recall = -1;
+  }
+
+  /** Pictures to send with the message: pasted, or dropped on the box. */
+  let images = $state<(Image & { url: string; name: string })[]>([]);
+  let problem = $state('');
+  let dragging = $state(false);
+  // What both CLIs' models take, and the API's size limit for one image.
+  const TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+  const MAX = 5 * 1024 * 1024;
+  async function attach(files: File[]) {
+    problem = '';
+    for (const f of files) {
+      if (!TYPES.includes(f.type)) {
+        problem = `${f.name || 'That file'} is not a PNG, JPEG, GIF or WebP image`;
+        continue;
+      }
+      if (f.size > MAX) {
+        problem = `${f.name || 'That image'} is over 5 MB`;
+        continue;
+      }
+      const url = await new Promise<string>((done) => {
+        const r = new FileReader();
+        r.onload = () => done(String(r.result));
+        r.readAsDataURL(f);
+      });
+      images = [...images, { mediaType: f.type, data: url.slice(url.indexOf(',') + 1), url, name: f.name || 'pasted image' }];
+    }
+  }
+  function onPaste(e: ClipboardEvent) {
+    const files = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'));
+    if (!files.length) return;
+    e.preventDefault();
+    void attach(files);
+  }
+  const hasFiles = (e: DragEvent) => [...(e.dataTransfer?.types ?? [])].includes('Files');
+  function onDrop(e: DragEvent) {
+    dragging = false;
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    void attach([...(e.dataTransfer?.files ?? [])]);
   }
 
   /** Which earlier prompt the box shows, counting back from the newest; -1 is none. */
@@ -99,7 +141,26 @@
   };
 </script>
 
-<div class="console" class:disabled>
+<!-- svelte-ignore a11y_no_static_element_interactions (a drop target; the box itself takes input) -->
+<div
+  class="console"
+  class:disabled
+  class:dragging
+  ondragover={(e) => hasFiles(e) && !disabled && (e.preventDefault(), (dragging = true))}
+  ondragleave={() => (dragging = false)}
+  ondrop={onDrop}
+>
+  {#if images.length || problem}
+    <div class="attachments">
+      {#each images as img, i (img.url)}
+        <figure>
+          <img src={img.url} alt={img.name} />
+          <button class="remove" onclick={() => (images = images.filter((_, j) => j !== i))} aria-label="Remove {img.name}" title="Remove">×</button>
+        </figure>
+      {/each}
+      {#if problem}<span class="problem">{problem}</span>{/if}
+    </div>
+  {/if}
   {#if menu.length}
     <ul class="menu" role="listbox" aria-label="Commands and skills">
       {#each menu as c, i (c.name)}
@@ -120,6 +181,7 @@
     onkeyup={track}
     onclick={track}
     onkeydown={onKey}
+    onpaste={onPaste}
     rows="1"
     {disabled}
     placeholder={disabled ? `${name} has stopped` : sigils.includes('$') ? `Ask ${name}: / for commands, $ for skills` : `Ask ${name}, or type / for commands and skills`}
@@ -129,7 +191,7 @@
     {@render toolbar?.()}
     <div class="grow"></div>
     {#if working}<button class="stop" onclick={onStop} title="Stop the turn (Esc)">Stop</button>{/if}
-    <button class="send" onclick={send} disabled={disabled || !text.trim()} title="Send (Enter)">Send</button>
+    <button class="send" onclick={send} disabled={disabled || (!text.trim() && !images.length)} title="Send (Enter)">Send</button>
   </div>
 </div>
 
@@ -141,6 +203,54 @@
     border-radius: 12px;
     box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
     transition: border-color var(--fast) var(--ease-out);
+  }
+  .console.dragging {
+    border-color: var(--accent);
+    border-style: dashed;
+  }
+  .attachments {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px 0;
+  }
+  figure {
+    position: relative;
+    margin: 0;
+  }
+  figure img {
+    display: block;
+    height: 56px;
+    max-width: 120px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+  .remove {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 18px;
+    height: 18px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    font-size: 12px;
+    line-height: 1;
+    color: var(--fg-bright);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    cursor: pointer;
+  }
+  .remove:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+  .problem {
+    font-size: 12px;
+    color: var(--danger);
   }
   .console:focus-within {
     border-color: color-mix(in srgb, var(--accent) 55%, var(--border));

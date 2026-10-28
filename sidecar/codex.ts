@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { clip, emit, firstLine, log, textOf } from './events.ts';
-import type { AgentEvent, AgentRequest, Answer, ChatItem, Model } from './protocol.ts';
+import type { AgentEvent, AgentRequest, Answer, ChatItem, Image, Model } from './protocol.ts';
 
 type Out = (ev: AgentEvent) => void;
 type Obj = Record<string, any>;
@@ -68,8 +68,12 @@ function threadOptions(args: string[]): { thread: Obj; server: string[] } {
 function itemOf(it: Obj): ChatItem | null {
   const done = it.status !== 'inProgress';
   switch (it.type) {
-    case 'userMessage':
-      return { id: it.id, kind: 'user', text: (it.content ?? []).map((c: Obj) => c.text ?? (c.name ? `$${c.name}` : '')).filter(Boolean).join(' ') };
+    case 'userMessage': {
+      const content: Obj[] = it.content ?? [];
+      const images = content.filter((c) => c.type === 'image' && c.url).map((c) => c.url as string);
+      const text = content.map((c) => c.text ?? (c.type === 'skill' ? `$${c.name}` : '')).filter(Boolean).join(' ');
+      return { id: it.id, kind: 'user', text, ...(images.length ? { images } : {}) };
+    }
     case 'agentMessage':
       return { id: it.id, kind: 'assistant', text: it.text };
     case 'reasoning': {
@@ -302,11 +306,15 @@ export class Codex {
 
   /** `$name` in a message invokes that skill, as in Codex's TUI; a message that is one of
    *  COMMANDS runs it. */
-  send(text: string) {
+  send(text: string, images: Image[] = []) {
     const command = /^\/(\w+)\s*([\s\S]*)$/.exec(text.trim());
-    if (command && COMMANDS.some((c) => c.name === `/${command[1]}`)) return void this.command(command[1], command[2].trim());
+    if (command && !images.length && COMMANDS.some((c) => c.name === `/${command[1]}`)) return void this.command(command[1], command[2].trim());
     const skills = [...text.matchAll(/\$([\w:.-]+)/g)].map((m) => this.skills.get(m[1])).filter(Boolean) as Obj[];
-    const input = [{ type: 'text', text }, ...skills.map((s) => ({ type: 'skill', name: s.name, path: s.path }))];
+    const input = [
+      ...(text ? [{ type: 'text', text }] : []),
+      ...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })),
+      ...skills.map((s) => ({ type: 'skill', name: s.name, path: s.path })),
+    ];
     this.live({ t: 'working', on: true });
     this.call('turn/start', {
       threadId: this.thread,

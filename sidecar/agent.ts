@@ -35,7 +35,7 @@ function run(op: AgentOp) {
   if (!s) return;
   switch (op.op) {
     case 'send':
-      return s.send(op.text);
+      return s.send(op.text, op.images);
     case 'interrupt':
       return s.interrupt();
     case 'answer':
