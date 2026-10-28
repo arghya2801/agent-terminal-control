@@ -72,10 +72,21 @@
 
 <style>
   .card {
-    border-left: 3px solid var(--warn);
-    background: var(--bg-chrome);
-    padding: 10px 14px 12px;
+    border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--border));
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--warn) 5%, var(--bg-chrome));
+    padding: 12px 16px 14px;
     animation: card-in var(--enter) var(--ease-out);
+  }
+  h3::before {
+    content: '';
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 8px;
+    border-radius: 50%;
+    background: var(--warn);
+    vertical-align: 1px;
   }
   @keyframes card-in {
     from {
@@ -136,7 +147,7 @@
     gap: 1px;
     padding: 6px 10px;
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: 8px;
     cursor: pointer;
   }
   .option span {
@@ -160,7 +171,7 @@
     color: var(--fg);
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: 8px;
     padding: 5px 8px;
     margin-bottom: 8px;
   }
@@ -177,7 +188,7 @@
     color: var(--fg);
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: 8px;
     padding: 5px 12px;
     cursor: pointer;
   }

@@ -1,8 +1,9 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import { matchCommands, typedCommand } from './commands';
   import type { Command } from '../../sidecar/protocol';
 
-  let { name, sigil, commands, working, disabled, onSend, onStop }: {
+  let { name, sigil, commands, working, disabled, onSend, onStop, toolbar }: {
     name: string;
     /** How the agent spells a command: `/compact` for Claude, `$skill` for Codex. */
     sigil: '/' | '$';
@@ -11,6 +12,8 @@
     disabled: boolean;
     onSend: (text: string) => void;
     onStop: () => void;
+    /** Model, mode and status, along the bottom of the box. */
+    toolbar?: Snippet;
   } = $props();
 
   let text = $state('');
@@ -75,12 +78,12 @@
   };
 </script>
 
-<div class="composer">
+<div class="console" class:disabled>
   {#if menu.length}
     <ul class="menu" role="listbox" aria-label="Commands and skills">
       {#each menu as c, i (c.name)}
         <li role="option" aria-selected={i === pick}>
-          <button class:on={i === pick} onmousedown={(e) => { e.preventDefault(); choose(c); }}>
+          <button class:on={i === pick} onmousedown={(e) => { e.preventDefault(); choose(c); }} onmouseenter={() => (pick = i)}>
             <span class="cmd">{label(c)}</span>
             {#if c.hint && sigil === '/'}<span class="hint">{c.hint}</span>{/if}
             <span class="desc">{c.description}</span>
@@ -98,52 +101,108 @@
     onkeydown={onKey}
     rows="1"
     {disabled}
-    placeholder={disabled ? `${name} has stopped` : `Message ${name}, or ${sigil} for ${sigil === '/' ? 'commands and skills' : 'skills'}`}
+    placeholder={disabled ? `${name} has stopped` : `Ask ${name}, or type ${sigil} for ${sigil === '/' ? 'commands and skills' : 'skills'}`}
     aria-label="Message {name}"
   ></textarea>
-  {#if working}<button class="btn" onclick={onStop} title="Stop the turn (Esc)">Stop</button>{/if}
-  <button class="btn primary" onclick={send} disabled={disabled || !text.trim()}>Send</button>
+  <div class="bar">
+    {@render toolbar?.()}
+    <div class="grow"></div>
+    {#if working}<button class="stop" onclick={onStop} title="Stop the turn (Esc)">Stop</button>{/if}
+    <button class="send" onclick={send} disabled={disabled || !text.trim()} title="Send (Enter)">Send</button>
+  </div>
 </div>
 
 <style>
-  .composer {
+  .console {
     position: relative;
-    display: flex;
-    align-items: flex-end;
-    gap: 8px;
-  }
-  textarea {
-    flex: 1;
-    field-sizing: content;
-    min-height: 1.5em;
-    max-height: 40vh;
-    resize: none;
-    font-family: var(--mono);
-    font-size: var(--mono-size);
-    line-height: 1.5;
-    color: var(--fg-bright);
     background: var(--bg-chrome);
     border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 7px 9px;
+    border-radius: 12px;
+    box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+    transition: border-color var(--fast) var(--ease-out);
+  }
+  .console:focus-within {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  }
+  textarea {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    field-sizing: content;
+    min-height: 2.6em;
+    max-height: 40vh;
+    resize: none;
+    font: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--fg-bright);
+    background: transparent;
+    border: none;
+    padding: 12px 14px 4px;
   }
   textarea:focus-visible {
     outline: none;
-    border-color: var(--accent);
+  }
+  textarea::placeholder {
+    color: var(--fg-faint);
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px 8px 10px;
+    font-size: 12px;
+    color: var(--fg-faint);
+  }
+  .grow {
+    flex: 1;
+  }
+  .send,
+  .stop {
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 8px;
+    padding: 5px 14px;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .send {
+    background: var(--accent-strong);
+    color: var(--on-accent);
+  }
+  .send:disabled {
+    background: var(--bg-surface);
+    color: var(--fg-faint);
+    cursor: default;
+  }
+  .stop {
+    background: transparent;
+    color: var(--fg);
+    border-color: var(--border);
+  }
+  .stop:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+  .send:focus-visible,
+  .stop:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: 1px;
   }
   .menu {
     position: absolute;
     left: 0;
     right: 0;
-    bottom: calc(100% + 4px);
+    bottom: calc(100% + 6px);
     margin: 0;
     padding: 4px;
     list-style: none;
     background: var(--bg-chrome);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 10px;
     box-shadow: var(--shadow-pop);
-    max-height: 18em;
+    max-height: 20em;
     overflow-x: hidden;
     overflow-y: auto;
     z-index: 2;
@@ -152,11 +211,11 @@
     all: unset;
     box-sizing: border-box;
     display: flex;
-    gap: 1ch;
+    gap: 1.2ch;
     align-items: baseline;
     width: 100%;
-    padding: 4px 8px;
-    border-radius: 4px;
+    padding: 6px 10px;
+    border-radius: 6px;
     cursor: pointer;
     white-space: nowrap;
   }
@@ -182,29 +241,5 @@
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
-  }
-  .btn {
-    font: inherit;
-    color: var(--fg);
-    background: var(--bg-surface);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 6px 12px;
-    cursor: pointer;
-  }
-  .btn:hover:not(:disabled) {
-    background: var(--bg-hover);
-  }
-  .btn:focus-visible {
-    outline: 1px solid var(--accent);
-  }
-  .btn.primary {
-    background: var(--accent-strong);
-    border-color: var(--accent-strong);
-    color: var(--on-accent);
-  }
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: default;
   }
 </style>

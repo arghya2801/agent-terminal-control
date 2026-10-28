@@ -3,11 +3,14 @@
   import Composer from './Composer.svelte';
   import Markdown from './Markdown.svelte';
   import RequestCard from './RequestCard.svelte';
-  import ToolLine from './ToolLine.svelte';
+  import ToolLine, { toolStatus } from './ToolLine.svelte';
+  import Icon from '../lib/Icon.svelte';
+  import ProviderIcon from '../lib/ProviderIcon.svelte';
   import { agents, answer, interrupt, send, setMode, setModel } from './agent.svelte';
   import { getActiveKey, queuePrompt } from '../terminal/manager';
   import { providerName } from '../lib/agents';
   import { appState } from '../lib/stores.svelte';
+  import type { ChatItem } from '../../sidecar/protocol';
   import type { AgentProvider, TabKey } from '../types';
 
   /** `queued`: a message waiting for the turn to end (the tab's queue, shared with the Open view). */
@@ -15,11 +18,27 @@
 
   const name = $derived(providerName(provider));
   const s = $derived(agents[tabKey]);
-  const items = $derived(s?.items ?? []);
   const request = $derived(s?.requests[0]);
+  const MODES: Record<string, string> = { default: 'Ask first', acceptEdits: 'Accept edits', plan: 'Plan', auto: 'Auto', bypassPermissions: 'Bypass', dontAsk: "Don't ask" };
   // The CLI reports the full model id; the picker lists aliases that resolve to one.
   const model = $derived(s ? (s.models.find((m) => m.id === s.model || m.resolved === s.model)?.id ?? s.model ?? s.models[0]?.id ?? '') : '');
-  const MODES: Record<string, string> = { default: 'Ask first', acceptEdits: 'Accept edits', plan: 'Plan', auto: 'Auto', bypassPermissions: 'Bypass', dontAsk: "Don't ask" };
+
+  /** A prompt, then everything the agent did for it, then how the turn ended. */
+  interface Turn { prompt: ChatItem | null; steps: ChatItem[]; end: ChatItem | null }
+  const turns = $derived.by(() => {
+    const out: Turn[] = [];
+    for (const it of s?.items ?? []) {
+      if (it.kind === 'user') {
+        out.push({ prompt: it, steps: [], end: null });
+        continue;
+      }
+      let t = out.at(-1);
+      if (!t || t.end) out.push((t = { prompt: null, steps: [], end: null }));
+      if (it.kind === 'turn') t.end = it;
+      else t.steps.push(it);
+    }
+    return out;
+  });
 
   // The turn timer, ticking only while the agent works.
   let now = $state(Date.now());
@@ -33,12 +52,13 @@
     const sec = Math.max(0, Math.round(ms / 1000));
     return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s`;
   };
+  const cost = (usd?: number) => (usd ? `$${usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)}` : '');
   const status = $derived(
-    !s ? '' : s.exited ? `${name} has stopped` : request ? 'Waiting for you' : s.working ? `Working ${clock(now - s.since)}` : s.ready ? 'Ready' : `Starting ${name}`,
+    !s ? '' : s.exited ? 'Stopped' : request ? 'Waiting for you' : s.working ? `Working ${clock(now - s.since)}` : s.ready ? 'Ready' : 'Starting',
   );
 
   // Follow the end unless the user has scrolled up. On any resize, not on new items: text
-  // streams into an item without adding one, and the request card shrinks the list.
+  // streams into an item without adding one, and a request card shrinks the list.
   let list = $state<HTMLDivElement>();
   let stuck = true;
   $effect(() => {
@@ -54,51 +74,65 @@
   onMount(() => {
     if (getActiveKey() === tabKey) (list?.parentElement?.querySelector('textarea') as HTMLTextAreaElement | null)?.focus();
   });
-
-  const turnText = (ms?: number, cost?: number) =>
-    [ms ? `Worked ${clock(ms)}` : '', cost ? `$${cost < 0.01 ? cost.toFixed(4) : cost.toFixed(2)}` : ''].filter(Boolean).join(', ');
 </script>
 
 <div
   class="agent"
   style:--mono={appState.settings?.terminal.fontFamily}
-  style:--mono-size="{appState.settings?.terminal.fontSize ?? 13}px"
+  style:--mono-size="{Math.max(11, (appState.settings?.terminal.fontSize ?? 13) - 1)}px"
 >
   <div class="list" bind:this={list} onscroll={(e) => (stuck = e.currentTarget.scrollHeight - e.currentTarget.scrollTop - e.currentTarget.clientHeight < 40)}>
     <div class="column">
-      {#if s?.ready && !items.length}
-        <p class="empty">Ask {name} anything. Type {provider === 'claude' ? '/' : '$'} to see {provider === 'claude' ? 'commands and skills' : 'skills'}.</p>
-      {/if}
-      {#each items as it (it.id)}
-        <div class="item {it.kind}" class:sub={!!it.parent}>
-          {#if it.kind === 'user'}
-            <div class="you">{it.text}</div>
-          {:else if it.kind === 'assistant'}
-            {#if it.text}<Markdown text={it.text} />{/if}
-          {:else if it.kind === 'thinking'}
-            {#if it.text}<details class="thinking"><summary>{it.text.trim().split('\n')[0]}</summary><Markdown text={it.text} /></details>{/if}
-          {:else if it.kind === 'tool'}
-            <ToolLine item={it} live={!s?.exited} />
-          {:else if it.kind === 'turn'}
-            <div class="turn">{turnText(it.durationMs, it.costUsd)}</div>
-          {:else}
-            <p class="notice" class:error={it.error}>{it.text}</p>
-          {/if}
+      {#if s?.ready && !turns.length}
+        <div class="empty">
+          <span class="mark"><ProviderIcon {provider} /></span>
+          <p class="lead">Ask {name} anything</p>
+          <p>Type <kbd>{provider === 'claude' ? '/' : '$'}</kbd> for {provider === 'claude' ? 'commands and skills' : 'skills'}. <kbd>Enter</kbd> sends, <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line.</p>
         </div>
+      {:else if !s?.ready && !s?.exited && !turns.length}
+        <div class="empty"><p class="lead">Starting {name}</p></div>
+      {/if}
+
+      {#each turns as turn, i (i)}
+        {@const live = i === turns.length - 1 && !!s?.working}
+        <section class="turn">
+          {#if turn.prompt}<div class="prompt">{turn.prompt.text}</div>{/if}
+          {#if turn.steps.length || turn.end || live}
+            <div class="trail" class:live class:ended={!!turn.end}>
+              {#each turn.steps as it (it.id)}
+                {#if it.kind === 'tool'}
+                  <div class="step tool {toolStatus(it, !s?.exited)}" class:sub={!!it.parent}><ToolLine item={it} live={!s?.exited} /></div>
+                {:else if it.kind === 'assistant'}
+                  {#if it.text}<div class="step text" class:sub={!!it.parent}><Markdown text={it.text} /></div>{/if}
+                {:else if it.kind === 'thinking'}
+                  {#if it.text}<details class="step thinking" class:sub={!!it.parent}><summary>{it.text.trim().split('\n')[0]}</summary><Markdown text={it.text} /></details>{/if}
+                {:else}
+                  <p class="step notice" class:error={it.error}>{it.text}</p>
+                {/if}
+              {/each}
+              {#if live && !request}<div class="step working">{status}</div>{/if}
+              {#if turn.end}
+                <div class="step end">
+                  {#if turn.end.durationMs}<span>Worked {clock(turn.end.durationMs)}</span>{/if}
+                  {#if turn.end.costUsd}<span>{cost(turn.end.costUsd)}</span>{/if}
+                </div>
+              {/if}
+            </div>
+          {/if}
+        </section>
       {/each}
-      {#if s?.working && !request}<div class="working"><span class="pulse" aria-hidden="true"></span>{status}</div>{/if}
     </div>
   </div>
 
-  <div class="bottom">
+  <div class="dock">
     {#if request && s}
       {#key request.id}
         <RequestCard {request} {name} onAnswer={(a) => answer(tabKey, request.id, a)} />
       {/key}
-      {#if s.requests.length > 1}<p class="more">{s.requests.length - 1} more waiting</p>{/if}
+      {#if s.requests.length > 1}<p class="aside">{s.requests.length - 1} more waiting</p>{/if}
     {/if}
     {#if queued}
-      <p class="queued">
+      <p class="aside queued">
         <span>Sends when {name} finishes: {queued}</span>
         <button class="link" onclick={() => queuePrompt(tabKey, null)}>Cancel</button>
       </p>
@@ -111,22 +145,27 @@
       disabled={!s || s.exited}
       onSend={(text) => send(tabKey, text)}
       onStop={() => interrupt(tabKey)}
-    />
-    <div class="footer">
-      {#if s?.models.length}
-        <select aria-label="Model" value={model} onchange={(e) => setModel(tabKey, e.currentTarget.value)}>
-          {#if model && !s.models.some((m) => m.id === model)}<option value={model}>{model}</option>{/if}
-          {#each s.models as m (m.id)}<option value={m.id}>{m.label}</option>{/each}
-        </select>
-      {/if}
-      {#if s?.modes.length}
-        <select aria-label="Permission mode" value={s.mode ?? 'default'} onchange={(e) => setMode(tabKey, e.currentTarget.value)}>
-          {#each s.modes as m (m)}<option value={m}>{MODES[m] ?? m}</option>{/each}
-        </select>
-      {/if}
-      <span class="status" class:waiting={!!request}>{status}</span>
-      <button class="link" onclick={onTerminal} title="Close this view and resume the session in a terminal">Open in terminal</button>
-    </div>
+    >
+      {#snippet toolbar()}
+        {#if s?.models.length}
+          <label class="chip" title="Model">
+            <select aria-label="Model" value={model} onchange={(e) => setModel(tabKey, e.currentTarget.value)}>
+              {#if model && !s.models.some((m) => m.id === model)}<option value={model}>{model}</option>{/if}
+              {#each s.models as m (m.id)}<option value={m.id}>{m.label}</option>{/each}
+            </select>
+          </label>
+        {/if}
+        {#if s?.modes.length}
+          <label class="chip" class:plan={s.mode === 'plan'} title="Permission mode">
+            <select aria-label="Permission mode" value={s.mode ?? 'default'} onchange={(e) => setMode(tabKey, e.currentTarget.value)}>
+              {#each s.modes as m (m)}<option value={m}>{MODES[m] ?? m}</option>{/each}
+            </select>
+          </label>
+        {/if}
+        <span class="status" class:working={s?.working && !request} class:waiting={!!request}>{status}</span>
+        <button class="icon" onclick={onTerminal} title="Open in terminal: resume this session in {name}'s own TUI" aria-label="Open in terminal"><Icon name="terminal" size={14} /></button>
+      {/snippet}
+    </Composer>
   </div>
 </div>
 
@@ -138,45 +177,152 @@
     flex-direction: column;
     background: var(--bg);
     color: var(--fg);
-    font-size: 13px;
+    font-size: 13.5px;
+    line-height: 1.6;
+    --rail: 18px;
   }
   .list {
     flex: 1;
     overflow-y: auto;
-    padding: 18px 24px 8px;
+    padding: 28px 24px 12px;
   }
-  .column {
-    max-width: 100ch;
+  .column,
+  .dock {
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+    box-sizing: border-box;
   }
-  .item {
+
+  .empty {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    margin-top: 18vh;
+    text-align: center;
+    color: var(--fg-dim);
+  }
+  .empty p {
+    margin: 0;
+  }
+  .empty .mark {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--bg-surface);
+    margin-bottom: 6px;
+  }
+  .lead {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--fg-bright);
+  }
+  kbd {
+    font: inherit;
+    font-size: 12px;
+    padding: 0 5px;
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    color: var(--fg);
+  }
+
+  .turn + .turn {
+    margin-top: 26px;
+  }
+  .prompt {
+    width: fit-content;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 9px 14px;
+    border-radius: 12px;
+    background: var(--bg-surface);
+    color: var(--fg-bright);
+    font-size: 14px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  /* The rail: each turn's work hangs off one line, a light per tool call. */
+  .trail {
+    position: relative;
+    margin: 12px 0 0 7px;
+    padding-left: var(--rail);
+  }
+  .trail::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--border);
+  }
+  .trail.live::before {
+    background: linear-gradient(to bottom, var(--border), color-mix(in srgb, var(--accent) 70%, transparent));
+  }
+  .step {
+    position: relative;
     content-visibility: auto;
     contain-intrinsic-size: auto 24px;
   }
-  .item.user,
-  .item.assistant,
-  .item.thinking {
-    margin: 10px 0;
+  .step + .step {
+    margin-top: 6px;
   }
-  .item.tool + .item:not(.tool) {
+  .step.text + .step,
+  .step + .step.text {
     margin-top: 10px;
   }
-  .item.assistant,
-  .item.thinking {
-    max-width: 76ch;
+  .step.sub {
+    margin-left: 14px;
+    padding-left: 10px;
+    border-left: 1px dashed var(--border);
   }
-  .item.sub {
-    margin-left: 3ch;
-    padding-left: 1ch;
-    border-left: 1px solid var(--border);
+  .step.tool::before,
+  .step.working::before,
+  .step.end::before {
+    content: '';
+    position: absolute;
+    left: calc(-1 * var(--rail) - 4px);
+    top: 8px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 2px solid var(--fg-faint);
   }
-  .you {
-    background: var(--bg-surface);
-    color: var(--fg-bright);
-    border-left: 2px solid var(--accent);
-    padding: 6px 10px;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    line-height: 1.5;
+  /* A subagent's calls sit on its own dashed line, with smaller lights. */
+  .step.sub::before {
+    left: -4px;
+    top: 9px;
+    width: 3px;
+    height: 3px;
+  }
+  .step.tool.done::before {
+    border-color: var(--ok);
+    background: color-mix(in srgb, var(--ok) 35%, var(--bg));
+  }
+  .step.tool.failed::before {
+    border-color: var(--danger);
+    background: var(--danger);
+  }
+  .step.tool.running::before,
+  .step.working::before {
+    border-color: var(--accent);
+    background: var(--accent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+    animation: beacon 1.4s ease-in-out infinite;
+  }
+  @keyframes beacon {
+    50% {
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent);
+    }
+  }
+  .step.text {
+    max-width: 68ch;
   }
   .thinking {
     color: var(--fg-faint);
@@ -187,92 +333,48 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    list-style: none;
   }
-  .turn {
-    display: flex;
-    align-items: center;
-    gap: 1ch;
-    margin: 14px 0;
+  .thinking summary::before {
+    content: 'Thought: ';
+    font-style: normal;
+  }
+  .notice {
+    margin: 0;
     color: var(--fg-faint);
-    font-size: 12px;
-  }
-  .turn::before,
-  .turn::after {
-    content: '';
-    flex: 1;
-    border-top: 1px solid var(--border);
-  }
-  .turn:empty::after {
-    display: none;
-  }
-  .notice,
-  .empty,
-  .more {
-    color: var(--fg-faint);
-    margin: 8px 0;
+    font-size: 12.5px;
   }
   .notice.error {
     color: var(--danger);
   }
-  .empty {
-    color: var(--fg-dim);
-  }
   .working {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 10px 0;
     color: var(--fg-dim);
+    font-size: 12.5px;
+  }
+  .end {
+    display: flex;
+    gap: 14px;
+    color: var(--fg-faint);
     font-size: 12px;
+    padding-top: 2px;
   }
-  .pulse {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--accent);
-    animation: pulse 1.2s ease-in-out infinite;
+  .step.end::before {
+    border-radius: 2px;
+    border-color: var(--border);
+    background: var(--border);
   }
-  @keyframes pulse {
-    50% {
-      opacity: 0.3;
-    }
-  }
-  .bottom {
+
+  .dock {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 8px 24px 10px;
-    border-top: 1px solid var(--border);
-    max-width: calc(100ch + 48px);
+    padding: 6px 24px 16px;
+    max-width: calc(760px + 48px);
   }
-  .footer {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: var(--fg-faint);
-  }
-  select {
-    font: inherit;
-    color: var(--fg-dim);
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    padding: 2px 4px;
-    cursor: pointer;
-  }
-  select:hover,
-  select:focus-visible {
-    border-color: var(--border);
-    outline: none;
-  }
-  .status {
-    flex: 1;
-  }
-  .queued {
+  .aside {
     display: flex;
     gap: 1ch;
-    margin: 0;
+    margin: 0 4px;
     font-size: 12px;
     color: var(--fg-dim);
   }
@@ -282,19 +384,81 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .link {
+    all: unset;
+    color: var(--accent);
+    cursor: pointer;
+  }
+  .link:focus-visible {
+    outline: 1px solid var(--accent);
+  }
+
+  /* Toolbar, inside the composer. */
+  .chip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    border-radius: 7px;
+    background: var(--bg-surface);
+    color: var(--fg-dim);
+  }
+  .chip::after {
+    content: '▾';
+    position: absolute;
+    right: 7px;
+    pointer-events: none;
+    font-size: 10px;
+  }
+  .chip:hover {
+    color: var(--fg-bright);
+  }
+  .chip.plan {
+    color: var(--info);
+    background: color-mix(in srgb, var(--info) 14%, var(--bg-surface));
+  }
+  .chip select {
+    appearance: none;
+    font: inherit;
+    font-size: 12px;
+    color: inherit;
+    background: transparent;
+    border: none;
+    padding: 3px 22px 3px 9px;
+    cursor: pointer;
+  }
+  .chip select:focus-visible {
+    outline: 1px solid var(--accent);
+    border-radius: 7px;
+  }
+  .chip option {
+    color: var(--fg);
+    background: var(--bg-chrome);
+  }
+  .status {
+    margin-left: 4px;
+  }
+  .status.working {
+    color: var(--fg-dim);
+  }
   .status.waiting {
     color: var(--warn);
   }
-  .link {
-    all: unset;
+  .icon {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
     color: var(--fg-dim);
     cursor: pointer;
   }
-  .link:hover {
+  .icon:hover {
+    background: var(--bg-hover);
     color: var(--fg-bright);
-    text-decoration: underline;
   }
-  .link:focus-visible {
+  .icon:focus-visible {
     outline: 1px solid var(--accent);
   }
 </style>

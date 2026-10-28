@@ -1,26 +1,33 @@
-<script lang="ts">
+<script lang="ts" module>
   import type { ChatItem } from '../../sidecar/protocol';
 
-  /** `live`: the session is still running, so a call without a result is in progress. */
+  export type ToolStatus = 'running' | 'done' | 'failed' | 'stopped';
+  /** `live`: the session still runs, so a call without a result is in progress. */
+  export function toolStatus(item: ChatItem, live: boolean): ToolStatus {
+    return item.done ? (item.error ? 'failed' : 'done') : live ? 'running' : 'stopped';
+  }
+</script>
+
+<script lang="ts">
   let { item, live }: { item: ChatItem; live: boolean } = $props();
   let open = $state(false);
 
   const diff = $derived(/^(Edit|MultiEdit|apply_patch)$/.test(item.tool ?? '') || !!item.body?.startsWith('*** Begin Patch'));
   const lines = $derived(item.body?.replace(/\n$/, '').split('\n') ?? []);
   const counts = $derived(diff ? { add: lines.filter((l: string) => l.startsWith('+')).length, del: lines.filter((l: string) => l.startsWith('-')).length } : null);
-  const status = $derived(item.done ? (item.error ? 'failed' : 'done') : live ? 'running' : 'stopped');
+  const status = $derived(toolStatus(item, live));
   // While it runs, the last lines of its output, so a long command shows it is alive.
   const tail = $derived(status === 'running' && item.output ? item.output.trimEnd().split('\n').slice(-3).join('\n') : '');
 </script>
 
 <div class="tool" class:open>
   <button class="line" onclick={() => (open = !open)} aria-expanded={open} title={item.input}>
-    <span class="dot {status}" aria-hidden="true">⏺</span>
     <span class="name">{item.tool}</span>
     <span class="input">{item.input}</span>
     {#if counts}<span class="counts"><span class="add">+{counts.add}</span> <span class="del">−{counts.del}</span></span>{/if}
     {#if status === 'running' && item.seconds}<span class="secs">{Math.round(item.seconds)}s</span>{/if}
-    <span class="status {status}">{status === 'running' ? '…' : status === 'failed' ? '✗' : status === 'done' ? '✓' : '–'}<span class="sr">{status}</span></span>
+    {#if status === 'failed'}<span class="failed">failed</span>{:else if status === 'stopped'}<span class="secs">stopped</span>{/if}
+    <span class="chev" aria-hidden="true">{open ? '▾' : '▸'}</span>
   </button>
   {#if tail && !open}<pre class="tail">{tail}</pre>{/if}
   {#if open}
@@ -44,11 +51,11 @@
     box-sizing: border-box;
     display: flex;
     align-items: baseline;
-    gap: 1ch;
+    gap: 1.2ch;
     width: 100%;
-    padding: 1px 4px;
-    margin-left: -4px;
-    border-radius: 3px;
+    padding: 3px 8px;
+    margin-left: -8px;
+    border-radius: 6px;
     cursor: pointer;
     white-space: nowrap;
   }
@@ -58,17 +65,9 @@
   .line:focus-visible {
     outline: 1px solid var(--accent);
   }
-  .dot {
-    color: var(--fg-faint);
-  }
-  .dot.done {
-    color: var(--ok);
-  }
-  .dot.failed {
-    color: var(--danger);
-  }
   .name {
-    color: var(--fg);
+    color: var(--fg-bright);
+    font-weight: 600;
   }
   .input {
     overflow: hidden;
@@ -76,34 +75,43 @@
     min-width: 0;
     flex: 1;
   }
-  .counts .add,
-  .status.done {
+  .chev {
+    color: var(--fg-faint);
+    opacity: 0;
+  }
+  .line:hover .chev,
+  .open .chev,
+  .line:focus-visible .chev {
+    opacity: 1;
+  }
+  .counts .add {
     color: var(--ok);
   }
   .counts .del,
-  .status.failed {
+  .failed {
     color: var(--danger);
   }
-  .sr {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
+  .secs {
+    color: var(--fg-faint);
   }
   .detail {
-    margin: 2px 0 6px 2ch;
-    border-left: 1px solid var(--border);
-    padding-left: 1ch;
+    margin: 4px 0 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-chrome);
+    overflow: hidden;
   }
   pre {
     margin: 0;
-    padding: 4px 0;
+    padding: 8px 12px;
     max-height: 24em;
     overflow: auto;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     font: inherit;
+  }
+  .body + .output {
+    border-top: 1px solid var(--border);
   }
   .body .add {
     color: var(--ok);
@@ -116,25 +124,13 @@
   .output {
     color: var(--fg-faint);
   }
-  .tail {
-    color: var(--fg-faint);
-    margin-left: 3ch;
-    max-height: 4.5em;
-    overflow: hidden;
-  }
-  .secs {
-    color: var(--fg-faint);
-  }
-  .dot.running {
-    color: var(--accent);
-    animation: pulse 1.2s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    50% {
-      opacity: 0.35;
-    }
-  }
   .output.error {
     color: var(--danger);
+  }
+  .tail {
+    color: var(--fg-faint);
+    padding: 2px 0 4px;
+    max-height: 4.5em;
+    overflow: hidden;
   }
 </style>
