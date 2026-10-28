@@ -9,6 +9,7 @@
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import { agents, answer, catalog, interrupt, send, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
   import { activity, blocks, summarize, type Block } from './work';
+  import { keptEffort, olderModels } from './models';
   import { getActiveKey, queuePrompt } from '../terminal/manager';
   import { providerName } from '../lib/agents';
   import { appState } from '../lib/stores.svelte';
@@ -44,16 +45,18 @@
   function pick(value: string) {
     const at = value.indexOf(':');
     const [p, id] = [value.slice(0, at) as AgentProvider, value.slice(at + 1)];
-    if (p === provider) setModel(tabKey, id);
-    else switchProvider(tabKey, p, id);
+    if (p !== provider) return switchProvider(tabKey, p, id);
+    setModel(tabKey, id);
+    // An effort the new model does not take would fail its next request.
+    if (s && s.effort !== keptEffort(s.effort, s.models.find((m) => m.id === id))) setEffort(tabKey, null);
   }
-  /** The picker's groups: Claude first, then Codex, each with its current models on top.
-   *  Claude's pinned older versions (ids with a version in them) fold under "Older models". */
+  /** The picker's groups: Claude first, then Codex, each with its current models on top and
+   *  older ones folded under "Older models". */
   const modelSections = $derived.by((): MenuSection[] => {
     const lists = { [provider]: s?.models ?? [], [other]: s?.fresh ? others : [] } as Record<AgentProvider, Model[]>;
     return (['claude', 'codex'] as const).filter((p) => lists[p].length).map((p) => {
       const item = (m: Model) => ({ value: `${p}:${m.id}`, label: m.label, description: m.description });
-      const older = p === 'claude' ? lists[p].filter((m) => !/^[a-z]+$/.test(m.id)) : [];
+      const older = olderModels(p, lists[p]);
       return {
         title: providerName(p),
         icon: p === 'claude' ? claudeIcon : codexIcon,
@@ -148,7 +151,7 @@
     <div class="effort" role="group" aria-label="Reasoning effort">
       <span class="lbl">Effort{provider === 'codex' ? ', from the next message' : ''}</span>
       <div class="seg">
-        <button class:on={!s.effort} onclick={() => setEffort(tabKey, null)} title={current.defaultEffort ? `${effortName(current.defaultEffort)}, the model's default` : "The CLI's default"}>Default</button>
+        <button class:on={!s.effort} onclick={() => setEffort(tabKey, null)} title="The model's own default">{current.defaultEffort ? `Default (${effortName(current.defaultEffort).toLowerCase()})` : 'Default'}</button>
         {#each current.efforts as e (e)}
           <button class:on={s.effort === e} onclick={() => setEffort(tabKey, e)}>{effortName(e)}</button>
         {/each}
@@ -252,7 +255,7 @@
     >
       {#snippet toolbar()}
         {#if s?.models.length}
-          <ChipMenu title="Model and effort" sections={modelSections} value="{provider}:{model}" onPick={pick} footer={modelFooter} width={340}>
+          <ChipMenu title="Model and effort" sections={modelSections} value="{provider}:{model}" onPick={pick} footer={modelFooter} width={420}>
             {#snippet label()}
               <ProviderIcon {provider} />
               <span>{chipLabel}</span>
@@ -591,7 +594,7 @@
   .seg {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 3px;
   }
   .seg button {
     font: inherit;
@@ -600,7 +603,7 @@
     background: transparent;
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 2px 8px;
+    padding: 2px 6px;
     cursor: pointer;
   }
   .seg button:hover {
