@@ -11,6 +11,14 @@
   let { text }: { text: string } = $props();
   const tree = $derived(fromMarkdown(text, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] }));
 
+  function copy(e: MouseEvent, text: string) {
+    const button = e.currentTarget as HTMLButtonElement;
+    void navigator.clipboard.writeText(text).then(() => {
+      button.textContent = 'Copied';
+      setTimeout(() => (button.textContent = 'Copy'), 1500);
+    });
+  }
+
   function open(e: MouseEvent, url: string) {
     e.preventDefault();
     void openUrl(url).catch((err) => (appState.error = String(err)));
@@ -30,7 +38,8 @@
   {:else if n.type === 'emphasis'}<em>{@render kids(n)}</em>
   {:else if n.type === 'delete'}<del>{@render kids(n)}</del>
   {:else if n.type === 'inlineCode'}<code>{n.value}</code>
-  {:else if n.type === 'code'}<pre><code>{n.value}</code></pre>
+  {:else if n.type === 'code'}
+    <div class="code"><pre><code>{n.value}</code></pre><button class="copy" onclick={(e) => copy(e, n.value)}>Copy</button></div>
   {:else if n.type === 'break'}<br />
   {:else if n.type === 'thematicBreak'}<hr />
   {:else if n.type === 'blockquote'}<blockquote>{@render kids(n)}</blockquote>
@@ -77,8 +86,12 @@
   .md :global(h3) { font-size: 17px; }
   .md :global(h4) { font-size: 15px; }
   .md :global(h5) { font-size: 13px; }
-  .md :global(:is(ul, ol)) {
+  .md :global(ul) {
     padding-left: 1.4em;
+  }
+  /* Room for three-digit numbers. */
+  .md :global(ol) {
+    padding-left: 2.4em;
   }
   .md :global(li.task) {
     list-style: none;
@@ -107,6 +120,31 @@
   .md :global(pre code) {
     background: none;
     padding: 0;
+  }
+  .md :global(.code) {
+    position: relative;
+    margin: 0 0 0.6em;
+  }
+  .md :global(.code pre) {
+    margin: 0;
+  }
+  .md :global(.code .copy) {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    font: inherit;
+    font-size: 11px;
+    color: var(--fg-dim);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1px 8px;
+    cursor: pointer;
+    opacity: 0;
+  }
+  .md :global(.code:hover .copy),
+  .md :global(.code .copy:focus-visible) {
+    opacity: 1;
   }
   .md :global(blockquote) {
     border-left: 2px solid var(--border);

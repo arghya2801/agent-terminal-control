@@ -3,8 +3,10 @@
   import { matchCommands, typedCommand } from './commands';
   import type { Command } from '../../sidecar/protocol';
 
-  let { name, sigil, commands, working, disabled, onSend, onStop, toolbar }: {
+  let { name, history, sigil, commands, working, disabled, onSend, onStop, toolbar }: {
     name: string;
+    /** Earlier prompts, oldest first: Up and Down walk them from an empty box. */
+    history: string[];
     /** How the agent spells a command: `/compact` for Claude, `$skill` for Codex. */
     sigil: '/' | '$';
     commands: Command[];
@@ -44,6 +46,18 @@
     if (!text.trim() || disabled) return;
     onSend(text.trim());
     text = '';
+    recall = -1;
+  }
+
+  /** Which earlier prompt the box shows, counting back from the newest; -1 is none. */
+  let recall = $state(-1);
+  function step(by: 1 | -1): boolean {
+    const next = recall + by;
+    if (next < -1 || next >= history.length || (recall === -1 && text)) return false;
+    recall = next;
+    text = next === -1 ? '' : history[history.length - 1 - next];
+    queueMicrotask(() => box?.setSelectionRange(text.length, text.length));
+    return true;
   }
 
   function onKey(e: KeyboardEvent) {
@@ -63,6 +77,13 @@
         dismissed = true;
         return;
       }
+    }
+    // Up from the first line, Down from the last, so moving inside a long prompt still works.
+    const firstLine = !text.slice(0, box?.selectionStart ?? 0).includes('\n');
+    const lastLine = !text.slice(box?.selectionEnd ?? 0).includes('\n');
+    if ((e.key === 'ArrowUp' && firstLine && step(1)) || (e.key === 'ArrowDown' && lastLine && step(-1))) {
+      e.preventDefault();
+      return;
     }
     if (e.key === 'Escape' && working) {
       e.preventDefault();

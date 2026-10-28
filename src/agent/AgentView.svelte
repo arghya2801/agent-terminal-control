@@ -7,6 +7,7 @@
   import Icon from '../lib/Icon.svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import { agents, answer, interrupt, send, setMode, setModel } from './agent.svelte';
+  import { activity, blocks, summarize, type Block } from './work';
   import { getActiveKey, queuePrompt } from '../terminal/manager';
   import { providerName } from '../lib/agents';
   import { appState } from '../lib/stores.svelte';
@@ -14,7 +15,7 @@
   import type { AgentProvider, TabKey } from '../types';
 
   /** `queued`: a message waiting for the turn to end (the tab's queue, shared with the Open view). */
-  let { tabKey, provider, queued, onTerminal }: { tabKey: TabKey; provider: AgentProvider; queued: string | null; onTerminal: () => void } = $props();
+  let { tabKey, provider, cwd, queued, onTerminal }: { tabKey: TabKey; provider: AgentProvider; cwd: string | null; queued: string | null; onTerminal: () => void } = $props();
 
   const name = $derived(providerName(provider));
   const s = $derived(agents[tabKey]);
@@ -39,6 +40,15 @@
     }
     return out;
   });
+  const history = $derived(turns.flatMap((t) => (t.prompt?.text ? [t.prompt.text] : [])));
+
+  /** Groups the user opened or closed; others follow `live`: the run being worked on stays
+   *  open, and folds once something comes after it. */
+  let opened = $state<Record<string, boolean>>({});
+  const groupStatus = (b: Block & { kind: 'group' }) => {
+    const all = b.items.map((it) => toolStatus(it, !s?.exited));
+    return all.includes('running') ? 'running' : all.includes('failed') ? 'failed' : 'done';
+  };
 
   // The turn timer, ticking only while the agent works.
   let now = $state(Date.now());
@@ -74,6 +84,13 @@
   onMount(() => {
     if (getActiveKey() === tabKey) (list?.parentElement?.querySelector('textarea') as HTMLTextAreaElement | null)?.focus();
   });
+
+  let copied = $state<string | null>(null);
+  async function copy(text: string, id: string) {
+    await navigator.clipboard.writeText(text).catch(() => {});
+    copied = id;
+    setTimeout(() => copied === id && (copied = null), 1500);
+  }
 </script>
 
 <div
@@ -98,19 +115,40 @@
         <section class="turn">
           {#if turn.prompt}<div class="prompt">{turn.prompt.text}</div>{/if}
           {#if turn.steps.length || turn.end || live}
+            {@const all = blocks(turn.steps)}
             <div class="trail" class:live class:ended={!!turn.end}>
-              {#each turn.steps as it (it.id)}
-                {#if it.kind === 'tool'}
-                  <div class="step tool {toolStatus(it, !s?.exited)}" class:sub={!!it.parent}><ToolLine item={it} live={!s?.exited} /></div>
-                {:else if it.kind === 'assistant'}
-                  {#if it.text}<div class="step text" class:sub={!!it.parent}><Markdown text={it.text} /></div>{/if}
-                {:else if it.kind === 'thinking'}
-                  {#if it.text}<details class="step thinking" class:sub={!!it.parent}><summary>{it.text.trim().split('\n')[0]}</summary><Markdown text={it.text} /></details>{/if}
+              {#each all as b, bi (b.kind === 'group' ? `g:${b.id}` : b.item.id)}
+                {#if b.kind === 'group'}
+                  {@const open = opened[b.id] ?? (live && bi === all.length - 1)}
+                  <div class="step tool group {groupStatus(b)}" class:sub={!!b.items[0].parent}>
+                    <button class="summary" aria-expanded={open} onclick={() => (opened[b.id] = !open)}>
+                      <span>{summarize(b.items)}</span><span class="chev" aria-hidden="true">{open ? '▾' : '▸'}</span>
+                    </button>
+                    {#if open}
+                      <div class="calls">
+                        {#each b.items as it (it.id)}<ToolLine item={it} live={!s?.exited} {cwd} />{/each}
+                      </div>
+                    {/if}
+                  </div>
                 {:else}
-                  <p class="step notice" class:error={it.error}>{it.text}</p>
+                  {@const it = b.item}
+                  {#if it.kind === 'tool'}
+                    <div class="step tool {toolStatus(it, !s?.exited)}" class:sub={!!it.parent}><ToolLine item={it} live={!s?.exited} {cwd} /></div>
+                  {:else if it.kind === 'assistant'}
+                    {#if it.text}
+                      <div class="step text" class:sub={!!it.parent}>
+                        <Markdown text={it.text} />
+                        <button class="copy" onclick={() => copy(it.text ?? '', it.id)} title="Copy as Markdown">{copied === it.id ? 'Copied' : 'Copy'}</button>
+                      </div>
+                    {/if}
+                  {:else if it.kind === 'thinking'}
+                    {#if it.text}<details class="step thinking" class:sub={!!it.parent}><summary>{it.text.trim().split('\n')[0]}</summary><Markdown text={it.text} /></details>{/if}
+                  {:else}
+                    <p class="step notice" class:error={it.error}>{it.text}</p>
+                  {/if}
                 {/if}
               {/each}
-              {#if live && !request}<div class="step working">{status}</div>{/if}
+              {#if live && !request}<div class="step working"><span class="what">{activity(turn.steps, cwd)}</span><span class="secs">{clock(now - (s?.since ?? now))}</span></div>{/if}
               {#if turn.end}
                 <div class="step end">
                   {#if turn.end.durationMs}<span>Worked {clock(turn.end.durationMs)}</span>{/if}
@@ -139,6 +177,7 @@
     {/if}
     <Composer
       {name}
+      {history}
       sigil={provider === 'claude' ? '/' : '$'}
       commands={s?.commands ?? []}
       working={!!s?.working}
@@ -264,10 +303,14 @@
   .trail.live::before {
     background: linear-gradient(to bottom, var(--border), color-mix(in srgb, var(--accent) 70%, transparent));
   }
+  /* Whole turns skip layout offscreen. Not steps: the containment clips what a step draws
+     outside its box, such as list numbers and the copy button. */
+  .turn {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 120px;
+  }
   .step {
     position: relative;
-    content-visibility: auto;
-    contain-intrinsic-size: auto 24px;
   }
   .step + .step {
     margin-top: 6px;
@@ -348,8 +391,80 @@
     color: var(--danger);
   }
   .working {
+    display: flex;
+    gap: 1ch;
     color: var(--fg-dim);
     font-size: 12.5px;
+  }
+  .working .what {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .working .secs {
+    color: var(--fg-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* A run of calls, folded into one sentence. */
+  .summary {
+    all: unset;
+    box-sizing: border-box;
+    display: flex;
+    gap: 1ch;
+    align-items: baseline;
+    width: 100%;
+    padding: 2px 8px;
+    margin-left: -8px;
+    border-radius: 6px;
+    color: var(--fg-dim);
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .summary:hover {
+    background: var(--bg-hover);
+    color: var(--fg-bright);
+  }
+  .summary:focus-visible {
+    outline: 1px solid var(--accent);
+  }
+  .group.failed .summary {
+    color: var(--danger);
+  }
+  .summary .chev {
+    color: var(--fg-faint);
+  }
+  .calls {
+    margin: 2px 0 2px;
+    padding-left: 10px;
+    border-left: 1px solid var(--border);
+  }
+
+  .step.text {
+    position: relative;
+  }
+  .copy {
+    position: absolute;
+    top: -2px;
+    right: -64px;
+    font: inherit;
+    font-size: 11px;
+    color: var(--fg-faint);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 1px 8px;
+    cursor: pointer;
+    opacity: 0;
+  }
+  .step.text:hover .copy,
+  .copy:focus-visible {
+    opacity: 1;
+  }
+  .copy:hover {
+    color: var(--fg-bright);
+    border-color: var(--border);
   }
   .end {
     display: flex;

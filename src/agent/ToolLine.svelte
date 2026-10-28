@@ -9,8 +9,12 @@
 </script>
 
 <script lang="ts">
-  let { item, live }: { item: ChatItem; live: boolean } = $props();
+  import { relativePaths } from './work';
+
+  /** `cwd`: paths under it show relative to it. */
+  let { item, live, cwd = null }: { item: ChatItem; live: boolean; cwd?: string | null } = $props();
   let open = $state(false);
+  const input = $derived(relativePaths(item.input ?? '', cwd));
 
   const diff = $derived(/^(Edit|MultiEdit|apply_patch)$/.test(item.tool ?? '') || !!item.body?.startsWith('*** Begin Patch'));
   const lines = $derived(item.body?.replace(/\n$/, '').split('\n') ?? []);
@@ -23,7 +27,7 @@
 <div class="tool" class:open>
   <button class="line" onclick={() => (open = !open)} aria-expanded={open} title={item.input}>
     <span class="name">{item.tool}</span>
-    <span class="input">{item.input}</span>
+    <span class="input">{input}</span>
     {#if counts}<span class="counts"><span class="add">+{counts.add}</span> <span class="del">−{counts.del}</span></span>{/if}
     {#if status === 'running' && item.seconds}<span class="secs">{Math.round(item.seconds)}s</span>{/if}
     {#if status === 'failed'}<span class="failed">failed</span>{:else if status === 'stopped'}<span class="secs">stopped</span>{/if}

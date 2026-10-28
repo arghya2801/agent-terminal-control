@@ -1006,7 +1006,7 @@
       {@const tab = t.provider ? getTab(t.key) : undefined}
       {#if tab && !tab.term && t.provider}
         <div use:portal={tab.container}>
-          <AgentView tabKey={t.key} provider={t.provider} queued={t.queued} onTerminal={() => toTerminal(t.key)} />
+          <AgentView tabKey={t.key} provider={t.provider} cwd={t.cwd} queued={t.queued} onTerminal={() => toTerminal(t.key)} />
         </div>
       {/if}
     {/each}
