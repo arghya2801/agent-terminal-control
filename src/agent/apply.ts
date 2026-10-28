@@ -49,6 +49,9 @@ export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
     case 'history':
       for (const e of ev.events) apply(s, e, now);
       return;
+    case 'clear':
+      Object.assign(s, { items: [], requests: [] });
+      return;
     case 'item': {
       const had = find(ev.item.id);
       if (had) Object.assign(had, ev.item);

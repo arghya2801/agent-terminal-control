@@ -96,6 +96,38 @@ function itemOf(it: Obj): ChatItem | null {
   return null;
 }
 
+/** The approval presets of Codex's own `/approvals`: how much it may do without asking. */
+const PRESETS: Record<string, { approvalPolicy: string; sandboxPolicy: Obj }> = {
+  'read-only': { approvalPolicy: 'on-request', sandboxPolicy: { type: 'readOnly' } },
+  workspace: { approvalPolicy: 'on-request', sandboxPolicy: { type: 'workspaceWrite' } },
+  'full-access': { approvalPolicy: 'never', sandboxPolicy: { type: 'dangerFullAccess' } },
+};
+const presetOf = (sandbox: Obj | undefined) =>
+  sandbox?.type === 'dangerFullAccess' ? 'full-access' : sandbox?.type === 'workspaceWrite' ? 'workspace' : 'read-only';
+
+/** Codex TUI commands the app-server has calls for. The rest of `/...` goes to the model. */
+const COMMANDS = [
+  { name: '/compact', description: 'Summarize the conversation to free up context' },
+  { name: '/review', description: 'Review the uncommitted changes, or what you describe after it', hint: '[instructions]' },
+  { name: '/undo', description: 'Undo the last turn' },
+  { name: '/new', description: 'Start a new thread in this tab' },
+  { name: '/rename', description: 'Name this thread', hint: '<name>' },
+];
+
+/** A thread's turns as chat history. User messages remember their turn, so the chat can
+ *  rewind to one. */
+function historyOf(thread: Obj): AgentEvent[] {
+  const history: AgentEvent[] = [];
+  for (const turn of thread.turns ?? []) {
+    for (const it of turn.items ?? []) {
+      const item = itemOf(it);
+      if (item) history.push({ t: 'item', item: item.kind === 'user' ? { ...item, turn: turn.id } : item });
+    }
+    if (turn.status !== 'inProgress') history.push({ t: 'item', item: { id: `turn:${turn.id}`, kind: 'turn', durationMs: turn.durationMs ?? undefined } });
+  }
+  return history;
+}
+
 /** One Codex thread through `codex app-server`, the protocol Codex's own editor
  *  extensions use. Config, approvals and session files are the CLI's own. */
 export class Codex {
@@ -111,9 +143,14 @@ export class Codex {
   private effortChosen: string | null;
   private skills = new Map<string, Obj>();
   private closing = false;
+  private cwd: string;
+  private turns: string[] = [];
+  /** Set when the user picks a preset; until then turns keep the thread's own config. */
+  private preset: string | null = null;
 
   constructor(id: string, o: Launch & { resume?: string; model?: string; effort?: string }) {
     this.id = id;
+    this.cwd = o.cwd;
     const { thread, server } = threadOptions(o.args);
     if (o.model) thread.model = o.model;
     this.effortChosen = o.effort || null;
@@ -152,14 +189,8 @@ export class Codex {
     this.write({ method: 'initialized' });
     const r = o.resume ? await this.call('thread/resume', { threadId: o.resume, cwd: o.cwd, ...thread }) : await this.call('thread/start', { cwd: o.cwd, ...thread });
     this.thread = r.thread.id;
-    const history: AgentEvent[] = [];
-    for (const turn of r.thread.turns ?? []) {
-      for (const it of turn.items ?? []) {
-        const item = itemOf(it);
-        if (item) history.push({ t: 'item', item });
-      }
-      if (turn.status !== 'inProgress') history.push({ t: 'item', item: { id: `turn:${turn.id}`, kind: 'turn', durationMs: turn.durationMs ?? undefined } });
-    }
+    this.turns = (r.thread.turns ?? []).map((t: Obj) => t.id);
+    const history = historyOf(r.thread);
     if (history.length) this.live({ t: 'history', events: history });
     this.live({ t: 'session', id: this.thread });
     this.live({ t: 'model', model: r.model });
@@ -170,10 +201,11 @@ export class Codex {
     for (const s of (skills.data ?? []).flatMap((e: Obj) => e.skills ?? [])) if (s.enabled) this.skills.set(s.name, s);
     this.live({
       t: 'ready',
-      commands: [...this.skills.values()].map((s) => ({ name: `$${s.name}`, description: s.shortDescription || s.description })),
+      commands: [...COMMANDS, ...[...this.skills.values()].map((s) => ({ name: `$${s.name}`, description: s.shortDescription || s.description }))],
       models: (models.data ?? []).filter((m: Obj) => !m.hidden).map(toModel),
       model: r.model,
-      modes: [],
+      modes: Object.keys(PRESETS),
+      mode: presetOf(r.sandbox),
       effort: this.effortChosen,
     });
   }
@@ -192,6 +224,7 @@ export class Codex {
     switch (method) {
       case 'turn/started':
         this.turn = p.turn.id;
+        if (!this.turns.includes(p.turn.id)) this.turns.push(p.turn.id);
         this.live({ t: 'working', on: true });
         return;
       case 'turn/completed':
@@ -203,7 +236,7 @@ export class Codex {
       case 'item/started':
       case 'item/completed': {
         const item = itemOf(p.item);
-        if (item) this.live({ t: 'item', item });
+        if (item) this.live({ t: 'item', item: item.kind === 'user' ? { ...item, turn: p.turnId } : item });
         else this.seen(`item ${p.item?.type}`);
         if (item?.kind === 'tool' && item.done) this.live({ t: 'result', id: item.id, output: item.output ?? '', error: !!item.error });
         return;
@@ -267,12 +300,21 @@ export class Codex {
     this.live({ t: 'resolved', id: request });
   }
 
-  /** `$name` in a message invokes that skill, as in Codex's TUI. */
+  /** `$name` in a message invokes that skill, as in Codex's TUI; a message that is one of
+   *  COMMANDS runs it. */
   send(text: string) {
+    const command = /^\/(\w+)\s*([\s\S]*)$/.exec(text.trim());
+    if (command && COMMANDS.some((c) => c.name === `/${command[1]}`)) return void this.command(command[1], command[2].trim());
     const skills = [...text.matchAll(/\$([\w:.-]+)/g)].map((m) => this.skills.get(m[1])).filter(Boolean) as Obj[];
     const input = [{ type: 'text', text }, ...skills.map((s) => ({ type: 'skill', name: s.name, path: s.path }))];
     this.live({ t: 'working', on: true });
-    this.call('turn/start', { threadId: this.thread, input, ...(this.chosen ? { model: this.chosen } : {}), ...(this.effortChosen ? { effort: this.effortChosen } : {}) }).catch((e) => {
+    this.call('turn/start', {
+      threadId: this.thread,
+      input,
+      ...(this.chosen ? { model: this.chosen } : {}),
+      ...(this.effortChosen ? { effort: this.effortChosen } : {}),
+      ...(this.preset ? PRESETS[this.preset] : {}),
+    }).catch((e) => {
       this.live({ t: 'working', on: false });
       this.live({ t: 'error', message: String(e?.message ?? e) });
     });
@@ -282,7 +324,51 @@ export class Codex {
     if (this.turn) void this.call('turn/interrupt', { threadId: this.thread, turnId: this.turn }).catch((e) => log(this.id, 'interrupt:', String(e)));
   }
 
-  mode(_mode: string) {}
+  /** The preset applies from the next turn, which carries it. */
+  mode(mode: string) {
+    if (!PRESETS[mode]) return;
+    this.preset = mode;
+    this.live({ t: 'mode', mode });
+  }
+
+  private async command(name: string, args: string) {
+    this.live({ t: 'item', item: { id: `cmd${++this.n}`, kind: 'user', text: `/${name}${args ? ' ' + args : ''}` } });
+    const say = (text: string) => this.live({ t: 'item', item: { id: `cmd${++this.n}`, kind: 'notice', text } });
+    try {
+      if (name === 'compact') {
+        await this.call('thread/compact/start', { threadId: this.thread });
+      } else if (name === 'review') {
+        this.live({ t: 'working', on: true });
+        await this.call('review/start', { threadId: this.thread, delivery: 'inline', target: args ? { type: 'custom', instructions: args } : { type: 'uncommittedChanges' } });
+      } else if (name === 'undo') {
+        const last = this.turns.at(-1);
+        if (!last) return say('Nothing to undo');
+        await this.revert(last);
+      } else if (name === 'new') {
+        const r = await this.call('thread/start', { cwd: this.cwd, ...(this.chosen ? { model: this.chosen } : {}) });
+        this.thread = r.thread.id;
+        this.turns = [];
+        this.live({ t: 'clear' });
+        this.live({ t: 'session', id: this.thread });
+        say('New thread');
+      } else if (name === 'rename') {
+        if (!args) return say('Usage: /rename <name>');
+        await this.call('thread/name/set', { threadId: this.thread, name: args });
+        say(`Renamed to ${args}`);
+      }
+    } catch (e) {
+      this.live({ t: 'working', on: false });
+      this.live({ t: 'error', message: `/${name}: ${(e as Error).message}` });
+    }
+  }
+
+  /** Drop `turn` and every turn after it, then show the thread as it now stands. */
+  async revert(turn: string) {
+    const r = await this.call('thread/revert', { threadId: this.thread, beforeTurnId: turn });
+    this.turns = (r.thread?.turns ?? []).map((t: Obj) => t.id);
+    this.live({ t: 'clear' });
+    this.live({ t: 'history', events: historyOf(r.thread ?? {}) });
+  }
 
   /** Codex takes effort per turn, so this applies from the next message. */
   effort(effort: string | null) {

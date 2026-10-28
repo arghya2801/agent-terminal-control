@@ -23,9 +23,12 @@ export interface ChatItem {
   parent?: string | null;
   durationMs?: number;
   costUsd?: number;
+  /** Codex: the turn a user message started, to rewind to. */
+  turn?: string;
 }
 
 export interface Command {
+  /** As typed: `/compact`, or `$skill` for a Codex skill. */
   name: string;
   description: string;
   hint?: string;
@@ -75,6 +78,8 @@ export type AgentEvent =
   | { t: 'ready'; commands: Command[]; models: Model[]; model?: string; mode?: string; modes: string[]; effort?: string | null }
   | { t: 'session'; id: string }
   | { t: 'history'; events: AgentEvent[] }
+  /** The conversation was cleared or rewritten; history follows if any remains. */
+  | { t: 'clear' }
   | { t: 'item'; item: ChatItem }
   | { t: 'delta'; id: string; kind: 'assistant' | 'thinking'; text: string; parent?: string | null }
   | { t: 'output'; id: string; text: string }

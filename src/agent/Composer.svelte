@@ -1,14 +1,14 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { matchCommands, typedCommand } from './commands';
+  import { matchCommands, typedCommand, type Sigil } from './commands';
   import type { Command } from '../../sidecar/protocol';
 
-  let { name, history, sigil, commands, working, disabled, onSend, onStop, toolbar }: {
+  let { name, history, sigils, commands, working, disabled, onSend, onStop, toolbar }: {
     name: string;
     /** Earlier prompts, oldest first: Up and Down walk them from an empty box. */
     history: string[];
-    /** How the agent spells a command: `/compact` for Claude, `$skill` for Codex. */
-    sigil: '/' | '$';
+    /** What opens the menu: `/` for commands, and `$` for Codex's skills. */
+    sigils: Sigil[];
     commands: Command[];
     working: boolean;
     disabled: boolean;
@@ -24,9 +24,9 @@
   let pick = $state(0);
   let dismissed = $state(false);
 
-  const typed = $derived(typedCommand(text, caret, sigil));
-  const menu = $derived(typed && !dismissed ? matchCommands(commands, typed.query) : []);
-  const label = (c: Command) => (sigil === '/' ? '/' : '') + c.name;
+  const typed = $derived(typedCommand(text, caret, sigils));
+  const menu = $derived(typed && !dismissed ? matchCommands(commands, typed.query, typed.sigil) : []);
+  const label = (c: Command) => c.name;
   $effect(() => {
     void menu.length;
     pick = 0;
@@ -106,7 +106,7 @@
         <li role="option" aria-selected={i === pick}>
           <button class:on={i === pick} onmousedown={(e) => { e.preventDefault(); choose(c); }} onmouseenter={() => (pick = i)}>
             <span class="cmd">{label(c)}</span>
-            {#if c.hint && sigil === '/'}<span class="hint">{c.hint}</span>{/if}
+            {#if c.hint}<span class="hint">{c.hint}</span>{/if}
             <span class="desc">{c.description}</span>
           </button>
         </li>
@@ -122,7 +122,7 @@
     onkeydown={onKey}
     rows="1"
     {disabled}
-    placeholder={disabled ? `${name} has stopped` : `Ask ${name}, or type ${sigil} for ${sigil === '/' ? 'commands and skills' : 'skills'}`}
+    placeholder={disabled ? `${name} has stopped` : sigils.includes('$') ? `Ask ${name}: / for commands, $ for skills` : `Ask ${name}, or type / for commands and skills`}
     aria-label="Message {name}"
   ></textarea>
   <div class="bar">

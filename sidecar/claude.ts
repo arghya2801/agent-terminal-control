@@ -120,7 +120,7 @@ export class Claude {
       .then((init) =>
         this.live({
           t: 'ready',
-          commands: init.commands.map((c) => ({ name: c.name, description: c.description, hint: c.argumentHint || undefined })),
+          commands: init.commands.map((c) => ({ name: `/${c.name}`, description: c.description, hint: c.argumentHint || undefined })),
           models: init.models.map(toModel),
           mode: (init as { current_permission_mode?: string }).current_permission_mode,
           modes: MODES,
@@ -234,6 +234,8 @@ export class Claude {
   }
 
   send(text: string) {
+    // `/clear` starts the CLI on a fresh conversation; the view starts over with it.
+    if (text.trim() === '/clear') this.live({ t: 'clear' });
     this.live({ t: 'item', item: { id: `you${++this.n}`, kind: 'user', text } });
     this.live({ t: 'working', on: true });
     this.inbox.push({ type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null, session_id: '' } as SDKUserMessage);

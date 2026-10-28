@@ -22,7 +22,17 @@
   const name = $derived(providerName(provider));
   const s = $derived(agents[tabKey]);
   const request = $derived(s?.requests[0]);
-  const MODES: Record<string, string> = { default: 'Ask first', acceptEdits: 'Accept edits', plan: 'Plan', auto: 'Auto', bypassPermissions: 'Bypass', dontAsk: "Don't ask" };
+  const MODES: Record<string, string> = {
+    default: 'Ask first',
+    acceptEdits: 'Accept edits',
+    plan: 'Plan',
+    auto: 'Auto',
+    bypassPermissions: 'Bypass',
+    dontAsk: "Don't ask",
+    'read-only': 'Read only',
+    workspace: 'Auto',
+    'full-access': 'Full access',
+  };
   // The CLI reports the full model id; the picker lists aliases that resolve to one.
   // Claude's `default` alias is shown as the family it stands for, so prefer that alias.
   const model = $derived.by(() => {
@@ -74,6 +84,9 @@
     plan: 'Reads and plans; changes nothing until you approve',
     auto: 'Approves safe actions itself and asks about the rest',
     bypassPermissions: 'Never asks',
+    'read-only': 'Reads files; asks before editing or running anything',
+    workspace: 'Edits and runs commands in the project; asks before going outside it',
+    'full-access': 'Edits and runs anything, anywhere, without asking',
   };
   const EFFORTS: Record<string, string> = { none: 'None', minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max', ultra: 'Ultra' };
   const effortName = (e: string) => EFFORTS[e] ?? e;
@@ -175,7 +188,7 @@
         <div class="empty">
           <span class="mark"><ProviderIcon {provider} /></span>
           <p class="lead">Ask {name} anything</p>
-          <p>Type <kbd>{provider === 'claude' ? '/' : '$'}</kbd> for {provider === 'claude' ? 'commands and skills' : 'skills'}. <kbd>Enter</kbd> sends, <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line.</p>
+          <p>Type <kbd>/</kbd> for commands{#if provider === 'codex'}, <kbd>$</kbd> for skills{:else} and skills{/if}. <kbd>Enter</kbd> sends, <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line.</p>
         </div>
       {:else if !s?.ready && !s?.exited && !turns.length}
         <div class="empty"><p class="lead">Starting {name}</p></div>
@@ -249,7 +262,7 @@
     <Composer
       {name}
       {history}
-      sigil={provider === 'claude' ? '/' : '$'}
+      sigils={provider === 'claude' ? ['/'] : ['/', '$']}
       commands={s?.commands ?? []}
       working={!!s?.working}
       disabled={!s || s.exited}
@@ -267,7 +280,7 @@
           </ChipMenu>
         {/if}
         {#if s?.modes.length}
-          <ChipMenu title="Permission mode" sections={[{ items: s.modes.map((m) => ({ value: m, label: MODES[m] ?? m, description: MODE_HELP[m] })) }]} value={s.mode ?? 'default'} onPick={(m) => setMode(tabKey, m)} width={340}>
+          <ChipMenu title={provider === 'codex' ? 'Sandbox and approvals, from the next message' : 'Permission mode'} sections={[{ items: s.modes.map((m) => ({ value: m, label: MODES[m] ?? m, description: MODE_HELP[m] })) }]} value={s.mode ?? 'default'} onPick={(m) => setMode(tabKey, m)} width={340}>
             {#snippet label()}<span class:plan={s?.mode === 'plan'}>{MODES[s?.mode ?? 'default'] ?? s?.mode}</span>{/snippet}
           </ChipMenu>
         {/if}
