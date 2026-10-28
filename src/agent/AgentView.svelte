@@ -6,12 +6,12 @@
   import ToolLine, { toolStatus } from './ToolLine.svelte';
   import Icon from '../lib/Icon.svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
-  import { agents, answer, interrupt, send, setMode, setModel } from './agent.svelte';
+  import { agents, answer, catalog, interrupt, send, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
   import { activity, blocks, summarize, type Block } from './work';
   import { getActiveKey, queuePrompt } from '../terminal/manager';
   import { providerName } from '../lib/agents';
   import { appState } from '../lib/stores.svelte';
-  import type { ChatItem } from '../../sidecar/protocol';
+  import type { ChatItem, Model } from '../../sidecar/protocol';
   import type { AgentProvider, TabKey } from '../types';
 
   /** `queued`: a message waiting for the turn to end (the tab's queue, shared with the Open view). */
@@ -23,6 +23,25 @@
   const MODES: Record<string, string> = { default: 'Ask first', acceptEdits: 'Accept edits', plan: 'Plan', auto: 'Auto', bypassPermissions: 'Bypass', dontAsk: "Don't ask" };
   // The CLI reports the full model id; the picker lists aliases that resolve to one.
   const model = $derived(s ? (s.models.find((m) => m.id === s.model || m.resolved === s.model)?.id ?? s.model ?? s.models[0]?.id ?? '') : '');
+  const current = $derived(s?.models.find((m) => m.id === model));
+
+  // Until the first message the picker offers both providers' models; picking the other
+  // provider's moves the tab to it. After that the conversation belongs to one CLI.
+  const other = $derived<AgentProvider>(provider === 'claude' ? 'codex' : 'claude');
+  let others = $state<Model[]>([]);
+  $effect(() => {
+    const p = other;
+    if (!s?.fresh || !s.ready) return;
+    catalog(p).then((m) => (others = m), () => (others = []));
+  });
+  function pick(value: string) {
+    const at = value.indexOf(':');
+    const [p, id] = [value.slice(0, at) as AgentProvider, value.slice(at + 1)];
+    if (p === provider) setModel(tabKey, id);
+    else switchProvider(tabKey, p, id);
+  }
+  const EFFORTS: Record<string, string> = { none: 'None', minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max', ultra: 'Ultra' };
+  const effortName = (e: string) => EFFORTS[e] ?? e;
 
   /** A prompt, then everything the agent did for it, then how the turn ended. */
   interface Turn { prompt: ChatItem | null; steps: ChatItem[]; end: ChatItem | null }
@@ -187,10 +206,27 @@
     >
       {#snippet toolbar()}
         {#if s?.models.length}
-          <label class="chip" title="Model">
-            <select aria-label="Model" value={model} onchange={(e) => setModel(tabKey, e.currentTarget.value)}>
-              {#if model && !s.models.some((m) => m.id === model)}<option value={model}>{model}</option>{/if}
-              {#each s.models as m (m.id)}<option value={m.id}>{m.label}</option>{/each}
+          <label class="chip" title={s.fresh ? 'Model: Claude or Codex until the first message' : 'Model'}>
+            <select aria-label="Model" value="{provider}:{model}" onchange={(e) => pick(e.currentTarget.value)}>
+              {#if model && !s.models.some((m) => m.id === model)}<option value="{provider}:{model}">{model}</option>{/if}
+              {#if s.fresh && others.length}
+                <optgroup label={name}>
+                  {#each s.models as m (m.id)}<option value="{provider}:{m.id}">{m.label}</option>{/each}
+                </optgroup>
+                <optgroup label={providerName(other)}>
+                  {#each others as m (m.id)}<option value="{other}:{m.id}">{m.label}</option>{/each}
+                </optgroup>
+              {:else}
+                {#each s.models as m (m.id)}<option value="{provider}:{m.id}">{m.label}</option>{/each}
+              {/if}
+            </select>
+          </label>
+        {/if}
+        {#if s && current?.efforts?.length}
+          <label class="chip" title="Reasoning effort{provider === 'codex' ? ', from the next message' : ''}">
+            <select aria-label="Reasoning effort" value={s.effort ?? ''} onchange={(e) => setEffort(tabKey, e.currentTarget.value || null)}>
+              <option value="">{current.defaultEffort ? `${effortName(current.defaultEffort)} effort (default)` : 'Default effort'}</option>
+              {#each current.efforts as e (e)}<option value={e}>{effortName(e)} effort</option>{/each}
             </select>
           </label>
         {/if}

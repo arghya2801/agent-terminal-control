@@ -9,6 +9,8 @@ export interface AgentState {
   modes: string[];
   model: string | null;
   mode: string | null;
+  /** Null is the CLI's default. */
+  effort: string | null;
   sessionId: string | null;
   ready: boolean;
   working: boolean;
@@ -18,7 +20,7 @@ export interface AgentState {
 }
 
 export function emptyState(): AgentState {
-  return { items: [], requests: [], commands: [], models: [], modes: [], model: null, mode: null, sessionId: null, ready: false, working: false, since: 0, exited: false };
+  return { items: [], requests: [], commands: [], models: [], modes: [], model: null, mode: null, effort: null, sessionId: null, ready: false, working: false, since: 0, exited: false };
 }
 
 let notices = 0;
@@ -39,6 +41,7 @@ export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
       Object.assign(s, { commands: ev.commands, models: ev.models, modes: ev.modes, ready: true });
       if (ev.model) s.model = ev.model;
       if (ev.mode) s.mode = ev.mode;
+      if (ev.effort !== undefined) s.effort = ev.effort;
       return;
     case 'session':
       s.sessionId = ev.id;
@@ -89,6 +92,9 @@ export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
       return;
     case 'mode':
       s.mode = ev.mode;
+      return;
+    case 'effort':
+      s.effort = ev.effort;
       return;
     case 'error':
       notify(s, ev.message, true);

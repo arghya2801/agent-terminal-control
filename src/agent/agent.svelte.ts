@@ -3,35 +3,72 @@
  * and closes with the tab. Its state is everything the sidecar has said, run through
  * `apply`; the manager hears only what the tab list shows.
  */
-import { agentClose, agentOpen, agentSend, Channel } from '../lib/ipc';
+import { agentCatalog, agentClose, agentOpen, agentSend, Channel } from '../lib/ipc';
 import { countOutput, getTab, onClosed, queuePrompt, setAgentHooks, setAgentState } from '../terminal/manager';
 import { apply, emptyState, peek, type AgentState } from './apply';
-import type { AgentEvent, Answer } from '../../sidecar/protocol';
+import type { AgentEvent, Answer, Model } from '../../sidecar/protocol';
 import type { AgentProvider, TabKey } from '../types';
 
-export const agents = $state<Record<string, AgentState>>({});
+/** Each tab's session. `fresh`: nothing sent and nothing resumed, so the tab can still
+ *  move to the other provider. */
+export const agents = $state<Record<string, AgentState & { fresh: boolean }>>({});
 
+type Start = { session?: string | null; chat?: boolean; task?: string; model?: string; effort?: string };
 interface Live {
   id: string | null;
   provider: AgentProvider;
+  cwd: string;
+  chat: boolean;
   channel: Channel<AgentEvent>;
   /** Sent once the session is ready: a task from the task box, or Reply before then. */
   queued: string[];
 }
 const live = new Map<TabKey, Live>();
 
-export async function startAgent(key: TabKey, provider: AgentProvider, cwd: string, o: { session?: string | null; chat?: boolean; task?: string } = {}) {
+export async function startAgent(key: TabKey, provider: AgentProvider, cwd: string, o: Start = {}) {
   if (live.has(key)) return;
-  agents[key] = emptyState();
+  agents[key] = { ...emptyState(), fresh: !o.session && !o.task };
   const channel = new Channel<AgentEvent>();
-  const l: Live = { id: null, provider, channel, queued: o.task ? [o.task] : [] };
+  const l: Live = { id: null, provider, cwd, chat: !!o.chat, channel, queued: o.task ? [o.task] : [] };
   live.set(key, l);
   channel.onmessage = (ev) => receive(key, ev);
   try {
-    l.id = await agentOpen(provider, cwd, o.session ?? null, !!o.chat, channel);
+    l.id = await agentOpen(provider, cwd, o, channel);
   } catch (e) {
     receive(key, { t: 'exit', message: String(e instanceof Error ? e.message : e) });
   }
+}
+
+/** Move a fresh tab to the other provider: its empty session ends and one of the other
+ *  CLI starts in its place, on `model`. A conversation cannot change provider. */
+export function switchProvider(key: TabKey, provider: AgentProvider, model: string) {
+  const l = live.get(key);
+  if (!l || !agents[key]?.fresh || l.provider === provider) return;
+  end(key);
+  setAgentState(key, { provider });
+  void startAgent(key, provider, l.cwd, { chat: l.chat, model });
+}
+
+const catalogs = new Map<AgentProvider, Promise<Model[]>>();
+/** A provider's models, for a fresh tab's picker; asked once. */
+export function catalog(provider: AgentProvider): Promise<Model[]> {
+  let asked = catalogs.get(provider);
+  if (!asked) {
+    asked = new Promise<Model[]>((resolve, reject) => {
+      const channel = new Channel<AgentEvent>();
+      channel.onmessage = (ev) => {
+        if (ev.t === 'catalog') resolve(ev.models);
+        else if (ev.t === 'exit') {
+          channel.dispose();
+          reject(new Error(ev.message ?? 'No models'));
+        }
+      };
+      agentCatalog(provider, channel).catch(reject);
+    });
+    asked.catch(() => catalogs.delete(provider));
+    catalogs.set(provider, asked);
+  }
+  return asked;
 }
 
 function receive(key: TabKey, ev: AgentEvent) {
@@ -77,6 +114,7 @@ const op = (key: TabKey, o: Record<string, unknown>) => {
 export function send(key: TabKey, text: string) {
   const l = live.get(key);
   if (!l || !text.trim()) return;
+  if (agents[key]) agents[key].fresh = false;
   if (!l.id || !agents[key]?.ready) l.queued.push(text);
   else if (agents[key].working) {
     const had = getTab(key)?.queued;
@@ -87,14 +125,17 @@ export const interrupt = (key: TabKey) => op(key, { op: 'interrupt' });
 export const answer = (key: TabKey, request: string, a: Answer) => op(key, { op: 'answer', request, answer: a });
 export const setMode = (key: TabKey, mode: string) => op(key, { op: 'mode', mode });
 export const setModel = (key: TabKey, model: string) => op(key, { op: 'model', model });
+export const setEffort = (key: TabKey, effort: string | null) => op(key, { op: 'effort', effort });
 
-onClosed((key) => {
+/** End a tab's session; it stays on disk to resume. */
+function end(key: TabKey) {
   const l = live.get(key);
   if (!l) return;
   live.delete(key);
   l.channel.dispose();
   if (l.id) void agentClose(l.id).catch(() => {});
   delete agents[key];
-});
+}
+onClosed(end);
 
 setAgentHooks({ peek: (key) => (agents[key] ? peek(agents[key]) : []), send });

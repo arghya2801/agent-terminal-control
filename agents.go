@@ -35,16 +35,40 @@ type sidecar struct {
 var nextAgent atomic.Uint64
 
 // AgentOpen starts a Claude or Codex session in cwd, resuming session when it is set, and
-// streams its events on channel. chat adds the chat arguments.
-func (a *App) AgentOpen(provider, cwd, session string, chat bool, channel string) (string, error) {
+// streams its events on channel. chat adds the chat arguments; model and effort, when set,
+// choose them for the session.
+func (a *App) AgentOpen(provider, cwd, session string, chat bool, model, effort, channel string) (string, error) {
+	op, e := a.launch(provider, cwd, chat)
+	if e != nil {
+		return "", e
+	}
+	op["op"], op["resume"], op["model"], op["effort"] = "open", session, model, effort
+	return a.agents.send(a, op, channel)
+}
+
+// AgentCatalog lists a provider's models on channel, then exits, without starting a
+// session. The sidecar asks each CLI once.
+func (a *App) AgentCatalog(provider, channel string) error {
+	op, e := a.launch(provider, core.Home(), false)
+	if e != nil {
+		return e
+	}
+	op["op"] = "catalog"
+	_, e = a.agents.send(a, op, channel)
+	return e
+}
+
+// launch is what starting provider in cwd takes: the CLI from settings, its arguments,
+// and Codex's home.
+func (a *App) launch(provider, cwd string, chat bool) (core.Object, error) {
 	if provider != "claude" && provider != "codex" {
-		return "", fmt.Errorf("unknown provider: %s", provider)
+		return nil, fmt.Errorf("unknown provider: %s", provider)
 	}
 	s := a.getSettings()
 	cfg := core.Obj(s[provider])
 	exe, e := agentExe(provider, core.Str(cfg["command"]))
 	if e != nil {
-		return "", e
+		return nil, e
 	}
 	args := []string{}
 	for _, k := range []string{"args", "chatArgs"} {
@@ -61,20 +85,27 @@ func (a *App) AgentOpen(provider, cwd, session string, chat bool, channel string
 	if !core.IsDir(cwd) {
 		cwd = core.Home()
 	}
-	if e = a.agents.start(a); e != nil {
+	return core.Object{"provider": provider, "cwd": cwd, "exe": exe, "args": args, "env": env}, nil
+}
+
+// send gives op a fresh id whose events go to channel, and writes it.
+func (s *sidecar) send(a *App, op core.Object, channel string) (string, error) {
+	if e := s.start(a); e != nil {
 		return "", e
 	}
 	id := fmt.Sprintf("agent-%d", nextAgent.Add(1))
-	a.agents.mu.Lock()
-	a.agents.channels[id] = channel
-	a.agents.mu.Unlock()
-	return id, a.agents.write(core.Object{"op": "open", "id": id, "provider": provider, "cwd": cwd, "resume": session, "exe": exe, "args": args, "env": env})
+	s.mu.Lock()
+	s.channels[id] = channel
+	s.mu.Unlock()
+	op["id"] = id
+	return id, s.write(op)
 }
 
-// AgentSend passes one operation to a session: send, interrupt, answer, mode or model.
+// AgentSend passes one operation to a session: send, interrupt, answer, mode, model or
+// effort.
 func (a *App) AgentSend(id string, op core.Object) error {
 	switch core.Str(op["op"]) {
-	case "send", "interrupt", "answer", "mode", "model":
+	case "send", "interrupt", "answer", "mode", "model", "effort":
 	default:
 		return fmt.Errorf("unknown agent operation: %v", op["op"])
 	}
@@ -156,9 +187,16 @@ func (s *sidecar) read(a *App, cmd *exec.Cmd, stdout io.Reader) {
 			ID string          `json:"id"`
 			Ev json.RawMessage `json:"ev"`
 		}
+		var ev struct {
+			T string `json:"t"`
+		}
 		if json.Unmarshal(line, &m) == nil {
 			s.mu.Lock()
 			channel := s.channels[m.ID]
+			// A session's last event: nothing more goes to its channel.
+			if json.Unmarshal(m.Ev, &ev) == nil && ev.T == "exit" {
+				delete(s.channels, m.ID)
+			}
 			s.mu.Unlock()
 			if channel != "" {
 				a.emit(channel, m.Ev)

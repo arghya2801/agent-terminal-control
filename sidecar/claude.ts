@@ -1,6 +1,40 @@
-import { getSessionMessages, query, type PermissionResult, type PermissionUpdate, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { getSessionMessages, query, type ModelInfo, type PermissionResult, type PermissionUpdate, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { clip, emit, Inbox, log, summarize, textOf } from './events.ts';
-import type { AgentEvent, AgentRequest, Answer } from './protocol.ts';
+import type { AgentEvent, AgentRequest, Answer, Model } from './protocol.ts';
+
+/** How a Claude process starts, from settings: the CLI, its arguments, extra environment. */
+type Launch = { cwd: string; exe: string; args: string[]; env?: Record<string, string> };
+
+function launchOptions(id: string, o: Launch) {
+  return {
+    cwd: o.cwd,
+    pathToClaudeCodeExecutable: o.exe,
+    executable: o.exe.endsWith('.js') ? ('node' as const) : undefined,
+    settingSources: ['user' as const, 'project' as const, 'local' as const],
+    extraArgs: extraArgs(o.args),
+    env: { ...process.env, ...o.env, CLAUDE_AGENT_SDK_CLIENT_APP: 'atc' },
+    stderr: (d: string) => log(id, 'claude:', d.trimEnd()),
+  };
+}
+
+const toModel = (m: ModelInfo): Model => ({
+  id: m.value,
+  label: m.displayName,
+  resolved: m.resolvedModel,
+  efforts: m.supportsEffort ? m.supportedEffortLevels : undefined,
+});
+
+/** Claude's models without a session: start the CLI, ask, stop it. Nothing is written. */
+export async function claudeCatalog(id: string, o: Launch): Promise<Model[]> {
+  const inbox = new Inbox<SDKUserMessage>();
+  const q = query({ prompt: inbox, options: launchOptions(id, o) });
+  try {
+    return (await q.initializationResult()).models.map(toModel);
+  } finally {
+    inbox.end();
+    q.close();
+  }
+}
 
 type Out = (ev: AgentEvent) => void;
 type Block = Record<string, any>;
@@ -50,22 +84,18 @@ export class Claude {
   private n = 0;
   private closing = false;
 
-  constructor(id: string, o: { cwd: string; resume?: string; exe: string; args: string[]; env?: Record<string, string> }) {
+  constructor(id: string, o: Launch & { resume?: string; model?: string; effort?: string }) {
     this.id = id;
     this.q = query({
       prompt: this.inbox,
       options: {
-        cwd: o.cwd,
+        ...launchOptions(id, o),
         resume: o.resume || undefined,
-        pathToClaudeCodeExecutable: o.exe,
-        executable: o.exe.endsWith('.js') ? 'node' : undefined,
-        settingSources: ['user', 'project', 'local'],
+        model: o.model || undefined,
+        effort: (o.effort || undefined) as never,
         systemPrompt: { type: 'preset', preset: 'claude_code' },
         includePartialMessages: true,
-        extraArgs: extraArgs(o.args),
-        env: { ...process.env, ...o.env, CLAUDE_AGENT_SDK_CLIENT_APP: 'atc' },
         canUseTool: (tool, input, { signal, suggestions }) => this.ask(tool, input, suggestions, signal),
-        stderr: (d) => log(id, 'claude:', d.trimEnd()),
       },
     });
     void this.start(o);
@@ -73,7 +103,7 @@ export class Claude {
 
   private live: Out = (ev) => emit(this.id, ev);
 
-  private async start(o: { cwd: string; resume?: string }) {
+  private async start(o: { cwd: string; resume?: string; effort?: string }) {
     if (o.resume) {
       const history: AgentEvent[] = [];
       try {
@@ -90,9 +120,10 @@ export class Claude {
         this.live({
           t: 'ready',
           commands: init.commands.map((c) => ({ name: c.name, description: c.description, hint: c.argumentHint || undefined })),
-          models: init.models.map((m) => ({ id: m.value, label: m.displayName, resolved: m.resolvedModel })),
+          models: init.models.map(toModel),
           mode: (init as { current_permission_mode?: string }).current_permission_mode,
           modes: MODES,
+          effort: o.effort || null,
         }),
       )
       // A session that fails to start says so in its exit.
@@ -163,8 +194,7 @@ export class Claude {
       }
       case 'result':
         out({ t: 'working', on: false });
-        if (m.num_turns) out({ t: 'item', item: { id: m.uuid, kind: 'turn', durationMs: m.duration_ms, costUsd: m.total_cost_usd } });
-        if (m.subtype !== 'success') out({ t: 'item', item: { id: `${m.uuid}:e`, kind: 'notice', text: m.errors.join('\n') || m.subtype } });
+        if (m.num_turns) out({ t: 'item', item: { id: m.uuid, kind: 'turn', durationMs: m.duration_ms, costUsd: m.total_cost_usd } });        if (m.subtype !== 'success') out({ t: 'item', item: { id: `${m.uuid}:e`, kind: 'notice', text: m.errors.join('\n') || m.subtype } });
         return;
       case 'tool_progress':
         out({ t: 'progress', id: m.tool_use_id, seconds: m.elapsed_time_seconds });
@@ -221,6 +251,13 @@ export class Claude {
       .setPermissionMode(mode as never)
       .then(() => this.live({ t: 'mode', mode }))
       .catch((e) => this.live({ t: 'error', message: `Can't switch to ${mode}: ${e?.message ?? e}` }));
+  }
+
+  effort(effort: string | null) {
+    void this.q
+      .applyFlagSettings({ effortLevel: effort as never })
+      .then(() => this.live({ t: 'effort', effort }))
+      .catch((e) => this.live({ t: 'error', message: `Can't set effort to ${effort}: ${e?.message ?? e}` }));
   }
 
   model(model: string) {

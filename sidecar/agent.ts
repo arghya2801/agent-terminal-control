@@ -4,15 +4,28 @@
  * runs through the Agent SDK, Codex through `codex app-server`.
  */
 import { createInterface } from 'node:readline';
-import { Claude } from './claude.ts';
-import { Codex } from './codex.ts';
+import { Claude, claudeCatalog } from './claude.ts';
+import { Codex, codexCatalog } from './codex.ts';
 import { emit, log } from './events.ts';
-import type { AgentOp } from './protocol.ts';
+import type { AgentOp, Model, Provider } from './protocol.ts';
 
 const sessions = new Map<string, Claude | Codex>();
 const oldNode = Number(process.versions.node.split('.')[0]) < 18;
+/** Each provider's models, asked once per sidecar: starting a CLI to ask takes a second. */
+const catalogs = new Map<Provider, Promise<Model[]>>();
 
 function run(op: AgentOp) {
+  if (op.op === 'catalog') {
+    if (!catalogs.has(op.provider)) {
+      const asked = op.provider === 'codex' ? codexCatalog(op) : claudeCatalog(op.id, op);
+      catalogs.set(op.provider, asked.catch((e) => (catalogs.delete(op.provider), Promise.reject(e))));
+    }
+    catalogs.get(op.provider)!.then(
+      (models) => (emit(op.id, { t: 'catalog', models }), emit(op.id, { t: 'exit' })),
+      (e) => emit(op.id, { t: 'exit', message: String(e?.message ?? e) }),
+    );
+    return;
+  }
   if (op.op === 'open') {
     if (oldNode) return emit(op.id, { t: 'exit', message: `Agent sessions need Node.js 18 or later; this is ${process.version}.` });
     sessions.set(op.id, op.provider === 'codex' ? new Codex(op.id, op) : new Claude(op.id, op));
@@ -31,6 +44,8 @@ function run(op: AgentOp) {
       return s.mode(op.mode);
     case 'model':
       return s.model(op.model);
+    case 'effort':
+      return s.effort(op.effort);
     case 'close':
       sessions.delete(op.id);
       return s.close();

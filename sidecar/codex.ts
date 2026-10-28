@@ -1,10 +1,52 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { clip, emit, firstLine, log, textOf } from './events.ts';
-import type { AgentEvent, AgentRequest, Answer, ChatItem } from './protocol.ts';
+import type { AgentEvent, AgentRequest, Answer, ChatItem, Model } from './protocol.ts';
 
 type Out = (ev: AgentEvent) => void;
 type Obj = Record<string, any>;
+/** How a Codex process starts, from settings: the CLI, its arguments, extra environment. */
+type Launch = { cwd: string; exe: string; args: string[]; env?: Record<string, string> };
+
+/** `codex app-server` with `server` flags. npm's .cmd shims only start through a shell. */
+function spawnCodex(o: Launch, server: string[]): ChildProcessWithoutNullStreams {
+  const shim = /\.(cmd|bat)$/i.test(o.exe);
+  return spawn(shim ? `"${o.exe}"` : o.exe, ['app-server', ...server], { cwd: o.cwd, env: { ...process.env, ...o.env }, shell: shim, windowsHide: true });
+}
+
+const toModel = (m: Obj): Model => ({
+  id: m.model,
+  label: m.displayName,
+  efforts: (m.supportedReasoningEfforts ?? []).map((e: Obj) => e.reasoningEffort),
+  defaultEffort: m.defaultReasoningEffort,
+});
+
+/** Codex's models without a thread: start the app-server, ask, stop it. */
+export async function codexCatalog(o: Launch): Promise<Model[]> {
+  const proc = spawnCodex(o, threadOptions(o.args).server);
+  const waiting = new Map<number, (m: Obj) => void>();
+  createInterface({ input: proc.stdout }).on('line', (line) => {
+    try {
+      const m = JSON.parse(line);
+      waiting.get(m.id)?.(m);
+    } catch {}
+  });
+  let next = 1;
+  const call = (method: string, params: Obj = {}) =>
+    new Promise<any>((resolve, reject) => {
+      const id = next++;
+      waiting.set(id, (m) => (m.error ? reject(new Error(m.error.message)) : resolve(m.result)));
+      proc.stdin.write(JSON.stringify({ id, method, params }) + '\n');
+    });
+  try {
+    await call('initialize', { clientInfo: { name: 'atc', title: 'ATC', version: '1' } });
+    proc.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n');
+    const r = await call('model/list', {});
+    return (r.data ?? []).filter((m: Obj) => !m.hidden).map(toModel);
+  } finally {
+    proc.kill();
+  }
+}
 
 /** The TUI flags that mean something to a thread; `-c` overrides go to the app-server. */
 function threadOptions(args: string[]): { thread: Obj; server: string[] } {
@@ -65,15 +107,16 @@ export class Codex {
   private thread = '';
   private turn = '';
   private chosen: string | undefined;
+  private effortChosen: string | null;
   private skills = new Map<string, Obj>();
   private closing = false;
 
-  constructor(id: string, o: { cwd: string; resume?: string; exe: string; args: string[]; env?: Record<string, string> }) {
+  constructor(id: string, o: Launch & { resume?: string; model?: string; effort?: string }) {
     this.id = id;
     const { thread, server } = threadOptions(o.args);
-    // npm's .cmd shims only start through a shell.
-    const shim = /\.(cmd|bat)$/i.test(o.exe);
-    this.proc = spawn(shim ? `"${o.exe}"` : o.exe, ['app-server', ...server], { cwd: o.cwd, env: { ...process.env, ...o.env }, shell: shim, windowsHide: true });
+    if (o.model) thread.model = o.model;
+    this.effortChosen = o.effort || null;
+    this.proc = spawnCodex(o, server);
     this.proc.stderr.on('data', (d) => log(id, 'codex:', String(d).trimEnd()));
     this.proc.on('exit', (code) => {
       for (const c of this.calls.values()) c.reject(new Error('Codex exited'));
@@ -127,9 +170,10 @@ export class Codex {
     this.live({
       t: 'ready',
       commands: [...this.skills.values()].map((s) => ({ name: `$${s.name}`, description: s.shortDescription || s.description })),
-      models: (models.data ?? []).filter((m: Obj) => !m.hidden).map((m: Obj) => ({ id: m.model, label: m.displayName })),
+      models: (models.data ?? []).filter((m: Obj) => !m.hidden).map(toModel),
       model: r.model,
       modes: [],
+      effort: this.effortChosen,
     });
   }
 
@@ -227,7 +271,7 @@ export class Codex {
     const skills = [...text.matchAll(/\$([\w:.-]+)/g)].map((m) => this.skills.get(m[1])).filter(Boolean) as Obj[];
     const input = [{ type: 'text', text }, ...skills.map((s) => ({ type: 'skill', name: s.name, path: s.path }))];
     this.live({ t: 'working', on: true });
-    this.call('turn/start', { threadId: this.thread, input, ...(this.chosen ? { model: this.chosen } : {}) }).catch((e) => {
+    this.call('turn/start', { threadId: this.thread, input, ...(this.chosen ? { model: this.chosen } : {}), ...(this.effortChosen ? { effort: this.effortChosen } : {}) }).catch((e) => {
       this.live({ t: 'working', on: false });
       this.live({ t: 'error', message: String(e?.message ?? e) });
     });
@@ -238,6 +282,12 @@ export class Codex {
   }
 
   mode(_mode: string) {}
+
+  /** Codex takes effort per turn, so this applies from the next message. */
+  effort(effort: string | null) {
+    this.effortChosen = effort;
+    this.live({ t: 'effort', effort });
+  }
 
   model(model: string) {
     this.chosen = model;

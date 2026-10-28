@@ -313,9 +313,10 @@ export function openAgentTab(key: TabKey, title: string, cwd: string | null, pro
 }
 
 /** What an agent tab's session reports: its state, its session id, that it exited. */
-export function setAgentState(key: TabKey, s: { activity?: Activity | null; session?: string; exited?: boolean; waiting?: boolean }) {
+export function setAgentState(key: TabKey, s: { activity?: Activity | null; session?: string; exited?: boolean; waiting?: boolean; provider?: AgentProvider }) {
   const tab = tabs.get(key);
   if (!tab || tab.term) return;
+  if (s.provider) tab.provider = s.provider;
   // A question or a permission pauses the turn: the tab waits on the user, and says so once.
   if (s.waiting) {
     tab.activity = 'idle';

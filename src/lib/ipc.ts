@@ -19,9 +19,15 @@ export function ptySpawn(opts: SpawnOpts, onEvent: Channel<PtyEvent>): Promise<s
 export function ptyWrite(id: string, data: string): Promise<void> { return App.PtyWrite(id, data); }
 
 /** Start a Claude or Codex session in the sidecar, resuming `session` when set. */
-export function agentOpen(provider: AgentProvider, cwd: string, session: string | null, chat: boolean, events: Channel<AgentEvent>): Promise<string> {
+export function agentOpen(provider: AgentProvider, cwd: string, o: { session?: string | null; chat?: boolean; model?: string; effort?: string }, events: Channel<AgentEvent>): Promise<string> {
   events.attach();
-  return App.AgentOpen(provider, cwd, session ?? '', chat, events.name).catch((error) => { events.dispose(); throw error; });
+  return App.AgentOpen(provider, cwd, o.session ?? '', !!o.chat, o.model ?? '', o.effort ?? '', events.name).catch((error) => { events.dispose(); throw error; });
+}
+
+/** A provider's models on `events`, then an exit, without starting a session. */
+export function agentCatalog(provider: AgentProvider, events: Channel<AgentEvent>): Promise<void> {
+  events.attach();
+  return App.AgentCatalog(provider, events.name).catch((error) => { events.dispose(); throw error; });
 }
 
 export function agentSend(id: string, op: Record<string, unknown>): Promise<void> { return App.AgentSend(id, op); }
