@@ -170,16 +170,16 @@
   }
   .panel,
   .flyout {
-    padding: 6px;
+    padding: 4px;
     background: var(--bg-chrome);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 10px;
     box-shadow: var(--shadow-pop);
   }
   .panel {
     position: absolute;
     left: -4px;
-    bottom: calc(100% + 10px);
+    bottom: calc(100% + 8px);
     z-index: 3;
     animation: rise var(--enter) var(--ease-out);
   }
@@ -192,16 +192,16 @@
   .head {
     display: flex;
     align-items: center;
-    gap: 7px;
-    padding: 8px 8px 4px;
-    font-size: 11.5px;
+    gap: 6px;
+    padding: 5px 8px 3px;
+    font-size: 11px;
     font-weight: 600;
-    color: var(--fg-dim);
+    color: var(--fg-faint);
   }
   .head:not(:first-child) {
-    margin-top: 4px;
+    margin-top: 3px;
     border-top: 1px solid var(--border);
-    padding-top: 10px;
+    padding-top: 7px;
   }
   .row {
     position: relative;
@@ -214,11 +214,11 @@
     box-sizing: border-box;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     flex: 1;
     min-width: 0;
-    padding: 6px 8px;
-    border-radius: 7px;
+    padding: 4px 8px;
+    border-radius: 6px;
     cursor: pointer;
   }
   .flyout .item {
@@ -239,10 +239,10 @@
     all: unset;
     display: grid;
     place-items: center;
-    width: 26px;
+    width: 22px;
     flex: none;
-    border-radius: 7px;
-    font-size: 16px;
+    border-radius: 6px;
+    font-size: 14px;
     color: var(--fg-faint);
     cursor: pointer;
   }
@@ -252,20 +252,20 @@
   }
   /* Keeps versions lined up on rows with nothing older. */
   .arrow-space {
-    width: 26px;
+    width: 22px;
     flex: none;
   }
   .flyout {
     position: absolute;
-    left: calc(100% + 12px);
-    top: -6px;
-    width: 260px;
+    left: calc(100% + 8px);
+    top: -4px;
+    width: 280px;
     z-index: 4;
     animation: slide var(--enter) var(--ease-out);
   }
   .flyout.leftward {
     left: auto;
-    right: calc(100% + 40px);
+    right: calc(100% + 32px);
   }
   @keyframes slide {
     from {
@@ -273,17 +273,21 @@
       transform: translateX(-4px);
     }
   }
+  /* One line per choice: the name, then what it is for, cut to fit. */
   .text {
     display: flex;
-    flex-direction: column;
+    align-items: baseline;
+    gap: 8px;
     min-width: 0;
     flex: 1;
   }
   .name {
-    font-size: 13px;
+    flex: none;
+    font-size: 12.5px;
     color: var(--fg-bright);
   }
   .desc {
+    min-width: 0;
     font-size: 11.5px;
     color: var(--fg-faint);
     overflow: hidden;
@@ -291,7 +295,7 @@
     white-space: nowrap;
   }
   .badge {
-    font-size: 11.5px;
+    font-size: 11px;
     color: var(--fg-faint);
     font-variant-numeric: tabular-nums;
   }
@@ -304,8 +308,8 @@
     visibility: visible;
   }
   .footer {
-    margin-top: 6px;
-    padding: 10px 8px 4px;
+    margin-top: 4px;
+    padding: 7px 8px 3px;
     border-top: 1px solid var(--border);
   }
 </style>

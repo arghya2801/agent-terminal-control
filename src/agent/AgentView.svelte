@@ -258,7 +258,7 @@
     >
       {#snippet toolbar()}
         {#if s?.models.length}
-          <ChipMenu title="Model and effort" sections={modelSections} value="{provider}:{model}" onPick={pick} footer={modelFooter} width={420}>
+          <ChipMenu title="Model and effort" sections={modelSections} value="{provider}:{model}" onPick={pick} footer={modelFooter} width={380}>
             {#snippet label()}
               <ProviderIcon {provider} />
               <span>{chipLabel}</span>
@@ -267,7 +267,7 @@
           </ChipMenu>
         {/if}
         {#if s?.modes.length}
-          <ChipMenu title="Permission mode" sections={[{ items: s.modes.map((m) => ({ value: m, label: MODES[m] ?? m, description: MODE_HELP[m] })) }]} value={s.mode ?? 'default'} onPick={(m) => setMode(tabKey, m)} width={320}>
+          <ChipMenu title="Permission mode" sections={[{ items: s.modes.map((m) => ({ value: m, label: MODES[m] ?? m, description: MODE_HELP[m] })) }]} value={s.mode ?? 'default'} onPick={(m) => setMode(tabKey, m)} width={340}>
             {#snippet label()}<span class:plan={s?.mode === 'plan'}>{MODES[s?.mode ?? 'default'] ?? s?.mode}</span>{/snippet}
           </ChipMenu>
         {/if}
@@ -587,12 +587,12 @@
   }
   .effort {
     display: grid;
-    gap: 6px;
+    gap: 5px;
   }
   .lbl {
-    font-size: 11.5px;
+    font-size: 11px;
     font-weight: 600;
-    color: var(--fg-dim);
+    color: var(--fg-faint);
   }
   .seg {
     display: flex;
@@ -601,12 +601,12 @@
   }
   .seg button {
     font: inherit;
-    font-size: 11.5px;
+    font-size: 11px;
     color: var(--fg-dim);
     background: transparent;
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 2px 6px;
+    border-radius: 5px;
+    padding: 1px 6px;
     cursor: pointer;
   }
   .seg button:hover {
@@ -621,8 +621,8 @@
     outline: 1px solid var(--accent);
   }
   .locked {
-    margin: 8px 0 0;
-    font-size: 11.5px;
+    margin: 6px 0 0;
+    font-size: 11px;
     color: var(--fg-faint);
   }
   .status {
