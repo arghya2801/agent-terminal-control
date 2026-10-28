@@ -9,7 +9,7 @@
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import { agents, answer, catalog, interrupt, send, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
   import { activity, blocks, summarize, type Block } from './work';
-  import { keptEffort, olderModels } from './models';
+  import { families, keptEffort, versionOf } from './models';
   import { getActiveKey, queuePrompt } from '../terminal/manager';
   import { providerName } from '../lib/agents';
   import { appState } from '../lib/stores.svelte';
@@ -24,14 +24,16 @@
   const request = $derived(s?.requests[0]);
   const MODES: Record<string, string> = { default: 'Ask first', acceptEdits: 'Accept edits', plan: 'Plan', auto: 'Auto', bypassPermissions: 'Bypass', dontAsk: "Don't ask" };
   // The CLI reports the full model id; the picker lists aliases that resolve to one.
-  const model = $derived(s ? (s.models.find((m) => m.id === s.model || m.resolved === s.model)?.id ?? s.model ?? s.models[0]?.id ?? '') : '');
-  const current = $derived(s?.models.find((m) => m.id === model));
-  /** "Default (recommended)" says nothing on a chip; name the model it stands for. */
-  const chipLabel = $derived.by(() => {
-    if (current?.id !== 'default' || !current.resolved) return current?.label ?? model;
-    const named = s?.models.find((m) => m.id !== 'default' && m.resolved === current.resolved);
-    return named ? `${named.label} (default)` : current.label;
+  // Claude's `default` alias is shown as the family it stands for, so prefer that alias.
+  const model = $derived.by(() => {
+    if (!s) return '';
+    const exact = s.models.find((m) => m.id === s.model);
+    const resolved = exact?.resolved ?? s.model;
+    const named = s.models.find((m) => m.id !== 'default' && /^[a-z]+$/.test(m.id) && m.resolved === resolved);
+    return (exact?.id === 'default' || !exact ? named?.id : exact.id) ?? exact?.id ?? s.model ?? s.models[0]?.id ?? '';
   });
+  const current = $derived(s?.models.find((m) => m.id === model));
+  const chipLabel = $derived(current?.label ?? model);
 
   // Until the first message the picker offers both providers' models; picking the other
   // provider's moves the tab to it. After that the conversation belongs to one CLI.
@@ -50,20 +52,21 @@
     // An effort the new model does not take would fail its next request.
     if (s && s.effort !== keptEffort(s.effort, s.models.find((m) => m.id === id))) setEffort(tabKey, null);
   }
-  /** The picker's groups: Claude first, then Codex, each with its current models on top and
-   *  older ones folded under "Older models". */
+  /** The picker: Claude, then Codex, one row per family (Opus, Sonnet, Sol...). A row picks
+   *  the family's latest; its arrow lists the older versions. */
   const modelSections = $derived.by((): MenuSection[] => {
     const lists = { [provider]: s?.models ?? [], [other]: s?.fresh ? others : [] } as Record<AgentProvider, Model[]>;
-    return (['claude', 'codex'] as const).filter((p) => lists[p].length).map((p) => {
-      const item = (m: Model) => ({ value: `${p}:${m.id}`, label: m.label, description: m.description });
-      const older = olderModels(p, lists[p]);
-      return {
-        title: providerName(p),
-        icon: p === 'claude' ? claudeIcon : codexIcon,
-        items: lists[p].filter((m) => !older.includes(m)).map(item),
-        more: older.length ? { label: `Older models (${older.length})`, items: older.map(item) } : undefined,
-      };
-    });
+    return (['claude', 'codex'] as const).filter((p) => lists[p].length).map((p) => ({
+      title: providerName(p),
+      icon: p === 'claude' ? claudeIcon : codexIcon,
+      items: families(p, lists[p]).map((f) => ({
+        value: `${p}:${f.latest.id}`,
+        label: f.name,
+        description: f.latest.description,
+        badge: f.version,
+        sub: f.older.map((o) => ({ value: `${p}:${o.id}`, label: o.label, description: o.description, badge: versionOf(p, o) })),
+      })),
+    }));
   });
   const MODE_HELP: Record<string, string> = {
     default: 'Asks before edits and commands',
