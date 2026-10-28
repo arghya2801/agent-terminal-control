@@ -245,6 +245,15 @@ export class Codex {
         if (item?.kind === 'tool' && item.done) this.live({ t: 'result', id: item.id, output: item.output ?? '', error: !!item.error });
         return;
       }
+      // With `approvals_reviewer = "auto_review"` Codex's own reviewer answers approvals;
+      // say what it decided, since no card asked the user.
+      case 'item/autoApprovalReview/completed': {
+        const a = p.action ?? {};
+        const what = a.command ?? (a.program ? [a.program, ...(a.argv ?? [])].join(' ') : a.files?.join(', ') ?? a.target ?? (a.toolName ? `${a.server}.${a.toolName}` : a.reason ?? a.type));
+        const risk = p.review?.riskLevel ? ` (${p.review.riskLevel} risk)` : '';
+        this.live({ t: 'item', item: { id: `review:${p.reviewId}`, kind: 'notice', text: `Codex's reviewer ${p.review?.status ?? 'decided'}${risk}: ${firstLine(String(what))}` } });
+        return;
+      }
       case 'item/agentMessage/delta':
         this.live({ t: 'delta', id: p.itemId, kind: 'assistant', text: p.delta });
         return;

@@ -84,6 +84,9 @@ export class Claude {
   private streaming = new Map<string | null, string>();
   private n = 0;
   private closing = false;
+  /** The permission mode now, and the one an approved plan returns to. */
+  private current = 'default';
+  private beforePlan = 'default';
 
   constructor(id: string, o: Launch & { resume?: string; model?: string; effort?: string }) {
     this.id = id;
@@ -144,6 +147,7 @@ export class Claude {
         if (m.subtype === 'init') {
           out({ t: 'session', id: m.session_id });
           out({ t: 'model', model: m.model });
+          this.current = m.permissionMode;
           out({ t: 'mode', mode: m.permissionMode });
         } else if (m.subtype === 'compact_boundary') out({ t: 'item', item: { id: m.uuid, kind: 'notice', text: 'Conversation compacted' } });
         else if (m.subtype === 'api_retry') out({ t: 'item', item: { id: m.uuid, kind: 'notice', text: `API error, retrying (attempt ${m.attempt} of ${m.max_retries})` } });
@@ -230,6 +234,8 @@ export class Claude {
       const answers = Object.fromEntries(Object.entries(answer.answers ?? {}).map(([q, labels]) => [q, labels.join(', ')]));
       return { behavior: 'allow', updatedInput: { ...input, answers } };
     }
+    // An approved plan ends plan mode, back to the mode before it; the CLI says nothing.
+    if (kind === 'plan') this.live({ t: 'mode', mode: this.beforePlan });
     return { behavior: 'allow', updatedInput: input, ...(answer.always && suggestions ? { updatedPermissions: suggestions } : {}) };
   }
 
@@ -254,6 +260,8 @@ export class Claude {
   }
 
   mode(mode: string) {
+    if (mode === 'plan' && this.current !== 'plan') this.beforePlan = this.current;
+    this.current = mode;
     void this.q
       .setPermissionMode(mode as never)
       .then(() => this.live({ t: 'mode', mode }))
