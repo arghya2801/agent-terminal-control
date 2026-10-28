@@ -34,6 +34,7 @@ export interface Command {
 export interface Model {
   id: string;
   label: string;
+  description?: string;
   /** The full model id an alias such as `opus` stands for. */
   resolved?: string;
   /** Reasoning effort levels the model takes, lowest first; none means it has no setting. */

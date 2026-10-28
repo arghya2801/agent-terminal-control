@@ -20,6 +20,7 @@ function launchOptions(id: string, o: Launch) {
 const toModel = (m: ModelInfo): Model => ({
   id: m.value,
   label: m.displayName,
+  description: m.description || undefined,
   resolved: m.resolvedModel,
   efforts: m.supportsEffort ? m.supportedEffortLevels : undefined,
 });

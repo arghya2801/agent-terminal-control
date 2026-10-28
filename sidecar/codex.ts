@@ -17,6 +17,7 @@ function spawnCodex(o: Launch, server: string[]): ChildProcessWithoutNullStreams
 const toModel = (m: Obj): Model => ({
   id: m.model,
   label: m.displayName,
+  description: m.description || undefined,
   efforts: (m.supportedReasoningEfforts ?? []).map((e: Obj) => e.reasoningEffort),
   defaultEffort: m.defaultReasoningEffort,
 });

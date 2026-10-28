@@ -4,6 +4,7 @@
   import Markdown from './Markdown.svelte';
   import RequestCard from './RequestCard.svelte';
   import ToolLine, { toolStatus } from './ToolLine.svelte';
+  import ChipMenu, { type MenuSection } from './ChipMenu.svelte';
   import Icon from '../lib/Icon.svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import { agents, answer, catalog, interrupt, send, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
@@ -24,6 +25,12 @@
   // The CLI reports the full model id; the picker lists aliases that resolve to one.
   const model = $derived(s ? (s.models.find((m) => m.id === s.model || m.resolved === s.model)?.id ?? s.model ?? s.models[0]?.id ?? '') : '');
   const current = $derived(s?.models.find((m) => m.id === model));
+  /** "Default (recommended)" says nothing on a chip; name the model it stands for. */
+  const chipLabel = $derived.by(() => {
+    if (current?.id !== 'default' || !current.resolved) return current?.label ?? model;
+    const named = s?.models.find((m) => m.id !== 'default' && m.resolved === current.resolved);
+    return named ? `${named.label} (default)` : current.label;
+  });
 
   // Until the first message the picker offers both providers' models; picking the other
   // provider's moves the tab to it. After that the conversation belongs to one CLI.
@@ -40,6 +47,28 @@
     if (p === provider) setModel(tabKey, id);
     else switchProvider(tabKey, p, id);
   }
+  /** The picker's groups: Claude first, then Codex, each with its current models on top.
+   *  Claude's pinned older versions (ids with a version in them) fold under "Older models". */
+  const modelSections = $derived.by((): MenuSection[] => {
+    const lists = { [provider]: s?.models ?? [], [other]: s?.fresh ? others : [] } as Record<AgentProvider, Model[]>;
+    return (['claude', 'codex'] as const).filter((p) => lists[p].length).map((p) => {
+      const item = (m: Model) => ({ value: `${p}:${m.id}`, label: m.label, description: m.description });
+      const older = p === 'claude' ? lists[p].filter((m) => !/^[a-z]+$/.test(m.id)) : [];
+      return {
+        title: providerName(p),
+        icon: p === 'claude' ? claudeIcon : codexIcon,
+        items: lists[p].filter((m) => !older.includes(m)).map(item),
+        more: older.length ? { label: `Older models (${older.length})`, items: older.map(item) } : undefined,
+      };
+    });
+  });
+  const MODE_HELP: Record<string, string> = {
+    default: 'Asks before edits and commands',
+    acceptEdits: 'Edits files without asking; asks before commands',
+    plan: 'Reads and plans; changes nothing until you approve',
+    auto: 'Approves safe actions itself and asks about the rest',
+    bypassPermissions: 'Never asks',
+  };
   const EFFORTS: Record<string, string> = { none: 'None', minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max', ultra: 'Ultra' };
   const effortName = (e: string) => EFFORTS[e] ?? e;
 
@@ -111,6 +140,23 @@
     setTimeout(() => copied === id && (copied = null), 1500);
   }
 </script>
+
+{#snippet claudeIcon()}<ProviderIcon provider="claude" />{/snippet}
+{#snippet codexIcon()}<ProviderIcon provider="codex" />{/snippet}
+{#snippet modelFooter()}
+  {#if s && current?.efforts?.length}
+    <div class="effort" role="group" aria-label="Reasoning effort">
+      <span class="lbl">Effort{provider === 'codex' ? ', from the next message' : ''}</span>
+      <div class="seg">
+        <button class:on={!s.effort} onclick={() => setEffort(tabKey, null)} title={current.defaultEffort ? `${effortName(current.defaultEffort)}, the model's default` : "The CLI's default"}>Default</button>
+        {#each current.efforts as e (e)}
+          <button class:on={s.effort === e} onclick={() => setEffort(tabKey, e)}>{effortName(e)}</button>
+        {/each}
+      </div>
+    </div>
+  {/if}
+  {#if s && !s.fresh}<p class="locked">This conversation stays on {name}. A new tab can use {providerName(other)}.</p>{/if}
+{/snippet}
 
 <div
   class="agent"
@@ -206,36 +252,18 @@
     >
       {#snippet toolbar()}
         {#if s?.models.length}
-          <label class="chip" title={s.fresh ? 'Model: Claude or Codex until the first message' : 'Model'}>
-            <select aria-label="Model" value="{provider}:{model}" onchange={(e) => pick(e.currentTarget.value)}>
-              {#if model && !s.models.some((m) => m.id === model)}<option value="{provider}:{model}">{model}</option>{/if}
-              {#if s.fresh && others.length}
-                <optgroup label={name}>
-                  {#each s.models as m (m.id)}<option value="{provider}:{m.id}">{m.label}</option>{/each}
-                </optgroup>
-                <optgroup label={providerName(other)}>
-                  {#each others as m (m.id)}<option value="{other}:{m.id}">{m.label}</option>{/each}
-                </optgroup>
-              {:else}
-                {#each s.models as m (m.id)}<option value="{provider}:{m.id}">{m.label}</option>{/each}
-              {/if}
-            </select>
-          </label>
-        {/if}
-        {#if s && current?.efforts?.length}
-          <label class="chip" title="Reasoning effort{provider === 'codex' ? ', from the next message' : ''}">
-            <select aria-label="Reasoning effort" value={s.effort ?? ''} onchange={(e) => setEffort(tabKey, e.currentTarget.value || null)}>
-              <option value="">{current.defaultEffort ? `${effortName(current.defaultEffort)} effort (default)` : 'Default effort'}</option>
-              {#each current.efforts as e (e)}<option value={e}>{effortName(e)} effort</option>{/each}
-            </select>
-          </label>
+          <ChipMenu title="Model and effort" sections={modelSections} value="{provider}:{model}" onPick={pick} footer={modelFooter} width={340}>
+            {#snippet label()}
+              <ProviderIcon {provider} />
+              <span>{chipLabel}</span>
+              {#if s?.effort}<span class="faint">{effortName(s.effort).toLowerCase()}</span>{/if}
+            {/snippet}
+          </ChipMenu>
         {/if}
         {#if s?.modes.length}
-          <label class="chip" class:plan={s.mode === 'plan'} title="Permission mode">
-            <select aria-label="Permission mode" value={s.mode ?? 'default'} onchange={(e) => setMode(tabKey, e.currentTarget.value)}>
-              {#each s.modes as m (m)}<option value={m}>{MODES[m] ?? m}</option>{/each}
-            </select>
-          </label>
+          <ChipMenu title="Permission mode" sections={[{ items: s.modes.map((m) => ({ value: m, label: MODES[m] ?? m, description: MODE_HELP[m] })) }]} value={s.mode ?? 'default'} onPick={(m) => setMode(tabKey, m)} width={320}>
+            {#snippet label()}<span class:plan={s?.mode === 'plan'}>{MODES[s?.mode ?? 'default'] ?? s?.mode}</span>{/snippet}
+          </ChipMenu>
         {/if}
         <span class="status" class:working={s?.working && !request} class:waiting={!!request}>{status}</span>
         <button class="icon" onclick={onTerminal} title="Open in terminal: resume this session in {name}'s own TUI" aria-label="Open in terminal"><Icon name="terminal" size={14} /></button>
@@ -545,45 +573,51 @@
   }
 
   /* Toolbar, inside the composer. */
-  .chip {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    border-radius: 7px;
-    background: var(--bg-surface);
+  .faint {
+    color: var(--fg-faint);
+  }
+  .plan {
+    color: var(--info);
+  }
+  .effort {
+    display: grid;
+    gap: 6px;
+  }
+  .lbl {
+    font-size: 11.5px;
+    font-weight: 600;
     color: var(--fg-dim);
   }
-  .chip::after {
-    content: '▾';
-    position: absolute;
-    right: 7px;
-    pointer-events: none;
-    font-size: 10px;
+  .seg {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
   }
-  .chip:hover {
-    color: var(--fg-bright);
-  }
-  .chip.plan {
-    color: var(--info);
-    background: color-mix(in srgb, var(--info) 14%, var(--bg-surface));
-  }
-  .chip select {
-    appearance: none;
+  .seg button {
     font: inherit;
-    font-size: 12px;
-    color: inherit;
+    font-size: 11.5px;
+    color: var(--fg-dim);
     background: transparent;
-    border: none;
-    padding: 3px 22px 3px 9px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 8px;
     cursor: pointer;
   }
-  .chip select:focus-visible {
-    outline: 1px solid var(--accent);
-    border-radius: 7px;
+  .seg button:hover {
+    color: var(--fg-bright);
   }
-  .chip option {
-    color: var(--fg);
-    background: var(--bg-chrome);
+  .seg button.on {
+    color: var(--fg-bright);
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+  .seg button:focus-visible {
+    outline: 1px solid var(--accent);
+  }
+  .locked {
+    margin: 8px 0 0;
+    font-size: 11.5px;
+    color: var(--fg-faint);
   }
   .status {
     margin-left: 4px;
