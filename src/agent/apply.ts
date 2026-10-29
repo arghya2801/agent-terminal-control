@@ -40,7 +40,8 @@ function notify(s: AgentState, text: string, error = false) {
 /** Apply one event in place. Items are matched by id, so a streamed draft, its final text
  *  and a tool's result all land on the same item. */
 export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
-  const find = (id: string) => s.items.find((i) => i.id === id);
+  // Streamed text and results land on the newest items, so look from the end.
+  const find = (id: string) => s.items.findLast((i) => i.id === id);
   switch (ev.t) {
     case 'ready':
       Object.assign(s, { commands: ev.commands, models: ev.models, modes: ev.modes, ready: true, dormant: false });

@@ -5,11 +5,24 @@
   import { gfm } from 'micromark-extension-gfm';
   import { gfmFromMarkdown } from 'mdast-util-gfm';
   import type { Nodes } from 'mdast';
+  import { onDestroy, untrack } from 'svelte';
   import { openUrl } from '../lib/ipc';
   import { appState } from '../lib/stores.svelte';
 
   let { text }: { text: string } = $props();
-  const tree = $derived(fromMarkdown(text, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] }));
+  // A streaming reply changes `text` with every token, and each parse reads all of it. So the
+  // tree follows at most every 80 ms, always catching up to the latest text.
+  let shown = $state(untrack(() => text));
+  let pending: ReturnType<typeof setTimeout> | undefined;
+  $effect(() => {
+    void text;
+    pending ??= setTimeout(() => {
+      pending = undefined;
+      shown = text;
+    }, 80);
+  });
+  onDestroy(() => clearTimeout(pending));
+  const tree = $derived(fromMarkdown(shown, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] }));
 
   function copy(e: MouseEvent, text: string) {
     const button = e.currentTarget as HTMLButtonElement;
