@@ -10,6 +10,11 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Claude and Codex tabs are a chat instead of a terminal. Claude runs through the Claude Agent SDK and Codex through its app-server: the same CLIs, logins, settings, hooks, skills, MCP servers and session files. Replies stream in; each tool call is one line with a timer, its live output and its result; permission prompts, questions and plan approvals are cards with buttons; `/` (Claude) and `$` (Codex) list commands and skills with their descriptions; the footer picks the model and Claude's permission mode and shows the turn's running time, and each turn ends with its duration and cost. "Open in terminal" resumes the session in the CLI's own TUI. Agent tabs need Node.js 18 or later on PATH.
 - In agent tabs, a run of tool calls reads as one line ("Read 3 files and ran 2 commands") that opens to the calls; the turn being worked on stays open. Each turn hangs off a rail with a light per call. The working line says what the agent is doing ("Running npm test", or its current thought), paths show relative to the project, Up and Down recall earlier prompts, and replies and code blocks have a Copy button.
 - An effort picker beside the model in agent tabs, for models that take one: Claude changes it mid-session, Codex from the next message. A new agent tab's model picker lists Claude's and Codex's models together; picking the other provider's moves the tab to it, until the first message is sent.
+- Codex tabs take `/compact`, `/review`, `/undo`, `/new` and `/rename`, and the mode chip picks Read only, Workspace or Full access for the next turns. When Codex's own reviewer approves something (`approvals_reviewer = "auto_review"`), the chat says what it decided.
+- Paste or drop images into an agent tab's message box, for Claude and Codex: PNG, JPEG, GIF or WebP, up to 5 MB each. They show above the prompt they went with.
+
+### Fixed
+- An approved plan in a Claude tab leaves plan mode, so the mode chip no longer stays on Plan.
 
 ## [0.6.2] - 2026-10-24
 
