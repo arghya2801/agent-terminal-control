@@ -19,6 +19,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ### Fixed
 - An approved plan in a Claude tab leaves plan mode, so the mode chip no longer stays on Plan.
+- A resumed Codex conversation whose saved model Codex no longer lists moves to the default model, instead of failing its next turn.
 - An agent tab waiting on a permission or question shows as waiting in the sidebar and header even while you are looking at it, instead of idle.
 
 ## [0.6.2] - 2026-10-24

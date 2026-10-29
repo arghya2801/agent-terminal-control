@@ -197,17 +197,25 @@ export class Codex {
     const history = historyOf(r.thread);
     if (history.length) this.live({ t: 'history', events: history });
     this.live({ t: 'session', id: this.thread });
-    this.live({ t: 'model', model: r.model });
     const [skills, models] = await Promise.all([
       this.call('skills/list', { cwds: [o.cwd] }).catch(() => ({ data: [] })),
       this.call('model/list', {}).catch(() => ({ data: [] })),
     ]);
     for (const s of (skills.data ?? []).flatMap((e: Obj) => e.skills ?? [])) if (s.enabled) this.skills.set(s.name, s);
+    // A thread can carry a model Codex no longer lists (or a bad one ATC once saved into
+    // it); its next turn would fail, so it moves to the default model.
+    const listed: Obj[] = models.data ?? [];
+    let model = r.model;
+    if (listed.length && !listed.some((m) => m.model === model || m.id === model)) {
+      model = listed.find((m) => m.isDefault)?.model ?? listed[0].model;
+      this.chosen ??= model;
+    }
+    this.live({ t: 'model', model });
     this.live({
       t: 'ready',
       commands: [...COMMANDS, ...[...this.skills.values()].map((s) => ({ name: `$${s.name}`, description: s.shortDescription || s.description }))],
-      models: (models.data ?? []).filter((m: Obj) => !m.hidden).map(toModel),
-      model: r.model,
+      models: listed.filter((m) => !m.hidden).map(toModel),
+      model,
       modes: Object.keys(PRESETS),
       mode: presetOf(r.sandbox),
       effort: this.effortChosen,
