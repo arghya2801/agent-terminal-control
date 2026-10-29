@@ -35,6 +35,12 @@ export interface Image {
   data: string;
 }
 
+/** One line of the agent's plan: Claude's tasks, or Codex's plan. */
+export interface Step {
+  text: string;
+  status: 'pending' | 'active' | 'done';
+}
+
 export interface Command {
   /** As typed: `/compact`, or `$skill` for a Codex skill. */
   name: string;
@@ -102,6 +108,10 @@ export type AgentEvent =
   | { t: 'mode'; mode: string }
   /** Null is the CLI's default. */
   | { t: 'effort'; effort: string | null }
+  /** The whole plan as it now stands. */
+  | { t: 'plan'; steps: Step[] }
+  /** The project's files, relative, answering `files`. */
+  | { t: 'files'; files: string[] }
   /** A provider's models, answering `catalog`, before any session of it runs. */
   | { t: 'catalog'; models: Model[] }
   | { t: 'error'; message: string }
@@ -118,4 +128,5 @@ export type AgentOp =
   | { op: 'model'; id: string; model: string }
   /** Go back to before a prompt: Claude's item id, or Codex's turn id. */
   | { op: 'rewind'; id: string; to: string }
+  | { op: 'files'; id: string }
   | { op: 'close'; id: string };

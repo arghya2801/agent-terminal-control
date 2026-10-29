@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import { untrack, type Snippet } from 'svelte';
   import { matchCommands, typedCommand, type Sigil } from './commands';
   import type { Command, Image } from '../../sidecar/protocol';
 
-  let { text = $bindable(''), name, history, sigils, commands, working, disabled, onSend, onStop, toolbar }: {
+  let { text = $bindable(''), name, history, sigils, commands, working, disabled, onSend, onStop, onFiles, toolbar }: {
     /** What is in the box; a rewind puts its prompt back here. */
     text?: string;
     name: string;
@@ -16,6 +16,8 @@
     disabled: boolean;
     onSend: (text: string, images: Image[]) => void;
     onStop: () => void;
+    /** Typing `@` asks for the project's files, which arrive as `@path` commands. */
+    onFiles?: () => void;
     /** Model, mode and status, along the bottom of the box. */
     toolbar?: Snippet;
   } = $props();
@@ -26,6 +28,10 @@
   let dismissed = $state(false);
 
   const typed = $derived(typedCommand(text, caret, sigils));
+  const atFiles = $derived(typed?.sigil === '@');
+  $effect(() => {
+    if (atFiles) untrack(() => onFiles?.());
+  });
   const menu = $derived(typed && !dismissed ? matchCommands(commands, typed.query, typed.sigil) : []);
   const label = (c: Command) => c.name;
   $effect(() => {

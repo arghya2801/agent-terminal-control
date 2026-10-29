@@ -147,7 +147,7 @@ export class Codex {
   private effortChosen: string | null;
   private skills = new Map<string, Obj>();
   private closing = false;
-  private cwd: string;
+  readonly cwd: string;
   private turns: string[] = [];
   /** Set when the user picks a preset; until then turns keep the thread's own config. */
   private preset: string | null = null;
@@ -254,6 +254,9 @@ export class Codex {
         this.live({ t: 'item', item: { id: `review:${p.reviewId}`, kind: 'notice', text: `Codex's reviewer ${p.review?.status ?? 'decided'}${risk}: ${firstLine(String(what))}` } });
         return;
       }
+      case 'turn/plan/updated':
+        this.live({ t: 'plan', steps: (p.plan ?? []).map((s: Obj) => ({ text: s.step, status: s.status === 'completed' ? 'done' : s.status === 'inProgress' ? 'active' : 'pending' })) });
+        return;
       case 'item/agentMessage/delta':
         this.live({ t: 'delta', id: p.itemId, kind: 'assistant', text: p.delta });
         return;

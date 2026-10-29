@@ -6,7 +6,7 @@
 import { createInterface } from 'node:readline';
 import { Claude, claudeCatalog } from './claude.ts';
 import { Codex, codexCatalog } from './codex.ts';
-import { emit, log } from './events.ts';
+import { emit, listFiles, log } from './events.ts';
 import type { AgentOp, Model, Provider } from './protocol.ts';
 
 const sessions = new Map<string, Claude | Codex>();
@@ -48,6 +48,11 @@ function run(op: AgentOp) {
       return s.effort(op.effort);
     case 'rewind':
       return void s.rewind(op.to);
+    case 'files':
+      return void listFiles(s.cwd).then(
+        (files) => emit(op.id, { t: 'files', files }),
+        (e) => log(op.id, 'files:', String(e)),
+      );
     case 'close':
       sessions.delete(op.id);
       return s.close();

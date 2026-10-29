@@ -21,6 +21,11 @@ describe('typedCommand', () => {
     expect(typedCommand('use $cave', 9, ['/'])).toBeNull();
     expect(typedCommand('a$b', 3, ['$'])).toBeNull();
   });
+
+  it('finds an @file token anywhere, but not inside an address', () => {
+    expect(typedCommand('read @src/ap', 12, ['/', '@'])).toEqual({ start: 5, query: 'src/ap', sigil: '@' });
+    expect(typedCommand('mail a@b', 8, ['@'])).toBeNull();
+  });
 });
 
 describe('matchCommands', () => {

@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentRequest, ChatItem, Command, Model } from '../../sidecar/protocol';
+import type { AgentEvent, AgentRequest, ChatItem, Command, Model, Step } from '../../sidecar/protocol';
 
 /** Everything the chat view shows for one session, built only from sidecar events. */
 export interface AgentState {
@@ -17,10 +17,13 @@ export interface AgentState {
   /** When the current turn started, for the timer. */
   since: number;
   exited: boolean;
+  plan: Step[];
+  /** For the `@` menu, as the last `files` answer listed them. */
+  files: string[];
 }
 
 export function emptyState(): AgentState {
-  return { items: [], requests: [], commands: [], models: [], modes: [], model: null, mode: null, effort: null, sessionId: null, ready: false, working: false, since: 0, exited: false };
+  return { items: [], requests: [], commands: [], models: [], modes: [], model: null, mode: null, effort: null, sessionId: null, ready: false, working: false, since: 0, exited: false, plan: [], files: [] };
 }
 
 let notices = 0;
@@ -50,7 +53,7 @@ export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
       for (const e of ev.events) apply(s, e, now);
       return;
     case 'clear':
-      Object.assign(s, { items: [], requests: [] });
+      Object.assign(s, { items: [], requests: [], plan: [] });
       return;
     case 'rewound': {
       const at = s.items.findIndex((i) => i.id === ev.to);
@@ -104,6 +107,12 @@ export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
       return;
     case 'effort':
       s.effort = ev.effort;
+      return;
+    case 'plan':
+      s.plan = ev.steps;
+      return;
+    case 'files':
+      s.files = ev.files;
       return;
     case 'error':
       notify(s, ev.message, true);

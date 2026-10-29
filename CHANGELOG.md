@@ -13,6 +13,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Codex tabs take `/compact`, `/review`, `/undo`, `/new` and `/rename`, and the mode chip picks Read only, Workspace or Full access for the next turns. When Codex's own reviewer approves something (`approvals_reviewer = "auto_review"`), the chat says what it decided.
 - Paste or drop images into an agent tab's message box, for Claude and Codex: PNG, JPEG, GIF or WebP, up to 5 MB each. They show above the prompt they went with.
 - Rewind an agent tab: hover one of your messages and choose Rewind. The conversation goes back to before it and the message returns to the box. In Claude tabs, files Claude changed since then go back too, as Esc Esc does in the CLI. Codex can't undo its edits, so its files stay as they are.
+- Type `@` in an agent tab's message box to pick a project file. The list is git's (ignored files left out), or the folder's own outside a repo.
+- Claude's task list shows above the message box while any task is open, with each task's state ("2 of 5 tasks done"). Codex's plan shows there too, when Codex sends one.
 
 ### Fixed
 - An approved plan in a Claude tab leaves plan mode, so the mode chip no longer stays on Plan.

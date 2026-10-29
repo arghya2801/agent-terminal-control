@@ -1,13 +1,13 @@
 import type { Command } from '../../sidecar/protocol';
 
-export type Sigil = '/' | '$';
+export type Sigil = '/' | '$' | '@';
 
-/** The command or skill being typed at `caret`: `/name` opening a message, or a `$name`
- *  token anywhere (Codex skills). Null when the caret is not in one of `sigils`. */
+/** The command, skill or file being typed at `caret`: `/name` opening a message, or a
+ *  `$skill` or `@path` token anywhere. Null when the caret is not in one of `sigils`. */
 export function typedCommand(text: string, caret: number, sigils: Sigil[]): { start: number; query: string; sigil: Sigil } | null {
   const before = text.slice(0, caret);
   for (const sigil of sigils) {
-    const start = sigil === '/' ? (before.startsWith('/') ? 0 : -1) : before.lastIndexOf('$');
+    const start = sigil === '/' ? (before.startsWith('/') ? 0 : -1) : before.lastIndexOf(sigil);
     if (start < 0 || /\s/.test(before.slice(start)) || (start > 0 && !/\s/.test(before[start - 1]))) continue;
     return { start, query: before.slice(start + 1).toLowerCase(), sigil };
   }

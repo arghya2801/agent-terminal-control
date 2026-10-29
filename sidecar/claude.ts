@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { relative } from 'node:path';
 import { getSessionMessages, query, type ModelInfo, type PermissionResult, type PermissionUpdate, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { clip, emit, Inbox, log, summarize, textOf } from './events.ts';
-import type { AgentEvent, AgentRequest, Answer, Image, Model } from './protocol.ts';
+import type { AgentEvent, AgentRequest, Answer, Image, Model, Step } from './protocol.ts';
 
 /** How a Claude process starts, from settings: the CLI, its arguments, extra environment. */
 type Launch = { cwd: string; exe: string; args: string[]; env?: Record<string, string> };
@@ -43,6 +43,7 @@ type Out = (ev: AgentEvent) => void;
 type Block = Record<string, any>;
 
 const MODES = ['default', 'acceptEdits', 'plan', 'auto'];
+const STATUS: Record<string, Step['status']> = { pending: 'pending', in_progress: 'active', completed: 'done' };
 
 /** Settings arguments as the SDK's extraArgs: `--flag value`, `--flag=value` or `--flag`. */
 export function extraArgs(args: string[]): Record<string, string | null> {
@@ -84,6 +85,9 @@ export class Claude {
   /** The chain entry before each prompt, where a rewind resumes; null for the first. */
   private before = new Map<string, string | null>();
   private last: string | null = null;
+  /** Claude's task list by task number, and TaskCreate calls waiting for their number. */
+  private tasks = new Map<string, Step>();
+  private creating = new Map<string, string>();
   private waiting = new Map<string, (a: Answer) => void>();
   /** Content blocks seen per assistant message, so a block matches the stream that drew it. */
   private blocks = new Map<string, number>();
@@ -117,12 +121,32 @@ export class Claude {
         systemPrompt: { type: 'preset', preset: 'claude_code' },
         includePartialMessages: true,
         enableFileCheckpointing: true,
+        // The CLI leaves its task list out of SDK sessions; this puts it back.
+        allowedTools: ['TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet'],
         canUseTool: (tool, input, { signal, suggestions }) => this.ask(tool, input, suggestions, signal),
       },
     });
   }
 
+  get cwd() {
+    return this.o.cwd;
+  }
+
   private live: Out = (ev) => emit(this.id, ev);
+
+  private task(b: Block, out: Out) {
+    const input = b.input ?? {};
+    if (b.name === 'TaskCreate') return void this.creating.set(b.id, String(input.subject ?? ''));
+    if (b.name === 'TodoWrite') {
+      this.tasks = new Map((input.todos ?? []).map((t: Block, i: number) => [String(i), { text: String(t.content), status: STATUS[t.status] ?? 'pending' }]));
+    } else if (b.name === 'TaskUpdate') {
+      const t = this.tasks.get(String(input.taskId));
+      if (!t) return;
+      if (input.status === 'deleted') this.tasks.delete(String(input.taskId));
+      else Object.assign(t, input.subject ? { text: String(input.subject) } : {}, STATUS[input.status] ? { status: STATUS[input.status] } : {});
+    } else return;
+    out({ t: 'plan', steps: [...this.tasks.values()] });
+  }
 
   private async start(o: { cwd: string; resume?: string; effort?: string }) {
     if (o.resume) {
@@ -205,7 +229,10 @@ export class Claude {
           const id = `${mid}:${k}`;
           if (b.type === 'text') out({ t: 'item', item: { id, kind: 'assistant', text: b.text, parent } });
           else if (b.type === 'thinking' && b.thinking) out({ t: 'item', item: { id, kind: 'thinking', text: b.thinking, parent } });
-          else if (b.type === 'tool_use' || b.type === 'server_tool_use') out({ t: 'item', item: { id: b.id, kind: 'tool', tool: b.name, ...summarize(b.name, b.input ?? {}), parent } });
+          else if (b.type === 'tool_use' || b.type === 'server_tool_use') {
+            out({ t: 'item', item: { id: b.id, kind: 'tool', tool: b.name, ...summarize(b.name, b.input ?? {}), parent } });
+            if (!parent) this.task(b, out);
+          }
         }
         if (m.error) out({ t: 'item', item: { id: m.uuid, kind: 'notice', text: `API error: ${m.error}` } });
         this.chain(m.uuid, parent);
@@ -220,7 +247,16 @@ export class Claude {
           return;
         }
         const blocks = content as Block[];
-        for (const b of blocks) if (b.type === 'tool_result') out({ t: 'result', id: b.tool_use_id, output: clip(textOf(b.content)), error: !!b.is_error });
+        for (const b of blocks) {
+          if (b.type !== 'tool_result') continue;
+          out({ t: 'result', id: b.tool_use_id, output: clip(textOf(b.content)), error: !!b.is_error });
+          const subject = this.creating.get(b.tool_use_id);
+          const n = subject !== undefined && /Task #(\d+) created/.exec(textOf(b.content));
+          if (n) {
+            this.tasks.set(n[1], { text: subject, status: 'pending' });
+            out({ t: 'plan', steps: [...this.tasks.values()] });
+          }
+        }
         // A prompt with pictures: its text blocks and image blocks are one message.
         const images = blocks.filter((b) => b.type === 'image' && b.source?.type === 'base64').map((b) => `data:${b.source.media_type};base64,${b.source.data}`);
         const text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n');

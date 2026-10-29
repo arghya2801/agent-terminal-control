@@ -8,7 +8,7 @@
   import Icon from '../lib/Icon.svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import ConfirmDialog from '../lib/ConfirmDialog.svelte';
-  import { agents, answer, catalog, interrupt, rewind, send, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
+  import { agents, answer, catalog, interrupt, listFiles, rewind, send, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
   import { activity, blocks, summarize, type Block } from './work';
   import { families, keptEffort, versionOf } from './models';
   import { getActiveKey, queuePrompt } from '../terminal/manager';
@@ -154,6 +154,10 @@
   });
 
   let draft = $state('');
+  const commands = $derived([...(s?.commands ?? []), ...(s?.files ?? []).map((f) => ({ name: `@${f}`, description: '' }))]);
+  const plan = $derived(s?.plan ?? []);
+  const doneSteps = $derived(plan.filter((p) => p.status === 'done').length);
+  let planOpen = $state(true);
   let rewinding = $state<ChatItem | null>(null);
   // Codex commands such as /undo start no turn, so there is nothing to go back to.
   const canRewind = (p: ChatItem) => !!s && !s.working && !s.exited && (provider === 'claude' || !!p.turn);
@@ -290,6 +294,16 @@
       {/key}
       {#if s.requests.length > 1}<p class="aside">{s.requests.length - 1} more waiting</p>{/if}
     {/if}
+    {#if doneSteps < plan.length}
+      <div class="tasks">
+        <button class="link" aria-expanded={planOpen} onclick={() => (planOpen = !planOpen)}>{doneSteps} of {plan.length} {provider === 'claude' ? 'tasks' : 'steps'} done <span aria-hidden="true">{planOpen ? '▾' : '▸'}</span></button>
+        {#if planOpen}
+          <ul>
+            {#each plan as step, i (i)}<li class={step.status}><span class="box" aria-hidden="true">{step.status === 'done' ? '✓' : step.status === 'active' ? '●' : '○'}</span>{step.text}</li>{/each}
+          </ul>
+        {/if}
+      </div>
+    {/if}
     {#if queued}
       <p class="aside queued">
         <span>Sends when {name} finishes: {queued}</span>
@@ -300,8 +314,9 @@
       bind:text={draft}
       {name}
       {history}
-      sigils={provider === 'claude' ? ['/'] : ['/', '$']}
-      commands={s?.commands ?? []}
+      sigils={provider === 'claude' ? ['/', '@'] : ['/', '$', '@']}
+      {commands}
+      onFiles={() => listFiles(tabKey)}
       working={!!s?.working}
       disabled={!s || s.exited}
       onSend={(text, images) => send(tabKey, text, images)}
@@ -640,6 +655,45 @@
     margin: 0 4px;
     font-size: 12px;
     color: var(--fg-dim);
+  }
+  .tasks {
+    margin: 0 4px;
+    font-size: 12px;
+  }
+  .tasks .link {
+    color: var(--fg-dim);
+  }
+  .tasks ul {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+    display: grid;
+    gap: 2px;
+    max-height: 9.5em;
+    overflow-y: auto;
+  }
+  .tasks li {
+    display: flex;
+    gap: 8px;
+    color: var(--fg-dim);
+  }
+  .tasks li.active {
+    color: var(--fg-bright);
+  }
+  .tasks li.done {
+    color: var(--fg-faint);
+    text-decoration: line-through;
+  }
+  .tasks .box {
+    flex: none;
+    width: 1em;
+    text-align: center;
+  }
+  .tasks li.active .box {
+    color: var(--accent);
+  }
+  .tasks li.done .box {
+    color: var(--ok);
   }
   .queued span {
     flex: 1;

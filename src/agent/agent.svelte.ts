@@ -129,6 +129,7 @@ export const answer = (key: TabKey, request: string, a: Answer) => op(key, { op:
 export const setMode = (key: TabKey, mode: string) => op(key, { op: 'mode', mode });
 export const setModel = (key: TabKey, model: string) => op(key, { op: 'model', model });
 export const setEffort = (key: TabKey, effort: string | null) => op(key, { op: 'effort', effort });
+export const listFiles = (key: TabKey) => op(key, { op: 'files' });
 /** Back to before `prompt`: Claude by its id, Codex by the turn it started. */
 export const rewind = (key: TabKey, prompt: ChatItem) => op(key, { op: 'rewind', to: prompt.turn ?? prompt.id });
 

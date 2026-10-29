@@ -278,6 +278,17 @@ Things that cost time once. Add to this list.
   few hundred bytes of metadata to its transcript, as the TUI does.
 - Two app-servers cannot hold one Codex thread: the second gets "already has an active
   writer". Stopping the page's browser does not end its sidecar; the next page load does.
+- An SDK session has no task list: the CLI drops TaskCreate and TaskUpdate (and TodoWrite)
+  from it. Naming them in `allowedTools` adds them back. Bare names there skip
+  `canUseTool`, which is fine for tools that only keep a list.
+- A Claude rewind needs `enableFileCheckpointing`. `rewindFiles` restores the files, but
+  only a dry run lists them. The conversation then resumes at the chain entry before the
+  prompt (`resumeSessionAt`). Each prompt the sidecar sends carries its own `uuid`, so it
+  can be found again.
+- Codex's `thread/revert` changes only the history, never files, and its response comes
+  back with no turns. Read the thread with `includeTurns` afterwards.
+- Codex's app-server sessions don't offer `update_plan`, so `turn/plan/updated` may never
+  arrive.
 - Codex's first shell command can take half a minute when `pwsh` loads a heavy profile.
   The tool line shows it running; nothing is stuck.
 - The first `npm run play` after a lockfile change makes Vite re-optimize dependencies,

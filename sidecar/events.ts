@@ -1,6 +1,31 @@
+import { execFile } from 'node:child_process';
+import { readdir } from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
+import { join, relative } from 'node:path';
+import { promisify } from 'node:util';
 import type { AgentEvent } from './protocol.ts';
 
 /** One line to Go, which routes it to the session's channel. */
+const exec = promisify(execFile);
+
+// ponytail: capped list, filtered in the box; ask the CLI's own file search if repos outgrow it.
+const MAX_FILES = 20000;
+/** Files under `cwd` for the `@` menu: git's view of the repo (tracked and new, nothing
+ *  ignored), or a walk that skips dependency and VCS folders outside one. */
+export async function listFiles(cwd: string): Promise<string[]> {
+  try {
+    const { stdout } = await exec('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { cwd, maxBuffer: 64 << 20, windowsHide: true });
+    return stdout.split('\n').filter(Boolean).slice(0, MAX_FILES);
+  } catch {
+    const all = (await readdir(cwd, { recursive: true, withFileTypes: true })) as Dirent[];
+    return all
+      .filter((d) => d.isFile())
+      .map((d) => relative(cwd, join(d.parentPath, d.name)).replaceAll('\\', '/'))
+      .filter((p) => !/(^|\/)(node_modules|\.git|\.venv|target|dist)\//.test(p))
+      .slice(0, MAX_FILES);
+  }
+}
+
 export function emit(id: string, ev: AgentEvent) {
   process.stdout.write(JSON.stringify({ id, ev }) + '\n');
 }
@@ -75,6 +100,10 @@ export function summarize(tool: string, input: Record<string, unknown>): { input
     }
     case 'ExitPlanMode':
       return { input: 'Plan', body: clip(str(input.plan), 64 * 1024) };
+    case 'TaskCreate':
+      return { input: str(input.subject), body: str(input.description) };
+    case 'TaskUpdate':
+      return { input: [`#${str(input.taskId)}`, str(input.status).replace('_', ' '), str(input.subject)].filter((s) => s.trim()).join(' '), body: '' };
     case 'TodoWrite': {
       const todos = Array.isArray(input.todos) ? input.todos : [];
       const mark = (s: string) => (s === 'completed' ? '[x]' : s === 'in_progress' ? '[~]' : '[ ]');
