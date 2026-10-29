@@ -19,6 +19,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Agent tabs use far less memory. A resumed Claude or Codex tab shows its conversation without starting the CLI, which starts when you type or send (a Claude CLI holds about 370 MB). Codex tabs read through one shared app-server instead of one each. A long reply takes less CPU while it streams. The notes editor loads the first time the notes pane opens, and the header stops re-reading costs while its agent is idle.
 
 - Choose chat or terminal for agent tabs: Settings > General > "Agent tabs open as" picks Chat (the default) or Terminal, the CLI's own screen. Ctrl+` moves any agent tab between the two on the same session, and a terminal agent tab has a chat button in its header. Restored tabs come back the way you left them.
+- Search settings: a box at the top of Settings filters it as you type. It matches loosely ("fnt sz" finds Font size) and also searches hints and section names; Esc clears it.
 
 ### Fixed
 - An approved plan in a Claude tab leaves plan mode, so the mode chip no longer stays on Plan.

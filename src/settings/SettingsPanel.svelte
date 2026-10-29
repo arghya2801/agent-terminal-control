@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { sessionKey } from '../lib/agents';
+  import { fuzzyScore } from '../lib/fuzzy';
   import Page from '../lib/Page.svelte';
   import SectionNav from '../lib/SectionNav.svelte';
   import { openSettingsFile } from '../lib/ipc';
@@ -134,6 +135,50 @@
     draft.projects[field] = map;
   }
 
+  /**
+   * The search box. A row shows when its label fuzzily matches, or when its label, hint and
+   * options hold every word typed; a section with no row left hides its heading. Rows are a
+   * grid's cells, two per row (three in Agents, under a header row of its own).
+   */
+  let query = $state('');
+  let search = $state<HTMLInputElement>();
+  let body = $state<HTMLElement>();
+  let matches = $state(true);
+  onMount(() => search?.focus());
+  $effect(() => {
+    const q = query.trim().toLowerCase();
+    if (!body || !draft) return;
+    const words = q.split(/\s+/);
+    const show = (el: Element, on: boolean) => ((el as HTMLElement).style.display = on ? '' : 'none');
+    let any = false;
+    for (const h of body.querySelectorAll('h2')) {
+      let found = false;
+      for (let el = h.nextElementSibling; el && el.tagName !== 'H2'; el = el.nextElementSibling) {
+        if (!el.matches('.grid, .agents')) {
+          show(el, !q);
+          continue;
+        }
+        const cols = el.matches('.agents') ? 3 : 2;
+        const cells = [...el.children];
+        const first = el.matches('.agents') ? cols : 0;
+        let rows = 0;
+        for (let i = first; i < cells.length; i += cols) {
+          const row = cells.slice(i, i + cols);
+          const text = `${h.textContent} ${row.map((r) => r.textContent).join(' ')}`.toLowerCase();
+          const hit = !q || fuzzyScore(row[0].textContent ?? '', q) !== null || words.every((w) => text.includes(w));
+          for (const cell of row) show(cell, hit);
+          if (hit) rows++;
+        }
+        for (const cell of cells.slice(0, first)) show(cell, rows > 0);
+        show(el, rows > 0);
+        found ||= rows > 0;
+      }
+      show(h, found);
+      any ||= found;
+    }
+    matches = any;
+  });
+
   function sessionLabel(id: string): string {
     const shortId = id.slice(id.indexOf(':') + 1, id.indexOf(':') + 9);
     for (const p of appState.index.projects) {
@@ -146,11 +191,22 @@
 <Page title="Settings" modal {onClose}>
   {#snippet actions()}
     {#if saved}<span class="muted saved">Saved</span>{/if}
+    <input
+      class="search"
+      type="search"
+      placeholder="Search settings"
+      aria-label="Search settings"
+      bind:this={search}
+      bind:value={query}
+      onkeydown={(e) => e.key === 'Escape' && query && (e.stopPropagation(), (query = ''))}
+    />
     <button class="btn" onclick={() => openSettingsFile()}>Open settings.json</button>
   {/snippet}
   {#if !draft}
     <p class="err">Settings could not be loaded.</p>
   {:else}
+    {#if query.trim() && !matches}<p class="muted none">No settings match “{query.trim()}”.</p>{/if}
+    <div class="body" bind:this={body}>
     <SectionNav sections={SECTIONS}>
       <h2 id="s-general">General</h2>
       <div class="grid">
@@ -406,6 +462,7 @@
       </div>
 
     </SectionNav>
+    </div>
   {/if}
 </Page>
 
@@ -431,6 +488,33 @@
   }
   .saved {
     animation: atc-fade var(--enter) var(--ease-out);
+  }
+  /* The search wraps the page without boxing it in. */
+  .body {
+    display: contents;
+  }
+  .search {
+    width: 220px;
+    height: 28px;
+    box-sizing: border-box;
+    padding: 0 10px;
+    font: inherit;
+    font-size: 13px;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+  }
+  .search::placeholder {
+    color: var(--fg-faint);
+  }
+  .search:focus-visible {
+    outline: none;
+    border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+  }
+  .none {
+    margin: 24px 0;
+    text-align: center;
   }
   textarea {
     min-height: 52px;
