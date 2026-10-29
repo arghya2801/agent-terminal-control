@@ -234,7 +234,7 @@
                 {#if p.images?.length}
                   <div class="pics">{#each p.images as src, i (i)}<img {src} alt="Sent with the message" />{/each}</div>
                 {/if}
-                {#if p.text}<div>{p.text}</div>{/if}
+                {#if p.text}<div class="said">{p.text}</div>{/if}
               </div>
               {#if canRewind(p)}<button class="copy" onclick={() => (rewinding = p)} title="Go back to before this message">Rewind</button>{/if}
             </div>
@@ -416,8 +416,11 @@
     background: var(--bg-surface);
     color: var(--fg-bright);
     font-size: 14px;
-    white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+  /* On the text alone: on the box, the template's own whitespace shows as a blank line. */
+  .said {
+    white-space: pre-wrap;
   }
 
   .pics {
