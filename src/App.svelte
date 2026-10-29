@@ -697,7 +697,7 @@
     if (appState.settings?.ui.notifications === false) return;
     try {
       let granted = await isPermissionGranted();
-      if (!granted) granted = (await requestPermission()) === 'granted';
+      if (!granted) granted = await requestPermission();
       if (!granted) return;
       sendNotification({ title, body: attentionBody(provider, reason) });
     } catch (e) {

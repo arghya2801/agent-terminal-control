@@ -734,9 +734,6 @@ export function isSplit(): boolean {
  * resized, so no agent redraws or rewraps, and leaving restores them exactly.
  */
 let mosaic = false;
-export function isMosaic(): boolean {
-  return mosaic;
-}
 export function toggleMosaic() {
   mosaic = !mosaic && tabs.size > 1;
   if (mosaic) layout();

@@ -280,7 +280,6 @@ func (a *App) session(id string) (*pty.Session, error) {
 	return p, nil
 }
 
-// Invoke is the single reviewed desktop command boundary used by the typed frontend.
 // The frontend's command surface. Wails binds every exported method on App and generates
 // typed TypeScript for it in wailsjs/go/main, so a wrong name or argument fails the build.
 

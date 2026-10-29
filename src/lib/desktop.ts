@@ -47,7 +47,7 @@ export function save(options: { defaultPath: string; filters: { name: string; ex
   return App.SaveDialog(options.defaultPath, options.filters);
 }
 export function isPermissionGranted(): Promise<boolean> { return App.NotificationPermission(); }
-export async function requestPermission(): Promise<string> { return await App.NotificationRequest() ? 'granted' : 'denied'; }
+export function requestPermission(): Promise<boolean> { return App.NotificationRequest(); }
 export function sendNotification(options: { title: string; body: string }): void { void App.NotificationSend(options.title, options.body).catch(console.warn); }
 
 /** A full page reload replaces its shells; HMR within the same document keeps them. */
