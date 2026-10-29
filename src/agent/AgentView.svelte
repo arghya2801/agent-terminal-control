@@ -7,7 +7,8 @@
   import ChipMenu, { type MenuSection } from './ChipMenu.svelte';
   import Icon from '../lib/Icon.svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
-  import { agents, answer, catalog, interrupt, send, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
+  import ConfirmDialog from '../lib/ConfirmDialog.svelte';
+  import { agents, answer, catalog, interrupt, rewind, send, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
   import { activity, blocks, summarize, type Block } from './work';
   import { families, keptEffort, versionOf } from './models';
   import { getActiveKey, queuePrompt } from '../terminal/manager';
@@ -152,6 +153,11 @@
     if (getActiveKey() === tabKey) (list?.parentElement?.querySelector('textarea') as HTMLTextAreaElement | null)?.focus();
   });
 
+  let draft = $state('');
+  let rewinding = $state<ChatItem | null>(null);
+  // Codex commands such as /undo start no turn, so there is nothing to go back to.
+  const canRewind = (p: ChatItem) => !!s && !s.working && !s.exited && (provider === 'claude' || !!p.turn);
+
   let copied = $state<string | null>(null);
   async function copy(text: string, id: string) {
     await navigator.clipboard.writeText(text).catch(() => {});
@@ -159,6 +165,26 @@
     setTimeout(() => copied === id && (copied = null), 1500);
   }
 </script>
+
+{#if rewinding}
+  {@const p = rewinding}
+  <ConfirmDialog
+    confirmLabel="Rewind"
+    onConfirm={() => {
+      rewind(tabKey, p);
+      draft = p.text ?? '';
+      rewinding = null;
+    }}
+    onCancel={() => (rewinding = null)}
+  >
+    {#if provider === 'claude'}
+      Rewind to before this message? Files Claude changed since then go back to how they were, and the conversation after it is dropped.
+    {:else}
+      Rewind to before this message? The conversation after it is dropped. Files stay as they are, since Codex can't undo its edits.
+    {/if}
+    The message goes back in the box.
+  </ConfirmDialog>
+{/if}
 
 {#snippet claudeIcon()}<ProviderIcon provider="claude" />{/snippet}
 {#snippet codexIcon()}<ProviderIcon provider="codex" />{/snippet}
@@ -198,11 +224,15 @@
         {@const live = i === turns.length - 1 && !!s?.working}
         <section class="turn">
           {#if turn.prompt}
-            <div class="prompt">
-              {#if turn.prompt.images?.length}
-                <div class="pics">{#each turn.prompt.images as src, i (i)}<img {src} alt="Sent with the message" />{/each}</div>
-              {/if}
-              {#if turn.prompt.text}<div>{turn.prompt.text}</div>{/if}
+            {@const p = turn.prompt}
+            <div class="ask">
+              <div class="prompt">
+                {#if p.images?.length}
+                  <div class="pics">{#each p.images as src, i (i)}<img {src} alt="Sent with the message" />{/each}</div>
+                {/if}
+                {#if p.text}<div>{p.text}</div>{/if}
+              </div>
+              {#if canRewind(p)}<button class="copy" onclick={() => (rewinding = p)} title="Go back to before this message">Rewind</button>{/if}
             </div>
           {/if}
           {#if turn.steps.length || turn.end || live}
@@ -267,6 +297,7 @@
       </p>
     {/if}
     <Composer
+      bind:text={draft}
       {name}
       {history}
       sigils={provider === 'claude' ? ['/'] : ['/', '$']}
@@ -564,6 +595,17 @@
     cursor: pointer;
     opacity: 0;
   }
+  .ask {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .ask .copy {
+    position: static;
+    margin-top: 8px;
+    flex: none;
+  }
+  .ask:hover .copy,
   .step.text:hover .copy,
   .copy:focus-visible {
     opacity: 1;

@@ -379,9 +379,16 @@ export class Codex {
     }
   }
 
-  /** Drop `turn` and every turn after it, then show the thread as it now stands. */
+  rewind(turn: string) {
+    return this.revert(turn).catch((e) => this.live({ t: 'error', message: `Can't rewind: ${e?.message ?? e}` }));
+  }
+
+  /** Drop `turn` and every turn after it, then show the thread as it now stands. Files stay
+   *  as they are: app-server's revert changes only the history. */
   async revert(turn: string) {
-    const r = await this.call('thread/revert', { threadId: this.thread, beforeTurnId: turn });
+    await this.call('thread/revert', { threadId: this.thread, beforeTurnId: turn });
+    // The revert's thread comes back without turns.
+    const r = await this.call('thread/read', { threadId: this.thread, includeTurns: true });
     this.turns = (r.thread?.turns ?? []).map((t: Obj) => t.id);
     this.live({ t: 'clear' });
     this.live({ t: 'history', events: historyOf(r.thread ?? {}) });

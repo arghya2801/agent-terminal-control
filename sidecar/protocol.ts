@@ -88,6 +88,8 @@ export type AgentEvent =
   | { t: 'history'; events: AgentEvent[] }
   /** The conversation was cleared or rewritten; history follows if any remains. */
   | { t: 'clear' }
+  /** Claude: the conversation went back to before item `to`, which goes with all after it. */
+  | { t: 'rewound'; to: string }
   | { t: 'item'; item: ChatItem }
   | { t: 'delta'; id: string; kind: 'assistant' | 'thinking'; text: string; parent?: string | null }
   | { t: 'output'; id: string; text: string }
@@ -114,4 +116,6 @@ export type AgentOp =
   | { op: 'answer'; id: string; request: string; answer: Answer }
   | { op: 'mode'; id: string; mode: string }
   | { op: 'model'; id: string; model: string }
+  /** Go back to before a prompt: Claude's item id, or Codex's turn id. */
+  | { op: 'rewind'; id: string; to: string }
   | { op: 'close'; id: string };

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { relative } from 'node:path';
 import { getSessionMessages, query, type ModelInfo, type PermissionResult, type PermissionUpdate, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { clip, emit, Inbox, log, summarize, textOf } from './events.ts';
 import type { AgentEvent, AgentRequest, Answer, Image, Model } from './protocol.ts';
@@ -75,8 +77,13 @@ function promptOf(text: string): AgentEvent | null {
  *  and session files as in a terminal, without the TUI. */
 export class Claude {
   private id: string;
-  private inbox = new Inbox<SDKUserMessage>();
+  private o: Launch & { model?: string; effort?: string };
+  private inbox!: Inbox<SDKUserMessage>;
   private q: Query;
+  private session = '';
+  /** The chain entry before each prompt, where a rewind resumes; null for the first. */
+  private before = new Map<string, string | null>();
+  private last: string | null = null;
   private waiting = new Map<string, (a: Answer) => void>();
   /** Content blocks seen per assistant message, so a block matches the stream that drew it. */
   private blocks = new Map<string, number>();
@@ -90,19 +97,29 @@ export class Claude {
 
   constructor(id: string, o: Launch & { resume?: string; model?: string; effort?: string }) {
     this.id = id;
-    this.q = query({
+    this.o = { ...o };
+    this.q = this.open(o.resume);
+    void this.start(o);
+  }
+
+  /** A query on a fresh inbox. A rewind opens a new one at `at` and keeps the mode. */
+  private open(resume?: string, at?: string, mode?: string) {
+    this.inbox = new Inbox<SDKUserMessage>();
+    return query({
       prompt: this.inbox,
       options: {
-        ...launchOptions(id, o),
-        resume: o.resume || undefined,
-        model: o.model || undefined,
-        effort: (o.effort || undefined) as never,
+        ...launchOptions(this.id, this.o),
+        resume: resume || undefined,
+        resumeSessionAt: at,
+        permissionMode: mode as never,
+        model: this.o.model || undefined,
+        effort: (this.o.effort || undefined) as never,
         systemPrompt: { type: 'preset', preset: 'claude_code' },
         includePartialMessages: true,
+        enableFileCheckpointing: true,
         canUseTool: (tool, input, { signal, suggestions }) => this.ask(tool, input, suggestions, signal),
       },
     });
-    void this.start(o);
   }
 
   private live: Out = (ev) => emit(this.id, ev);
@@ -132,12 +149,23 @@ export class Claude {
       )
       // A session that fails to start says so in its exit.
       .catch((e) => log(this.id, 'initialize:', String(e?.message ?? e)));
+    await this.run(this.q);
+  }
+
+  /** Only the current query speaks: one a rewind replaced ends quietly. */
+  private async run(q: Query) {
     try {
-      for await (const m of this.q) this.handle(m, this.live);
-      this.live({ t: 'exit' });
+      for await (const m of q) if (q === this.q) this.handle(m, this.live);
+      if (q === this.q) this.live({ t: 'exit' });
     } catch (e) {
-      this.live({ t: 'exit', message: this.closing ? undefined : String((e as Error)?.message ?? e) });
+      if (q === this.q) this.live({ t: 'exit', message: this.closing ? undefined : String((e as Error)?.message ?? e) });
     }
+  }
+
+  private chain(uuid: string | undefined, parent: string | null, prompt = false) {
+    if (!uuid || parent) return;
+    if (prompt) this.before.set(uuid, this.last);
+    this.last = uuid;
   }
 
   private handle(m: SDKMessage, out: Out) {
@@ -145,6 +173,7 @@ export class Claude {
     switch (m.type) {
       case 'system':
         if (m.subtype === 'init') {
+          this.session = m.session_id;
           out({ t: 'session', id: m.session_id });
           out({ t: 'model', model: m.model });
           this.current = m.permissionMode;
@@ -179,6 +208,7 @@ export class Claude {
           else if (b.type === 'tool_use' || b.type === 'server_tool_use') out({ t: 'item', item: { id: b.id, kind: 'tool', tool: b.name, ...summarize(b.name, b.input ?? {}), parent } });
         }
         if (m.error) out({ t: 'item', item: { id: m.uuid, kind: 'notice', text: `API error: ${m.error}` } });
+        this.chain(m.uuid, parent);
         return;
       }
       case 'user': {
@@ -186,6 +216,7 @@ export class Claude {
         if (typeof content === 'string') {
           const ev = promptOf(content);
           if (ev?.t === 'item') out({ t: 'item', item: { ...ev.item, id: m.uuid ?? `u${++this.n}`, parent } });
+          this.chain(m.uuid, parent, ev?.t === 'item' && ev.item.kind === 'user');
           return;
         }
         const blocks = content as Block[];
@@ -195,11 +226,13 @@ export class Claude {
         const text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n');
         const ev = text ? promptOf(text) : images.length ? { t: 'item' as const, item: { id: '', kind: 'user' as const, text: '' } } : null;
         if (ev?.t === 'item') out({ t: 'item', item: { ...ev.item, id: m.uuid ?? `u${++this.n}`, parent, ...(images.length && ev.item.kind === 'user' ? { images } : {}) } });
+        this.chain(m.uuid, parent, ev?.t === 'item' && ev.item.kind === 'user');
         return;
       }
       case 'result':
         out({ t: 'working', on: false });
-        if (m.num_turns) out({ t: 'item', item: { id: m.uuid, kind: 'turn', durationMs: m.duration_ms, costUsd: m.total_cost_usd } });        if (m.subtype !== 'success') out({ t: 'item', item: { id: `${m.uuid}:e`, kind: 'notice', text: m.errors.join('\n') || m.subtype } });
+        if (m.num_turns) out({ t: 'item', item: { id: m.uuid, kind: 'turn', durationMs: m.duration_ms, costUsd: m.total_cost_usd } });
+        if (m.subtype !== 'success') out({ t: 'item', item: { id: `${m.uuid}:e`, kind: 'notice', text: m.errors.join('\n') || m.subtype } });
         return;
       case 'tool_progress':
         out({ t: 'progress', id: m.tool_use_id, seconds: m.elapsed_time_seconds });
@@ -243,12 +276,41 @@ export class Claude {
     // `/clear` starts the CLI on a fresh conversation; the view starts over with it.
     if (text.trim() === '/clear') this.live({ t: 'clear' });
     const shown = images.map((i) => `data:${i.mediaType};base64,${i.data}`);
-    this.live({ t: 'item', item: { id: `you${++this.n}`, kind: 'user', text, ...(shown.length ? { images: shown } : {}) } });
+    const uuid = randomUUID();
+    this.chain(uuid, null, true);
+    this.live({ t: 'item', item: { id: uuid, kind: 'user', text, ...(shown.length ? { images: shown } : {}) } });
     this.live({ t: 'working', on: true });
     const content = images.length
       ? [...images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mediaType, data: i.data } })), ...(text ? [{ type: 'text', text }] : [])]
       : text;
-    this.inbox.push({ type: 'user', message: { role: 'user', content }, parent_tool_use_id: null, session_id: '' } as SDKUserMessage);
+    this.inbox.push({ type: 'user', uuid, message: { role: 'user', content }, parent_tool_use_id: null, session_id: '' } as SDKUserMessage);
+  }
+
+  /** Files go back to how they were before prompt `to`, as Esc Esc does, then the session
+   *  resumes at the entry before it, so it and everything after drop out. */
+  async rewind(to: string) {
+    if (!this.before.has(to)) return this.live({ t: 'error', message: "Can't rewind to that message" });
+    let files = '';
+    try {
+      // Only a dry run lists the files.
+      const preview = await this.q.rewindFiles(to, { dryRun: true });
+      const r = preview.canRewind ? await this.q.rewindFiles(to) : preview;
+      if (r.canRewind) files = (preview.filesChanged ?? []).map((f) => relative(this.o.cwd, f) || f).join(', ');
+      else log(this.id, 'rewind files:', r.error);
+    } catch (e) {
+      log(this.id, 'rewind files:', String(e));
+    }
+    const at = this.before.get(to) ?? undefined;
+    const old = this.q;
+    const oldInbox = this.inbox;
+    this.q = this.open(at && this.session, at, this.current);
+    for (const resolve of this.waiting.values()) resolve({ allow: false, message: 'Rewound' });
+    oldInbox.end();
+    old.close();
+    void this.run(this.q);
+    this.last = at ?? null;
+    this.live({ t: 'rewound', to });
+    this.live({ t: 'item', item: { id: `rw${++this.n}`, kind: 'notice', text: files ? `Rewound. Restored ${files}` : 'Rewound. No files had changed since then' } });
   }
 
   answer(request: string, a: Answer) {
@@ -271,14 +333,14 @@ export class Claude {
   effort(effort: string | null) {
     void this.q
       .applyFlagSettings({ effortLevel: effort as never })
-      .then(() => this.live({ t: 'effort', effort }))
+      .then(() => ((this.o.effort = effort ?? undefined), this.live({ t: 'effort', effort })))
       .catch((e) => this.live({ t: 'error', message: `Can't set effort to ${effort}: ${e?.message ?? e}` }));
   }
 
   model(model: string) {
     void this.q
       .setModel(model)
-      .then(() => this.live({ t: 'model', model }))
+      .then(() => ((this.o.model = model), this.live({ t: 'model', model })))
       .catch((e) => this.live({ t: 'error', message: `Can't switch to ${model}: ${e?.message ?? e}` }));
   }
 

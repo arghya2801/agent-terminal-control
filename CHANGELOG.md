@@ -12,6 +12,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - An effort picker beside the model in agent tabs, for models that take one: Claude changes it mid-session, Codex from the next message. A new agent tab's model picker lists Claude's and Codex's models together; picking the other provider's moves the tab to it, until the first message is sent.
 - Codex tabs take `/compact`, `/review`, `/undo`, `/new` and `/rename`, and the mode chip picks Read only, Workspace or Full access for the next turns. When Codex's own reviewer approves something (`approvals_reviewer = "auto_review"`), the chat says what it decided.
 - Paste or drop images into an agent tab's message box, for Claude and Codex: PNG, JPEG, GIF or WebP, up to 5 MB each. They show above the prompt they went with.
+- Rewind an agent tab: hover one of your messages and choose Rewind. The conversation goes back to before it and the message returns to the box. In Claude tabs, files Claude changed since then go back too, as Esc Esc does in the CLI. Codex can't undo its edits, so its files stay as they are.
 
 ### Fixed
 - An approved plan in a Claude tab leaves plan mode, so the mode chip no longer stays on Plan.

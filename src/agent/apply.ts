@@ -52,6 +52,12 @@ export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
     case 'clear':
       Object.assign(s, { items: [], requests: [] });
       return;
+    case 'rewound': {
+      const at = s.items.findIndex((i) => i.id === ev.to);
+      if (at >= 0) s.items.splice(at);
+      s.requests = [];
+      return;
+    }
     case 'item': {
       const had = find(ev.item.id);
       if (had) Object.assign(had, ev.item);

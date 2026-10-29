@@ -6,7 +6,7 @@
 import { agentCatalog, agentClose, agentOpen, agentSend, Channel } from '../lib/ipc';
 import { countOutput, getTab, onClosed, queuePrompt, setAgentHooks, setAgentState } from '../terminal/manager';
 import { apply, emptyState, peek, type AgentState } from './apply';
-import type { AgentEvent, Answer, Image, Model } from '../../sidecar/protocol';
+import type { AgentEvent, Answer, ChatItem, Image, Model } from '../../sidecar/protocol';
 import type { AgentProvider, TabKey } from '../types';
 
 /** Each tab's session. `fresh`: nothing sent and nothing resumed, so the tab can still
@@ -129,6 +129,8 @@ export const answer = (key: TabKey, request: string, a: Answer) => op(key, { op:
 export const setMode = (key: TabKey, mode: string) => op(key, { op: 'mode', mode });
 export const setModel = (key: TabKey, model: string) => op(key, { op: 'model', model });
 export const setEffort = (key: TabKey, effort: string | null) => op(key, { op: 'effort', effort });
+/** Back to before `prompt`: Claude by its id, Codex by the turn it started. */
+export const rewind = (key: TabKey, prompt: ChatItem) => op(key, { op: 'rewind', to: prompt.turn ?? prompt.id });
 
 /** End a tab's session; it stays on disk to resume. */
 function end(key: TabKey) {

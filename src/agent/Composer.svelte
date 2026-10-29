@@ -3,7 +3,9 @@
   import { matchCommands, typedCommand, type Sigil } from './commands';
   import type { Command, Image } from '../../sidecar/protocol';
 
-  let { name, history, sigils, commands, working, disabled, onSend, onStop, toolbar }: {
+  let { text = $bindable(''), name, history, sigils, commands, working, disabled, onSend, onStop, toolbar }: {
+    /** What is in the box; a rewind puts its prompt back here. */
+    text?: string;
     name: string;
     /** Earlier prompts, oldest first: Up and Down walk them from an empty box. */
     history: string[];
@@ -18,7 +20,6 @@
     toolbar?: Snippet;
   } = $props();
 
-  let text = $state('');
   let caret = $state(0);
   let box = $state<HTMLTextAreaElement>();
   let pick = $state(0);

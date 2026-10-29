@@ -56,4 +56,13 @@ describe('apply', () => {
     apply(s, { t: 'exit', message: 'Claude exited' });
     expect([s.exited, s.requests.length, s.items.at(-1)?.text]).toEqual([true, 0, 'Claude exited']);
   });
+
+  it('drops a rewound prompt and everything after it', () => {
+    const s = emptyState();
+    for (const ev of turn) apply(s, ev);
+    apply(s, { t: 'item', item: { id: 'you2', kind: 'user', text: 'again' } });
+    apply(s, { t: 'item', item: { id: 'm3:0', kind: 'assistant', text: 'v24' } });
+    apply(s, { t: 'rewound', to: 'you2' });
+    expect(s.items.at(-1)?.id).toBe('r1');
+  });
 });

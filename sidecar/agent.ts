@@ -46,6 +46,8 @@ function run(op: AgentOp) {
       return s.model(op.model);
     case 'effort':
       return s.effort(op.effort);
+    case 'rewind':
+      return void s.rewind(op.to);
     case 'close':
       sessions.delete(op.id);
       return s.close();
