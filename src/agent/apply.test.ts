@@ -57,6 +57,14 @@ describe('apply', () => {
     expect([s.exited, s.requests.length, s.items.at(-1)?.text]).toEqual([true, 0, 'Claude exited']);
   });
 
+  it('marks a resumed session dormant until its CLI is ready', () => {
+    const s = emptyState();
+    apply(s, { t: 'dormant' });
+    expect([s.dormant, s.ready]).toEqual([true, false]);
+    apply(s, { t: 'ready', commands: [], models: [], modes: [] });
+    expect([s.dormant, s.ready]).toEqual([false, true]);
+  });
+
   it('drops a rewound prompt and everything after it', () => {
     const s = emptyState();
     for (const ev of turn) apply(s, ev);

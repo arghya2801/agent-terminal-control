@@ -8,7 +8,7 @@
   import Icon from '../lib/Icon.svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import ConfirmDialog from '../lib/ConfirmDialog.svelte';
-  import { agents, answer, catalog, interrupt, listFiles, resume, rewind, send, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
+  import { agents, answer, catalog, interrupt, listFiles, resume, rewind, send, wake, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
   import { activity, blocks, summarize, thoughtLine, type Block } from './work';
   import { families, keptEffort, versionOf } from './models';
   import { getActiveKey, queuePrompt } from '../terminal/manager';
@@ -132,7 +132,7 @@
   };
   const cost = (usd?: number) => (usd ? `$${usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)}` : '');
   const status = $derived(
-    !s || s.exited ? '' : request ? 'Waiting on you' : s.working || s.ready ? '' : 'Starting',
+    !s || s.exited ? '' : request ? 'Waiting on you' : s.working || s.ready || s.dormant ? '' : 'Starting',
   );
 
   // Follow the end unless the user has scrolled up. On any resize, not on new items: text
@@ -215,13 +215,13 @@
 >
   <div class="list" bind:this={list} onscroll={(e) => (stuck = e.currentTarget.scrollHeight - e.currentTarget.scrollTop - e.currentTarget.clientHeight < 40)}>
     <div class="column">
-      {#if s?.ready && !turns.length}
+      {#if (s?.ready || s?.dormant) && !turns.length}
         <div class="empty">
           <span class="mark"><ProviderIcon {provider} /></span>
           <p class="lead">Ask {name} anything</p>
           <p>Type <kbd>/</kbd> for commands{#if provider === 'codex'}, <kbd>$</kbd> for skills{:else} and skills{/if}. <kbd>Enter</kbd> sends, <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line.</p>
         </div>
-      {:else if !s?.ready && !s?.exited && !turns.length}
+      {:else if !s?.ready && !s?.dormant && !s?.exited && !turns.length}
         <div class="empty"><p class="lead">Starting {name}</p></div>
       {/if}
 
@@ -299,9 +299,9 @@
               {/if}
               {#if !live && (turn.end || reply)}
                 <div class="end" class:bare={!turn.end?.durationMs && !turn.end?.costUsd}>
-                  {#if reply}<button class="act" onclick={() => copy(reply, `r${i}`)} title="Copy the reply as Markdown"><Icon name={copied === `r${i}` ? 'check' : 'copy'} size={13} /><span>{copied === `r${i}` ? 'Copied' : 'Copy'}</span></button>{/if}
                   {#if turn.end?.durationMs}<span>Worked for {clock(turn.end.durationMs)}</span>{/if}
                   {#if turn.end?.costUsd}<span>{cost(turn.end.costUsd)}</span>{/if}
+                  {#if reply}<button class="act" onclick={() => copy(reply, `r${i}`)} title="Copy the reply as Markdown"><Icon name={copied === `r${i}` ? 'check' : 'copy'} size={13} /><span>{copied === `r${i}` ? 'Copied' : 'Copy'}</span></button>{/if}
                 </div>
               {/if}
             </div>
@@ -354,6 +354,7 @@
       sigils={provider === 'claude' ? ['/', '@'] : ['/', '$', '@']}
       {commands}
       onFiles={() => listFiles(tabKey)}
+      onInput={() => wake(tabKey)}
       working={!!s?.working}
       waiting={!!request}
       disabled={!s || s.exited}
@@ -370,7 +371,7 @@
             {/snippet}
           </ChipMenu>
         {/if}
-        {#if s?.modes.length}
+        {#if s?.modes.length && s.mode}
           <ChipMenu title={provider === 'codex' ? 'Sandbox and approvals, from the next message' : 'Permission mode'} sections={[{ items: s.modes.map((m) => ({ value: m, label: MODES[m] ?? m, description: MODE_HELP[m] })) }]} value={s.mode ?? 'default'} onPick={(m) => setMode(tabKey, m)} width={340}>
             {#snippet label()}<span class:plan={s?.mode === 'plan'}>{MODES[s?.mode ?? 'default'] ?? s?.mode}</span>{/snippet}
           </ChipMenu>
@@ -748,8 +749,7 @@
     font-variant-numeric: tabular-nums;
   }
   .end .act {
-    margin-left: -7px;
-    margin-right: -4px;
+    margin-left: -4px;
     opacity: 0;
     transition: opacity var(--enter) var(--ease-out);
   }

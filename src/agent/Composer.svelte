@@ -4,7 +4,7 @@
   import { matchCommands, typedCommand, type Sigil } from './commands';
   import type { Command, Image } from '../../sidecar/protocol';
 
-  let { text = $bindable(''), name, history, sigils, commands, working, waiting = false, disabled, onSend, onStop, onFiles, toolbar }: {
+  let { text = $bindable(''), name, history, sigils, commands, working, waiting = false, disabled, onSend, onStop, onFiles, onInput, toolbar }: {
     /** What is in the box; a rewind puts its prompt back here. */
     text?: string;
     name: string;
@@ -21,6 +21,8 @@
     onStop: () => void;
     /** Typing `@` asks for the project's files, which arrive as `@path` commands. */
     onFiles?: () => void;
+    /** Any typing, so a dormant session can start its CLI before the message is sent. */
+    onInput?: () => void;
     /** Model, mode and status, along the bottom of the box. */
     toolbar?: Snippet;
   } = $props();
@@ -195,7 +197,7 @@
   <textarea
     bind:this={box}
     bind:value={text}
-    oninput={track}
+    oninput={() => (track(), onInput?.())}
     onkeyup={track}
     onclick={track}
     onkeydown={onKey}

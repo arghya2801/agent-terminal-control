@@ -48,6 +48,9 @@ function run(op: AgentOp) {
       return s.effort(op.effort);
     case 'rewind':
       return void s.rewind(op.to);
+    case 'wake':
+      // A Codex tab that can't load its thread says so on its next message.
+      return void Promise.resolve(s.wake()).catch((e) => log(op.id, 'wake:', String(e?.message ?? e)));
     case 'files':
       return void listFiles(s.cwd).then(
         (files) => emit(op.id, { t: 'files', files }),

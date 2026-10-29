@@ -80,9 +80,9 @@ function promptOf(text: string): AgentEvent | null {
  *  and session files as in a terminal, without the TUI. */
 export class Claude {
   private id: string;
-  private o: Launch & { model?: string; effort?: string };
+  private o: Launch & { resume?: string; model?: string; effort?: string };
   private inbox!: Inbox<SDKUserMessage>;
-  private q: Query;
+  private q?: Query;
   private session = '';
   /** The chain entry before each prompt, where a rewind resumes; null for the first. */
   private before = new Map<string, string | null>();
@@ -104,7 +104,7 @@ export class Claude {
   constructor(id: string, o: Launch & { resume?: string; model?: string; effort?: string }) {
     this.id = id;
     this.o = { ...o };
-    this.q = this.open(o.resume);
+    this.session = o.resume ?? '';
     void this.start(o);
   }
 
@@ -161,7 +161,17 @@ export class Claude {
       this.live({ t: 'history', events: history });
       this.live({ t: 'session', id: o.resume });
     }
-    void this.q
+    // A resumed tab is often only read. Its history comes from disk, and the CLI, which
+    // holds about 370 MB, starts when there is something to send.
+    if (o.resume) this.live({ t: 'dormant' });
+    else this.wake();
+  }
+
+  /** Start the CLI, once. */
+  wake(): Query | undefined {
+    if (this.q || this.closing) return this.q;
+    const q = (this.q = this.open(this.o.resume));
+    void q
       .initializationResult()
       .then((init) =>
         this.live({
@@ -170,12 +180,13 @@ export class Claude {
           models: init.models.map(toModel),
           mode: (init as { current_permission_mode?: string }).current_permission_mode,
           modes: MODES,
-          effort: o.effort || null,
+          effort: this.o.effort || null,
         }),
       )
       // A session that fails to start says so in its exit.
       .catch((e) => log(this.id, 'initialize:', String(e?.message ?? e)));
-    await this.run(this.q);
+    void this.run(q);
+    return q;
   }
 
   /** Only the current query speaks: one a rewind replaced ends quietly. */
@@ -324,6 +335,7 @@ export class Claude {
     this.chain(uuid, null, true);
     this.live({ t: 'item', item: { id: uuid, kind: 'user', text, ...(shown.length ? { images: shown } : {}) } });
     this.live({ t: 'working', on: true });
+    this.wake();
     const content = images.length
       ? [...images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mediaType, data: i.data } })), ...(text ? [{ type: 'text', text }] : [])]
       : text;
@@ -334,18 +346,21 @@ export class Claude {
    *  resumes at the entry before it, so it and everything after drop out. */
   async rewind(to: string) {
     if (!this.before.has(to)) return this.live({ t: 'error', message: "Can't rewind to that message" });
+    const q = this.wake();
+    if (!q) return;
     let files = '';
     try {
+      await q.initializationResult();
       // Only a dry run lists the files.
-      const preview = await this.q.rewindFiles(to, { dryRun: true });
-      const r = preview.canRewind ? await this.q.rewindFiles(to) : preview;
+      const preview = await q.rewindFiles(to, { dryRun: true });
+      const r = preview.canRewind ? await q.rewindFiles(to) : preview;
       if (r.canRewind) files = (preview.filesChanged ?? []).map((f) => relative(this.o.cwd, f) || f).join(', ');
       else log(this.id, 'rewind files:', r.error);
     } catch (e) {
       log(this.id, 'rewind files:', String(e));
     }
     const at = this.before.get(to) ?? undefined;
-    const old = this.q;
+    const old = q;
     const oldInbox = this.inbox;
     this.q = this.open(at && this.session, at, this.current);
     for (const resolve of this.waiting.values()) resolve({ allow: false, message: 'Rewound' });
@@ -362,28 +377,28 @@ export class Claude {
   }
 
   interrupt() {
-    void this.q.interrupt().catch((e) => log(this.id, 'interrupt:', String(e)));
+    void this.q?.interrupt().catch((e) => log(this.id, 'interrupt:', String(e)));
   }
 
   mode(mode: string) {
     if (mode === 'plan' && this.current !== 'plan') this.beforePlan = this.current;
     this.current = mode;
-    void this.q
-      .setPermissionMode(mode as never)
+    void this.wake()
+      ?.setPermissionMode(mode as never)
       .then(() => this.live({ t: 'mode', mode }))
       .catch((e) => this.live({ t: 'error', message: `Can't switch to ${mode}: ${e?.message ?? e}` }));
   }
 
   effort(effort: string | null) {
-    void this.q
-      .applyFlagSettings({ effortLevel: effort as never })
+    void this.wake()
+      ?.applyFlagSettings({ effortLevel: effort as never })
       .then(() => ((this.o.effort = effort ?? undefined), this.live({ t: 'effort', effort })))
       .catch((e) => this.live({ t: 'error', message: `Can't set effort to ${effort}: ${e?.message ?? e}` }));
   }
 
   model(model: string) {
-    void this.q
-      .setModel(model)
+    void this.wake()
+      ?.setModel(model)
       .then(() => ((this.o.model = model), this.live({ t: 'model', model })))
       .catch((e) => this.live({ t: 'error', message: `Can't switch to ${model}: ${e?.message ?? e}` }));
   }
@@ -391,6 +406,8 @@ export class Claude {
   close() {
     this.closing = true;
     for (const resolve of this.waiting.values()) resolve({ allow: false, message: 'Session closed' });
+    // A session that never started has no CLI to end it, so it says it ended itself.
+    if (!this.q) return this.live({ t: 'exit' });
     this.inbox.end();
     this.q.close();
   }

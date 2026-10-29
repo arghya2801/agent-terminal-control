@@ -96,6 +96,8 @@ export type AgentEvent =
   | { t: 'history'; events: AgentEvent[] }
   /** The conversation was cleared or rewritten; history follows if any remains. */
   | { t: 'clear' }
+  /** A resumed session shows its history but has no CLI yet; one starts with the first message, or `wake`. */
+  | { t: 'dormant' }
   /** Claude: the conversation went back to before item `to`, which goes with all after it. */
   | { t: 'rewound'; to: string }
   | { t: 'item'; item: ChatItem }
@@ -131,4 +133,5 @@ export type AgentOp =
   /** Go back to before a prompt: Claude's item id, or Codex's turn id. */
   | { op: 'rewind'; id: string; to: string }
   | { op: 'files'; id: string }
+  | { op: 'wake'; id: string }
   | { op: 'close'; id: string };

@@ -84,6 +84,7 @@ function receive(key: TabKey, ev: AgentEvent) {
       countOutput(key, ev.text.length);
       break;
     case 'ready':
+    case 'dormant':
       setAgentState(key, { activity: s.working ? 'working' : 'idle' });
       for (const text of l.queued.splice(0)) send(key, text);
       break;
@@ -118,7 +119,7 @@ export function send(key: TabKey, text: string, images: Image[] = []) {
   if (!l || (!text.trim() && !images.length)) return;
   if (agents[key]) agents[key].fresh = false;
   l.images.push(...images);
-  if (!l.id || !agents[key]?.ready) l.queued.push(text);
+  if (!l.id || !(agents[key]?.ready || agents[key]?.dormant)) l.queued.push(text);
   else if (agents[key].working) {
     const had = getTab(key)?.queued;
     queuePrompt(key, had ? `${had}\n\n${text}` : text || '(images)');
@@ -130,6 +131,8 @@ export const setMode = (key: TabKey, mode: string) => op(key, { op: 'mode', mode
 export const setModel = (key: TabKey, model: string) => op(key, { op: 'model', model });
 export const setEffort = (key: TabKey, effort: string | null) => op(key, { op: 'effort', effort });
 export const listFiles = (key: TabKey) => op(key, { op: 'files' });
+/** Start a dormant session's CLI ahead of the first message, so its commands are listed. */
+export const wake = (key: TabKey) => agents[key]?.dormant && op(key, { op: 'wake' });
 /** Back to before `prompt`: Claude by its id, Codex by the turn it started. */
 export const rewind = (key: TabKey, prompt: ChatItem) => op(key, { op: 'rewind', to: prompt.turn ?? prompt.id });
 

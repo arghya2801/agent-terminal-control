@@ -17,13 +17,15 @@ export interface AgentState {
   /** When the current turn started, for the timer. */
   since: number;
   exited: boolean;
+  /** Resumed, with no CLI running yet: sending starts one. */
+  dormant: boolean;
   plan: Step[];
   /** For the `@` menu, as the last `files` answer listed them. */
   files: string[];
 }
 
 export function emptyState(): AgentState {
-  return { items: [], requests: [], commands: [], models: [], modes: [], model: null, mode: null, effort: null, sessionId: null, ready: false, working: false, since: 0, exited: false, plan: [], files: [] };
+  return { items: [], requests: [], commands: [], models: [], modes: [], model: null, mode: null, effort: null, sessionId: null, ready: false, working: false, since: 0, exited: false, dormant: false, plan: [], files: [] };
 }
 
 let notices = 0;
@@ -41,7 +43,7 @@ export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
   const find = (id: string) => s.items.find((i) => i.id === id);
   switch (ev.t) {
     case 'ready':
-      Object.assign(s, { commands: ev.commands, models: ev.models, modes: ev.modes, ready: true });
+      Object.assign(s, { commands: ev.commands, models: ev.models, modes: ev.modes, ready: true, dormant: false });
       if (ev.model) s.model = ev.model;
       if (ev.mode) s.mode = ev.mode;
       if (ev.effort !== undefined) s.effort = ev.effort;
@@ -54,6 +56,9 @@ export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
       return;
     case 'clear':
       Object.assign(s, { items: [], requests: [], plan: [] });
+      return;
+    case 'dormant':
+      s.dormant = true;
       return;
     case 'rewound': {
       const at = s.items.findIndex((i) => i.id === ev.to);

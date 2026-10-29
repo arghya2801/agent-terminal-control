@@ -132,14 +132,112 @@ function historyOf(thread: Obj): AgentEvent[] {
   return history;
 }
 
+const readers = new Map<string, Server>();
+
+/**
+ * A `codex app-server`. Every Codex tab started the same way reads through one shared
+ * server: history, models and skills, which take no lock. A tab writes through a server of
+ * its own, started with its first message, because the server that loads a thread holds it
+ * until that process exits, and a terminal opening the thread needs it free.
+ */
+class Server {
+  readonly sessions = new Set<Codex>();
+  /** Which tab each thread's events go to. */
+  readonly threads = new Map<string, Codex>();
+  private proc: ChildProcessWithoutNullStreams;
+  private calls = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
+  private next = 1;
+  private started: Promise<void>;
+  /** Set for the shared reader. */
+  private key: string;
+
+  constructor(key: string, o: Launch, args: string[]) {
+    this.key = key;
+    this.proc = spawnCodex(o, args);
+    this.proc.stderr.on('data', (d) => log('codex:', String(d).trimEnd()));
+    this.proc.on('exit', (code) => this.end(code ? `Codex exited with ${code}` : undefined));
+    this.proc.on('error', (e) => this.end(`Can't start Codex: ${e.message}`));
+    createInterface({ input: this.proc.stdout }).on('line', (line) => {
+      try {
+        this.receive(JSON.parse(line));
+      } catch (e) {
+        log('codex line:', String(e));
+      }
+    });
+    this.started = this.send('initialize', { clientInfo: { name: 'atc', title: 'ATC', version: '1' } }).then(() => this.write({ method: 'initialized' }));
+  }
+
+  static reader(o: Launch, args: string[]): Server {
+    const key = JSON.stringify([o.exe, args, o.env ?? {}]);
+    let s = readers.get(key);
+    if (!s) readers.set(key, (s = new Server(key, o, args)));
+    return s;
+  }
+
+  write(v: Obj) {
+    this.proc.stdin.write(JSON.stringify(v) + '\n');
+  }
+
+  private send(method: string, params: Obj): Promise<any> {
+    const id = this.next++;
+    this.write({ id, method, params });
+    return new Promise((resolve, reject) => this.calls.set(id, { resolve, reject }));
+  }
+
+  async call(method: string, params: Obj = {}): Promise<any> {
+    await this.started;
+    return this.send(method, params);
+  }
+
+  /** A thread's tab; with one tab, also anything that names no thread. */
+  private route(p: Obj): Codex | undefined {
+    const thread = p.threadId ?? p.conversationId;
+    return thread ? this.threads.get(thread) : this.sessions.size === 1 ? [...this.sessions][0] : undefined;
+  }
+
+  private receive(m: Obj) {
+    if (m.id !== undefined && m.method === undefined) {
+      const c = this.calls.get(m.id);
+      this.calls.delete(m.id);
+      if (m.error) c?.reject(new Error(m.error.message ?? JSON.stringify(m.error)));
+      else c?.resolve(m.result);
+    } else if (m.id !== undefined) {
+      const s = this.route(m.params ?? {});
+      if (s) s.request(m.id, m.method, m.params ?? {});
+      else this.write({ id: m.id, error: { code: -32601, message: 'No ATC tab holds this thread' } });
+    } else this.route(m.params ?? {})?.notify(m.method, m.params ?? {});
+  }
+
+  private end(message?: string) {
+    if (readers.get(this.key) === this) readers.delete(this.key);
+    for (const c of this.calls.values()) c.reject(new Error('Codex exited'));
+    for (const s of this.sessions) s.ended(message);
+  }
+
+  /** A tab closed; the server stops with its last one, which frees the threads it loaded. */
+  release(s: Codex) {
+    this.sessions.delete(s);
+    for (const [thread, owner] of this.threads) if (owner === s) this.threads.delete(thread);
+    if (this.sessions.size) return;
+    if (readers.get(this.key) === this) readers.delete(this.key);
+    this.proc.kill();
+  }
+}
+
 /** One Codex thread through `codex app-server`, the protocol Codex's own editor
  *  extensions use. Config, approvals and session files are the CLI's own. */
 export class Codex {
   private id: string;
-  private proc: ChildProcessWithoutNullStreams;
-  private calls = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
+  private o: Launch & { resume?: string };
+  /** The app-server flags, and the thread settings from the TUI flags. */
+  private args: string[];
+  private options: Obj;
+  private reader: Server;
+  /** This tab's own app-server, once it has something to send. */
+  private server?: Server;
+  private waking?: Promise<Server>;
+  private listed: Obj[] = [];
   private requests = new Map<string, { rpc: number | string; method: string; params: Obj }>();
-  private next = 1;
   private n = 0;
   private thread = '';
   private turn = '';
@@ -154,85 +252,104 @@ export class Codex {
 
   constructor(id: string, o: Launch & { resume?: string; model?: string; effort?: string }) {
     this.id = id;
+    this.o = o;
     this.cwd = o.cwd;
     const { thread, server } = threadOptions(o.args);
     if (o.model) thread.model = o.model;
+    this.args = server;
+    this.options = thread;
     this.effortChosen = o.effort || null;
-    this.proc = spawnCodex(o, server);
-    this.proc.stderr.on('data', (d) => log(id, 'codex:', String(d).trimEnd()));
-    this.proc.on('exit', (code) => {
-      for (const c of this.calls.values()) c.reject(new Error('Codex exited'));
-      this.live({ t: 'exit', message: code && !this.closing ? `Codex exited with ${code}` : undefined });
-    });
-    this.proc.on('error', (e) => this.live({ t: 'exit', message: `Can't start Codex: ${e.message}` }));
-    createInterface({ input: this.proc.stdout }).on('line', (line) => {
-      try {
-        this.receive(JSON.parse(line));
-      } catch (e) {
-        log(id, 'codex line:', String(e));
-      }
-    });
     this.chosen = thread.model;
-    void this.start(o, thread).catch((e) => this.live({ t: 'error', message: String(e?.message ?? e) }));
+    this.reader = Server.reader(o, server);
+    this.reader.sessions.add(this);
+    void this.start().catch((e) => this.live({ t: 'error', message: String(e?.message ?? e) }));
   }
 
   private live: Out = (ev) => emit(this.id, ev);
 
   private write(v: Obj) {
-    this.proc.stdin.write(JSON.stringify(v) + '\n');
+    this.server?.write(v);
   }
 
-  private call(method: string, params: Obj = {}): Promise<any> {
-    const id = this.next++;
-    this.write({ id, method, params });
-    return new Promise((resolve, reject) => this.calls.set(id, { resolve, reject }));
+  private async call(method: string, params: Obj = {}): Promise<any> {
+    return (await this.wake()).call(method, params);
   }
 
-  private async start(o: { cwd: string; resume?: string }, thread: Obj) {
-    await this.call('initialize', { clientInfo: { name: 'atc', title: 'ATC', version: '1' } });
-    this.write({ method: 'initialized' });
-    const r = o.resume ? await this.call('thread/resume', { threadId: o.resume, cwd: o.cwd, ...thread }) : await this.call('thread/start', { cwd: o.cwd, ...thread });
-    this.thread = r.thread.id;
-    this.turns = (r.thread.turns ?? []).map((t: Obj) => t.id);
-    const history = historyOf(r.thread);
-    if (history.length) this.live({ t: 'history', events: history });
-    this.live({ t: 'session', id: this.thread });
-    const [skills, models] = await Promise.all([
-      this.call('skills/list', { cwds: [o.cwd] }).catch(() => ({ data: [] })),
-      this.call('model/list', {}).catch(() => ({ data: [] })),
+  /** This tab's events come from `thread` now. */
+  private own(thread: string) {
+    if (this.thread) this.server?.threads.delete(this.thread);
+    this.thread = thread;
+    this.server?.threads.set(thread, this);
+  }
+
+  /** An app-server this tab uses stopped. */
+  ended(message?: string) {
+    this.live({ t: 'exit', message: this.closing ? undefined : message });
+  }
+
+  /** A model Codex lists. A thread can carry one it no longer does (or a bad one ATC once
+   *  saved into it), and its next turn would fail, so it moves to the default. */
+  private fit(model: string | undefined) {
+    if (!this.listed.length || this.listed.some((m) => m.model === model || m.id === model)) return model;
+    const fallback = this.listed.find((m) => m.isDefault)?.model ?? this.listed[0].model;
+    this.chosen ??= fallback;
+    return fallback;
+  }
+
+  /** History, models and skills from the shared reader. A resumed tab is often only read,
+   *  so its own app-server waits for something to send. */
+  private async start() {
+    const o = this.o;
+    const [skills, models, read] = await Promise.all([
+      this.reader.call('skills/list', { cwds: [o.cwd] }).catch(() => ({ data: [] })),
+      this.reader.call('model/list', {}).catch(() => ({ data: [] })),
+      o.resume ? this.reader.call('thread/read', { threadId: o.resume, includeTurns: true }) : null,
     ]);
     for (const s of (skills.data ?? []).flatMap((e: Obj) => e.skills ?? [])) if (s.enabled) this.skills.set(s.name, s);
-    // A thread can carry a model Codex no longer lists (or a bad one ATC once saved into
-    // it); its next turn would fail, so it moves to the default model.
-    const listed: Obj[] = models.data ?? [];
-    let model = r.model;
-    if (listed.length && !listed.some((m) => m.model === model || m.id === model)) {
-      model = listed.find((m) => m.isDefault)?.model ?? listed[0].model;
-      this.chosen ??= model;
+    this.listed = models.data ?? [];
+    if (read) {
+      this.thread = read.thread.id;
+      this.turns = (read.thread.turns ?? []).map((t: Obj) => t.id);
+      const history = historyOf(read.thread);
+      if (history.length) this.live({ t: 'history', events: history });
+      this.live({ t: 'session', id: this.thread });
     }
-    this.live({ t: 'model', model });
     this.live({
       t: 'ready',
       commands: [...COMMANDS, ...[...this.skills.values()].map((s) => ({ name: `$${s.name}`, description: s.shortDescription || s.description }))],
-      models: listed.filter((m) => !m.hidden).map(toModel),
-      model,
+      models: this.listed.filter((m) => !m.hidden).map(toModel),
+      model: this.fit(this.chosen ?? read?.thread.model),
       modes: Object.keys(PRESETS),
-      mode: presetOf(r.sandbox),
       effort: this.effortChosen,
     });
+    if (o.resume) this.live({ t: 'dormant' });
+    else await this.wake();
   }
 
-  private receive(m: Obj) {
-    if (m.id !== undefined && m.method === undefined) {
-      const c = this.calls.get(m.id);
-      this.calls.delete(m.id);
-      if (m.error) c?.reject(new Error(m.error.message ?? JSON.stringify(m.error)));
-      else c?.resolve(m.result);
-    } else if (m.id !== undefined) this.request(m.id, m.method, m.params ?? {});
-    else this.notify(m.method, m.params ?? {});
+  /** This tab's own app-server, with the thread loaded in it. */
+  wake(): Promise<Server> {
+    this.waking ??= (async () => {
+      const s = (this.server = new Server('', this.o, this.args));
+      s.sessions.add(this);
+      const o = { cwd: this.o.cwd, ...this.options };
+      const r = this.thread ? await s.call('thread/resume', { threadId: this.thread, ...o }) : await s.call('thread/start', o);
+      if (!this.thread) this.live({ t: 'session', id: r.thread.id });
+      this.own(r.thread.id);
+      if (r.thread.turns?.length) this.turns = r.thread.turns.map((t: Obj) => t.id);
+      const model = this.fit(this.chosen ?? r.model);
+      if (model) this.live({ t: 'model', model });
+      if (!this.preset) this.live({ t: 'mode', mode: presetOf(r.sandbox) });
+      return s;
+    })().catch((e) => {
+      // Another process may hold the thread; the next message tries again.
+      this.server?.release(this);
+      this.server = this.waking = undefined;
+      throw e;
+    });
+    return this.waking;
   }
 
-  private notify(method: string, p: Obj) {
+  notify(method: string, p: Obj) {
     switch (method) {
       case 'turn/started':
         this.turn = p.turn.id;
@@ -289,7 +406,7 @@ export class Codex {
     log(this.id, 'codex ignores', what);
   }
 
-  private request(rpc: number | string, method: string, p: Obj) {
+  request(rpc: number | string, method: string, p: Obj) {
     log(this.id, 'codex asks', method, JSON.stringify(p).slice(0, 300));
     const id = `r${++this.n}`;
     let request: AgentRequest;
@@ -349,7 +466,7 @@ export class Codex {
   }
 
   interrupt() {
-    if (this.turn) void this.call('turn/interrupt', { threadId: this.thread, turnId: this.turn }).catch((e) => log(this.id, 'interrupt:', String(e)));
+    if (this.turn && this.server) void this.call('turn/interrupt', { threadId: this.thread, turnId: this.turn }).catch((e) => log(this.id, 'interrupt:', String(e)));
   }
 
   /** The preset applies from the next turn, which carries it. */
@@ -374,7 +491,7 @@ export class Codex {
         await this.revert(last);
       } else if (name === 'new') {
         const r = await this.call('thread/start', { cwd: this.cwd, ...(this.chosen ? { model: this.chosen } : {}) });
-        this.thread = r.thread.id;
+        this.own(r.thread.id);
         this.turns = [];
         this.live({ t: 'clear' });
         this.live({ t: 'session', id: this.thread });
@@ -418,6 +535,8 @@ export class Codex {
 
   close() {
     this.closing = true;
-    this.proc.kill();
+    this.reader.release(this);
+    this.server?.release(this);
+    this.live({ t: 'exit' });
   }
 }

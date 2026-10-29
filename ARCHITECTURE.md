@@ -95,6 +95,11 @@ session; quitting and a full page reload do that, then kill whatever is left of 
 The sidecar's stderr goes to `<config>/sidecar.log`, and it logs each Codex message it
 ignores once.
 
+A resumed tab is often only read, so it starts dormant: its history comes from disk
+(`getSessionMessages`, or Codex's `thread/read` on a shared app-server) and no CLI runs.
+The CLI starts with the first message, or `wake`, which the composer sends when you type.
+A Claude CLI holds about 370 MB and a Codex app-server about 40 MB.
+
 Claude runs with setting sources user, project and local and the `claude_code` system
 prompt preset, so it reads the same settings, CLAUDE.md, hooks, skills and MCP servers as
 in a terminal. Settings arguments pass through as `extraArgs`. Permission prompts arrive
@@ -278,6 +283,10 @@ Things that cost time once. Add to this list.
   few hundred bytes of metadata to its transcript, as the TUI does.
 - Two app-servers cannot hold one Codex thread: the second gets "already has an active
   writer". Stopping the page's browser does not end its sidecar; the next page load does.
+- The app-server that loads a Codex thread (`thread/start` or `thread/resume`) holds it
+  until that process exits; `thread/unsubscribe` says "unsubscribed" and keeps it. Only
+  `thread/read` takes no lock. So every Codex tab reads through one shared app-server, and
+  writes through its own, started with its first message and stopped when the tab closes.
 - An SDK session has no task list: the CLI drops TaskCreate and TaskUpdate (and TodoWrite)
   from it. Naming them in `allowedTools` adds them back. Bare names there skip
   `canUseTool`, which is fine for tools that only keep a list.
