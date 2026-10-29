@@ -18,6 +18,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - A new look for agent tabs. Your messages sit on the right. Each thing the agent did is one row with an icon and a plain verb ("Ran npm test", "Edited cli.js"), and a failed or declined call says why underneath. Permission and question cards have clearer buttons, and number keys pick an answer. The task list folds to one line while a card waits. Tables, code blocks and the `/` menu (with matches highlighted) are easier to read. An image button sits in the message box, and a stopped session offers Resume. The pane header shows the model, cost and context; tokens and cache use moved into the cost's tooltip.
 - Agent tabs use far less memory. A resumed Claude or Codex tab shows its conversation without starting the CLI, which starts when you type or send (a Claude CLI holds about 370 MB). Codex tabs read through one shared app-server instead of one each. A long reply takes less CPU while it streams. The notes editor loads the first time the notes pane opens, and the header stops re-reading costs while its agent is idle.
 
+- Choose chat or terminal for agent tabs: Settings > General > "Agent tabs open as" picks Chat (the default) or Terminal, the CLI's own screen. Ctrl+` moves any agent tab between the two on the same session, and a terminal agent tab has a chat button in its header. Restored tabs come back the way you left them.
+
 ### Fixed
 - An approved plan in a Claude tab leaves plan mode, so the mode chip no longer stays on Plan.
 - A resumed Codex conversation whose saved model Codex no longer lists moves to the default model, instead of failing its next turn.

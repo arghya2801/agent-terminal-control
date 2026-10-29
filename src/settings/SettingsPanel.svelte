@@ -159,6 +159,14 @@
           <input id="rt" type="checkbox" bind:checked={draft.ui.restoreTabs} />
           <span class="muted">Reopen last time's tabs on launch; agent sessions resume</span>
         </label>
+        <label for="av">Agent tabs open as</label>
+        <div>
+          <select id="av" bind:value={draft.ui.agentView}>
+            <option value="chat">Chat</option>
+            <option value="terminal">Terminal</option>
+          </select>
+          <span class="muted hint">The same CLI and session either way: the chat, or the CLI's own screen. Ctrl+` switches a tab.</span>
+        </div>
         <label for="nt">Notifications</label>
         <label class="check">
           <input id="nt" type="checkbox" bind:checked={draft.ui.notifications} />

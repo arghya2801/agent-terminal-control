@@ -23,6 +23,14 @@ describe('parseSavedTabs', () => {
     expect(parseSavedTabs(JSON.stringify({ tabs, active: 0 }))?.tabs.map((t) => 'chat' in t && t.chat)).toEqual([true, false]);
   });
 
+  it('keeps an agent tab in the terminal it was left in', () => {
+    const tabs = [
+      { kind: 'session', provider: 'claude', sessionId: 's1', cwd: 'D:\\p', terminal: true },
+      { kind: 'session', provider: 'claude', sessionId: 's2', cwd: 'D:\\p' },
+    ];
+    expect(parseSavedTabs(JSON.stringify({ tabs, active: 0 }))?.tabs.map((t) => 'terminal' in t && t.terminal)).toEqual([true, false]);
+  });
+
   it('treats missing, empty or corrupt storage as nothing to restore', () => {
     expect(parseSavedTabs(null)).toBeNull();
     expect(parseSavedTabs('')).toBeNull();

@@ -101,26 +101,37 @@
   const tabToSession = $derived(resolveSessions(tabSessions, appState.index.projects));
 
   /**
-   * An agent tab: Claude or Codex through the sidecar, with the chat in place of a terminal.
-   * `session` resumes one; `task` is sent as the first message.
+   * An agent tab: Claude or Codex as ATC's chat over the sidecar, or with `terminal` (by
+   * default the setting) the CLI's own TUI in a terminal. `session` resumes one; `task` is
+   * the first message.
    */
-  function openAgent(key: TabKey, title: string, cwd: string, projectKey: string | null, provider: AgentProvider, o: { session?: string | null; chat?: boolean; task?: string } = {}) {
+  async function openAgent(key: TabKey, title: string, cwd: string, projectKey: string | null, provider: AgentProvider, o: { session?: string | null; chat?: boolean; task?: string; terminal?: boolean } = {}) {
     if (o.chat) chatTabs.add(key);
+    if (o.terminal ?? appState.settings?.ui.agentView === 'terminal') {
+      // Typed into PowerShell: single quotes take everything literally but a doubled quote.
+      const task = o.task ? ` '${o.task.replaceAll("'", "''")}'` : '';
+      // A new session is found by what was not there before it started.
+      const known = o.session ? [] : appState.index.projects.flatMap((p) => p.sessions.map(sessionKey));
+      await guard(async () => openTab(key, title, { cwd, initialCommand: `${await agentCommand(provider, o.session ?? null, o.chat)}${task}` }, projectKey, provider, known));
+      return;
+    }
     const isNew = !getTab(key);
     openAgentTab(key, title, cwd, projectKey, provider);
     if (isNew) void startAgent(key, provider, cwd, o);
   }
 
-  /** "Open in terminal": the same session, resumed in Claude's or Codex's own TUI. */
-  async function toTerminal(key: TabKey) {
+  /** Moves an agent tab between the chat and the CLI's own terminal, on the same session.
+   *  Only one of them can drive a session, so the tab closes and reopens in the other. */
+  async function switchView(key: TabKey) {
     const t = getTab(key);
-    if (!t?.provider) return;
+    if (!t?.provider || !t.cwd) return;
     const id = t.boundSession?.slice(t.boundSession.indexOf(':') + 1) ?? null;
     const { provider, cwd, projectKey: pk } = t;
     const title = displayTitle(t);
     const chat = chatTabs.has(key);
+    const terminal = !t.term;
     await closeTab(key);
-    await guard(async () => openTab(id ? `session:${provider}:${id}` : key, title, { cwd, initialCommand: await agentCommand(provider, id, chat) }, pk, provider));
+    await openAgent(id ? `session:${provider}:${id}` : key, title, cwd, pk, provider, { session: id, chat, terminal });
   }
 
   /** Moves an agent tab's chat into its pane, where the manager lays it out. */
@@ -163,7 +174,12 @@
     // Exited tabs are kept: they are still in the tab bar, and on quit every shell exits
     // just before the window goes, which must not wipe what gets restored.
     const tabs = all.map((t): SavedTab => {
-      const common = { projectKey: t.projectKey, customTitle: t.customTitle, ...(chatTabs.has(t.key) ? { chat: true as const } : {}) };
+      const common = {
+        projectKey: t.projectKey,
+        customTitle: t.customTitle,
+        ...(chatTabs.has(t.key) ? { chat: true as const } : {}),
+        ...(t.provider && t.term ? { terminal: true as const } : {}),
+      };
       const sessionId = sessionIdOf(t);
       if (sessionId && t.cwd) return { kind: 'session', provider: t.provider ?? 'claude', sessionId, cwd: t.cwd, ...common };
       if (t.provider && t.cwd) return { kind: 'agent', provider: t.provider, cwd: t.cwd, ...common };
@@ -200,11 +216,11 @@
         const label = appState.index.projects
           .flatMap((p) => p.sessions)
           .find((s) => s.id === t.sessionId && s.provider === t.provider)?.label;
-        openAgent(key, label ?? providerName(t.provider), t.cwd ?? '', t.projectKey, t.provider, { session: t.sessionId, chat: t.chat });
+        await openAgent(key, label ?? providerName(t.provider), t.cwd ?? '', t.projectKey, t.provider, { session: t.sessionId, chat: t.chat, terminal: !!t.terminal });
       } else if (t.kind === 'agent') {
         counter += 1;
         key = t.chat ? `agent:${t.provider}:chat-${counter}` : `agent:${t.provider}:${counter}`;
-        openAgent(key, providerName(t.provider), t.cwd ?? '', t.projectKey, t.provider, { chat: t.chat });
+        await openAgent(key, providerName(t.provider), t.cwd ?? '', t.projectKey, t.provider, { chat: t.chat, terminal: !!t.terminal });
       } else if (t.kind === 'shell' && t.project && t.projectKey) {
         key = `project:${t.projectKey}`;
         const name = appState.index.projects.find((p) => p.key === t.projectKey)?.name ?? 'pwsh';
@@ -310,6 +326,7 @@
       activity: t.activity,
       projectKey: t.projectKey,
       since: t.markSince,
+      terminal: !!t.provider && !!t.term,
     }));
     const nextActive = getActiveKey();
     // Picking a tab means the user wants the terminal, not the page covering it.
@@ -386,8 +403,11 @@
     counter += 1;
     const key: TabKey = `agent:${provider}:${counter}`;
     const back = activeKey;
-    openAgent(key, task.slice(0, 40), p.path, p.key, provider, { task });
-    if (back) activate(back);
+    const path = p.path;
+    return guard(async () => {
+      await openAgent(key, task.slice(0, 40), path, p.key, provider, { task });
+      if (back) activate(back);
+    });
   }
 
 
@@ -804,6 +824,9 @@
       case 'toggleMosaic':
         toggleMosaic();
         break;
+      case 'toggleAgentView':
+        if (activeKey) void switchView(activeKey);
+        break;
     }
   }
 
@@ -997,6 +1020,7 @@
         <div class="grow"></div>
       {/if}
       {#snippet actions()}
+        {#if shown?.terminal}<button class="bar-btn" onclick={() => switchView(shown.key)} title="Open as chat ({chordFor('toggleAgentView')})" aria-label="Open as chat"><Icon name="chat" size={14} /></button>{/if}
         {@render barNew()}
         {#if shown}<button class="bar-btn" onclick={() => requestClose(shown.key)} title="Close {shown.title} (Ctrl+Shift+W)" aria-label="Close {shown.title}"><Icon name="close" size={12} /></button>{/if}
       {/snippet}
@@ -1007,7 +1031,7 @@
       {@const tab = t.provider ? getTab(t.key) : undefined}
       {#if tab && !tab.term && t.provider}
         <div use:portal={tab.container}>
-          <AgentView tabKey={t.key} provider={t.provider} cwd={t.cwd} queued={t.queued} onTerminal={() => toTerminal(t.key)} />
+          <AgentView tabKey={t.key} provider={t.provider} cwd={t.cwd} queued={t.queued} onTerminal={() => switchView(t.key)} />
         </div>
       {/if}
     {/each}

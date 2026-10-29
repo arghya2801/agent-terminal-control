@@ -113,8 +113,10 @@ On the page, `src/agent/agent.svelte.ts` keeps one session per tab and `apply.ts
 events into state. The manager's agent tabs (`openAgentTab`) have `term: null`; App
 portals an `AgentView` into each one's pane, so split, mosaic and zoom apply as they do to
 terminals. The manager hears only state changes (`setAgentState`) and asks the store for
-the Open view's peek and for Reply (`setAgentHooks`). "Open in terminal" closes the tab
-and resumes the session with `core.AgentCommand` in a terminal tab.
+the Open view's peek and for Reply (`setAgentHooks`). `switchView` (Ctrl+`) closes an
+agent tab and reopens its session the other way: in a terminal with `core.AgentCommand`,
+or as a chat. Only one of them can drive a session. `ui.agentView` picks the view for new
+tabs, and a saved tab keeps its own (`terminal` in `atc.tabs`).
 
 ## Agents in a terminal
 

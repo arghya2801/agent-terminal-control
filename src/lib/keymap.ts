@@ -35,7 +35,8 @@ export type Action =
   | 'focusOtherPane'
   | 'palette'
   | 'jumpWaiting'
-  | 'toggleMosaic';
+  | 'toggleMosaic'
+  | 'toggleAgentView';
 
 /** The subset of KeyboardEvent this needs, so tests require no DOM. */
 export interface ChordEvent {
@@ -99,6 +100,8 @@ const BINDINGS: Binding[] = [
   { key: 'o', ctrl: true, shift: true, action: 'focusOtherPane' },
   { key: 'j', ctrl: true, shift: true, action: 'jumpWaiting' },
   { key: 'g', ctrl: true, shift: true, action: 'toggleMosaic' },
+  // VS Code's terminal toggle. Neither Claude Code nor PSReadLine binds it.
+  { key: '`', ctrl: true, shift: false, action: 'toggleAgentView' },
 ];
 
 /**
@@ -119,6 +122,7 @@ const DESCRIPTIONS: Record<Action, { group: Group; label: string }> = {
   openShellHere: { group: 'Launch', label: 'Open a shell in this tab’s project' },
   askAgent: { group: 'Launch', label: 'Ask agent (scratch directory)' },
   toggleMosaic: { group: 'View', label: 'Show every tab at once, or back to one' },
+  toggleAgentView: { group: 'View', label: 'Switch an agent tab between chat and terminal' },
   toggleSidebar: { group: 'View', label: 'Show or hide the sidebar' },
   palette: { group: 'View', label: 'Command palette' },
   focusSearch: { group: 'View', label: 'Filter the sidebar' },
