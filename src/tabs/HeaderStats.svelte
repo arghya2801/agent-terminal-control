@@ -36,12 +36,10 @@
 <div class="stats">
   {#if stats}
     <span title="Model used most recently">{modelLabel(stats.model)}</span>
-    <span title="This session's cost at API prices">{monetary(stats)}</span>
-    <span title="Tokens this session">{formatTokens(stats.tokens)} <small>tokens</small></span>
-    <span title="Share of input read from the prompt cache">{Math.round(stats.cacheShare * 100)}% <small>cache</small></span>
+    <span title="This session's cost at API prices: {formatTokens(stats.tokens)} tokens, {Math.round(stats.cacheShare * 100)}% of input from the prompt cache">{monetary(stats)}</span>
   {/if}
   {#if changes && (changes.files || changes.untracked)}
-    <span title="{changesText(changes)}, since the agent last stopped">{changes.files + changes.untracked} <small>files</small> <ins>+{changes.insertions}</ins> <del>−{changes.deletions}</del></span>
+    <span title="{changesText(changes)}, since the agent last stopped">{changes.files + changes.untracked} <small>{changes.files + changes.untracked === 1 ? 'file' : 'files'}</small> <ins>+{changes.insertions}</ins> <del>−{changes.deletions}</del></span>
   {/if}
   {#if context}
     {@const fill = context.used / context.window}
@@ -58,7 +56,7 @@
     gap: 14px;
     padding: 0 10px;
     color: var(--fg-dim);
-    font-size: 11px;
+    font-size: 12px;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
@@ -82,7 +80,6 @@
   svg {
     width: 60px;
     height: 10px;
-    border-bottom: 1px solid var(--border);
     stroke: var(--fg-faint);
     stroke-width: 1.5;
   }

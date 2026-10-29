@@ -69,6 +69,8 @@ export interface Tab {
   claudeName: string | null;
   /** Something happened in this tab while it was in the background; cleared on focus. */
   attention: boolean;
+  /** An agent tab's card waits for an answer. Unlike `attention`, focus does not clear it. */
+  asking: boolean;
   /** Moved out of "Waiting on you" by the user; cleared when the agent starts working. */
   done: boolean;
   /** Typed in for the agent once it stops working (#158); dropped if the tab exits. */
@@ -302,7 +304,7 @@ export function openAgentTab(key: TabKey, title: string, cwd: string | null, pro
   const now = Date.now();
   const tab: Tab = {
     provider, boundSession: key.startsWith('session:') ? key.slice(8) : null, existingSessions: [], codexSequence: null,
-    key, title, autoTitle: null, customTitle: null, activity: null, claudeName: null, attention: false, done: false,
+    key, title, autoTitle: null, customTitle: null, activity: null, claudeName: null, attention: false, asking: false, done: false,
     queued: null, projectKey, startedAt: now, lastOutputAt: now, cwd, term: null, fit: null, search: null, container,
     ptyId: null, exited: false, exitCode: null, dims: null, unacked: 0, mark: 'open', markSince: now,
     buckets: new Array(BUCKETS).fill(0), bucketAt: Math.floor(now / BUCKET_MS),
@@ -320,13 +322,16 @@ export function setAgentState(key: TabKey, s: { activity?: Activity | null; sess
   // A question or a permission pauses the turn: the tab waits on the user, and says so once.
   if (s.waiting) {
     tab.activity = 'idle';
+    tab.asking = true;
     flagAttention(tab, 'bell');
   } else if (s.activity !== undefined) {
+    tab.asking = false;
     if (tab.activity === 'working' && s.activity === 'idle') flagAttention(tab, 'finished');
     tab.activity = s.activity;
   }
   if (s.session) tab.boundSession = s.session;
-  if (s.exited) tab.exited = true;
+  if (s.waiting === false) tab.asking = false;
+  if (s.exited !== undefined) tab.exited = s.exited;
   notify();
 }
 
@@ -457,6 +462,7 @@ export async function openTab(
     activity: null,
     claudeName: null,
     attention: false,
+    asking: false,
     done: false,
     queued: null,
     projectKey,

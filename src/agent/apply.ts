@@ -81,7 +81,7 @@ export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
     }
     case 'result': {
       const had = find(ev.id);
-      if (had) Object.assign(had, { output: ev.output, error: ev.error, done: true });
+      if (had) Object.assign(had, { output: ev.output, error: ev.error, declined: ev.declined, done: true });
       return;
     }
     case 'progress': {

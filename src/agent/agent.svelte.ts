@@ -97,7 +97,7 @@ function receive(key: TabKey, ev: AgentEvent) {
       setAgentState(key, { waiting: true });
       break;
     case 'resolved':
-      if (s.working && !s.requests.length) setAgentState(key, { activity: 'working' });
+      if (!s.requests.length) setAgentState(key, s.working ? { activity: 'working' } : { waiting: false });
       break;
     case 'exit':
       setAgentState(key, { exited: true, activity: null });
@@ -132,6 +132,16 @@ export const setEffort = (key: TabKey, effort: string | null) => op(key, { op: '
 export const listFiles = (key: TabKey) => op(key, { op: 'files' });
 /** Back to before `prompt`: Claude by its id, Codex by the turn it started. */
 export const rewind = (key: TabKey, prompt: ChatItem) => op(key, { op: 'rewind', to: prompt.turn ?? prompt.id });
+
+/** Start a stopped tab's session again from its transcript. */
+export function resume(key: TabKey) {
+  const l = live.get(key);
+  const session = agents[key]?.sessionId;
+  if (!l || !agents[key]?.exited) return;
+  end(key);
+  setAgentState(key, { exited: false });
+  void startAgent(key, l.provider, l.cwd, { chat: l.chat, session });
+}
 
 /** End a tab's session; it stays on disk to resume. */
 function end(key: TabKey) {

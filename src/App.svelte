@@ -76,7 +76,7 @@
     type Tab,
   } from './terminal/manager';
   import AgentView from './agent/AgentView.svelte';
-  import { startAgent } from './agent/agent.svelte';
+  import { agents, startAgent } from './agent/agent.svelte';
   import { actionList, chordFor, matchChord, type Action } from './lib/keymap';
   import CommandPalette, { type Command } from './lib/CommandPalette.svelte';
   import ContextMenu, { type MenuItem } from './sidebar/ContextMenu.svelte';
@@ -303,7 +303,7 @@
       provider: t.provider,
       title: displayTitle(t),
       exited: t.exited,
-      attention: t.attention,
+      attention: t.attention || t.asking,
       done: t.done,
       queued: t.queued,
       cwd: t.cwd,
@@ -524,6 +524,7 @@
     })),
   );
   const shownState = $derived.by(() => {
+    if (shown && tabMark(shown) === 'attention' && agents[shown.key]?.requests.length) return 'waiting on you';
     const state = shown ? stateWord(tabMark(shown)) : '';
     return state && `${state} ${relativeTime(shown!.since, now)}`;
   });
@@ -987,7 +988,7 @@
             <!-- svelte-ignore a11y_no_static_element_interactions (Ctrl+Shift+R is the keyboard way) -->
             <b class:exited={shown.exited} ondblclick={() => startRename(shown.key)}>{shown.title}</b>
           {/if}
-          {#if shownState}<span class="facts">{shownState}</span>{/if}
+          {#if shownState}<span class="facts" class:waiting={shownState.startsWith('waiting')}>{shownState}</span>{/if}
         </span>
         <div class="grow"></div>
         <HeaderStats tabKey={shown.key} sessionKey={shownSession} working={mark === 'working'} changes={changes[shown.key]} />
@@ -1144,6 +1145,9 @@
     overflow: hidden;
     color: var(--fg-faint);
     text-overflow: ellipsis;
+  }
+  .facts.waiting {
+    color: var(--accent);
   }
   .bar-btn {
     display: grid;

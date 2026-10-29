@@ -3,13 +3,13 @@
   import Composer from './Composer.svelte';
   import Markdown from './Markdown.svelte';
   import RequestCard from './RequestCard.svelte';
-  import ToolLine, { toolStatus } from './ToolLine.svelte';
+  import ToolLine, { toolIcon, toolStatus } from './ToolLine.svelte';
   import ChipMenu, { type MenuSection } from './ChipMenu.svelte';
   import Icon from '../lib/Icon.svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import ConfirmDialog from '../lib/ConfirmDialog.svelte';
-  import { agents, answer, catalog, interrupt, listFiles, rewind, send, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
-  import { activity, blocks, summarize, type Block } from './work';
+  import { agents, answer, catalog, interrupt, listFiles, resume, rewind, send, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
+  import { activity, blocks, summarize, thoughtLine, type Block } from './work';
   import { families, keptEffort, versionOf } from './models';
   import { getActiveKey, queuePrompt } from '../terminal/manager';
   import { providerName } from '../lib/agents';
@@ -114,7 +114,7 @@
    *  open, and folds once something comes after it. */
   let opened = $state<Record<string, boolean>>({});
   const groupStatus = (b: Block & { kind: 'group' }) => {
-    const all = b.items.map((it) => toolStatus(it, !s?.exited));
+    const all = b.items.filter((it) => !it.declined).map((it) => toolStatus(it, !s?.exited));
     return all.includes('running') ? 'running' : all.includes('failed') ? 'failed' : 'done';
   };
 
@@ -132,7 +132,7 @@
   };
   const cost = (usd?: number) => (usd ? `$${usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)}` : '');
   const status = $derived(
-    !s ? '' : s.exited ? 'Stopped' : request ? 'Waiting for you' : s.working ? `Working ${clock(now - s.since)}` : s.ready ? 'Ready' : 'Starting',
+    !s || s.exited ? '' : request ? 'Waiting on you' : s.working || s.ready ? '' : 'Starting',
   );
 
   // Follow the end unless the user has scrolled up. On any resize, not on new items: text
@@ -154,7 +154,8 @@
   });
 
   let draft = $state('');
-  const commands = $derived([...(s?.commands ?? []), ...(s?.files ?? []).map((f) => ({ name: `@${f}`, description: '' }))]);
+  // Names starting `__` are the CLI's own plumbing, not something to type.
+  const commands = $derived([...(s?.commands ?? []).filter((c) => !c.name.startsWith('/__')), ...(s?.files ?? []).map((f) => ({ name: `@${f}`, description: '' }))]);
   const plan = $derived(s?.plan ?? []);
   const doneSteps = $derived(plan.filter((p) => p.status === 'done').length);
   let planOpen = $state(true);
@@ -226,28 +227,38 @@
 
       {#each turns as turn, i (i)}
         {@const live = i === turns.length - 1 && !!s?.working}
+        {@const reply = turn.steps.filter((x) => x.kind === 'assistant' && x.text && !x.parent).map((x) => x.text).join('\n\n')}
         <section class="turn">
           {#if turn.prompt}
             {@const p = turn.prompt}
-            <div class="ask">
-              <div class="prompt">
+            <div class="you">
+              <div class="actions">
+                {#if p.text}<button class="act" onclick={() => copy(p.text ?? '', p.id)} title="Copy message" aria-label="Copy message"><Icon name={copied === p.id ? 'check' : 'copy'} size={13} /></button>{/if}
+                {#if canRewind(p)}<button class="act" onclick={() => (rewinding = p)} title="Go back to before this message"><Icon name="rewind" size={13} /><span>Rewind</span></button>{/if}
+              </div>
+              <div class="bubble">
                 {#if p.images?.length}
-                  <div class="pics">{#each p.images as src, i (i)}<img {src} alt="Sent with the message" />{/each}</div>
+                  <div class="pics">{#each p.images as src, k (k)}<img {src} alt="Sent with the message" />{/each}</div>
                 {/if}
                 {#if p.text}<div class="said">{p.text}</div>{/if}
               </div>
-              {#if canRewind(p)}<button class="copy" onclick={() => (rewinding = p)} title="Go back to before this message">Rewind</button>{/if}
             </div>
           {/if}
           {#if turn.steps.length || turn.end || live}
             {@const all = blocks(turn.steps)}
-            <div class="trail" class:live class:ended={!!turn.end}>
+            <div class="work">
               {#each all as b, bi (b.kind === 'group' ? `g:${b.id}` : b.item.id)}
                 {#if b.kind === 'group'}
                   {@const open = opened[b.id] ?? (live && bi === all.length - 1)}
-                  <div class="step tool group {groupStatus(b)}" class:sub={!!b.items[0].parent}>
-                    <button class="summary" aria-expanded={open} onclick={() => (opened[b.id] = !open)}>
-                      <span>{summarize(b.items)}</span><span class="chev" aria-hidden="true">{open ? '▾' : '▸'}</span>
+                  {@const st = groupStatus(b)}
+                  {@const failed = b.items.filter((x) => x.done && x.error && !x.declined).length}
+                  {@const declined = b.items.filter((x) => x.declined).length}
+                  <div class="step group {st}" class:sub={!!b.items[0].parent}>
+                    <button class="row" aria-expanded={open} onclick={() => (opened[b.id] = !open)}>
+                      <span class="icon"><Icon name={toolIcon(b.items[0].tool)} size={14} /></span>
+                      <span class="what">{summarize(b.items)}</span>
+                      <span class="chev" class:turned={open} aria-hidden="true"><Icon name="chevron" size={12} /></span>
+                      {#if failed}<span class="badge">{failed} failed</span>{:else if declined}<span class="badge declined">{declined} declined</span>{/if}
                     </button>
                     {#if open}
                       <div class="calls">
@@ -258,26 +269,39 @@
                 {:else}
                   {@const it = b.item}
                   {#if it.kind === 'tool'}
-                    <div class="step tool {toolStatus(it, !s?.exited)}" class:sub={!!it.parent}><ToolLine item={it} live={!s?.exited} {cwd} /></div>
+                    <div class="step tool" class:sub={!!it.parent}><ToolLine item={it} live={!s?.exited} {cwd} /></div>
                   {:else if it.kind === 'assistant'}
-                    {#if it.text}
-                      <div class="step text" class:sub={!!it.parent}>
-                        <Markdown text={it.text} />
-                        <button class="copy" onclick={() => copy(it.text ?? '', it.id)} title="Copy as Markdown">{copied === it.id ? 'Copied' : 'Copy'}</button>
-                      </div>
-                    {/if}
+                    {#if it.text}<div class="step text" class:sub={!!it.parent}><Markdown text={it.text} /></div>{/if}
                   {:else if it.kind === 'thinking'}
-                    {#if it.text}<details class="step thinking" class:sub={!!it.parent}><summary>{it.text.trim().split('\n')[0]}</summary><Markdown text={it.text} /></details>{/if}
+                    {#if it.text}
+                      <details class="step thinking" class:sub={!!it.parent}>
+                        <summary class="row">
+                          <span class="icon"><Icon name="sparkle" size={14} /></span>
+                          <span class="what">{thoughtLine(it.text) || 'Thought'}</span>
+                          <span class="chev" aria-hidden="true"><Icon name="chevron" size={12} /></span>
+                        </summary>
+                        <div class="thought"><Markdown text={it.text} /></div>
+                      </details>
+                    {/if}
+                  {:else if it.error}
+                    <p class="step alert"><Icon name="alert" size={14} /><span>{it.text}</span></p>
                   {:else}
-                    <p class="step notice" class:error={it.error}>{it.text}</p>
+                    <p class="step notice" class:long={(it.text ?? '').length > 90 || !!it.text?.includes('\n')}><span>{it.text}</span></p>
                   {/if}
                 {/if}
               {/each}
-              {#if live && !request}<div class="step working"><span class="what">{activity(turn.steps, cwd)}</span><span class="secs">{clock(now - (s?.since ?? now))}</span></div>{/if}
-              {#if turn.end}
-                <div class="step end">
-                  {#if turn.end.durationMs}<span>Worked {clock(turn.end.durationMs)}</span>{/if}
-                  {#if turn.end.costUsd}<span>{cost(turn.end.costUsd)}</span>{/if}
+              {#if live && !request}
+                <div class="step live">
+                  <span class="icon"><span class="spinner"></span></span>
+                  <span class="shimmer">{turn.steps.at(-1)?.kind === 'tool' && !turn.steps.at(-1)?.done ? 'Working' : activity(turn.steps, cwd)}</span>
+                  <span class="secs">{clock(now - (s?.since ?? now))}</span>
+                </div>
+              {/if}
+              {#if !live && (turn.end || reply)}
+                <div class="end" class:bare={!turn.end?.durationMs && !turn.end?.costUsd}>
+                  {#if reply}<button class="act" onclick={() => copy(reply, `r${i}`)} title="Copy the reply as Markdown"><Icon name={copied === `r${i}` ? 'check' : 'copy'} size={13} /><span>{copied === `r${i}` ? 'Copied' : 'Copy'}</span></button>{/if}
+                  {#if turn.end?.durationMs}<span>Worked for {clock(turn.end.durationMs)}</span>{/if}
+                  {#if turn.end?.costUsd}<span>{cost(turn.end.costUsd)}</span>{/if}
                 </div>
               {/if}
             </div>
@@ -296,13 +320,26 @@
     {/if}
     {#if doneSteps < plan.length}
       <div class="tasks">
-        <button class="link" aria-expanded={planOpen} onclick={() => (planOpen = !planOpen)}>{doneSteps} of {plan.length} {provider === 'claude' ? 'tasks' : 'steps'} done <span aria-hidden="true">{planOpen ? '▾' : '▸'}</span></button>
-        {#if planOpen}
+        <button class="head" aria-expanded={planOpen && !request} onclick={() => (planOpen = !planOpen)}>
+          <span class="icon"><Icon name="list" size={14} /></span>
+          <span>{doneSteps} of {plan.length} {provider === 'claude' ? 'tasks' : 'steps'} done</span>
+          <span class="progress" aria-hidden="true"><span style:width="{(doneSteps / plan.length) * 100}%"></span></span>
+          <span class="chev" class:turned={planOpen && !request} aria-hidden="true"><Icon name="chevron" size={12} /></span>
+        </button>
+        {#if planOpen && !request}
           <ul>
-            {#each plan as step, i (i)}<li class={step.status}><span class="box" aria-hidden="true">{step.status === 'done' ? '✓' : step.status === 'active' ? '●' : '○'}</span>{step.text}</li>{/each}
+            {#each plan as step, i (i)}
+              <li class={step.status}><span class="box" aria-hidden="true">{#if step.status === 'done'}<Icon name="check" size={10} />{/if}</span><span>{step.text}</span></li>
+            {/each}
           </ul>
         {/if}
       </div>
+    {/if}
+    {#if s?.exited}
+      <p class="aside stopped">
+        <span>{name} stopped. The conversation is saved.</span>
+        <button class="resume" onclick={() => resume(tabKey)}>Resume</button>
+      </p>
     {/if}
     {#if queued}
       <p class="aside queued">
@@ -318,6 +355,7 @@
       {commands}
       onFiles={() => listFiles(tabKey)}
       working={!!s?.working}
+      waiting={!!request}
       disabled={!s || s.exited}
       onSend={(text, images) => send(tabKey, text, images)}
       onStop={() => interrupt(tabKey)}
@@ -337,8 +375,8 @@
             {#snippet label()}<span class:plan={s?.mode === 'plan'}>{MODES[s?.mode ?? 'default'] ?? s?.mode}</span>{/snippet}
           </ChipMenu>
         {/if}
-        <span class="status" class:working={s?.working && !request} class:waiting={!!request}>{status}</span>
-        <button class="icon" onclick={onTerminal} title="Open in terminal: resume this session in {name}'s own TUI" aria-label="Open in terminal"><Icon name="terminal" size={14} /></button>
+        {#if status}<span class="status" class:waiting={!!request}>{status}</span>{/if}
+        <button class="tbtn" onclick={onTerminal} title="Open in terminal: resume this session in {name}'s own TUI" aria-label="Open in terminal"><Icon name="terminal" size={14} /></button>
       {/snippet}
     </Composer>
   </div>
@@ -352,19 +390,18 @@
     flex-direction: column;
     background: var(--bg);
     color: var(--fg);
-    font-size: 13.5px;
+    font-size: 14px;
     line-height: 1.6;
-    --rail: 18px;
   }
   .list {
     flex: 1;
     overflow-y: auto;
-    padding: 28px 24px 12px;
+    padding: 32px 24px 16px;
   }
   .column,
   .dock {
     width: 100%;
-    max-width: 760px;
+    max-width: 680px;
     margin: 0 auto;
     box-sizing: border-box;
   }
@@ -405,298 +442,484 @@
   }
 
   .turn + .turn {
-    margin-top: 26px;
+    margin-top: 32px;
   }
-  .prompt {
-    width: fit-content;
-    max-width: 100%;
+  /* Whole turns skip layout offscreen. */
+  .turn {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 160px;
+  }
+
+  /* Your message: on the right, the only filled shape in the conversation. */
+  .you {
+    display: flex;
+    justify-content: flex-end;
+    align-items: flex-end;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .bubble {
+    max-width: 85%;
     box-sizing: border-box;
-    padding: 9px 14px;
-    border-radius: 12px;
+    padding: 9px 15px;
+    border-radius: 18px 18px 6px 18px;
     background: var(--bg-surface);
     color: var(--fg-bright);
-    font-size: 14px;
+    line-height: 1.55;
     overflow-wrap: anywhere;
   }
   /* On the text alone: on the box, the template's own whitespace shows as a blank line. */
   .said {
     white-space: pre-wrap;
   }
-
   .pics {
     display: flex;
     flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 6px;
-    margin: 2px 0 6px;
+    margin: 4px 0 8px;
   }
   .pics:last-child {
-    margin-bottom: 2px;
+    margin-bottom: 4px;
   }
   .pics img {
-    max-height: 160px;
-    max-width: 240px;
-    border-radius: 8px;
+    max-height: 180px;
+    max-width: 280px;
+    border-radius: 10px;
     object-fit: cover;
   }
+  .actions {
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity var(--enter) var(--ease-out);
+  }
+  .you:hover .actions,
+  .actions:focus-within {
+    opacity: 1;
+  }
+  .act {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 7px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--fg-faint);
+    cursor: pointer;
+  }
+  .act:hover {
+    background: var(--bg-hover);
+    color: var(--fg-bright);
+  }
+  .act:focus-visible,
+  .row:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+    outline-offset: -2px;
+  }
 
-  /* The rail: each turn's work hangs off one line, a light per tool call. */
-  .trail {
-    position: relative;
-    margin: 12px 0 0 7px;
-    padding-left: var(--rail);
+  /* The agent's side: prose, and one quiet row per thing it did. */
+  .work {
+    display: flex;
+    flex-direction: column;
   }
-  .trail::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 6px;
-    bottom: 6px;
-    width: 2px;
-    border-radius: 1px;
-    background: var(--border);
+  .step.text {
+    color: var(--fg);
   }
-  .trail.live::before {
-    background: linear-gradient(to bottom, var(--border), color-mix(in srgb, var(--accent) 70%, transparent));
-  }
-  /* Whole turns skip layout offscreen. Not steps: the containment clips what a step draws
-     outside its box, such as list numbers and the copy button. */
-  .turn {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 120px;
-  }
-  .step {
-    position: relative;
-  }
-  .step + .step {
-    margin-top: 6px;
-  }
-  .step.text + .step,
-  .step + .step.text {
+  .step + .step.text,
+  .step.text + .step {
     margin-top: 10px;
   }
   .step.sub {
-    margin-left: 14px;
-    padding-left: 10px;
-    border-left: 1px dashed var(--border);
+    margin-left: 7px;
+    padding-left: 15px;
+    border-left: 1px solid var(--border);
   }
-  .step.tool::before,
-  .step.working::before,
-  .step.end::before {
-    content: '';
-    position: absolute;
-    left: calc(-1 * var(--rail) - 4px);
-    top: 8px;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--bg);
-    border: 2px solid var(--fg-faint);
-  }
-  /* A subagent's calls sit on its own dashed line, with smaller lights. */
-  .step.sub::before {
-    left: -4px;
-    top: 9px;
-    width: 3px;
-    height: 3px;
-  }
-  .step.tool.done::before {
-    border-color: var(--ok);
-    background: color-mix(in srgb, var(--ok) 35%, var(--bg));
-  }
-  .step.tool.failed::before {
-    border-color: var(--danger);
-    background: var(--danger);
-  }
-  .step.tool.running::before,
-  .step.working::before {
-    border-color: var(--accent);
-    background: var(--accent);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
-    animation: beacon 1.4s ease-in-out infinite;
-  }
-  @keyframes beacon {
-    50% {
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent);
-    }
-  }
-  .step.text {
-    max-width: 68ch;
-  }
-  .thinking {
-    color: var(--fg-faint);
-    font-style: italic;
-  }
-  .thinking summary {
+  .row {
+    all: unset;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: calc(100% + 16px);
+    min-height: 28px;
+    padding: 0 8px;
+    margin-left: -8px;
+    border-radius: 7px;
+    font-size: 13px;
+    color: var(--fg-dim);
     cursor: pointer;
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
-    list-style: none;
   }
-  .thinking summary::before {
-    content: 'Thought: ';
-    font-style: normal;
+  .row:hover {
+    background: var(--bg-hover);
+    color: var(--fg);
   }
-  .notice {
-    margin: 0;
+  .row::-webkit-details-marker {
+    display: none;
+  }
+  .icon {
+    display: grid;
+    place-items: center;
+    width: 16px;
+    flex: none;
     color: var(--fg-faint);
-    font-size: 12.5px;
   }
-  .notice.error {
+  .group.running .icon {
+    color: var(--warn);
+  }
+  .group.failed > .row .icon {
     color: var(--danger);
   }
-  .working {
-    display: flex;
-    gap: 1ch;
-    color: var(--fg-dim);
-    font-size: 12.5px;
+  .what {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .working .what {
+  .badge {
+    padding: 0 7px;
+    line-height: 18px;
+    border-radius: 9px;
+    font-size: 11px;
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+  }
+  .badge.declined {
+    color: var(--fg-dim);
+    background: transparent;
+    border-color: var(--border);
+  }
+  .chev {
+    display: grid;
+    color: var(--fg-faint);
+    opacity: 0;
+    transition: transform var(--enter) var(--ease-out);
+  }
+  .group .chev {
+    opacity: 0.5;
+  }
+  .row:hover .chev,
+  .row:focus-visible .chev,
+  .turned,
+  details[open] .chev {
+    opacity: 1;
+  }
+  .turned,
+  details[open] .chev {
+    transform: rotate(90deg);
+  }
+  .calls {
+    margin: 2px 0 4px 7px;
+    padding-left: 15px;
+    border-left: 1px solid var(--border);
+  }
+  .thinking .row {
+    color: var(--fg-faint);
+  }
+  .thought {
+    margin: 2px 0 8px 7px;
+    padding-left: 15px;
+    border-left: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--fg-dim);
+  }
+
+  /* What happened to the session itself: a divider, or a block when it has a lot to say. */
+  .notice {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 14px 0;
+    font-size: 12px;
+    color: var(--fg-faint);
+  }
+  .notice::before,
+  .notice::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .notice.long {
+    display: block;
+    margin: 8px 0;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: var(--bg-chrome);
+    border: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: var(--mono-size);
+    white-space: pre-wrap;
+    color: var(--fg-dim);
+  }
+  .notice.long::before,
+  .notice.long::after {
+    display: none;
+  }
+  .alert {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin: 8px 0;
+    padding: 9px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 9%, transparent);
+    border: 1px solid color-mix(in srgb, var(--danger) 22%, transparent);
+  }
+  .alert :global(svg) {
+    margin-top: 3px;
+  }
+  .alert span {
+    color: var(--fg);
+    white-space: pre-wrap;
+  }
+
+  /* The one moving thing: what the agent is doing right now. */
+  .live {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+    margin-top: 2px;
+    font-size: 13px;
+  }
+  .spinner {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid color-mix(in srgb, var(--warn) 30%, transparent);
+    border-top-color: var(--warn);
+    animation: spin 0.8s linear infinite;
+  }
+  .shimmer {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    background: linear-gradient(90deg, var(--fg-dim) 35%, var(--fg-bright) 50%, var(--fg-dim) 65%) 0 0 / 300% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    animation: shimmer 2.4s linear infinite;
   }
-  .working .secs {
+  .secs {
+    flex: none;
+    color: var(--fg-faint);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes shimmer {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spinner,
+    .shimmer {
+      animation: none;
+    }
+    .shimmer {
+      color: var(--fg-dim);
+      background: none;
+    }
+  }
+
+  .end {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 24px;
+    margin-top: 6px;
+    font-size: 12px;
     color: var(--fg-faint);
     font-variant-numeric: tabular-nums;
   }
-
-  /* A run of calls, folded into one sentence. */
-  .summary {
-    all: unset;
-    box-sizing: border-box;
-    display: flex;
-    gap: 1ch;
-    align-items: baseline;
-    width: 100%;
-    padding: 2px 8px;
-    margin-left: -8px;
-    border-radius: 6px;
-    color: var(--fg-dim);
-    font-size: 12.5px;
-    cursor: pointer;
-  }
-  .summary:hover {
-    background: var(--bg-hover);
-    color: var(--fg-bright);
-  }
-  .summary:focus-visible {
-    outline: 1px solid var(--accent);
-  }
-  .group.failed .summary {
-    color: var(--danger);
-  }
-  .summary .chev {
-    color: var(--fg-faint);
-  }
-  .calls {
-    margin: 2px 0 2px;
-    padding-left: 10px;
-    border-left: 1px solid var(--border);
-  }
-
-  .step.text {
-    position: relative;
-  }
-  .copy {
-    position: absolute;
-    top: -2px;
-    right: -64px;
-    font: inherit;
-    font-size: 11px;
-    color: var(--fg-faint);
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 6px;
-    padding: 1px 8px;
-    cursor: pointer;
+  .end .act {
+    margin-left: -7px;
+    margin-right: -4px;
     opacity: 0;
+    transition: opacity var(--enter) var(--ease-out);
   }
-  .ask {
-    display: flex;
-    align-items: flex-start;
-    gap: 6px;
-  }
-  .ask .copy {
-    position: static;
-    margin-top: 8px;
-    flex: none;
-  }
-  .ask:hover .copy,
-  .step.text:hover .copy,
-  .copy:focus-visible {
+  .turn:hover .end .act,
+  .end .act:focus-visible {
     opacity: 1;
   }
-  .copy:hover {
-    color: var(--fg-bright);
-    border-color: var(--border);
+  /* Only Copy, which shows on hover: it hangs in the gap below instead of widening it. */
+  .end.bare {
+    position: relative;
+    min-height: 0;
+    height: 0;
+    margin: 0;
   }
-  .end {
-    display: flex;
-    gap: 14px;
-    color: var(--fg-faint);
-    font-size: 12px;
-    padding-top: 2px;
-  }
-  .step.end::before {
-    border-radius: 2px;
-    border-color: var(--border);
-    background: var(--border);
+  .end.bare .act {
+    position: absolute;
+    top: 4px;
+    left: 0;
+    margin: 0;
   }
 
   .dock {
+    position: relative;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 6px 24px 16px;
-    max-width: calc(760px + 48px);
+    gap: 10px;
+    padding: 8px 24px 18px;
+    max-width: calc(680px + 48px);
+  }
+  /* Text scrolling under the dock fades out instead of being cut off. */
+  .dock::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: 28px;
+    background: linear-gradient(to bottom, transparent, var(--bg));
+    pointer-events: none;
   }
   .aside {
     display: flex;
     gap: 1ch;
-    margin: 0 4px;
+    margin: 0 6px;
     font-size: 12px;
     color: var(--fg-dim);
   }
   .tasks {
-    margin: 0 4px;
-    font-size: 12px;
+    padding: 3px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-chrome);
+    font-size: 13px;
   }
-  .tasks .link {
-    color: var(--fg-dim);
+  .head {
+    all: unset;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 30px;
+    padding: 0 9px;
+    border-radius: 9px;
+    color: var(--fg);
+    cursor: pointer;
+  }
+  .head:hover {
+    background: var(--bg-hover);
+  }
+  .head:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+    outline-offset: -2px;
+  }
+  .head .chev {
+    margin-left: 0;
+  }
+  .progress {
+    flex: 0 0 72px;
+    height: 4px;
+    margin-left: auto;
+    border-radius: 2px;
+    background: var(--border);
+    overflow: hidden;
+  }
+  .progress span {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    background: var(--ok);
+    transition: width var(--enter) var(--ease-out);
   }
   .tasks ul {
     list-style: none;
-    margin: 4px 0 0;
-    padding: 0;
     display: grid;
-    gap: 2px;
-    max-height: 9.5em;
+    gap: 6px;
+    max-height: 10.5em;
     overflow-y: auto;
+    margin: 2px 0 6px;
+    padding: 0 10px;
   }
   .tasks li {
     display: flex;
-    gap: 8px;
+    align-items: center;
+    gap: 10px;
     color: var(--fg-dim);
   }
   .tasks li.active {
     color: var(--fg-bright);
   }
-  .tasks li.done {
+  .tasks li.done span:last-child {
     color: var(--fg-faint);
-    text-decoration: line-through;
   }
-  .tasks .box {
+  .box {
+    display: grid;
+    place-items: center;
     flex: none;
-    width: 1em;
-    text-align: center;
+    width: 14px;
+    height: 14px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: 1.5px solid var(--fg-faint);
   }
-  .tasks li.active .box {
-    color: var(--accent);
+  .active .box {
+    border-color: var(--warn);
+    background: var(--warn);
+    box-shadow: inset 0 0 0 2.5px var(--bg-chrome);
   }
-  .tasks li.done .box {
-    color: var(--ok);
+  .done .box {
+    border-color: var(--ok);
+    background: var(--ok);
+    color: var(--bg);
+  }
+  .stopped {
+    align-items: center;
+    padding: 8px 12px;
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-chrome);
+    font-size: 13px;
+  }
+  .stopped span {
+    flex: 1;
+  }
+  .resume {
+    height: 28px;
+    padding: 0 12px;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    border: none;
+    border-radius: 7px;
+    background: var(--accent);
+    color: var(--on-accent);
+    cursor: pointer;
+  }
+  .resume:hover {
+    background: color-mix(in srgb, var(--accent) 85%, var(--fg-bright));
+  }
+  .resume:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+    outline-offset: 1px;
+  }
+  .queued {
+    align-items: center;
+    padding: 6px 10px;
+    margin: 0;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
   }
   .queued span {
     flex: 1;
@@ -767,9 +990,9 @@
     color: var(--fg-dim);
   }
   .status.waiting {
-    color: var(--warn);
+    color: var(--accent);
   }
-  .icon {
+  .tbtn {
     display: grid;
     place-items: center;
     width: 26px;
@@ -780,11 +1003,11 @@
     color: var(--fg-dim);
     cursor: pointer;
   }
-  .icon:hover {
+  .tbtn:hover {
     background: var(--bg-hover);
     color: var(--fg-bright);
   }
-  .icon:focus-visible {
+  .tbtn:focus-visible {
     outline: 1px solid var(--accent);
   }
 </style>

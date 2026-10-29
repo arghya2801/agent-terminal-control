@@ -397,7 +397,7 @@
 
   <footer>
     {#if view === 'open'}
-      {[`${tabs.length} open`, working && `${working} working`, waiting && `${waiting} need you`].filter(Boolean).join(', ')}
+      {[`${tabs.length} open`, working && `${working} working`, waiting && `${waiting} waiting on you`].filter(Boolean).join(', ')}
     {:else if view === 'scratch'}
       {scratchSessions} sessions
     {:else}

@@ -83,10 +83,10 @@ function itemOf(it: Obj): ChatItem | null {
     case 'plan':
       return { id: it.id, kind: 'assistant', text: it.text };
     case 'commandExecution':
-      return { id: it.id, kind: 'tool', tool: 'Shell', input: firstLine(it.command), body: clip(it.command), output: clip(it.aggregatedOutput ?? ''), done, error: it.status === 'failed' || it.status === 'declined' || (it.exitCode ?? 0) !== 0 };
+      return { id: it.id, kind: 'tool', tool: 'Shell', input: firstLine(it.command), body: clip(it.command), output: clip(it.aggregatedOutput ?? ''), done, error: it.status === 'failed' || it.status === 'declined' || (it.exitCode ?? 0) !== 0, declined: it.status === 'declined' || undefined };
     case 'fileChange': {
       const changes: Obj[] = it.changes ?? [];
-      return { id: it.id, kind: 'tool', tool: 'Edit', input: changes.map((c) => c.path).join(', '), body: clip(changes.map((c) => c.diff).join('\n')), done, error: it.status === 'failed' || it.status === 'declined' };
+      return { id: it.id, kind: 'tool', tool: 'Edit', input: changes.map((c) => c.path).join(', '), body: clip(changes.map((c) => c.diff).join('\n')), done, error: it.status === 'failed' || it.status === 'declined', declined: it.status === 'declined' || undefined };
     }
     case 'mcpToolCall':
       return { id: it.id, kind: 'tool', tool: `${it.server}.${it.tool}`, input: firstLine(JSON.stringify(it.arguments ?? {})), body: clip(JSON.stringify(it.arguments ?? {}, null, 2)), output: clip(it.error?.message ?? textOf(it.result?.content)), done, error: !!it.error };
@@ -242,7 +242,7 @@ export class Codex {
         const item = itemOf(p.item);
         if (item) this.live({ t: 'item', item: item.kind === 'user' ? { ...item, turn: p.turnId } : item });
         else this.seen(`item ${p.item?.type}`);
-        if (item?.kind === 'tool' && item.done) this.live({ t: 'result', id: item.id, output: item.output ?? '', error: !!item.error });
+        if (item?.kind === 'tool' && item.done) this.live({ t: 'result', id: item.id, output: item.output ?? '', error: !!item.error, declined: item.declined });
         return;
       }
       // With `approvals_reviewer = "auto_review"` Codex's own reviewer answers approvals;

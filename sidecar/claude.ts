@@ -43,6 +43,8 @@ type Out = (ev: AgentEvent) => void;
 type Block = Record<string, any>;
 
 const MODES = ['default', 'acceptEdits', 'plan', 'auto'];
+/** How a refused call's result starts: ATC's own denial, or the CLI's. History has no other mark. */
+const DECLINED = /^(The user declined this|The user doesn't want to proceed)/;
 const STATUS: Record<string, Step['status']> = { pending: 'pending', in_progress: 'active', completed: 'done' };
 
 /** Settings arguments as the SDK's extraArgs: `--flag value`, `--flag=value` or `--flag`. */
@@ -123,7 +125,7 @@ export class Claude {
         enableFileCheckpointing: true,
         // The CLI leaves its task list out of SDK sessions; this puts it back.
         allowedTools: ['TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet'],
-        canUseTool: (tool, input, { signal, suggestions }) => this.ask(tool, input, suggestions, signal),
+        canUseTool: (tool, input, { signal, suggestions, toolUseID }) => this.ask(tool, input, suggestions, signal, toolUseID),
       },
     });
   }
@@ -249,7 +251,7 @@ export class Claude {
         const blocks = content as Block[];
         for (const b of blocks) {
           if (b.type !== 'tool_result') continue;
-          out({ t: 'result', id: b.tool_use_id, output: clip(textOf(b.content)), error: !!b.is_error });
+          out({ t: 'result', id: b.tool_use_id, output: clip(textOf(b.content)), error: !!b.is_error, declined: this.denied.has(b.tool_use_id) || DECLINED.test(textOf(b.content)) || undefined });
           const subject = this.creating.get(b.tool_use_id);
           const n = subject !== undefined && /Task #(\d+) created/.exec(textOf(b.content));
           if (n) {
@@ -276,7 +278,10 @@ export class Claude {
     }
   }
 
-  private async ask(tool: string, input: Record<string, unknown>, suggestions: PermissionUpdate[] | undefined, signal: AbortSignal): Promise<PermissionResult> {
+  /** Calls the user said no to, so their results read as declined, not failed. */
+  private denied = new Set<string>();
+
+  private async ask(tool: string, input: Record<string, unknown>, suggestions: PermissionUpdate[] | undefined, signal: AbortSignal, call: string): Promise<PermissionResult> {
     const id = `r${++this.n}`;
     const kind = tool === 'AskUserQuestion' ? 'question' : tool === 'ExitPlanMode' ? 'plan' : 'permission';
     const asked = Array.isArray(input.questions) ? (input.questions as Block[]) : [];
@@ -298,7 +303,10 @@ export class Claude {
     });
     this.waiting.delete(id);
     this.live({ t: 'resolved', id });
-    if (!answer.allow) return { behavior: 'deny', message: answer.message || 'The user declined this.' };
+    if (!answer.allow) {
+      this.denied.add(call);
+      return { behavior: 'deny', message: answer.message ? `The user declined this: ${answer.message}` : 'The user declined this.' };
+    }
     if (kind === 'question') {
       const answers = Object.fromEntries(Object.entries(answer.answers ?? {}).map(([q, labels]) => [q, labels.join(', ')]));
       return { behavior: 'allow', updatedInput: { ...input, answers } };

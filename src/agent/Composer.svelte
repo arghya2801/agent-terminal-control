@@ -1,9 +1,10 @@
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';
+  import Icon from '../lib/Icon.svelte';
   import { matchCommands, typedCommand, type Sigil } from './commands';
   import type { Command, Image } from '../../sidecar/protocol';
 
-  let { text = $bindable(''), name, history, sigils, commands, working, disabled, onSend, onStop, onFiles, toolbar }: {
+  let { text = $bindable(''), name, history, sigils, commands, working, waiting = false, disabled, onSend, onStop, onFiles, toolbar }: {
     /** What is in the box; a rewind puts its prompt back here. */
     text?: string;
     name: string;
@@ -13,6 +14,8 @@
     sigils: Sigil[];
     commands: Command[];
     working: boolean;
+    /** A card above waits for an answer. */
+    waiting?: boolean;
     disabled: boolean;
     onSend: (text: string, images: Image[]) => void;
     onStop: () => void;
@@ -62,6 +65,7 @@
   let images = $state<(Image & { url: string; name: string })[]>([]);
   let problem = $state('');
   let dragging = $state(false);
+  let picker = $state<HTMLInputElement>();
   // What both CLIs' models take, and the API's size limit for one image.
   const TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
   const MAX = 5 * 1024 * 1024;
@@ -152,6 +156,7 @@
 <div
   class="console"
   class:disabled
+  class:waiting
   class:dragging
   ondragover={(e) => hasFiles(e) && !disabled && (e.preventDefault(), (dragging = true))}
   ondragleave={() => (dragging = false)}
@@ -169,17 +174,23 @@
     </div>
   {/if}
   {#if menu.length}
-    <ul class="menu" role="listbox" aria-label="Commands and skills">
-      {#each menu as c, i (c.name)}
-        <li role="option" aria-selected={i === pick}>
-          <button class:on={i === pick} onmousedown={(e) => { e.preventDefault(); choose(c); }} onmouseenter={() => (pick = i)}>
-            <span class="cmd">{label(c)}</span>
-            {#if c.hint}<span class="hint">{c.hint}</span>{/if}
-            <span class="desc">{c.description}</span>
-          </button>
-        </li>
-      {/each}
-    </ul>
+    <div class="menu">
+      <ul role="listbox" aria-label="Commands and skills">
+        {#each menu as c, i (c.name)}
+          {@const at = typed ? c.name.toLowerCase().indexOf(typed.query, 1) : -1}
+          {@const source = /^\(([^)]+)\)\s*/.exec(c.description)}
+          <li role="option" aria-selected={i === pick}>
+            <button class:on={i === pick} onmousedown={(e) => { e.preventDefault(); choose(c); }} onmouseenter={() => (pick = i)} title={c.description}>
+              <span class="cmd">{#if at > 0 && typed?.query}{c.name.slice(0, at)}<mark>{c.name.slice(at, at + typed.query.length)}</mark>{c.name.slice(at + typed.query.length)}{:else}{label(c)}{/if}</span>
+              {#if c.hint}<span class="hint">{c.hint}</span>{/if}
+              <span class="desc">{source ? c.description.slice(source[0].length) : c.description}</span>
+              {#if source}<span class="source">{source[1]}</span>{/if}
+            </button>
+          </li>
+        {/each}
+      </ul>
+      <div class="keys" aria-hidden="true"><kbd>↑</kbd><kbd>↓</kbd> to move <kbd>Tab</kbd> or <kbd>Enter</kbd> to pick <kbd>Esc</kbd> to close</div>
+    </div>
   {/if}
   <textarea
     bind:this={box}
@@ -191,14 +202,16 @@
     onpaste={onPaste}
     rows="1"
     {disabled}
-    placeholder={disabled ? `${name} has stopped` : sigils.includes('$') ? `Ask ${name}: / for commands, $ for skills` : `Ask ${name}, or type / for commands and skills`}
+    placeholder={disabled ? 'Resume the session to keep going' : waiting ? `Answer ${name} above, or type to tell it something else` : sigils.includes('$') ? `Ask ${name}: / for commands, $ for skills, @ for files` : `Ask ${name}: / for commands and skills, @ for files`}
     aria-label="Message {name}"
   ></textarea>
   <div class="bar">
+    <button class="attach" onclick={() => picker?.click()} {disabled} title="Attach images (or paste or drop them)" aria-label="Attach images"><Icon name="image" size={15} /></button>
+    <input type="file" accept={TYPES.join(',')} multiple hidden bind:this={picker} onchange={(e) => (void attach([...(e.currentTarget.files ?? [])]), (e.currentTarget.value = ''))} />
     {@render toolbar?.()}
     <div class="grow"></div>
-    {#if working}<button class="stop" onclick={onStop} title="Stop the turn (Esc)">Stop</button>{/if}
-    <button class="send" onclick={send} disabled={disabled || (!text.trim() && !images.length)} title="Send (Enter)">Send</button>
+    {#if working}<button class="round stop" onclick={onStop} title="Stop the turn (Esc)" aria-label="Stop"><Icon name="stop" size={13} /></button>{/if}
+    <button class="round send" onclick={send} disabled={disabled || (!text.trim() && !images.length)} title={working ? 'Send when this turn ends (Enter)' : 'Send (Enter)'} aria-label="Send"><Icon name="up" size={16} /></button>
   </div>
 </div>
 
@@ -207,8 +220,8 @@
     position: relative;
     background: var(--bg-chrome);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+    border-radius: 16px;
+    box-shadow: 0 8px 28px rgb(0 0 0 / 0.22), 0 1px 2px rgb(0 0 0 / 0.12);
     transition: border-color var(--fast) var(--ease-out);
   }
   .console.dragging {
@@ -259,6 +272,10 @@
     font-size: 12px;
     color: var(--danger);
   }
+  .console.waiting,
+  .console.waiting:focus-within {
+    border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  }
   .console:focus-within {
     border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
   }
@@ -276,7 +293,7 @@
     color: var(--fg-bright);
     background: transparent;
     border: none;
-    padding: 12px 14px 4px;
+    padding: 14px 16px 4px;
   }
   textarea:focus-visible {
     outline: none;
@@ -288,26 +305,46 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 8px 8px 10px;
+    padding: 4px 8px 8px 8px;
     font-size: 12px;
     color: var(--fg-faint);
   }
   .grow {
     flex: 1;
   }
-  .send,
-  .stop {
-    font: inherit;
-    font-size: 12px;
-    font-weight: 600;
+  .attach {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
     border-radius: 8px;
-    padding: 5px 14px;
+    background: transparent;
+    color: var(--fg-dim);
     cursor: pointer;
+  }
+  .attach:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--fg-bright);
+  }
+  .round {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-radius: 50%;
     border: 1px solid transparent;
+    cursor: pointer;
+    transition: background var(--fast) var(--ease-out), color var(--fast) var(--ease-out);
   }
   .send {
-    background: var(--accent-strong);
+    background: var(--accent);
     color: var(--on-accent);
+  }
+  .send:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 85%, var(--fg-bright));
   }
   .send:disabled {
     background: var(--bg-surface);
@@ -323,9 +360,9 @@
     border-color: var(--danger);
     color: var(--danger);
   }
-  .send:focus-visible,
-  .stop:focus-visible {
-    outline: 1px solid var(--accent);
+  .attach:focus-visible,
+  .round:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
     outline-offset: 1px;
   }
   .menu {
@@ -333,17 +370,32 @@
     left: 0;
     right: 0;
     bottom: calc(100% + 6px);
+    background: var(--bg-chrome);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-pop);
+    overflow: hidden;
+    z-index: 2;
+  }
+  .menu ul {
     margin: 0;
     padding: 4px;
     list-style: none;
-    background: var(--bg-chrome);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    box-shadow: var(--shadow-pop);
-    max-height: 20em;
+    /* Whole rows: eight of them, 34px each, plus the padding. */
+    max-height: calc(8 * 34px + 8px);
     overflow-x: hidden;
     overflow-y: auto;
-    z-index: 2;
+  }
+  mark {
+    background: none;
+    color: var(--accent);
+  }
+  .source {
+    flex: none;
+    margin-left: auto;
+    padding-left: 8px;
+    font-size: 11px;
+    color: var(--fg-faint);
   }
   .menu button {
     all: unset;
@@ -352,10 +404,40 @@
     gap: 1.2ch;
     align-items: baseline;
     width: 100%;
-    padding: 6px 10px;
-    border-radius: 6px;
+    height: 34px;
+    padding: 0 10px;
+    align-items: center;
+    border-radius: 8px;
     cursor: pointer;
     white-space: nowrap;
+  }
+  .keys {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 7px 12px;
+    border-top: 1px solid var(--border);
+    font-size: 11.5px;
+    color: var(--fg-faint);
+  }
+  kbd {
+    font: inherit;
+    padding: 0 4px;
+    min-width: 10px;
+    text-align: center;
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    color: var(--fg-dim);
+  }
+  kbd + kbd {
+    margin-left: -1px;
+  }
+  .keys kbd:not(:first-child) {
+    margin-left: 6px;
+  }
+  .keys kbd + kbd {
+    margin-left: 2px;
   }
   .menu button.on {
     background: var(--selection);

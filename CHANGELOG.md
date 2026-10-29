@@ -15,9 +15,11 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Rewind an agent tab: hover one of your messages and choose Rewind. The conversation goes back to before it and the message returns to the box. In Claude tabs, files Claude changed since then go back too, as Esc Esc does in the CLI. Codex can't undo its edits, so its files stay as they are.
 - Type `@` in an agent tab's message box to pick a project file. The list is git's (ignored files left out), or the folder's own outside a repo.
 - Claude's task list shows above the message box while any task is open, with each task's state ("2 of 5 tasks done"). Codex's plan shows there too, when Codex sends one.
+- A new look for agent tabs. Your messages sit on the right. Each thing the agent did is one row with an icon and a plain verb ("Ran npm test", "Edited cli.js"), and a failed or declined call says why underneath. Permission and question cards have clearer buttons, and number keys pick an answer. The task list folds to one line while a card waits. Tables, code blocks and the `/` menu (with matches highlighted) are easier to read. An image button sits in the message box, and a stopped session offers Resume. The pane header shows the model, cost and context; tokens and cache use moved into the cost's tooltip.
 
 ### Fixed
 - An approved plan in a Claude tab leaves plan mode, so the mode chip no longer stays on Plan.
+- An agent tab waiting on a permission or question shows as waiting in the sidebar and header even while you are looking at it, instead of idle.
 
 ## [0.6.2] - 2026-10-24
 

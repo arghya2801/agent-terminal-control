@@ -25,6 +25,8 @@ export interface ChatItem {
   costUsd?: number;
   /** Codex: the turn a user message started, to rewind to. */
   turn?: string;
+  /** The user said no to this call. */
+  declined?: boolean;
   /** Images sent with a user message, as data URLs. */
   images?: string[];
 }
@@ -99,7 +101,7 @@ export type AgentEvent =
   | { t: 'item'; item: ChatItem }
   | { t: 'delta'; id: string; kind: 'assistant' | 'thinking'; text: string; parent?: string | null }
   | { t: 'output'; id: string; text: string }
-  | { t: 'result'; id: string; output: string; error: boolean }
+  | { t: 'result'; id: string; output: string; error: boolean; declined?: boolean }
   | { t: 'progress'; id: string; seconds: number }
   | { t: 'working'; on: boolean }
   | { t: 'request'; request: AgentRequest }

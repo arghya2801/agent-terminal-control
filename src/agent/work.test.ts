@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activity, blocks, relativePaths, summarize, thoughtLine } from './work';
+import { activity, blocks, cleanCommand, relativePaths, summarize, thoughtLine, toolVerb } from './work';
 import type { ChatItem } from '../../sidecar/protocol';
 
 const tool = (id: string, name: string, input = '', extra: Partial<ChatItem> = {}): ChatItem => ({ id, kind: 'tool', tool: name, input, done: true, ...extra });
@@ -45,5 +45,17 @@ describe('activity', () => {
   });
   it('takes the first sentence of a thought without a heading', () => {
     expect(thoughtLine('The `fit` runs early. Then it resizes.')).toBe('The fit runs early.');
+  });
+});
+
+describe('cleanCommand', () => {
+  it("drops Codex's shell wrapper and a cd into the workspace", () => {
+    expect(cleanCommand(`"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -NoProfile -Command 'echo it''s'`, null)).toBe("echo it's");
+    expect(cleanCommand('cd "/d/Coding/app" && git status', 'D:\\Coding\\app')).toBe('git status');
+    expect(cleanCommand('cd /tmp && ls', 'D:\\Coding\\app')).toBe('cd /tmp && ls');
+  });
+
+  it('names what a call did, or is doing', () => {
+    expect([toolVerb('Bash'), toolVerb('Read', true), toolVerb('mcp__github__list_issues')]).toEqual(['Ran', 'Reading', 'github / list_issues']);
   });
 });

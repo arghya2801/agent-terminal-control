@@ -72,7 +72,7 @@
     overflow-wrap: anywhere;
   }
   .md :global(:is(p, ul, ol, pre, blockquote, .table, h3, h4, h5)) {
-    margin: 0 0 0.6em;
+    margin: 0 0 0.75em;
   }
   .md :global(:last-child) {
     margin-bottom: 0;
@@ -105,17 +105,18 @@
   }
   .md :global(code) {
     font-family: var(--mono);
-    font-size: 0.92em;
+    font-size: 0.9em;
     background: var(--bg-surface);
-    border-radius: 3px;
-    padding: 0 0.25em;
+    border-radius: 5px;
+    padding: 0.1em 0.35em;
   }
   .md :global(pre) {
     background: var(--bg-chrome);
     border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 8px 10px;
+    border-radius: 10px;
+    padding: 12px 14px;
     overflow-x: auto;
+    line-height: 1.5;
   }
   .md :global(pre code) {
     background: none;
@@ -123,7 +124,7 @@
   }
   .md :global(.code) {
     position: relative;
-    margin: 0 0 0.6em;
+    margin: 0 0 0.75em;
   }
   .md :global(.code pre) {
     margin: 0;
@@ -161,16 +162,31 @@
   }
   .md :global(.table) {
     overflow-x: auto;
+    width: fit-content;
+    max-width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 10px;
   }
   .md :global(table) {
     border-collapse: collapse;
+    font-size: 13px;
   }
   .md :global(:is(th, td)) {
-    border: 1px solid var(--border);
-    padding: 3px 8px;
+    padding: 6px 12px;
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: normal;
+    border-top: 1px solid var(--border);
+  }
+  .md :global(tr:first-child > *) {
+    border-top: none;
   }
   .md :global(th) {
     color: var(--fg-bright);
     font-weight: 600;
+    background: var(--bg-chrome);
+  }
+  .md :global(td code) {
+    white-space: nowrap;
   }
 </style>
