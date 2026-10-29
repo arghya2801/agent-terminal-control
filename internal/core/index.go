@@ -373,8 +373,9 @@ func (idx *Index) Scan(settings Object, force bool) Object {
 					}
 					f.Close()
 				}
+				// Not dirty: rewriting the whole cache on every write of a working agent costs
+				// more than the next start catching up here, the same cheap way.
 				entry.Size, entry.Stamp = size, stamp
-				dirty = true
 			default:
 				// New, shrunk, rewritten in place, or (Claude) a head that never yielded a label.
 				// A grown Codex file keeps its reader and resumes from the last offset.

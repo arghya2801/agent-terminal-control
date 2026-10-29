@@ -1,7 +1,6 @@
 <script lang="ts">
   import SessionList from './SessionList.svelte';
   import OpenList from './OpenList.svelte';
-  import NotesPad from './NotesPad.svelte';
   import TaskBox from './TaskBox.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import Icon from '../lib/Icon.svelte';
@@ -132,6 +131,12 @@
   const NOTES_HEIGHT_KEY = 'atc.notesHeight';
   let notesOpen = $state(true);
   let notesHeight = $state(200);
+  // The notes editor (Milkdown, a large part of the bundle) loads the first time the pane
+  // opens, then stays mounted so reopening is instant.
+  let notesLoaded = $state(false);
+  $effect(() => {
+    if (notesOpen) notesLoaded = true;
+  });
   let openView = $state<HTMLElement>();
   try {
     notesOpen = localStorage.getItem(NOTES_OPEN_KEY) !== '0';
@@ -337,7 +342,7 @@
         <span class="twisty" class:expanded={notesOpen}><Icon name="chevron" size={12} /></span>
         Notes <em>notes.md</em>
       </button>
-      <div class="notes-body" hidden={!notesOpen}><NotesPad /></div>
+      <div class="notes-body" hidden={!notesOpen}>{#if notesLoaded}{#await import('./NotesPad.svelte') then { default: NotesPad }}<NotesPad />{/await}{/if}</div>
     </section>
   </div>
   {#if menu}

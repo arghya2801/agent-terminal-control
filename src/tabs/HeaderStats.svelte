@@ -24,10 +24,13 @@
     const clock = setInterval(() => (now = Date.now()), 5_000);
     return () => clearInterval(clock);
   });
-  // ponytail: every poll ships all cost rows over IPC; ask Go for one session's totals if that gets slow.
+  // A session's cost only moves while its agent works: load on showing it and when it
+  // stops, and poll only in between.
+  // ponytail: each load ships all cost rows over IPC; ask Go for one session's totals if that gets slow.
   $effect(() => {
     if (!sessionKey) return;
     void loadCosts();
+    if (!working) return;
     const poll = setInterval(loadCosts, 60_000);
     return () => clearInterval(poll);
   });
