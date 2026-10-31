@@ -166,7 +166,8 @@
 >
   {#if images.length || problem}
     <div class="attachments">
-      {#each images as img, i (img.url)}
+      <!-- Unkeyed: the same image pasted twice has the same URL. -->
+      {#each images as img, i}
         <figure>
           <img src={img.url} alt={img.name} />
           <button class="remove" onclick={() => (images = images.filter((_, j) => j !== i))} aria-label="Remove {img.name}" title="Remove">×</button>
