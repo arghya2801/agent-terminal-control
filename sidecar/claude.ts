@@ -395,11 +395,13 @@ export class Claude {
   }
 
   mode(mode: string) {
-    if (mode === 'plan' && this.current !== 'plan') this.beforePlan = this.current;
-    this.current = mode;
     void this.wake()
       ?.setPermissionMode(mode as never)
-      .then(() => this.live({ t: 'mode', mode }))
+      .then(() => {
+        if (mode === 'plan' && this.current !== 'plan') this.beforePlan = this.current;
+        this.current = mode;
+        this.live({ t: 'mode', mode });
+      })
       .catch((e) => this.live({ t: 'error', message: `Can't switch to ${mode}: ${e?.message ?? e}` }));
   }
 

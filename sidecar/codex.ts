@@ -8,10 +8,16 @@ type Obj = Record<string, any>;
 /** How a Codex process starts, from settings: the CLI, its arguments, extra environment. */
 type Launch = { cwd: string; exe: string; args: string[]; env?: Record<string, string> };
 
-/** `codex app-server` with `server` flags. npm's .cmd shims only start through a shell. */
+/** `codex app-server` with `server` flags. ATC passes npm's codex.js, not its .cmd shim; a
+ *  shim given by path only starts through cmd.exe, so each argument is quoted for it. */
 function spawnCodex(o: Launch, server: string[]): ChildProcessWithoutNullStreams {
+  const args = ['app-server', ...server];
+  const opts = { cwd: o.cwd, env: { ...process.env, ...o.env }, windowsHide: true };
+  if (o.exe.endsWith('.js')) return spawn(process.execPath, [o.exe, ...args], opts);
   const shim = /\.(cmd|bat)$/i.test(o.exe);
-  return spawn(shim ? `"${o.exe}"` : o.exe, ['app-server', ...server], { cwd: o.cwd, env: { ...process.env, ...o.env }, shell: shim, windowsHide: true });
+  // ponytail: cmd.exe still expands %VAR% inside quotes; resolve the shim if that matters.
+  const quote = (a: string) => `"${a.replace(/"/g, '""')}"`;
+  return spawn(shim ? quote(o.exe) : o.exe, shim ? args.map(quote) : args, { ...opts, shell: shim });
 }
 
 const toModel = (m: Obj): Model => ({
@@ -22,30 +28,17 @@ const toModel = (m: Obj): Model => ({
   defaultEffort: m.defaultReasoningEffort,
 });
 
-/** Codex's models without a thread: start the app-server, ask, stop it. */
+/** Codex's models without a thread: start an app-server, ask, stop it. */
 export async function codexCatalog(o: Launch): Promise<Model[]> {
-  const proc = spawnCodex(o, threadOptions(o.args).server);
-  const waiting = new Map<number, (m: Obj) => void>();
-  createInterface({ input: proc.stdout }).on('line', (line) => {
-    try {
-      const m = JSON.parse(line);
-      waiting.get(m.id)?.(m);
-    } catch {}
-  });
-  let next = 1;
-  const call = (method: string, params: Obj = {}) =>
-    new Promise<any>((resolve, reject) => {
-      const id = next++;
-      waiting.set(id, (m) => (m.error ? reject(new Error(m.error.message)) : resolve(m.result)));
-      proc.stdin.write(JSON.stringify({ id, method, params }) + '\n');
-    });
+  const s = new Server('', o, threadOptions(o.args).server);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error("Codex didn't list its models within 30 seconds")), 30_000)));
   try {
-    await call('initialize', { clientInfo: { name: 'atc', title: 'ATC', version: '1' } });
-    proc.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n');
-    const r = await call('model/list', {});
+    const r = await Promise.race([s.call('model/list', {}), late]);
     return (r.data ?? []).filter((m: Obj) => !m.hidden).map(toModel);
   } finally {
-    proc.kill();
+    clearTimeout(timer);
+    s.kill();
   }
 }
 
@@ -54,8 +47,9 @@ function threadOptions(args: string[]): { thread: Obj; server: string[] } {
   const thread: Obj = {};
   const server: string[] = [];
   for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    const next = () => args[++i];
+    // `--sandbox=read-only` as well as `--sandbox read-only`.
+    const [a, inline] = args[i].startsWith('--') && args[i].includes('=') ? [args[i].slice(0, args[i].indexOf('=')), args[i].slice(args[i].indexOf('=') + 1)] : [args[i]];
+    const next = () => inline ?? args[++i];
     if (a === '--sandbox' || a === '-s') thread.sandbox = next();
     else if (a === '--model' || a === '-m') thread.model = next();
     else if (a === '--ask-for-approval' || a === '-a') thread.approvalPolicy = next();
@@ -158,6 +152,8 @@ class Server {
     this.proc.stderr.on('data', (d) => log('codex:', String(d).trimEnd()));
     this.proc.on('exit', (code) => this.end(code ? `Codex exited with ${code}` : undefined));
     this.proc.on('error', (e) => this.end(`Can't start Codex: ${e.message}`));
+    // A write to a server that has exited fails here, not as an uncaught EPIPE.
+    this.proc.stdin.on('error', (e) => this.end(`Codex stopped reading: ${e.message}`));
     createInterface({ input: this.proc.stdout }).on('line', (line) => {
       try {
         this.receive(JSON.parse(line));
@@ -225,6 +221,10 @@ class Server {
     for (const [thread, owner] of this.threads) if (owner === s) this.threads.delete(thread);
     if (this.sessions.size) return;
     if (readers.get(this.key) === this) readers.delete(this.key);
+    this.kill();
+  }
+
+  kill() {
     this.proc.kill();
   }
 }
@@ -246,6 +246,8 @@ export class Codex {
   private n = 0;
   private thread = '';
   private turn = '';
+  /** Stop came before the turn started. */
+  private stop = false;
   private chosen: string | undefined;
   private effortChosen: string | null;
   private skills = new Map<string, Obj>();
@@ -363,8 +365,14 @@ export class Codex {
         this.turn = p.turn.id;
         if (!this.turns.includes(p.turn.id)) this.turns.push(p.turn.id);
         this.live({ t: 'working', on: true });
+        if (this.stop) this.interrupt();
         return;
       case 'turn/completed':
+        this.turn = '';
+        this.stop = false;
+        // Codex drops a turn's open approvals with it.
+        for (const id of this.requests.keys()) this.live({ t: 'resolved', id });
+        this.requests.clear();
         this.live({ t: 'working', on: false });
         if (p.turn.status === 'interrupted') this.live({ t: 'item', item: { id: `int:${p.turn.id}`, kind: 'notice', text: 'Interrupted' } });
         if (p.turn.status === 'failed') this.live({ t: 'item', item: { id: `err:${p.turn.id}`, kind: 'notice', text: p.turn.error?.message ?? 'The turn failed' } });
@@ -415,11 +423,12 @@ export class Codex {
   }
 
   request(rpc: number | string, method: string, p: Obj) {
-    log(this.id, 'codex asks', method, JSON.stringify(p).slice(0, 300));
+    // Not the params: a command can hold a secret.
+    log(this.id, 'codex asks', method, rpc);
     const id = `r${++this.n}`;
     let request: AgentRequest;
     if (method === 'item/commandExecution/requestApproval' || method === 'execCommandApproval') {
-      const command = p.command ?? (Array.isArray(p.command) ? p.command.join(' ') : '');
+      const command = Array.isArray(p.command) ? p.command.join(' ') : (p.command ?? '');
       request = { id, kind: 'permission', tool: 'Shell', input: firstLine(String(command)), body: [command, p.reason].filter(Boolean).join('\n\n'), always: true };
     } else if (method === 'item/fileChange/requestApproval' || method === 'applyPatchApproval') {
       request = { id, kind: 'permission', tool: 'Edit', input: p.grantRoot ?? 'Apply changes', body: p.reason ?? '', always: true };
@@ -460,6 +469,7 @@ export class Codex {
       ...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })),
       ...skills.map((s) => ({ type: 'skill', name: s.name, path: s.path })),
     ];
+    this.stop = false;
     this.live({ t: 'working', on: true });
     // After wake(), which gives a new tab its thread.
     this.wake().then((s) => s.call('turn/start', {
@@ -474,7 +484,9 @@ export class Codex {
     });
   }
 
+  /** Before `turn/started`, Stop waits for the turn it means. */
   interrupt() {
+    this.stop = !this.turn;
     if (this.turn && this.server) void this.call('turn/interrupt', { threadId: this.thread, turnId: this.turn }).catch((e) => log(this.id, 'interrupt:', String(e)));
   }
 
@@ -500,8 +512,9 @@ export class Codex {
         if (!last) return say('Nothing to undo');
         await this.revert(last);
       } else if (name === 'new') {
-        const r = await this.call('thread/start', { cwd: this.cwd, ...(this.chosen ? { model: this.chosen } : {}) });
+        const r = await this.call('thread/start', { cwd: this.cwd, ...this.options, ...(this.chosen ? { model: this.chosen } : {}) });
         this.own(r.thread.id);
+        if (!this.preset) this.live({ t: 'mode', mode: presetOf(r.sandbox) });
         this.turns = [];
         this.live({ t: 'clear' });
         this.live({ t: 'session', id: this.thread });

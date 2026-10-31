@@ -87,7 +87,8 @@
       <pre class="well" class:cmd={action === 'command'}>{#if request.body && request.body !== request.input}{#each lines as l}<span class:add={diff && l.startsWith('+')} class:del={diff && l.startsWith('-')}>{l}</span>{'\n'}{/each}{:else}{request.input}{/if}</pre>
     {/if}
     <div class="actions">
-      <input class="field grow" placeholder={request.kind === 'plan' ? 'What to change (optional)' : `Why not? (optional, sent with Deny)`} bind:value={reason} />
+      <!-- Codex's decline takes no reason. -->
+      {#if name === 'Codex'}<span class="grow"></span>{:else}<input class="field grow" placeholder={request.kind === 'plan' ? 'What to change (optional)' : `Why not? (optional, sent with Deny)`} bind:value={reason} />{/if}
       {#if request.kind === 'plan'}
         <button class="btn" onclick={deny}>Keep planning</button>
         <button class="btn primary" onclick={() => onAnswer({ allow: true })}>Approve plan</button>

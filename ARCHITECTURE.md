@@ -88,12 +88,13 @@ models and modes; `item`, `delta`, `output`, `result` and `progress` for the cha
 sidecar is `ATC_SIDECAR` when set (the dev host points it at `sidecar/agent.ts`, which
 Node runs with types stripped), else the bundle `npm run build` puts in
 `dist/sidecar/agent.mjs`, embedded with `dist/` and written to `<config>/sidecar/`.
-`AgentOpen` resolves the CLI from settings (npm's `claude.cmd` becomes the `cli.js` beside
-it), passes the `args` and, for chats, `chatArgs` settings, and gives Codex `CODEX_HOME`.
+`AgentOpen` resolves the CLI from settings (npm's `claude.cmd` and `codex.cmd` become the
+scripts beside them, so no shell parses the arguments), passes the `args` and, for chats, `chatArgs` settings, and gives Codex `CODEX_HOME`.
 Each `{id, ev}` line goes to that session's Wails channel. Closing stdin ends every
 session; quitting and a full page reload do that, then kill whatever is left of the tree.
-The sidecar's stderr goes to `<config>/sidecar.log`, and it logs each Codex message it
-ignores once.
+The sidecar's stderr goes to `<config>/sidecar.log`; the run before it is
+`sidecar.old.log`. It logs each Codex message it ignores once, and only the method and id
+of an approval, whose command can hold secrets.
 
 A resumed tab is often only read, so it starts dormant: its history comes from disk
 (`getSessionMessages`, or Codex's `thread/read` on a shared app-server) and no CLI runs.

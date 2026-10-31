@@ -121,15 +121,16 @@ func (a *App) AgentClose(id string) error {
 	return a.agents.write(core.Object{"op": "close", "id": id})
 }
 
-// agentExe is the CLI a session runs. npm installs Claude Code as a .cmd shim that the
-// SDK cannot start, so it gets the cli.js beside it.
+// agentExe is the CLI a session runs. npm installs both CLIs as .cmd shims: the SDK cannot
+// start Claude's, and cmd.exe would reparse Codex's arguments, so each gets its script.
 func agentExe(provider, command string) (string, error) {
 	path, e := exec.LookPath(command)
 	if e != nil {
 		return "", fmt.Errorf("`%s` not found. Set its path in Settings > Agents", command)
 	}
-	if provider == "claude" && strings.EqualFold(filepath.Ext(path), ".cmd") {
-		if js := filepath.Join(filepath.Dir(path), "node_modules", "@anthropic-ai", "claude-code", "cli.js"); func() bool { _, e := os.Stat(js); return e == nil }() {
+	script := map[string]string{"claude": "@anthropic-ai/claude-code/cli.js", "codex": "@openai/codex/bin/codex.js"}[provider]
+	if strings.EqualFold(filepath.Ext(path), ".cmd") {
+		if js := filepath.Join(filepath.Dir(path), "node_modules", filepath.FromSlash(script)); func() bool { _, e := os.Stat(js); return e == nil }() {
 			return js, nil
 		}
 	}
@@ -155,7 +156,10 @@ func (s *sidecar) start(a *App) error {
 	cmd := exec.Command(node, script)
 	cmd.Env = pty.ChildEnv()
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
-	if cmd.Stderr, e = os.Create(filepath.Join(a.config, "sidecar.log")); e != nil {
+	// The last run's log says why it stopped; the next chat or Resume starts a new one.
+	logPath := filepath.Join(a.config, "sidecar.log")
+	_ = os.Rename(logPath, filepath.Join(a.config, "sidecar.old.log"))
+	if cmd.Stderr, e = os.Create(logPath); e != nil {
 		cmd.Stderr = io.Discard
 	}
 	stdin, e := cmd.StdinPipe()

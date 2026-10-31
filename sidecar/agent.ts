@@ -9,6 +9,14 @@ import { Codex, codexCatalog } from './codex.ts';
 import { emit, listFiles, log } from './events.ts';
 import type { AgentOp, Model, Provider } from './protocol.ts';
 
+// One process runs every chat, so a crash ends them all; sidecar.log says why.
+for (const event of ['uncaughtException', 'unhandledRejection'] as const) {
+  process.on(event, (e) => {
+    log('sidecar', event, String((e as Error)?.stack ?? e));
+    process.exit(1);
+  });
+}
+
 const sessions = new Map<string, Claude | Codex>();
 const oldNode = Number(process.versions.node.split('.')[0]) < 18;
 /** Each provider's models, asked once per sidecar: starting a CLI to ask takes a second. */
