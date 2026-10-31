@@ -118,10 +118,12 @@
   {@const end = l.resetsAt ? Date.parse(l.resetsAt) : now}
   {@const start = end - windowMinutes(l) * 60_000}
   {@const x = (t: number) => ((t - start) / (end - start)) * 100}
-  {#if s.length >= 2}
-    {@const last = s[s.length - 1]}
+  <!-- Only what falls inside the window drawn: an idle session's readings reach further back. -->
+  {@const inside = s.filter((r) => r.t >= start)}
+  {#if inside.length >= 2}
+    {@const last = inside[inside.length - 1]}
     <svg class="fillline" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="{l.label}, % used across this window">
-      <polyline points={s.map((r) => `${x(r.t)},${100 - r.percent}`).join(' ')} />
+      <polyline points={inside.map((r) => `${x(r.t)},${100 - r.percent}`).join(' ')} />
       {#if typeof f === 'number'}<line class="ahead" x1={x(last.t)} y1={100 - last.percent} x2={x(f)} y2="0" />{/if}
     </svg>
   {/if}
