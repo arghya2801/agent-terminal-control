@@ -21,8 +21,8 @@ interface Live {
   chat: boolean;
   channel: Channel<AgentEvent>;
   /** Sent once the session is ready: a task from the task box, or Reply before then. */
-  queued: string[];
-  /** Images from a message sent while the agent worked, which go with the queued text. */
+  queued: { text: string; images: Image[] }[];
+  /** The images of the manager's queued message, sent when it is. */
   images: Image[];
 }
 const live = new Map<TabKey, Live>();
@@ -31,11 +31,14 @@ export async function startAgent(key: TabKey, provider: AgentProvider, cwd: stri
   if (live.has(key)) return;
   agents[key] = { ...emptyState(), fresh: !o.session && !o.task };
   const channel = new Channel<AgentEvent>();
-  const l: Live = { id: null, provider, cwd, chat: !!o.chat, channel, queued: o.task ? [o.task] : [], images: [] };
+  const l: Live = { id: null, provider, cwd, chat: !!o.chat, channel, queued: o.task ? [{ text: o.task, images: [] }] : [], images: [] };
   live.set(key, l);
   channel.onmessage = (ev) => receive(key, ev);
   try {
-    l.id = await agentOpen(provider, cwd, o, channel);
+    const id = await agentOpen(provider, cwd, o, channel);
+    // The tab closed while its session opened, which then has no tab to close it.
+    if (live.get(key) !== l) return void agentClose(id).catch(() => {});
+    l.id = id;
   } catch (e) {
     receive(key, { t: 'exit', message: String(e instanceof Error ? e.message : e) });
   }
@@ -86,7 +89,7 @@ function receive(key: TabKey, ev: AgentEvent) {
     case 'ready':
     case 'dormant':
       setAgentState(key, { activity: s.working ? 'working' : 'idle' });
-      for (const text of l.queued.splice(0)) send(key, text);
+      for (const q of l.queued.splice(0)) send(key, q.text, q.images);
       break;
     case 'session':
       setAgentState(key, { session: `${l.provider}:${ev.id}` });
@@ -118,13 +121,16 @@ export function send(key: TabKey, text: string, images: Image[] = []) {
   const l = live.get(key);
   if (!l || (!text.trim() && !images.length)) return;
   if (agents[key]) agents[key].fresh = false;
-  l.images.push(...images);
-  if (!l.id || !(agents[key]?.ready || agents[key]?.dormant)) l.queued.push(text);
+  if (!l.id || !(agents[key]?.ready || agents[key]?.dormant)) l.queued.push({ text, images });
   else if (agents[key].working) {
     const had = getTab(key)?.queued;
-    queuePrompt(key, had ? `${had}\n\n${text}` : text || '(images)');
-  } else op(key, { op: 'send', text: text === '(images)' ? '' : text, images: l.images.splice(0) });
+    // Nothing queued means any held images were cancelled with their text.
+    l.images = [...(had ? l.images : []), ...images];
+    queuePrompt(key, had ? `${had}\n\n${text}` : text || IMAGES);
+  } else op(key, { op: 'send', text, images });
 }
+/** The queue's text for a message of only images, which the queue shows. */
+const IMAGES = '(images)';
 export const interrupt = (key: TabKey) => op(key, { op: 'interrupt' });
 export const answer = (key: TabKey, request: string, a: Answer) => op(key, { op: 'answer', request, answer: a });
 export const setMode = (key: TabKey, mode: string) => op(key, { op: 'mode', mode });
@@ -162,4 +168,10 @@ function end(key: TabKey) {
 }
 onClosed(end);
 
-setAgentHooks({ peek: (key) => (agents[key] ? peek(agents[key]) : []), send });
+setAgentHooks({
+  peek: (key) => (agents[key] ? peek(agents[key]) : []),
+  send: (key, text) => {
+    const images = live.get(key)?.images.splice(0) ?? [];
+    send(key, images.length && text === IMAGES ? '' : text, images);
+  },
+});

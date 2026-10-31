@@ -37,6 +37,9 @@ function notify(s: AgentState, text: string, error = false) {
   s.items.push({ id: `notice-${++notices}`, kind: 'notice', text, error });
 }
 
+/** How much of a running command's output the page keeps. */
+const LIVE_OUTPUT = 8192;
+
 /** Apply one event in place. Items are matched by id, so a streamed draft, its final text
  *  and a tool's result all land on the same item. */
 export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
@@ -82,7 +85,9 @@ export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
     }
     case 'output': {
       const had = find(ev.id);
-      if (had) had.output = (had.output ?? '') + ev.text;
+      // The tail is what shows while it runs; the result brings the whole output.
+      const out = (had?.output ?? '') + ev.text;
+      if (had) had.output = out.length > LIVE_OUTPUT ? `[earlier output cut]\n${out.slice(-LIVE_OUTPUT)}` : out;
       return;
     }
     case 'result': {
