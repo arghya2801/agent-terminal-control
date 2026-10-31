@@ -132,7 +132,12 @@ export const setModel = (key: TabKey, model: string) => op(key, { op: 'model', m
 export const setEffort = (key: TabKey, effort: string | null) => op(key, { op: 'effort', effort });
 export const listFiles = (key: TabKey) => op(key, { op: 'files' });
 /** Start a dormant session's CLI ahead of the first message, so its commands are listed. */
-export const wake = (key: TabKey) => agents[key]?.dormant && op(key, { op: 'wake' });
+export function wake(key: TabKey) {
+  if (!agents[key]?.dormant) return;
+  // Once is enough: Codex sends nothing that clears it, and its tab is already ready.
+  agents[key].dormant = false;
+  op(key, { op: 'wake' });
+}
 /** Back to before `prompt`: Claude by its id, Codex by the turn it started. */
 export const rewind = (key: TabKey, prompt: ChatItem) => op(key, { op: 'rewind', to: prompt.turn ?? prompt.id });
 

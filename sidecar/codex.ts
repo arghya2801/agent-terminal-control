@@ -267,7 +267,8 @@ export class Codex {
     this.chosen = thread.model;
     this.reader = Server.reader(o, server);
     this.reader.sessions.add(this);
-    void this.start().catch((e) => this.live({ t: 'error', message: String(e?.message ?? e) }));
+    // A tab that can't read its thread can't do anything else.
+    void this.start().catch((e) => this.ended(String(e?.message ?? e)));
   }
 
   private live: Out = (ev) => emit(this.id, ev);
@@ -310,6 +311,7 @@ export class Codex {
       this.reader.call('model/list', {}).catch(() => ({ data: [] })),
       o.resume ? this.reader.call('thread/read', { threadId: o.resume, includeTurns: true }) : null,
     ]);
+    if (this.closing) return;
     for (const s of (skills.data ?? []).flatMap((e: Obj) => e.skills ?? [])) if (s.enabled) this.skills.set(s.name, s);
     this.listed = models.data ?? [];
     if (read) {
@@ -328,11 +330,12 @@ export class Codex {
       effort: this.effortChosen,
     });
     if (o.resume) this.live({ t: 'dormant' });
-    else await this.wake();
+    else void this.wake().catch((e) => this.live({ t: 'error', message: String(e?.message ?? e) }));
   }
 
   /** This tab's own app-server, with the thread loaded in it. */
   wake(): Promise<Server> {
+    if (this.closing) return Promise.reject(new Error('The tab closed'));
     this.waking ??= (async () => {
       const s = (this.server = new Server('', this.o, this.args));
       s.sessions.add(this);
