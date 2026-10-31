@@ -17,7 +17,7 @@
     cumulative = $bindable(false),
     showAverage = $bindable(false),
     share = $bindable(false),
-    kind = $bindable('bars'),
+    kind = $bindable('line'),
   }: {
     rows: CostRow[];
     lo: string;
