@@ -47,8 +47,9 @@ function threadOptions(args: string[]): { thread: Obj; server: string[] } {
   const thread: Obj = {};
   const server: string[] = [];
   for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    const next = () => args[++i];
+    // `--sandbox=read-only` as well as `--sandbox read-only`.
+    const [a, inline] = args[i].startsWith('--') && args[i].includes('=') ? [args[i].slice(0, args[i].indexOf('=')), args[i].slice(args[i].indexOf('=') + 1)] : [args[i]];
+    const next = () => inline ?? args[++i];
     if (a === '--sandbox' || a === '-s') thread.sandbox = next();
     else if (a === '--model' || a === '-m') thread.model = next();
     else if (a === '--ask-for-approval' || a === '-a') thread.approvalPolicy = next();
@@ -500,7 +501,7 @@ export class Codex {
         if (!last) return say('Nothing to undo');
         await this.revert(last);
       } else if (name === 'new') {
-        const r = await this.call('thread/start', { cwd: this.cwd, ...(this.chosen ? { model: this.chosen } : {}) });
+        const r = await this.call('thread/start', { cwd: this.cwd, ...this.options, ...(this.chosen ? { model: this.chosen } : {}) });
         this.own(r.thread.id);
         this.turns = [];
         this.live({ t: 'clear' });
@@ -513,6 +514,7 @@ export class Codex {
       }
     } catch (e) {
       this.live({ t: 'working', on: false });
+        if (!this.preset) this.live({ t: 'mode', mode: presetOf(r.sandbox) });
       this.live({ t: 'error', message: `/${name}: ${(e as Error).message}` });
     }
   }
