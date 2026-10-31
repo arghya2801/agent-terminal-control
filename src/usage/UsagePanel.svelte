@@ -168,7 +168,7 @@
   const summary = $derived(summarize(filteredRows, lo, hi, projectOf));
   let metric = $state<'tokens' | 'cost'>('cost');
   let view = $state<'bars' | 'week' | 'calendar' | 'blocks' | 'cache'>('bars');
-  let bars = $state({ split: 'none' as Split, cumulative: false, showAverage: false, share: false });
+  let bars = $state({ split: 'none' as Split, cumulative: false, showAverage: false, share: false, kind: 'bars' as 'bars' | 'line' });
   /** The focused tab's session, all time (#80). */
   const session = $derived(current ? sessionStats(rows, current) : null);
   const localTime = (hour: string) =>
@@ -313,6 +313,7 @@
         bind:cumulative={bars.cumulative}
         bind:showAverage={bars.showAverage}
         bind:share={bars.share}
+        bind:kind={bars.kind}
       />
     {:else if view === 'week'}
       <WeekHeat rows={filteredRows} {lo} {hi} {metric} {fmt} />
