@@ -101,6 +101,7 @@ export class Claude {
   private streaming = new Map<string | null, string>();
   private n = 0;
   private closing = false;
+  private rewinding = false;
   /** The permission mode now, and the one an approved plan returns to. */
   private current = 'default';
   private beforePlan = 'default';
@@ -351,21 +352,30 @@ export class Claude {
   async rewind(to: string) {
     if (!this.before.has(to)) return this.live({ t: 'error', message: "Can't rewind to that message" });
     const q = this.wake();
-    if (!q) return;
-    let files = '';
+    if (!q || this.rewinding) return;
+    this.rewinding = true;
+    // Working, so the page holds messages until the new query takes them.
+    this.live({ t: 'working', on: true });
     try {
       await q.initializationResult();
       // Only a dry run lists the files.
       const preview = await q.rewindFiles(to, { dryRun: true });
       const r = preview.canRewind ? await q.rewindFiles(to) : preview;
-      if (r.canRewind) files = (preview.filesChanged ?? []).map((f) => relative(this.o.cwd, f) || f).join(', ');
-      else log(this.id, 'rewind files:', r.error);
+      if (!r.canRewind) throw new Error(r.error ?? "its files can't be restored");
+      if (!this.closing) this.restart(to, (preview.filesChanged ?? []).map((f) => relative(this.o.cwd, f) || f).join(', '));
     } catch (e) {
-      log(this.id, 'rewind files:', String(e));
+      if (!this.closing) this.live({ t: 'error', message: `Can't rewind: ${(e as Error)?.message ?? e}` });
+    } finally {
+      this.rewinding = false;
+      if (!this.closing) this.live({ t: 'working', on: false });
     }
-    const at = this.before.get(to) ?? undefined;
-    const old = q;
+  }
+
+  /** The conversation resumes at the entry before prompt `to`. */
+  private restart(to: string, files: string) {
+    const old = this.q!;
     const oldInbox = this.inbox;
+    const at = this.before.get(to) ?? undefined;
     this.q = this.open(at && this.session, at, this.current);
     for (const resolve of this.waiting.values()) resolve({ allow: false, message: 'Rewound' });
     oldInbox.end();
