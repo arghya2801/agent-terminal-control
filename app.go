@@ -530,7 +530,8 @@ func (a *App) NotificationSend(title, body string) error {
 // dir is not a git working tree.
 func (a *App) GitChanges(dir string) (any, error) {
 	git := func(args ...string) (string, error) {
-		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		// A repo's own fsmonitor would run a command it names.
+		cmd := exec.Command("git", append([]string{"-c", "core.fsmonitor=false", "-C", dir}, args...)...)
 		// No console at all: a hidden one fails to start (0xc0000142) under some parents.
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
 		var stderr strings.Builder

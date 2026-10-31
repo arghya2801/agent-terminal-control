@@ -14,7 +14,8 @@ const SKIP = new Set(['node_modules', '.git', '.venv', 'target', 'dist']);
  *  ignored), or a walk that skips dependency and VCS folders outside one. */
 export async function listFiles(cwd: string): Promise<string[]> {
   try {
-    const { stdout } = await exec('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { cwd, maxBuffer: 64 << 20, windowsHide: true });
+    // A repo's own fsmonitor would run a command it names.
+    const { stdout } = await exec('git', ['-c', 'core.fsmonitor=false', 'ls-files', '--cached', '--others', '--exclude-standard'], { cwd, maxBuffer: 64 << 20, windowsHide: true });
     return stdout.split('\n').filter(Boolean).slice(0, MAX_FILES);
   } catch {
     const files: string[] = [];
