@@ -46,17 +46,18 @@
   const asShare = $derived(share && chart.series.length > 1 && !line);
   /** Lines are not stacked, so their scale is the largest single value, not the largest total. */
   const lineMax = $derived(chart.series.length > 1 ? Math.max(0, ...chart.buckets.flatMap((b) => b.values)) : chartMax);
-  const yMax = $derived(line ? lineMax : chartMax);
   const ys = (i: number) => chart.buckets.map((b) => (chart.series.length > 1 ? b.values[i] : b.total));
   const canAverage = $derived(!hourly && !cumulative && !asShare && chart.buckets.length >= 7);
   const average = $derived(showAverage && canAverage ? rollingAverage(chart.buckets.map((b) => b.total)) : null);
+  // The average is of totals, so above every single line when split.
+  const yMax = $derived(Math.max(line ? lineMax : chartMax, ...(average ?? [])));
   const pct = (v: number, of: number) => `${of ? Math.round((v / of) * 100) : 0}%`;
   /** Bucket under the pointer, for the read-out above the chart. */
   let hovered = $state<number | null>(null);
   const shown = $derived(hovered === null ? null : chart.buckets[hovered]);
   /** A bar's height as a share of the chart, which the hover label sits just above. */
   const barPct = (b: (typeof chart.buckets)[number]) =>
-    line ? (lineMax ? (Math.max(...(chart.series.length > 1 ? b.values : [b.total])) / lineMax) * 100 : 0) : asShare ? (b.total ? 100 : 0) : chartMax ? (b.total / chartMax) * 100 : 0;
+    line ? (yMax ? (Math.max(...(chart.series.length > 1 ? b.values : [b.total])) / yMax) * 100 : 0) : asShare ? (b.total ? 100 : 0) : chartMax ? (b.total / chartMax) * 100 : 0;
   /** One series keeps the accent; a split takes the categorical slots chartData assigns. */
   // ponytail: model and project slots follow rank, so a range change can recolour a model;
   // pin colours per name if people compare screenshots across ranges.
