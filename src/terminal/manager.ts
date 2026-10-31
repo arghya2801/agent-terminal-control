@@ -495,8 +495,9 @@ export function bindSessions(bindings: Map<TabKey, string>, sessions: SessionMet
  * Move `delta` tabs from the active one, wrapping, in tab order: the order they were
  * opened, or the tab bar's, which dragging changes.
  */
-export function cycleTab(delta: number) {
-  const keys = [...tabs.keys()];
+/** `order`: the tabs as the user sees them, when that is not the tab bar's order. */
+export function cycleTab(delta: number, order?: TabKey[]) {
+  const keys = order ?? [...tabs.keys()];
   if (keys.length < 2) return;
   const current = activeKey ? keys.indexOf(activeKey) : -1;
   activate(keys[cycleIndex(current, keys.length, delta)]);
