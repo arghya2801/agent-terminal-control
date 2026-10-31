@@ -8,10 +8,16 @@ type Obj = Record<string, any>;
 /** How a Codex process starts, from settings: the CLI, its arguments, extra environment. */
 type Launch = { cwd: string; exe: string; args: string[]; env?: Record<string, string> };
 
-/** `codex app-server` with `server` flags. npm's .cmd shims only start through a shell. */
+/** `codex app-server` with `server` flags. ATC passes npm's codex.js, not its .cmd shim; a
+ *  shim given by path only starts through cmd.exe, so each argument is quoted for it. */
 function spawnCodex(o: Launch, server: string[]): ChildProcessWithoutNullStreams {
+  const args = ['app-server', ...server];
+  const opts = { cwd: o.cwd, env: { ...process.env, ...o.env }, windowsHide: true };
+  if (o.exe.endsWith('.js')) return spawn(process.execPath, [o.exe, ...args], opts);
   const shim = /\.(cmd|bat)$/i.test(o.exe);
-  return spawn(shim ? `"${o.exe}"` : o.exe, ['app-server', ...server], { cwd: o.cwd, env: { ...process.env, ...o.env }, shell: shim, windowsHide: true });
+  // ponytail: cmd.exe still expands %VAR% inside quotes; resolve the shim if that matters.
+  const quote = (a: string) => `"${a.replace(/"/g, '""')}"`;
+  return spawn(shim ? quote(o.exe) : o.exe, shim ? args.map(quote) : args, { ...opts, shell: shim });
 }
 
 const toModel = (m: Obj): Model => ({
