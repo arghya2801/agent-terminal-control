@@ -113,8 +113,8 @@
   /** Groups the user opened or closed; others follow `live`: the run being worked on stays
    *  open, and folds once something comes after it. */
   let opened = $state<Record<string, boolean>>({});
-  const groupStatus = (b: Block & { kind: 'group' }) => {
-    const all = b.items.filter((it) => !it.declined).map((it) => toolStatus(it, !s?.exited));
+  const groupStatus = (b: Block & { kind: 'group' }, live: boolean) => {
+    const all = b.items.filter((it) => !it.declined).map((it) => toolStatus(it, live));
     return all.includes('running') ? 'running' : all.includes('failed') ? 'failed' : 'done';
   };
 
@@ -250,7 +250,7 @@
               {#each all as b, bi (b.kind === 'group' ? `g:${b.id}` : b.item.id)}
                 {#if b.kind === 'group'}
                   {@const open = opened[b.id] ?? (live && bi === all.length - 1)}
-                  {@const st = groupStatus(b)}
+                  {@const st = groupStatus(b, live)}
                   {@const failed = b.items.filter((x) => x.done && x.error && !x.declined).length}
                   {@const declined = b.items.filter((x) => x.declined).length}
                   <div class="step group {st}" class:sub={!!b.items[0].parent}>
@@ -262,14 +262,14 @@
                     </button>
                     {#if open}
                       <div class="calls">
-                        {#each b.items as it (it.id)}<ToolLine item={it} live={!s?.exited} {cwd} />{/each}
+                        {#each b.items as it (it.id)}<ToolLine item={it} {live} {cwd} />{/each}
                       </div>
                     {/if}
                   </div>
                 {:else}
                   {@const it = b.item}
                   {#if it.kind === 'tool'}
-                    <div class="step tool" class:sub={!!it.parent}><ToolLine item={it} live={!s?.exited} {cwd} /></div>
+                    <div class="step tool" class:sub={!!it.parent}><ToolLine item={it} {live} {cwd} /></div>
                   {:else if it.kind === 'assistant'}
                     {#if it.text}<div class="step text" class:sub={!!it.parent}><Markdown text={it.text} /></div>{/if}
                   {:else if it.kind === 'thinking'}
