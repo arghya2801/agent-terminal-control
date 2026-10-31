@@ -28,30 +28,17 @@ const toModel = (m: Obj): Model => ({
   defaultEffort: m.defaultReasoningEffort,
 });
 
-/** Codex's models without a thread: start the app-server, ask, stop it. */
+/** Codex's models without a thread: start an app-server, ask, stop it. */
 export async function codexCatalog(o: Launch): Promise<Model[]> {
-  const proc = spawnCodex(o, threadOptions(o.args).server);
-  const waiting = new Map<number, (m: Obj) => void>();
-  createInterface({ input: proc.stdout }).on('line', (line) => {
-    try {
-      const m = JSON.parse(line);
-      waiting.get(m.id)?.(m);
-    } catch {}
-  });
-  let next = 1;
-  const call = (method: string, params: Obj = {}) =>
-    new Promise<any>((resolve, reject) => {
-      const id = next++;
-      waiting.set(id, (m) => (m.error ? reject(new Error(m.error.message)) : resolve(m.result)));
-      proc.stdin.write(JSON.stringify({ id, method, params }) + '\n');
-    });
+  const s = new Server('', o, threadOptions(o.args).server);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error("Codex didn't list its models within 30 seconds")), 30_000)));
   try {
-    await call('initialize', { clientInfo: { name: 'atc', title: 'ATC', version: '1' } });
-    proc.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n');
-    const r = await call('model/list', {});
+    const r = await Promise.race([s.call('model/list', {}), late]);
     return (r.data ?? []).filter((m: Obj) => !m.hidden).map(toModel);
   } finally {
-    proc.kill();
+    clearTimeout(timer);
+    s.kill();
   }
 }
 
@@ -165,6 +152,8 @@ class Server {
     this.proc.on('exit', (code) => this.end(code ? `Codex exited with ${code}` : undefined));
     this.proc.on('error', (e) => this.end(`Can't start Codex: ${e.message}`));
     createInterface({ input: this.proc.stdout }).on('line', (line) => {
+    // A write to a server that has exited fails here, not as an uncaught EPIPE.
+    this.proc.stdin.on('error', (e) => this.end(`Codex stopped reading: ${e.message}`));
       try {
         this.receive(JSON.parse(line));
       } catch (e) {
@@ -232,6 +221,10 @@ class Server {
     if (this.sessions.size) return;
     if (readers.get(this.key) === this) readers.delete(this.key);
     this.proc.kill();
+    this.kill();
+  }
+
+  kill() {
   }
 }
 
