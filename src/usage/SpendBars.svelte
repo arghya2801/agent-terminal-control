@@ -17,6 +17,7 @@
     cumulative = $bindable(false),
     showAverage = $bindable(false),
     share = $bindable(false),
+    kind = $bindable('line'),
   }: {
     rows: CostRow[];
     lo: string;
@@ -31,6 +32,8 @@
     showAverage?: boolean;
     /** 100% stacked bars, so the mix stays readable when totals swing. */
     share?: boolean;
+    /** Bars, or a line per series. */
+    kind?: 'bars' | 'line';
   } = $props();
 
   // Token kinds have no cost of their own, and one provider needs no provider split.
@@ -38,7 +41,13 @@
   const chart = $derived(chartData(rows, lo, hi, { metric, split: activeSplit, cumulative }, projectOf));
   const chartMax = $derived(Math.max(0, ...chart.buckets.map((b) => b.total)));
   const hourly = $derived(lo === hi);
-  const asShare = $derived(share && chart.series.length > 1);
+  const line = $derived(kind === 'line');
+  // A line per series has no stack to share out.
+  const asShare = $derived(share && chart.series.length > 1 && !line);
+  /** Lines are not stacked, so their scale is the largest single value, not the largest total. */
+  const lineMax = $derived(chart.series.length > 1 ? Math.max(0, ...chart.buckets.flatMap((b) => b.values)) : chartMax);
+  const yMax = $derived(line ? lineMax : chartMax);
+  const ys = (i: number) => chart.buckets.map((b) => (chart.series.length > 1 ? b.values[i] : b.total));
   const canAverage = $derived(!hourly && !cumulative && !asShare && chart.buckets.length >= 7);
   const average = $derived(showAverage && canAverage ? rollingAverage(chart.buckets.map((b) => b.total)) : null);
   const pct = (v: number, of: number) => `${of ? Math.round((v / of) * 100) : 0}%`;
@@ -46,7 +55,8 @@
   let hovered = $state<number | null>(null);
   const shown = $derived(hovered === null ? null : chart.buckets[hovered]);
   /** A bar's height as a share of the chart, which the hover label sits just above. */
-  const barPct = (b: (typeof chart.buckets)[number]) => (asShare ? (b.total ? 100 : 0) : chartMax ? (b.total / chartMax) * 100 : 0);
+  const barPct = (b: (typeof chart.buckets)[number]) =>
+    line ? (lineMax ? (Math.max(...(chart.series.length > 1 ? b.values : [b.total])) / lineMax) * 100 : 0) : asShare ? (b.total ? 100 : 0) : chartMax ? (b.total / chartMax) * 100 : 0;
   /** One series keeps the accent; a split takes the categorical slots chartData assigns. */
   // ponytail: model and project slots follow rank, so a range change can recolour a model;
   // pin colours per name if people compare screenshots across ranges.
@@ -54,10 +64,14 @@
     chart.series.length === 1 ? 'var(--accent)' : chart.series[i] === 'Other' ? 'var(--series-other)' : `var(--series-${chart.slots[i] + 1})`;
 </script>
 
+<div class="group" aria-label="Chart type">
+  <button class="btn" class:primary={!line} onclick={() => (kind = 'bars')}>Bars</button>
+  <button class="btn" class:primary={line} onclick={() => (kind = 'line')}>Line</button>
+</div>
 <div class="group" aria-label="Bar options">
   <button class="btn" class:primary={!cumulative} onclick={() => (cumulative = false)}>{hourly ? 'Hourly' : 'Daily'}</button>
   <button class="btn" class:primary={cumulative} onclick={() => (cumulative = true)}>Running total</button>
-  {#if chart.series.length > 1}
+  {#if chart.series.length > 1 && !line}
     <button class="btn" class:primary={share} aria-pressed={share} onclick={() => (share = !share)}>Share</button>
   {/if}
   {#if canAverage}
@@ -80,9 +94,28 @@
     {hourly ? 'Hover an hour' : 'Hover a day for its total; click it to show that day'}
   </div>
   <div class="chart" role="img" aria-label={`${cumulative ? 'Running total of' : ''} ${metric === 'tokens' ? 'tokens' : 'estimated cost'} per ${hourly ? 'hour' : 'day'}`}>
-    {#if average && chartMax}
-      <svg class="avg" viewBox="0 0 {average.length} {chartMax}" preserveAspectRatio="none" aria-hidden="true">
-        <polyline points={average.map((v, i) => `${i + 0.5},${chartMax - v}`).join(' ')} />
+    {#if line && yMax}
+      {@const n = chart.buckets.length}
+      <svg class="lines" viewBox="0 0 {n} {yMax}" preserveAspectRatio="none" aria-hidden="true">
+        {#if chart.series.length === 1}
+          <polygon class="area" points="0.5,{yMax} {ys(0).map((v, i) => `${i + 0.5},${yMax - v}`).join(' ')} {n - 0.5},{yMax}" />
+        {/if}
+        {#each chart.series as _, s (s)}
+          <polyline style="stroke: {color(s)}" points={ys(s).map((v, i) => `${i + 0.5},${yMax - v}`).join(' ')} />
+        {/each}
+      </svg>
+      {#if hovered !== null}
+        {@const x = ((hovered + 0.5) / n) * 100}
+        <div class="crosshair" style="left: {x}%"></div>
+        {#each chart.series as _, s (s)}
+          {@const v = ys(s)[hovered]}
+          {#if chart.series.length === 1 || v > 0}<span class="dot" style="left: {x}%; bottom: {(v / yMax) * 100}%; background: {color(s)}"></span>{/if}
+        {/each}
+      {/if}
+    {/if}
+    {#if average && yMax}
+      <svg class="avg" viewBox="0 0 {average.length} {yMax}" preserveAspectRatio="none" aria-hidden="true">
+        <polyline points={average.map((v, i) => `${i + 0.5},${yMax - v}`).join(' ')} />
       </svg>
     {/if}
     {#if shown && hovered !== null}
@@ -106,6 +139,7 @@
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
       <div
         class="bar-col"
+        class:hit={line}
         class:pick={!hourly}
         onmouseenter={() => (hovered = i)}
         onmouseleave={() => (hovered = null)}
@@ -229,6 +263,46 @@
   }
   .bar-col.pick {
     cursor: pointer;
+  }
+  /* In line mode the columns stay as the hover and click targets, with nothing drawn. */
+  .bar-col.hit .stack {
+    visibility: hidden;
+  }
+  .lines {
+    position: absolute;
+    inset: 0 0 2px;
+    width: 100%;
+    height: calc(100% - 2px);
+    overflow: visible;
+    pointer-events: none;
+  }
+  .lines polyline {
+    fill: none;
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+  }
+  .lines .area {
+    fill: color-mix(in srgb, var(--accent) 14%, transparent);
+    stroke: none;
+  }
+  .crosshair {
+    position: absolute;
+    top: 0;
+    bottom: 2px;
+    width: 1px;
+    background: var(--border);
+    pointer-events: none;
+  }
+  .dot {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    margin: 0 0 -4px -4px;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px var(--bg);
+    pointer-events: none;
   }
   .bar-col:hover .stack {
     opacity: 0.8;
