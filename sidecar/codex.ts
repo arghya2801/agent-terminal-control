@@ -453,13 +453,14 @@ export class Codex {
       ...skills.map((s) => ({ type: 'skill', name: s.name, path: s.path })),
     ];
     this.live({ t: 'working', on: true });
-    this.call('turn/start', {
+    // After wake(), which gives a new tab its thread.
+    this.wake().then((s) => s.call('turn/start', {
       threadId: this.thread,
       input,
       ...(this.chosen ? { model: this.chosen } : {}),
       ...(this.effortChosen ? { effort: this.effortChosen } : {}),
       ...(this.preset ? PRESETS[this.preset] : {}),
-    }).catch((e) => {
+    })).catch((e) => {
       this.live({ t: 'working', on: false });
       this.live({ t: 'error', message: String(e?.message ?? e) });
     });
@@ -480,6 +481,7 @@ export class Codex {
     this.live({ t: 'item', item: { id: `cmd${++this.n}`, kind: 'user', text: `/${name}${args ? ' ' + args : ''}` } });
     const say = (text: string) => this.live({ t: 'item', item: { id: `cmd${++this.n}`, kind: 'notice', text } });
     try {
+      await this.wake();
       if (name === 'compact') {
         await this.call('thread/compact/start', { threadId: this.thread });
       } else if (name === 'review') {
