@@ -1,7 +1,6 @@
 import { execFile } from 'node:child_process';
 import { readdir } from 'node:fs/promises';
-import type { Dirent } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { AgentEvent } from './protocol.ts';
 
@@ -10,6 +9,7 @@ const exec = promisify(execFile);
 
 // ponytail: capped list, filtered in the box; ask the CLI's own file search if repos outgrow it.
 const MAX_FILES = 20000;
+const SKIP = new Set(['node_modules', '.git', '.venv', 'target', 'dist']);
 /** Files under `cwd` for the `@` menu: git's view of the repo (tracked and new, nothing
  *  ignored), or a walk that skips dependency and VCS folders outside one. */
 export async function listFiles(cwd: string): Promise<string[]> {
@@ -17,12 +17,19 @@ export async function listFiles(cwd: string): Promise<string[]> {
     const { stdout } = await exec('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { cwd, maxBuffer: 64 << 20, windowsHide: true });
     return stdout.split('\n').filter(Boolean).slice(0, MAX_FILES);
   } catch {
-    const all = (await readdir(cwd, { recursive: true, withFileTypes: true })) as Dirent[];
-    return all
-      .filter((d) => d.isFile())
-      .map((d) => relative(cwd, join(d.parentPath, d.name)).replaceAll('\\', '/'))
-      .filter((p) => !/(^|\/)(node_modules|\.git|\.venv|target|dist)\//.test(p))
-      .slice(0, MAX_FILES);
+    const files: string[] = [];
+    const walk = async (dir: string) => {
+      const entries = await readdir(join(cwd, dir), { withFileTypes: true }).catch(() => []);
+      for (const d of entries) {
+        if (files.length >= MAX_FILES) return;
+        const path = dir ? `${dir}/${d.name}` : d.name;
+        // Links are skipped too, so a junction can't loop.
+        if (d.isDirectory()) !SKIP.has(d.name) && (await walk(path));
+        else if (d.isFile()) files.push(path);
+      }
+    };
+    await walk('');
+    return files;
   }
 }
 
