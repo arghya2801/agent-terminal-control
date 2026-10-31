@@ -148,6 +148,7 @@ class Server {
   private calls = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
   private next = 1;
   private started: Promise<void>;
+  private dead = false;
   /** Set for the shared reader. */
   private key: string;
 
@@ -208,10 +209,14 @@ class Server {
     } else this.route(m.params ?? {})?.notify(m.method, m.params ?? {});
   }
 
+  /** A dead reader fails its pending calls, which stops only the tabs still starting; the
+   *  next tab starts a new one. A tab's own server stopping stops the tab. */
   private end(message?: string) {
+    if (this.dead) return;
+    this.dead = true;
     if (readers.get(this.key) === this) readers.delete(this.key);
-    for (const c of this.calls.values()) c.reject(new Error('Codex exited'));
-    for (const s of this.sessions) s.ended(message);
+    for (const c of this.calls.values()) c.reject(new Error(message ?? 'Codex exited'));
+    if (!this.key) for (const s of this.sessions) s.ended(message);
   }
 
   /** A tab closed; the server stops with its last one, which frees the threads it loaded. */
