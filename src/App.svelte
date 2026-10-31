@@ -89,7 +89,7 @@
   import { zoomLabel } from './lib/zoom';
   import type { AgentProvider, Project, SessionMeta, TabKey, TabSummary } from './types';
   import { markTitle, tabMark, type SessionMark } from './lib/format';
-  import { nextWaiting, stateWord } from './lib/triage';
+  import { nextWaiting, stateWord, triageOrder } from './lib/triage';
 
   let wrapper: HTMLDivElement;
   let tabs = $state<TabSummary[]>([]);
@@ -734,6 +734,12 @@
 
   // One implementation of every chord, so a shortcut behaves identically whether focus
   // is in the terminal or the sidebar.
+  /** With the tab bar hidden (the default), Ctrl+Tab walks the Open view's order (#204). */
+  function visibleOrder(): TabKey[] | undefined {
+    if (appState.settings?.ui.showTabBar) return undefined;
+    return triageOrder(tabs.map((t) => ({ ...t, mark: tabMark(t) }))).map((t) => t.key);
+  }
+
   function runAction(action: Action) {
     switch (action) {
       case 'toggleSidebar':
@@ -749,10 +755,10 @@
         if (activeKey) requestClose(activeKey);
         break;
       case 'nextTab':
-        cycleTab(1);
+        cycleTab(1, visibleOrder());
         break;
       case 'prevTab':
-        cycleTab(-1);
+        cycleTab(-1, visibleOrder());
         break;
       case 'toggleDevtools':
         // Debug builds of Wails open devtools on this chord themselves.
