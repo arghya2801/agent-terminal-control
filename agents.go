@@ -156,7 +156,10 @@ func (s *sidecar) start(a *App) error {
 	cmd := exec.Command(node, script)
 	cmd.Env = pty.ChildEnv()
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
-	if cmd.Stderr, e = os.Create(filepath.Join(a.config, "sidecar.log")); e != nil {
+	// The last run's log says why it stopped; the next chat or Resume starts a new one.
+	logPath := filepath.Join(a.config, "sidecar.log")
+	_ = os.Rename(logPath, filepath.Join(a.config, "sidecar.old.log"))
+	if cmd.Stderr, e = os.Create(logPath); e != nil {
 		cmd.Stderr = io.Discard
 	}
 	stdin, e := cmd.StdinPipe()

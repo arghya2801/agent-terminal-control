@@ -414,7 +414,8 @@ export class Codex {
   }
 
   request(rpc: number | string, method: string, p: Obj) {
-    log(this.id, 'codex asks', method, JSON.stringify(p).slice(0, 300));
+    // Not the params: a command can hold a secret.
+    log(this.id, 'codex asks', method, rpc);
     const id = `r${++this.n}`;
     let request: AgentRequest;
     if (method === 'item/commandExecution/requestApproval' || method === 'execCommandApproval') {
