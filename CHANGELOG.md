@@ -19,11 +19,13 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Agent tabs use far less memory. A resumed Claude or Codex tab shows its conversation without starting the CLI, which starts when you type or send (a Claude CLI holds about 370 MB). Codex tabs read through one shared app-server instead of one each. A long reply takes less CPU while it streams. The notes editor loads the first time the notes pane opens, and the header stops re-reading costs while its agent is idle.
 
 - Choose chat or terminal for agent tabs: Settings > General > "Agent tabs open as" picks Chat (the default) or Terminal, the CLI's own screen. Ctrl+` moves any agent tab between the two on the same session, and a terminal agent tab has a chat button in its header. Restored tabs come back the way you left them.
+- Switching an agent tab between chat and terminal warns first: what moves, and whether a turn in progress stops. "Don't show this again" turns the warning off; Settings > General > Confirm switch turns it back on.
 - Search settings: a box at the top of Settings filters it as you type. It matches loosely ("fnt sz" finds Font size) and also searches hints and section names; Esc clears it.
 - The usage page's controls are one toolbar: provider, the dates with day steps, and the range presets, with Rescan and Export CSV beside the heading. Each set of options is one segmented control, and costs no longer say "(partial)"; the page already notes that unknown prices are left out.
 - Usage over time as a line chart, now the default; Bars beside it switches back. Split by model, project or provider, it draws a line per series; hovering shows a crosshair and each line's value.
 
 ### Fixed
+- A confirmation dialog always goes away once answered. It moves itself to the top of the page, where closing it did not always find it.
 - Claude chat tabs label their requests `atc`. Under the Agent SDK's own label, Anthropic's 5-hour meter has been measured charging about twice what the CLI pays for the same tokens; a custom label was measured at the CLI's rate (pingdotgg/t3code#24649). Weekly limits were never affected.
 - The 5-hour limit's graph no longer spills out of its card when the session has not started (#203).
 - With the tab bar hidden, Ctrl+Tab goes through tabs in the Open view's order (#204).

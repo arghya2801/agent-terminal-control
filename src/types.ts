@@ -146,6 +146,8 @@ export interface Settings {
     newTabIn: 'home' | 'project';
     /** How agent tabs open: ATC's chat, or the CLI's own TUI in a terminal. */
     agentView: 'chat' | 'terminal';
+    /** Warn before moving an agent tab between the chat and the terminal. */
+    confirmSwitch: boolean;
     /** Ask before closing a tab with something running in it. */
     confirmClose: boolean;
     /** In-app notes when a background tab finishes while ATC has focus. */

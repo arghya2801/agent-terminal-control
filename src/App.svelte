@@ -120,6 +120,34 @@
     if (isNew) void startAgent(key, provider, cwd, o);
   }
 
+  /** What the switch warning is about; null when it is not showing. */
+  let switching = $state<{ key: TabKey; title: string; name: string; toTerminal: boolean; working: boolean; fresh: boolean } | null>(null);
+  let dontWarn = $state(false);
+
+  /** Ctrl+` and the switch buttons: warns first, unless the warning was turned off. */
+  function requestSwitch(key: TabKey) {
+    const t = getTab(key);
+    if (!t?.provider) return;
+    if (appState.settings?.ui.confirmSwitch === false) return void switchView(key);
+    dontWarn = false;
+    switching = {
+      key,
+      title: displayTitle(t),
+      name: providerName(t.provider),
+      toTerminal: !t.term,
+      working: t.term ? t.activity === 'working' : !!agents[key]?.working,
+      fresh: !t.boundSession,
+    };
+  }
+
+  function finishSwitch(confirmed: boolean) {
+    const s = switching;
+    switching = null;
+    if (confirmed && dontWarn && appState.settings) void saveSettings({ ...appState.settings, ui: { ...appState.settings.ui, confirmSwitch: false } });
+    if (s && confirmed) void switchView(s.key);
+    else focusActiveTerminal();
+  }
+
   /** Moves an agent tab between the chat and the CLI's own terminal, on the same session.
    *  Only one of them can drive a session, so the tab closes and reopens in the other. */
   async function switchView(key: TabKey) {
@@ -831,7 +859,7 @@
         toggleMosaic();
         break;
       case 'toggleAgentView':
-        if (activeKey) void switchView(activeKey);
+        if (activeKey) requestSwitch(activeKey);
         break;
     }
   }
@@ -1026,7 +1054,7 @@
         <div class="grow"></div>
       {/if}
       {#snippet actions()}
-        {#if shown?.terminal}<button class="bar-btn" onclick={() => switchView(shown.key)} title="Open as chat ({chordFor('toggleAgentView')})" aria-label="Open as chat"><Icon name="chat" size={14} /></button>{/if}
+        {#if shown?.terminal}<button class="bar-btn" onclick={() => requestSwitch(shown.key)} title="Open as chat ({chordFor('toggleAgentView')})" aria-label="Open as chat"><Icon name="chat" size={14} /></button>{/if}
         {@render barNew()}
         {#if shown}<button class="bar-btn" onclick={() => requestClose(shown.key)} title="Close {shown.title} (Ctrl+Shift+W)" aria-label="Close {shown.title}"><Icon name="close" size={12} /></button>{/if}
       {/snippet}
@@ -1037,7 +1065,7 @@
       {@const tab = t.provider ? getTab(t.key) : undefined}
       {#if tab && !tab.term && t.provider}
         <div use:portal={tab.container}>
-          <AgentView tabKey={t.key} provider={t.provider} cwd={t.cwd} queued={t.queued} onTerminal={() => switchView(t.key)} />
+          <AgentView tabKey={t.key} provider={t.provider} cwd={t.cwd} queued={t.queued} onTerminal={() => requestSwitch(t.key)} />
         </div>
       {/if}
     {/each}
@@ -1078,6 +1106,21 @@
         onPick={finishPicker}
         onCancel={() => finishPicker()}
       />
+    {/if}
+    {#if switching}
+      {@const sw = switching}
+      <ConfirmDialog danger={false} confirmLabel={sw.toTerminal ? 'Open in terminal' : 'Open as chat'} onConfirm={() => finishSwitch(true)} onCancel={() => finishSwitch(false)}>
+        <p class="switch-text">
+          {#if sw.toTerminal}
+            Move <strong>{sw.title}</strong> to the terminal? The chat closes and the session resumes in {sw.name}'s own screen.
+          {:else}
+            Move <strong>{sw.title}</strong> to the chat? The terminal closes and the session reopens as a chat.
+          {/if}
+        </p>
+        {#if sw.working}<p class="switch-text">{sw.name} is working: the turn in progress will stop.</p>{/if}
+        {#if sw.fresh}<p class="switch-text">This tab has no session yet, so a new one starts.</p>{/if}
+        <label class="dont-warn"><input type="checkbox" bind:checked={dontWarn} /> Don't show this again</label>
+      </ConfirmDialog>
     {/if}
     {#if closing}
       <ConfirmDialog
@@ -1175,6 +1218,18 @@
     overflow: hidden;
     color: var(--fg-faint);
     text-overflow: ellipsis;
+  }
+  .switch-text {
+    margin: 0 0 8px;
+  }
+  .dont-warn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    color: var(--fg-dim);
+    font-size: 12px;
+    cursor: pointer;
   }
   .facts.waiting {
     color: var(--accent);

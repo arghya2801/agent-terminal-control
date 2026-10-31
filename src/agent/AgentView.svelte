@@ -219,7 +219,7 @@
         <div class="empty">
           <span class="mark"><ProviderIcon {provider} /></span>
           <p class="lead">Ask {name} anything</p>
-          <p>Type <kbd>/</kbd> for commands{#if provider === 'codex'}, <kbd>$</kbd> for skills{:else} and skills{/if}. <kbd>Enter</kbd> sends, <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line.</p>
+          <p>Type <kbd>/</kbd> for {provider === 'codex' ? 'commands, ' : 'commands and skills, '}{#if provider === 'codex'}<kbd>$</kbd> for skills, {/if}<kbd>@</kbd> for files. <kbd>Enter</kbd> sends, <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line.</p>
         </div>
       {:else if !s?.ready && !s?.dormant && !s?.exited && !turns.length}
         <div class="empty"><p class="lead">Starting {name}</p></div>

@@ -442,6 +442,11 @@
           <input id="cfc" type="checkbox" bind:checked={draft.ui.confirmClose} />
           <span class="muted">Ask before closing a tab with a program running in it</span>
         </label>
+        <label for="cfs">Confirm switch</label>
+        <label class="check">
+          <input id="cfs" type="checkbox" bind:checked={draft.ui.confirmSwitch} />
+          <span class="muted">Warn before moving an agent tab between the chat and the terminal</span>
+        </label>
         <label for="tst">In-app notes</label>
         <div class="check">
           <input id="tst" type="checkbox" bind:checked={draft.ui.toasts} />
