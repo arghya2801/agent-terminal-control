@@ -200,7 +200,7 @@
     <h2 id="u-session">This tab's session</h2>
     {#if session}
       <div class="total">
-        <span class="big">{monetary({ cost: session.cost, partial: session.partial, unavailable: false })}</span>
+        <span class="big">{monetary({ cost: session.cost })}</span>
         <span class="muted">{formatTokens(session.tokens)} tokens · {Math.round(session.cacheShare * 100)}% of input from cache · {sessionName(current)}</span>
       </div>
       <p class="muted">
@@ -231,51 +231,50 @@
     </table>
   {/if}
 
-  <h2 id="u-local">Local usage</h2>
+  <div class="head">
+    <h2 id="u-local">Local usage</h2>
+    <span class="actions">
+      <button class="btn quiet" onclick={loadCosts} disabled={costLoading}>{costLoading ? 'Scanning…' : 'Rescan'}</button>
+      <button class="btn quiet" onclick={exportCsv} disabled={exporting || rows.length === 0}>Export CSV</button>
+    </span>
+  </div>
   <p class="muted">
     Local tokens include linked child agents. Costs are API-equivalent estimates, not subscription charges. Codex uses standard short-context prices, including cached input; tier and long-context surcharges are excluded. Unknown model prices are unavailable.
   </p>
 
-  <label>Provider <select bind:value={provider}><option value="all">All</option><option value="claude">Claude</option><option value="codex">Codex</option></select></label>
   <div class="range">
-    <label>From <input type="date" bind:value={from} max={today} onchange={pickedByHand} /></label>
-    <label>To <input type="date" bind:value={to} max={today} onchange={pickedByHand} /></label>
-    <span class="daystep">
-      <button class="btn" onclick={() => stepDay(-1)} aria-label="Previous day" title="Previous day">‹</button>
-      <button class="btn" class:on={isActive(selection, 1)} onclick={() => preset(1)}>Today</button>
-      <button class="btn" onclick={() => stepDay(1)} disabled={from === to && to >= today} aria-label="Next day" title="Next day">›</button>
+    <select bind:value={provider} aria-label="Provider">
+      <option value="all">All providers</option>
+      <option value="claude">Claude</option>
+      <option value="codex">Codex</option>
+    </select>
+    <span class="dates">
+      <button class="btn step" onclick={() => stepDay(-1)} aria-label="Previous day" title="Previous day">‹</button>
+      <input type="date" bind:value={from} max={today} onchange={pickedByHand} aria-label="From" />
+      <span class="to">to</span>
+      <input type="date" bind:value={to} max={today} onchange={pickedByHand} aria-label="To" />
+      <button class="btn step" onclick={() => stepDay(1)} disabled={from === to && to >= today} aria-label="Next day" title="Next day">›</button>
     </span>
-    <button class="btn" class:on={isActive(selection, 7)} onclick={() => preset(7)}>7 days</button>
-    <button class="btn" class:on={isActive(selection, 30)} onclick={() => preset(30)}>30 days</button>
-    <button class="btn" class:on={isActive(selection, null)} onclick={() => preset(null)}>
-      All time
-    </button>
-    <label>
+    <div class="group" aria-label="Range">
+      <button class="btn" class:primary={isActive(selection, 1)} onclick={() => preset(1)}>Today</button>
+      <button class="btn" class:primary={isActive(selection, 7)} onclick={() => preset(7)}>7 days</button>
+      <button class="btn" class:primary={isActive(selection, 30)} onclick={() => preset(30)}>30 days</button>
+      <button class="btn" class:primary={isActive(selection, null)} onclick={() => preset(null)}>All time</button>
+      <button
+        class="btn"
+        class:primary={selection.kind === 'custom'}
+        onclick={useCustom}
+        disabled={!custom}
+        title={custom ? `${custom.from} to ${custom.to}` : 'Pick a From and To date first'}
+      >
+        Custom
+      </button>
+    </div>
+    <label class="last">
       Last
-      <input
-        class="span"
-        type="number"
-        min={MIN_DAYS}
-        max={MAX_DAYS}
-        bind:value={spanDays}
-        onchange={() => applySpan(spanDays)}
-        aria-label="Last N days"
-      />
+      <input class="span" type="number" min={MIN_DAYS} max={MAX_DAYS} bind:value={spanDays} onchange={() => applySpan(spanDays)} aria-label="Last N days" />
       days
     </label>
-    <button
-      class="btn"
-      class:on={selection.kind === 'custom'}
-      onclick={useCustom}
-      disabled={!custom}
-      title={custom ? `${custom.from} to ${custom.to}` : 'Pick a From and To date first'}
-    >
-      Custom
-    </button>
-    <button class="btn" onclick={loadCosts} disabled={costLoading}>
-      {costLoading ? 'Scanning…' : 'Rescan'}
-    </button>
-    <button class="btn" onclick={exportCsv} disabled={exporting || rows.length === 0}>Export CSV</button>
   </div>
   {#if exportError}<p class="err">{exportError}</p>{/if}
 
@@ -284,13 +283,13 @@
   {:else if costLoading && rows.length === 0}
     <p class="muted">Reading transcripts. The first scan can take a few seconds.</p>
   {:else}
-    <div class="group" aria-label="Usage metric">
-      <button class="btn" class:primary={metric === 'tokens'} onclick={() => metric = 'tokens'}>Tokens</button>
-      <button class="btn" class:primary={metric === 'cost'} onclick={() => metric = 'cost'}>API cost estimates</button>
-    </div>
     <div class="total">
-      <span class="big">{metric === 'tokens' ? `${formatTokens(summary.tokens)} tokens` : monetary({ cost: summary.total, partial: summary.partial, unavailable: summary.unavailable })}</span>
-      <span class="muted">{metric === 'tokens' ? `${monetary({cost: summary.total, partial: summary.partial, unavailable: summary.unavailable})} API cost estimate` : `${formatTokens(summary.tokens)} tokens`}</span>
+      <span class="big">{metric === 'tokens' ? `${formatTokens(summary.tokens)} tokens` : monetary({ cost: summary.total, unavailable: summary.unavailable })}</span>
+      <span class="muted">{metric === 'tokens' ? `${monetary({ cost: summary.total, unavailable: summary.unavailable })} API cost estimate` : `${formatTokens(summary.tokens)} tokens`}</span>
+      <div class="group metric" aria-label="Usage metric">
+        <button class="btn" class:primary={metric === 'tokens'} onclick={() => metric = 'tokens'}>Tokens</button>
+        <button class="btn" class:primary={metric === 'cost'} onclick={() => metric = 'cost'}>API cost</button>
+      </div>
     </div>
 
     <div class="group" aria-label="Chart options">
@@ -335,24 +334,59 @@
   .anchor {
     display: block;
   }
-  .range .span {
-    width: 4.5em;
-  }
-  .range :global(button.btn.on) {
-    border-color: var(--accent);
-    color: var(--fg-bright);
-  }
   .range {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    margin: 12px 0;
+    gap: 8px 10px;
+    margin: 14px 0 18px;
     color: var(--fg-dim);
     font-size: 12px;
   }
-  .daystep {
+  /* The usage page's groups sit in their own rows; in the toolbar they share one. */
+  .range :global(.group) {
+    margin: 0;
+  }
+  .dates {
     display: inline-flex;
-    gap: 2px;
+    align-items: center;
+    gap: 4px;
+  }
+  .to {
+    color: var(--fg-faint);
+  }
+  .range :global(button.btn.step) {
+    width: 26px;
+    padding: 4px 0;
+    text-align: center;
+  }
+  .last {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .range .span {
+    width: 4.5em;
+  }
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .actions {
+    display: inline-flex;
+    gap: 6px;
+    margin-left: auto;
+  }
+  .actions :global(button.btn.quiet) {
+    background: transparent;
+    color: var(--fg-dim);
+  }
+  .actions :global(button.btn.quiet:hover:not(:disabled)) {
+    color: var(--fg-bright);
+  }
+  .total :global(.group.metric) {
+    margin: 0 0 0 auto;
+    align-self: center;
   }
 </style>

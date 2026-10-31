@@ -30,7 +30,7 @@
           <td>{window(b)}{#if Date.now() < b.end}<span class="now">now</span>{/if}</td>
           <td class="num">{b.activeHours}</td>
           <td class="num">{formatTokens(b.tokens)}</td>
-          <td class="num">{monetary({ cost: b.cost, partial: b.partial, unavailable: b.partial && b.cost === 0 })}</td>
+          <td class="num">{monetary({ cost: b.cost, unavailable: b.partial && b.cost === 0 })}</td>
           <td class="bar-cell"><span class="hbar" style="width: {max ? (value(b) / max) * 100 : 0}%"></span></td>
         </tr>
       {/each}
