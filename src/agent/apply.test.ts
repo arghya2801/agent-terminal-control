@@ -57,6 +57,16 @@ describe('apply', () => {
     expect([s.exited, s.requests.length, s.items.at(-1)?.text]).toEqual([true, 0, 'Claude exited']);
   });
 
+  it('keeps only the end of a long running output, and says it was cut', () => {
+    const s = emptyState();
+    apply(s, { t: 'item', item: { id: 'c', kind: 'tool', tool: 'Bash', input: 'npm test' } });
+    for (let i = 0; i < 2000; i++) apply(s, { t: 'output', id: 'c', text: `line ${i}\n` });
+    const out = s.items[0].output!;
+    expect(out.startsWith('[earlier output cut]\n')).toBe(true);
+    expect(out.length).toBeLessThan(8300);
+    expect(out.endsWith('line 1999\n')).toBe(true);
+  });
+
   it('marks a resumed session dormant until its CLI is ready', () => {
     const s = emptyState();
     apply(s, { t: 'dormant' });
