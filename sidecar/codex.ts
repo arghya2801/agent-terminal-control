@@ -148,6 +148,7 @@ class Server {
   private calls = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
   private next = 1;
   private started: Promise<void>;
+  private dead = false;
   /** Set for the shared reader. */
   private key: string;
 
@@ -208,10 +209,14 @@ class Server {
     } else this.route(m.params ?? {})?.notify(m.method, m.params ?? {});
   }
 
+  /** A dead reader fails its pending calls, which stops only the tabs still starting; the
+   *  next tab starts a new one. A tab's own server stopping stops the tab. */
   private end(message?: string) {
+    if (this.dead) return;
+    this.dead = true;
     if (readers.get(this.key) === this) readers.delete(this.key);
-    for (const c of this.calls.values()) c.reject(new Error('Codex exited'));
-    for (const s of this.sessions) s.ended(message);
+    for (const c of this.calls.values()) c.reject(new Error(message ?? 'Codex exited'));
+    if (!this.key) for (const s of this.sessions) s.ended(message);
   }
 
   /** A tab closed; the server stops with its last one, which frees the threads it loaded. */
@@ -262,7 +267,8 @@ export class Codex {
     this.chosen = thread.model;
     this.reader = Server.reader(o, server);
     this.reader.sessions.add(this);
-    void this.start().catch((e) => this.live({ t: 'error', message: String(e?.message ?? e) }));
+    // A tab that can't read its thread can't do anything else.
+    void this.start().catch((e) => this.ended(String(e?.message ?? e)));
   }
 
   private live: Out = (ev) => emit(this.id, ev);
@@ -305,6 +311,7 @@ export class Codex {
       this.reader.call('model/list', {}).catch(() => ({ data: [] })),
       o.resume ? this.reader.call('thread/read', { threadId: o.resume, includeTurns: true }) : null,
     ]);
+    if (this.closing) return;
     for (const s of (skills.data ?? []).flatMap((e: Obj) => e.skills ?? [])) if (s.enabled) this.skills.set(s.name, s);
     this.listed = models.data ?? [];
     if (read) {
@@ -323,11 +330,12 @@ export class Codex {
       effort: this.effortChosen,
     });
     if (o.resume) this.live({ t: 'dormant' });
-    else await this.wake();
+    else void this.wake().catch((e) => this.live({ t: 'error', message: String(e?.message ?? e) }));
   }
 
   /** This tab's own app-server, with the thread loaded in it. */
   wake(): Promise<Server> {
+    if (this.closing) return Promise.reject(new Error('The tab closed'));
     this.waking ??= (async () => {
       const s = (this.server = new Server('', this.o, this.args));
       s.sessions.add(this);
@@ -453,13 +461,14 @@ export class Codex {
       ...skills.map((s) => ({ type: 'skill', name: s.name, path: s.path })),
     ];
     this.live({ t: 'working', on: true });
-    this.call('turn/start', {
+    // After wake(), which gives a new tab its thread.
+    this.wake().then((s) => s.call('turn/start', {
       threadId: this.thread,
       input,
       ...(this.chosen ? { model: this.chosen } : {}),
       ...(this.effortChosen ? { effort: this.effortChosen } : {}),
       ...(this.preset ? PRESETS[this.preset] : {}),
-    }).catch((e) => {
+    })).catch((e) => {
       this.live({ t: 'working', on: false });
       this.live({ t: 'error', message: String(e?.message ?? e) });
     });
@@ -480,6 +489,7 @@ export class Codex {
     this.live({ t: 'item', item: { id: `cmd${++this.n}`, kind: 'user', text: `/${name}${args ? ' ' + args : ''}` } });
     const say = (text: string) => this.live({ t: 'item', item: { id: `cmd${++this.n}`, kind: 'notice', text } });
     try {
+      await this.wake();
       if (name === 'compact') {
         await this.call('thread/compact/start', { threadId: this.thread });
       } else if (name === 'review') {
