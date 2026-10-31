@@ -6,6 +6,13 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Changed
+- The usage page's controls are one toolbar: provider, the dates with day steps, and the range presets, with Rescan and Export CSV beside the heading. Each set of options is one segmented control, and costs no longer say "(partial)"; the page already notes that unknown prices are left out.
+
+### Fixed
+- The 5-hour limit's graph no longer spills out of its card when the session has not started (#203).
+- With the tab bar hidden, Ctrl+Tab goes through tabs in the Open view's order (#204).
+
 ## [0.6.2] - 2026-10-24
 
 ### Added
