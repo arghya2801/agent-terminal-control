@@ -35,7 +35,10 @@ export async function startAgent(key: TabKey, provider: AgentProvider, cwd: stri
   live.set(key, l);
   channel.onmessage = (ev) => receive(key, ev);
   try {
-    l.id = await agentOpen(provider, cwd, o, channel);
+    const id = await agentOpen(provider, cwd, o, channel);
+    // The tab closed while its session opened, which then has no tab to close it.
+    if (live.get(key) !== l) return void agentClose(id).catch(() => {});
+    l.id = id;
   } catch (e) {
     receive(key, { t: 'exit', message: String(e instanceof Error ? e.message : e) });
   }
