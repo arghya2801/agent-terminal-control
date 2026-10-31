@@ -97,20 +97,33 @@
     };
   }
 
+  /** What the fields held at the last save, so a save writes only what was edited since. */
+  let base = draft && cleaned(draft);
+
   /**
    * The draft is not rewritten with the cleaned copy: a width typed as "3" on the way to
-   * "300" would be snapped to 160 mid-keystroke.
+   * "300" would be snapped to 160 mid-keystroke. Only edited fields are written, onto the
+   * current settings, so a change made elsewhere while the panel is open stays.
    */
   async function save() {
     clearTimeout(pending);
     const prev = appState.settings;
-    if (!draft || !prev) return;
-    const next = cleaned(draft);
-    if (JSON.stringify(next) === JSON.stringify(prev)) return;
-    await saveSettings(next);
+    if (!draft || !prev || !base) return;
+    const edited: Record<string, any> = cleaned(draft);
+    const was: Record<string, any> = base;
+    const next: Record<string, any> = structuredClone($state.snapshot(prev));
+    const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+    for (const [section, value] of Object.entries(edited)) {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        for (const [k, v] of Object.entries(value)) if (!same(v, was[section]?.[k])) next[section] = { ...next[section], [k]: v };
+      } else if (!same(value, was[section])) next[section] = value;
+    }
+    base = edited as Settings;
+    if (same(next, prev)) return;
+    await saveSettings(next as Settings);
     // Renames and the projects directory only show up after a rescan, which is not free.
     const scanned = (s: Settings) => JSON.stringify([s.projects.names, s.projects.sessionNames, s.projects.claudeProjectsDir]);
-    if (scanned(next) !== scanned(prev)) await refresh();
+    if (scanned(next as Settings) !== scanned(prev)) await refresh();
     saved = true;
     clearTimeout(savedTimer);
     savedTimer = setTimeout(() => (saved = false), 1500);

@@ -25,6 +25,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Usage over time as a line chart, now the default; Bars beside it switches back. Split by model, project or provider, it draws a line per series; hovering shows a crosshair and each line's value.
 
 ### Fixed
+- Animations and Animation speed apply as soon as they change, not after a restart.
+- Closing Settings saves only what was edited in it, so a change made elsewhere while it was open, such as an edit to settings.json, is kept.
 - The git calls ATC makes on its own, such as reading an agent's changes when it stops, ignore a repository's `core.fsmonitor` setting, which could run a command the repository names.
 - A confirmation dialog always goes away once answered. It moves itself to the top of the page, where closing it did not always find it.
 - Claude chat tabs label their requests `atc`. Under the Agent SDK's own label, Anthropic's 5-hour meter has been measured charging about twice what the CLI pays for the same tokens; a custom label was measured at the CLI's rate (pingdotgg/t3code#24649). Weekly limits were never affected.

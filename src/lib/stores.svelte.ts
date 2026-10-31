@@ -188,6 +188,8 @@ export async function saveSettings(next: Settings) {
     JSON.stringify(prev?.terminal) !== JSON.stringify(next.terminal)
   ) {
     applySettings(next);
+  } else if (prev?.ui.animations !== next.ui.animations || prev?.ui.animationSpeed !== next.ui.animationSpeed) {
+    applyMotion();
   }
   // This write carries everything a pending debounced one would.
   if (saveTimer !== undefined) {
