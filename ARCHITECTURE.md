@@ -292,6 +292,10 @@ Things that cost time once. Add to this list.
 - An SDK session has no task list: the CLI drops TaskCreate and TaskUpdate (and TodoWrite)
   from it. Naming them in `allowedTools` adds them back. Bare names there skip
   `canUseTool`, which is fine for tools that only keep a list.
+- Claude labels each request with `CLAUDE_CODE_ENTRYPOINT`. Under the SDK it is `sdk-ts`
+  or `sdk-cli`, which the 5-hour limit meters at roughly twice the CLI's rate for the same
+  tokens (pingdotgg/t3code#24649; weekly limits are unaffected). The sidecar sets `atc`,
+  which the meter counts like the CLI, unless launch settings set their own value.
 - A Claude rewind needs `enableFileCheckpointing`. `rewindFiles` restores the files, but
   only a dry run lists them. The conversation then resumes at the chain entry before the
   prompt (`resumeSessionAt`). Each prompt the sidecar sends carries its own `uuid`, so it

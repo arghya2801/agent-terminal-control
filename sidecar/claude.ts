@@ -14,7 +14,11 @@ function launchOptions(id: string, o: Launch) {
     executable: o.exe.endsWith('.js') ? ('node' as const) : undefined,
     settingSources: ['user' as const, 'project' as const, 'local' as const],
     extraArgs: extraArgs(o.args),
-    env: { ...process.env, ...o.env, CLAUDE_AGENT_SDK_CLIENT_APP: 'atc' },
+    // The label Claude puts on each request. The 5-hour limit meters the SDK's own labels
+    // (`sdk-ts`, `sdk-cli`) at about twice the CLI's rate for the same tokens
+    // (pingdotgg/t3code#24649), so ATC names itself. A value inherited from whatever
+    // started ATC is not ATC's choice; one in its launch settings is.
+    env: { ...process.env, ...o.env, CLAUDE_AGENT_SDK_CLIENT_APP: 'atc', CLAUDE_CODE_ENTRYPOINT: o.env?.CLAUDE_CODE_ENTRYPOINT || 'atc' },
     stderr: (d: string) => log(id, 'claude:', d.trimEnd()),
   };
 }
