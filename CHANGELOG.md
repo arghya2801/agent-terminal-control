@@ -31,7 +31,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Closing Settings saves only what was edited in it, so a change made elsewhere while it was open, such as an edit to settings.json, is kept.
 - The git calls ATC makes on its own, such as reading an agent's changes when it stops, ignore a repository's `core.fsmonitor` setting, which could run a command the repository names.
 - A confirmation dialog always goes away once answered. It moves itself to the top of the page, where closing it did not always find it.
-- Claude chat tabs label their requests `atc`. Under the Agent SDK's own label, Anthropic's 5-hour meter has been measured charging about twice what the CLI pays for the same tokens; a custom label was measured at the CLI's rate (pingdotgg/t3code#24649). Weekly limits were never affected. Settings > Agents > Label requests "atc" turns it off.
+- Claude chat tabs label their requests `atc`. Under the Agent SDK's own label, Anthropic's 5-hour meter has been reported charging about twice what the CLI pays for the same tokens, and a custom label at the CLI's rate (pingdotgg/t3code#24649). A Pro account measured in November showed no difference (#205), so this is a precaution. Weekly limits were never affected. Settings > Agents > Label requests "atc" turns it off.
 - The 5-hour limit's graph no longer spills out of its card when the session has not started (#203).
 - With the tab bar hidden, Ctrl+Tab goes through tabs in the Open view's order (#204).
 - An approved plan in a Claude tab leaves plan mode, so the mode chip no longer stays on Plan.
