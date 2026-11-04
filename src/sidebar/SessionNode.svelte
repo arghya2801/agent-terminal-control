@@ -16,7 +16,6 @@
     mark = null,
     showBranch = true,
     renaming = false,
-    renameValue,
     archived = false,
     onRename,
     onRenameCancel,
@@ -33,8 +32,6 @@
     /** Off under a branch sub-header, which already says it. */
     showBranch?: boolean;
     renaming?: boolean;
-    /** What the rename box starts with, e.g. a suggested name; the label otherwise. */
-    renameValue?: string;
     /** Hidden from the sidebar unless archived sessions are shown (#163). */
     archived?: boolean;
     onRename: (name: string) => void;
@@ -58,7 +55,7 @@
 {#if renaming}
   <div class="session">
     <ProviderIcon provider={session.provider} />
-    <InlineRename value={renameValue ?? session.label} onDone={onRename} onCancel={onRenameCancel} />
+    <InlineRename value={session.label} onDone={onRename} onCancel={onRenameCancel} />
   </div>
 {:else}
 <button
