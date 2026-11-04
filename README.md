@@ -19,7 +19,7 @@ page shows plan limits and what the work would have cost at API prices.
 
 Claude and Codex tabs are a chat by default: Claude runs through the Claude Agent SDK and
 Codex through its app-server, the same CLIs with their own authentication, models,
-permissions, hooks, skills and session files. Ctrl+` moves a tab between the chat and the
+permissions, hooks, skills and session files. Ctrl+` or Ctrl+Shift+M moves a tab between the chat and the
 CLI's own TUI on the same session, and Settings > General > "Agent tabs open as" picks
 which one new tabs use. Shell tabs are PowerShell in ConPTY.
 
@@ -111,8 +111,9 @@ build times, build resource use, runtime memory, validation, and migration detai
   has run; each turn ends with its duration and cost
 - Enter sends, Shift+Enter adds a line, Esc or Stop interrupts. A message sent while the
   agent works waits, shown above the box, and goes when the turn ends
-- Ctrl+` (or the terminal button) closes the chat and resumes the session in `claude` or
-  `codex`; in a terminal tab, Ctrl+` or the chat button in the header comes back
+- Ctrl+` or Ctrl+Shift+M (or the terminal button) closes the chat and resumes the session
+  in `claude` or `codex`; in a terminal tab, the same keys or the chat button in the header
+  come back
 
 **Sidebar: sessions**
 - Projects derived from Claude and Codex transcripts, resolved to their real paths, with

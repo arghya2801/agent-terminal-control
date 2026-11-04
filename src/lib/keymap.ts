@@ -102,6 +102,8 @@ const BINDINGS: Binding[] = [
   { key: 'g', ctrl: true, shift: true, action: 'toggleMosaic' },
   // VS Code's terminal toggle. Neither Claude Code nor PSReadLine binds it.
   { key: '`', ctrl: true, shift: false, action: 'toggleAgentView' },
+  // For when something else holds Ctrl+`, such as a clipboard manager.
+  { key: 'm', ctrl: true, shift: true, action: 'toggleAgentView' },
 ];
 
 /**

@@ -19,6 +19,7 @@ describe('matchChord', () => {
     expect(matchChord(ctrlShift('T'))).toBe('newTab');
     expect(matchChord(ctrlShift('D'))).toBe('toggleDebug');
     expect(matchChord(ctrlShift('W'))).toBe('closeTab');
+    expect(matchChord(ctrlShift('M'))).toBe('toggleAgentView');
     expect(matchChord(ctrlShift('F12'))).toBe('toggleDevtools');
   });
 

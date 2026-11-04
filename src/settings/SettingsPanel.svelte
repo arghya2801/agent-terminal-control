@@ -234,7 +234,7 @@
             <option value="chat">Chat</option>
             <option value="terminal">Terminal</option>
           </select>
-          <span class="muted hint">The same CLI and session either way: the chat, or the CLI's own screen. Ctrl+` switches a tab.</span>
+          <span class="muted hint">The same CLI and session either way: the chat, or the CLI's own screen. Ctrl+` or Ctrl+Shift+M switches a tab.</span>
         </div>
         <label for="nt">Notifications</label>
         <label class="check">
