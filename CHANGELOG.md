@@ -23,13 +23,15 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Search settings: a box at the top of Settings filters it as you type. It matches loosely ("fnt sz" finds Font size) and also searches hints and section names; Esc clears it.
 - The usage page's controls are one toolbar: provider, the dates with day steps, and the range presets, with Rescan and Export CSV beside the heading. Each set of options is one segmented control, and costs no longer say "(partial)"; the page already notes that unknown prices are left out.
 - Usage over time as a line chart, now the default; Bars beside it switches back. Split by model, project or provider, it draws a line per series; hovering shows a crosshair and each line's value.
+- Rename with Haiku or Luna renames the session straight away, rather than filling the rename box, and the open tab takes the name too. In the Open view, right-click a tab to rename its session or every open session this way.
+- The Open view keeps each tab's project name in sight: a long title is cut short before the project is.
 
 ### Fixed
 - Animations and Animation speed apply as soon as they change, not after a restart.
 - Closing Settings saves only what was edited in it, so a change made elsewhere while it was open, such as an edit to settings.json, is kept.
 - The git calls ATC makes on its own, such as reading an agent's changes when it stops, ignore a repository's `core.fsmonitor` setting, which could run a command the repository names.
 - A confirmation dialog always goes away once answered. It moves itself to the top of the page, where closing it did not always find it.
-- Claude chat tabs label their requests `atc`. Under the Agent SDK's own label, Anthropic's 5-hour meter has been measured charging about twice what the CLI pays for the same tokens; a custom label was measured at the CLI's rate (pingdotgg/t3code#24649). Weekly limits were never affected.
+- Claude chat tabs label their requests `atc`. Under the Agent SDK's own label, Anthropic's 5-hour meter has been measured charging about twice what the CLI pays for the same tokens; a custom label was measured at the CLI's rate (pingdotgg/t3code#24649). Weekly limits were never affected. Settings > Agents > Label requests "atc" turns it off.
 - The 5-hour limit's graph no longer spills out of its card when the session has not started (#203).
 - With the tab bar hidden, Ctrl+Tab goes through tabs in the Open view's order (#204).
 - An approved plan in a Claude tab leaves plan mode, so the mode chip no longer stays on Plan.
