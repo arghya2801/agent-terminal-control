@@ -370,6 +370,9 @@
         <label for="ca">Chat arguments<span class="muted hint">Added for chats. Codex keeps its MCP servers; only its commands are read-only. <code>""</code> is an empty argument</span></label>
         <textarea id="ca" bind:value={claudeChatArgs}></textarea>
         <textarea aria-label="Codex chat arguments" bind:value={codexChatArgs}></textarea>
+        <label for="al">Label requests "atc"<span class="muted hint">Agent tabs tell Anthropic they are ATC, not the Agent SDK, whose label has been metered at about twice the CLI's rate on the 5-hour limit. New sessions</span></label>
+        <label class="check"><input id="al" type="checkbox" bind:checked={draft.claude.atcLabel} /></label>
+        <span></span>
       </div>
       <div class="grid folders">
         <label for="pd">Claude projects</label>

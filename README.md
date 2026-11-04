@@ -319,7 +319,8 @@ Every field is optional; missing ones take their default.
     "args": [],                               // on every launch, e.g. ["--model", "opus"]
     "chatArgs": ["--tools=", "--strict-mcp-config"],  // added for chats
     "resumeArgs": ["--resume", "{session}"],  // {session} is the session id
-    "scratchDir": null                        // null = <config dir>\\scratch
+    "scratchDir": null,                       // null = <config dir>\\scratch
+    "atcLabel": true                          // chat requests say "atc", not the SDK's "sdk-ts"
   }
 }
 ```

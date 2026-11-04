@@ -82,6 +82,9 @@ func (a *App) launch(provider, cwd string, chat bool) (core.Object, error) {
 	if _, home := core.Roots(s); provider == "codex" && strings.TrimSpace(core.Str(cfg["homeDir"])) != "" {
 		env["CODEX_HOME"] = home
 	}
+	if provider == "claude" && cfg["atcLabel"] != false {
+		env["CLAUDE_CODE_ENTRYPOINT"] = "atc"
+	}
 	if !core.IsDir(cwd) {
 		cwd = core.Home()
 	}

@@ -49,7 +49,7 @@ func Defaults() Object {
 		// chatArgs start a chat. Claude gets no built-in tools and no MCP servers; `--tools=`
 		// rather than `--tools ""`, which Windows PowerShell drops. Codex has no switch for
 		// its tools or MCP servers, so it gets a read-only sandbox for commands.
-		"claude": Object{"command": "claude", "args": []any{}, "chatArgs": []any{"--tools=", "--strict-mcp-config"}, "resumeArgs": []any{"--resume", "{session}"}, "scratchDir": nil},
+		"claude": Object{"command": "claude", "args": []any{}, "chatArgs": []any{"--tools=", "--strict-mcp-config"}, "resumeArgs": []any{"--resume", "{session}"}, "scratchDir": nil, "atcLabel": true},
 		"codex":  Object{"command": "codex", "args": []any{}, "chatArgs": []any{"--sandbox", "read-only"}, "resumeArgs": []any{"resume", "{session}"}, "homeDir": nil},
 	}
 }
