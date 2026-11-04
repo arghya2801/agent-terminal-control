@@ -295,8 +295,9 @@ Things that cost time once. Add to this list.
   `canUseTool`, which is fine for tools that only keep a list.
 - Claude labels each request with `CLAUDE_CODE_ENTRYPOINT`. Under the SDK it is `sdk-ts`
   or `sdk-cli`, which the 5-hour limit meters at roughly twice the CLI's rate for the same
-  tokens (pingdotgg/t3code#24649; weekly limits are unaffected). The sidecar sets `atc`,
-  which the meter counts like the CLI, unless launch settings set their own value.
+  tokens (pingdotgg/t3code#24649; weekly limits are unaffected). `launch` in `agents.go`
+  sets `atc` unless `claude.atcLabel` is false. A Pro account measured on 2026-11-04 showed
+  no SDK penalty (#205), so this is insurance, not a measured fix.
 - A Claude rewind needs `enableFileCheckpointing`. `rewindFiles` restores the files, but
   only a dry run lists them. The conversation then resumes at the chain entry before the
   prompt (`resumeSessionAt`). Each prompt the sidecar sends carries its own `uuid`, so it

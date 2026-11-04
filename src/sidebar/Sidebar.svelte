@@ -13,7 +13,9 @@
   import {
     anyProjectExpanded,
     appState,
+    naming,
     refresh,
+    renameModelName,
     setSidebarView,
     sidebarView,
     toggleAllProjects,
@@ -40,6 +42,8 @@
     onNewTab,
     onCloseTab,
     onRenameTab,
+    onNameSessions,
+    onNameTabs,
     onDispatch,
   }: {
     activeKey: TabKey | null;
@@ -66,6 +70,9 @@
     onNewTab: () => void;
     onCloseTab: (key: TabKey) => void;
     onRenameTab: (key: TabKey) => void;
+    /** Rename with Haiku or Luna. */
+    onNameSessions: (sessions: SessionMeta[]) => void;
+    onNameTabs: (keys: TabKey[]) => void;
     /** Starts an agent on a task in the background. */
     onDispatch: (p: Project, provider: AgentProvider, task: string) => void;
   } = $props();
@@ -302,6 +309,8 @@
             { label: 'Queue a message…', icon: 'pencil', disabled: !tabs.some((t) => t.key === key && tabMark(t) === 'working'), run: () => openRows?.startQueue(key) },
             { label: 'Mark done', icon: 'check', disabled: !tabs.some((t) => t.key === key && isWaiting(tabMark(t)) && !t.done), run: () => markDone(key) },
             { label: 'Rename…', icon: 'pencil', run: () => onRenameTab(key) },
+            { label: `Rename with ${renameModelName()}`, icon: 'agent', disabled: naming.size > 0, run: () => onNameTabs([key]) },
+            { label: `Rename every open session with ${renameModelName()}`, icon: 'agent', disabled: naming.size > 0, run: () => onNameTabs(tabs.map((t) => t.key)) },
             { label: 'Split beside the current tab', icon: 'split', disabled: key === activeKey, run: () => splitWith(key) },
             { label: 'Close tab', icon: 'close', sep: true, run: () => onCloseTab(key) },
           ] };
@@ -372,6 +381,7 @@
       {onOpenSession}
       {onNewShell}
       {onNewAgent}
+      {onNameSessions}
     />
   </div>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
@@ -397,6 +407,7 @@
       {onOpenSession}
       {onNewShell}
       {onNewAgent}
+      {onNameSessions}
     />
   </div>
 

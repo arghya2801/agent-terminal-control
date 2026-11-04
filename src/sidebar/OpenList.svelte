@@ -113,7 +113,7 @@
   >
     <StatusDot mark={tab.mark} title={s} />
     <span class="icon">{#if tab.provider}<ProviderIcon provider={tab.provider} />{:else}<Icon name="terminal" size={12} />{/if}</span>
-    <span class="text"><Highlight text={tab.title} {query} />{#if projectName(tab.projectKey)}<small><Highlight text={projectName(tab.projectKey)} {query} /></small>{/if}</span>
+    <span class="text"><span class="title"><Highlight text={tab.title} {query} /></span>{#if projectName(tab.projectKey)}<small><Highlight text={projectName(tab.projectKey)} {query} /></small>{/if}</span>
     <time>{stateWord(tab.mark)} {relativeTime(tab.since, now)}{#if fill !== undefined}<span class="ctx" class:full={fill >= 0.8} title="Context window {Math.round(fill * 100)}% full">{Math.round(fill * 100)}%</span>{/if}</time>
     {#if peek}<span class="peek">{peek}</span>{/if}
     {#if !wait && graph}<svg class="spark" viewBox="0 0 60 10" preserveAspectRatio="none" aria-hidden="true"><path d={sparkPath((void now, outputHistory(tab.key)))} /></svg>{/if}
@@ -206,13 +206,22 @@
     place-items: center;
     color: var(--fg-faint);
   }
+  /* The title gives way first, so the project stays readable. */
   .text {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    white-space: nowrap;
+  }
+  .title,
+  small {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
   }
   small {
+    flex-shrink: 0;
+    max-width: 55%;
     margin-left: 6px;
     color: var(--fg-faint);
     font-size: 11px;

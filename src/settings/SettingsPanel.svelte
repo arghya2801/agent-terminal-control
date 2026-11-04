@@ -234,7 +234,7 @@
             <option value="chat">Chat</option>
             <option value="terminal">Terminal</option>
           </select>
-          <span class="muted hint">The same CLI and session either way: the chat, or the CLI's own screen. Ctrl+` switches a tab.</span>
+          <span class="muted hint">The same CLI and session either way: the chat, or the CLI's own screen. Ctrl+` or Ctrl+Shift+M switches a tab.</span>
         </div>
         <label for="nt">Notifications</label>
         <label class="check">
@@ -370,6 +370,9 @@
         <label for="ca">Chat arguments<span class="muted hint">Added for chats. Codex keeps its MCP servers; only its commands are read-only. <code>""</code> is an empty argument</span></label>
         <textarea id="ca" bind:value={claudeChatArgs}></textarea>
         <textarea aria-label="Codex chat arguments" bind:value={codexChatArgs}></textarea>
+        <label for="al">Label requests "atc"<span class="muted hint">Chat tabs label their requests <code>atc</code> rather than the Agent SDK's <code>sdk-ts</code>, which some accounts saw drain the 5-hour limit faster. From the next session</span></label>
+        <div class="check"><input id="al" type="checkbox" bind:checked={draft.claude.atcLabel} /></div>
+        <span></span>
       </div>
       <div class="grid folders">
         <label for="pd">Claude projects</label>

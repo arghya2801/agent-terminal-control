@@ -32,6 +32,7 @@
     currentZoom,
     enterMs,
     initStores,
+    nameSessions,
     refreshMs,
     saveSettings,
     sidebarOpen,
@@ -582,6 +583,18 @@
     page = null;
     renamingTab = key;
   }
+  /** Rename with Haiku or Luna; the tabs showing those sessions take the names too. */
+  function nameSessionsAndTabs(sessions: SessionMeta[]) {
+    void nameSessions(sessions, (id, name) => {
+      for (const [tab, s] of tabToSession) if (s === id) renameTab(tab, name);
+    });
+  }
+  function nameTabs(keys: TabKey[]) {
+    const all = appState.index.projects.flatMap((p) => p.sessions);
+    const sessions = keys.flatMap((k) => all.filter((s) => sessionKey(s) === tabToSession.get(k)));
+    if (sessions.length) nameSessionsAndTabs(sessions);
+    else appState.error = 'No open tab has a session to name yet';
+  }
   function finishRename(name?: string) {
     if (renamingTab && name !== undefined) renameTab(renamingTab, name);
     renamingTab = null;
@@ -1006,6 +1019,8 @@
         onNewTab={newTab}
         onCloseTab={requestClose}
         onRenameTab={startRename}
+        onNameSessions={nameSessionsAndTabs}
+        onNameTabs={nameTabs}
         onDispatch={dispatch}
       />
       </div>

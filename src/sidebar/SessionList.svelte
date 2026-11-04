@@ -1,6 +1,6 @@
 <script lang="ts">
   import { sessionKey } from '../lib/agents';
-  import { agentCommand, openInExplorer, searchTranscripts, suggestSessionName } from '../lib/ipc';
+  import { agentCommand, openInExplorer, searchTranscripts } from '../lib/ipc';
   import ConfirmDialog from '../lib/ConfirmDialog.svelte';
   import SessionPreview from './SessionPreview.svelte';
   import { formatUsd, sessionStats } from '../lib/costs';
@@ -13,7 +13,7 @@
   import { filterProjects } from '../lib/filter';
   import { groupSubfolders } from '../lib/group';
   import { isPinned, togglePinned } from '../lib/pinned';
-  import { appState, refresh, saveSettings } from '../lib/stores.svelte';
+  import { appState, naming, refresh, renameModelName, saveSettings } from '../lib/stores.svelte';
   import type { AgentProvider, Project, SessionMeta, TabKey } from '../types';
   import type { SessionMark } from '../lib/format';
 
@@ -29,6 +29,7 @@
     onOpenSession,
     onNewShell,
     onNewAgent,
+    onNameSessions,
     onOpenFolder,
     onAsk,
   }: {
@@ -47,29 +48,13 @@
     onOpenSession: (p: Project, s: SessionMeta) => void;
     onNewShell: (p: Project) => void;
     onNewAgent: (p: Project, provider: AgentProvider) => void;
+    onNameSessions: (sessions: SessionMeta[]) => void;
   } = $props();
 
   /** `p:<project key>` or `s:<session id>` while its name is being edited. */
   let renaming = $state<string | null>(null);
-  /** A name the model suggested, which the rename box starts with (#195). */
-  let renameValue = $state<string | undefined>();
-  /** A failed suggestion or search, shown above the list until clicked. */
+  /** A failed search, shown above the list until clicked. */
   let notice = $state<string | null>(null);
-  let naming = $state<string | null>(null);
-
-  async function suggestName(s: SessionMeta) {
-    const key = sessionKey(s);
-    naming = key;
-    notice = null;
-    try {
-      renameValue = await suggestSessionName(s.file);
-      renaming = `s:${key}`;
-    } catch (e) {
-      notice = `Could not suggest a name: ${e instanceof Error ? e.message : e}`;
-    } finally {
-      naming = null;
-    }
-  }
 
   // --- archive (#163): hidden from the list, kept on disk.
   const archived = $derived(new Set(appState.settings?.projects.archived ?? []));
@@ -145,7 +130,6 @@
   /** Store `name` under `id` in one of the rename maps; empty removes the entry. */
   async function saveName(field: 'names' | 'sessionNames', id: string, name: string) {
     renaming = null;
-    renameValue = undefined;
     if (!appState.settings) return;
     const map = { ...appState.settings.projects[field] };
     if (name) map[id] = name;
@@ -228,10 +212,10 @@
         { label: 'Preview', icon: 'search', run: () => showPreview(p, s, row) },
         { label: 'Rename…', icon: 'pencil', sep: true, run: () => (renaming = `s:${key}`) },
         {
-          label: naming === key ? 'Naming…' : `Rename with ${appState.settings?.ui.renameModel === 'luna' ? 'Luna' : 'Haiku'}`,
+          label: naming.has(key) ? 'Naming…' : `Rename with ${renameModelName()}`,
           icon: 'agent',
-          disabled: naming !== null,
-          run: () => void suggestName(s),
+          disabled: naming.has(key),
+          run: () => onNameSessions([s]),
         },
         archived.has(key)
           ? { label: 'Unarchive', icon: 'expand', run: () => void setArchived([key], false) }
@@ -284,15 +268,11 @@
     {activeSessionId}
     open={openProjectKeys.has(project.key)}
     {renaming}
-    {renameValue}
     {archived}
     onPreview={(p, s, row) => showPreview(p, s, row)}
     onRenameProject={(p, name) => p.path && void saveName('names', p.path, name)}
     onRenameSession={(s, name) => void saveName('sessionNames', sessionKey(s), name)}
-    onRenameCancel={() => {
-      renaming = null;
-      renameValue = undefined;
-    }}
+    onRenameCancel={() => (renaming = null)}
     {onOpenProject}
     {onOpenSession}
     onProjectMenu={projectMenu}
