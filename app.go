@@ -40,6 +40,7 @@ type App struct {
 	cancel       context.CancelFunc
 	lastIndex    string
 	lastSettings string
+	agents       sidecar
 }
 
 func NewApp(config string) *App {
@@ -63,6 +64,7 @@ func (a *App) shutdown(ctx context.Context) {
 		a.watcher.Close()
 	}
 	a.limits.stop()
+	a.agents.stop()
 	a.killAll()
 	wr.CleanupNotifications(ctx)
 }
@@ -278,15 +280,16 @@ func (a *App) session(id string) (*pty.Session, error) {
 	return p, nil
 }
 
-// Invoke is the single reviewed desktop command boundary used by the typed frontend.
 // The frontend's command surface. Wails binds every exported method on App and generates
 // typed TypeScript for it in wailsjs/go/main, so a wrong name or argument fails the build.
 
-// FrontendReady kills the shells of a page that was replaced by a full reload.
+// FrontendReady kills the shells and agent sessions of a page that was replaced by a full
+// reload.
 func (a *App) FrontendReady(pageID string) {
 	a.mu.Lock()
 	old := []*pty.Session{}
-	if a.pageID != pageID {
+	replaced := a.pageID != pageID
+	if replaced {
 		for _, p := range a.ptys {
 			old = append(old, p)
 		}
@@ -294,6 +297,9 @@ func (a *App) FrontendReady(pageID string) {
 		a.pageID = pageID
 	}
 	a.mu.Unlock()
+	if replaced {
+		a.agents.stop()
+	}
 	for _, p := range old {
 		p.Kill()
 		select {
@@ -524,7 +530,8 @@ func (a *App) NotificationSend(title, body string) error {
 // dir is not a git working tree.
 func (a *App) GitChanges(dir string) (any, error) {
 	git := func(args ...string) (string, error) {
-		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		// A repo's own fsmonitor would run a command it names.
+		cmd := exec.Command("git", append([]string{"-c", "core.fsmonitor=false", "-C", dir}, args...)...)
 		// No console at all: a hidden one fails to start (0xc0000142) under some parents.
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
 		var stderr strings.Builder

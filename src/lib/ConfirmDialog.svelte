@@ -7,8 +7,11 @@
     onConfirm,
     onCancel,
     children,
+    danger = true,
   }: {
     confirmLabel: string;
+    /** The confirm button warns in red; false for a step that loses nothing. */
+    danger?: boolean;
     onConfirm: () => void;
     onCancel: () => void;
     children: Snippet;
@@ -32,7 +35,11 @@
       else onCancel();
     };
     window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      // Moved out of its block, so the block's teardown no longer finds it.
+      backdrop.remove();
+    };
   });
 </script>
 
@@ -48,7 +55,7 @@
     <div class="message">{@render children()}</div>
     <div class="actions">
       <button class="cancel" onclick={onCancel}>Cancel <kbd>Esc</kbd></button>
-      <button class="confirm" bind:this={confirmButton} onclick={onConfirm}>
+      <button class="confirm" class:calm={!danger} bind:this={confirmButton} onclick={onConfirm}>
         {confirmLabel} <kbd>Enter</kbd>
       </button>
     </div>
@@ -111,6 +118,15 @@
     border-color: var(--danger);
     background: var(--danger);
     outline: none;
+  }
+  .confirm.calm {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+  .confirm.calm:hover,
+  .confirm.calm:focus-visible {
+    border-color: color-mix(in srgb, var(--accent) 85%, var(--fg-bright));
+    background: color-mix(in srgb, var(--accent) 85%, var(--fg-bright));
   }
   kbd {
     margin-left: 4px;

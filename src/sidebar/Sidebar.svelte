@@ -1,7 +1,6 @@
 <script lang="ts">
   import SessionList from './SessionList.svelte';
   import OpenList from './OpenList.svelte';
-  import NotesPad from './NotesPad.svelte';
   import TaskBox from './TaskBox.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import Icon from '../lib/Icon.svelte';
@@ -14,7 +13,9 @@
   import {
     anyProjectExpanded,
     appState,
+    naming,
     refresh,
+    renameModelName,
     setSidebarView,
     sidebarView,
     toggleAllProjects,
@@ -41,6 +42,8 @@
     onNewTab,
     onCloseTab,
     onRenameTab,
+    onNameSessions,
+    onNameTabs,
     onDispatch,
   }: {
     activeKey: TabKey | null;
@@ -67,6 +70,9 @@
     onNewTab: () => void;
     onCloseTab: (key: TabKey) => void;
     onRenameTab: (key: TabKey) => void;
+    /** Rename with Haiku or Luna. */
+    onNameSessions: (sessions: SessionMeta[]) => void;
+    onNameTabs: (keys: TabKey[]) => void;
     /** Starts an agent on a task in the background. */
     onDispatch: (p: Project, provider: AgentProvider, task: string) => void;
   } = $props();
@@ -132,6 +138,12 @@
   const NOTES_HEIGHT_KEY = 'atc.notesHeight';
   let notesOpen = $state(true);
   let notesHeight = $state(200);
+  // The notes editor (Milkdown, a large part of the bundle) loads the first time the pane
+  // opens, then stays mounted so reopening is instant.
+  let notesLoaded = $state(false);
+  $effect(() => {
+    if (notesOpen) notesLoaded = true;
+  });
   let openView = $state<HTMLElement>();
   try {
     notesOpen = localStorage.getItem(NOTES_OPEN_KEY) !== '0';
@@ -297,6 +309,8 @@
             { label: 'Queue a message…', icon: 'pencil', disabled: !tabs.some((t) => t.key === key && tabMark(t) === 'working'), run: () => openRows?.startQueue(key) },
             { label: 'Mark done', icon: 'check', disabled: !tabs.some((t) => t.key === key && isWaiting(tabMark(t)) && !t.done), run: () => markDone(key) },
             { label: 'Rename…', icon: 'pencil', run: () => onRenameTab(key) },
+            { label: `Rename with ${renameModelName()}`, icon: 'agent', disabled: naming.size > 0, run: () => onNameTabs([key]) },
+            { label: `Rename every open session with ${renameModelName()}`, icon: 'agent', disabled: naming.size > 0, run: () => onNameTabs(tabs.map((t) => t.key)) },
             { label: 'Split beside the current tab', icon: 'split', disabled: key === activeKey, run: () => splitWith(key) },
             { label: 'Close tab', icon: 'close', sep: true, run: () => onCloseTab(key) },
           ] };
@@ -337,7 +351,7 @@
         <span class="twisty" class:expanded={notesOpen}><Icon name="chevron" size={12} /></span>
         Notes <em>notes.md</em>
       </button>
-      <div class="notes-body" hidden={!notesOpen}><NotesPad /></div>
+      <div class="notes-body" hidden={!notesOpen}>{#if notesLoaded}{#await import('./NotesPad.svelte') then { default: NotesPad }}<NotesPad />{/await}{/if}</div>
     </section>
   </div>
   {#if menu}
@@ -367,6 +381,7 @@
       {onOpenSession}
       {onNewShell}
       {onNewAgent}
+      {onNameSessions}
     />
   </div>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
@@ -392,12 +407,13 @@
       {onOpenSession}
       {onNewShell}
       {onNewAgent}
+      {onNameSessions}
     />
   </div>
 
   <footer>
     {#if view === 'open'}
-      {[`${tabs.length} open`, working && `${working} working`, waiting && `${waiting} need you`].filter(Boolean).join(', ')}
+      {[`${tabs.length} open`, working && `${working} working`, waiting && `${waiting} waiting on you`].filter(Boolean).join(', ')}
     {:else if view === 'scratch'}
       {scratchSessions} sessions
     {:else}

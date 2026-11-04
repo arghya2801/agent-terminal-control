@@ -146,6 +146,24 @@ func TestACodexFileWithoutMetadataDoesNotDirtyTheCacheOnEveryScan(t *testing.T) 
 		t.Fatal("an unchanged metadata-less file rewrote the cache")
 	}
 }
+func TestAGrowingTranscriptDoesNotRewriteTheCache(t *testing.T) {
+	// A working agent appends many times a minute; each write must not rewrite the cache.
+	path, s := oneTranscript(t, title("Label"))
+	cache := filepath.Join(t.TempDir(), "index.json")
+	idx := Index{CachePath: cache}
+	idx.Scan(s, false)
+	old := time.Now().Add(-time.Hour)
+	os.Chtimes(cache, old, old)
+	write(t, path, title("Label")+"appended\n")
+	idx.Scan(s, false)
+	if st, _ := os.Stat(cache); !st.ModTime().Equal(old) {
+		t.Fatal("an append rewrote the cache")
+	}
+	reloaded := Index{CachePath: cache}
+	if onlySession(t, reloaded.Scan(s, false))["label"] != "Label" || reloaded.Hits != 1 {
+		t.Fatal("the next start catches up without a re-parse", reloaded.Hits)
+	}
+}
 func TestDeletedSessionsAreEvicted(t *testing.T) {
 	path, s := oneTranscript(t, title("A"))
 	write(t, filepath.Join(filepath.Dir(path), "b.jsonl"), title("B"))

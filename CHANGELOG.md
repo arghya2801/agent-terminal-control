@@ -6,6 +6,38 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Changed
+- Claude and Codex tabs are a chat instead of a terminal. Claude runs through the Claude Agent SDK and Codex through its app-server: the same CLIs, logins, settings, hooks, skills, MCP servers and session files. Replies stream in; each tool call is one line with a timer, its live output and its result; permission prompts, questions and plan approvals are cards with buttons; `/` (Claude) and `$` (Codex) list commands and skills with their descriptions; the footer picks the model and Claude's permission mode and shows the turn's running time, and each turn ends with its duration and cost. "Open in terminal" resumes the session in the CLI's own TUI. Agent tabs need Node.js 18 or later on PATH.
+- In agent tabs, a run of tool calls reads as one line ("Read 3 files and ran 2 commands") that opens to the calls; the turn being worked on stays open. Each turn hangs off a rail with a light per call. The working line says what the agent is doing ("Running npm test", or its current thought), paths show relative to the project, Up and Down recall earlier prompts, and replies and code blocks have a Copy button.
+- An effort picker beside the model in agent tabs, for models that take one: Claude changes it mid-session, Codex from the next message. A new agent tab's model picker lists Claude's and Codex's models together; picking the other provider's moves the tab to it, until the first message is sent.
+- Codex tabs take `/compact`, `/review`, `/undo`, `/new` and `/rename`, and the mode chip picks Read only, Workspace or Full access for the next turns. When Codex's own reviewer approves something (`approvals_reviewer = "auto_review"`), the chat says what it decided.
+- Paste or drop images into an agent tab's message box, for Claude and Codex: PNG, JPEG, GIF or WebP, up to 5 MB each. They show above the prompt they went with.
+- Rewind an agent tab: hover one of your messages and choose Rewind. The conversation goes back to before it and the message returns to the box. In Claude tabs, files Claude changed since then go back too, as Esc Esc does in the CLI. Codex can't undo its edits, so its files stay as they are.
+- Type `@` in an agent tab's message box to pick a project file. The list is git's (ignored files left out), or the folder's own outside a repo.
+- Claude's task list shows above the message box while any task is open, with each task's state ("2 of 5 tasks done"). Codex's plan shows there too, when Codex sends one.
+- A new look for agent tabs. Your messages sit on the right. Each thing the agent did is one row with an icon and a plain verb ("Ran npm test", "Edited cli.js"), and a failed or declined call says why underneath. Permission and question cards have clearer buttons, and number keys pick an answer. The task list folds to one line while a card waits. Tables, code blocks and the `/` menu (with matches highlighted) are easier to read. An image button sits in the message box, and a stopped session offers Resume. The pane header shows the model, cost and context; tokens and cache use moved into the cost's tooltip.
+- Agent tabs use far less memory. A resumed Claude or Codex tab shows its conversation without starting the CLI, which starts when you type or send (a Claude CLI holds about 370 MB). Codex tabs read through one shared app-server instead of one each. A long reply takes less CPU while it streams. The notes editor loads the first time the notes pane opens, and the header stops re-reading costs while its agent is idle.
+
+- Choose chat or terminal for agent tabs: Settings > General > "Agent tabs open as" picks Chat (the default) or Terminal, the CLI's own screen. Ctrl+` or Ctrl+Shift+M moves any agent tab between the two on the same session, and a terminal agent tab has a chat button in its header. Restored tabs come back the way you left them.
+- Switching an agent tab between chat and terminal warns first: what moves, and whether a turn in progress stops. "Don't show this again" turns the warning off; Settings > General > Confirm switch turns it back on.
+- Search settings: a box at the top of Settings filters it as you type. It matches loosely ("fnt sz" finds Font size) and also searches hints and section names; Esc clears it.
+- The usage page's controls are one toolbar: provider, the dates with day steps, and the range presets, with Rescan and Export CSV beside the heading. Each set of options is one segmented control, and costs no longer say "(partial)"; the page already notes that unknown prices are left out.
+- Usage over time as a line chart, now the default; Bars beside it switches back. Split by model, project or provider, it draws a line per series; hovering shows a crosshair and each line's value.
+- Rename with Haiku or Luna renames the session straight away, rather than filling the rename box, and the open tab takes the name too. In the Open view, right-click a tab to rename its session or every open session this way.
+- The Open view keeps each tab's project name in sight: a long title is cut short before the project is.
+
+### Fixed
+- Animations and Animation speed apply as soon as they change, not after a restart.
+- Closing Settings saves only what was edited in it, so a change made elsewhere while it was open, such as an edit to settings.json, is kept.
+- The git calls ATC makes on its own, such as reading an agent's changes when it stops, ignore a repository's `core.fsmonitor` setting, which could run a command the repository names.
+- A confirmation dialog always goes away once answered. It moves itself to the top of the page, where closing it did not always find it.
+- Claude chat tabs label their requests `atc`. Under the Agent SDK's own label, Anthropic's 5-hour meter has been reported charging about twice what the CLI pays for the same tokens, and a custom label at the CLI's rate (pingdotgg/t3code#24649). A Pro account measured in November showed no difference (#205), so this is a precaution. Weekly limits were never affected. Settings > Agents > Label requests "atc" turns it off.
+- The 5-hour limit's graph no longer spills out of its card when the session has not started (#203).
+- With the tab bar hidden, Ctrl+Tab goes through tabs in the Open view's order (#204).
+- An approved plan in a Claude tab leaves plan mode, so the mode chip no longer stays on Plan.
+- A resumed Codex conversation whose saved model Codex no longer lists moves to the default model, instead of failing its next turn.
+- An agent tab waiting on a permission or question shows as waiting in the sidebar and header even while you are looking at it, instead of idle.
+
 ## [0.6.2] - 2026-10-24
 
 ### Added

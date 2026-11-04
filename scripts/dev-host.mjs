@@ -9,6 +9,8 @@ import { ensureConpty } from './conpty.mjs';
 await ensureConpty();
 export function startDev(env = process.env, args = []) {
   if (!existsSync(join(root, 'node_modules/vite/bin/vite.js'))) throw new Error('Run npm ci first.');
+  // The staged dist/ has no sidecar bundle; Node runs the source, types stripped.
+  env = { ...env, ATC_SIDECAR: join(root, 'sidecar', 'agent.ts') };
   const stage = join(root, 'wails-dev-work');
   mkdirSync(join(stage, 'dist'), { recursive: true });
   writeFileSync(join(stage, 'dist/index.html'), '<!doctype html><title>ATC development</title>');

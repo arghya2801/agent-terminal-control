@@ -5,7 +5,8 @@
  * `.svelte.ts` files, so `$state` in a plain `.ts` would silently not be reactive.
  */
 
-import { migrateSessionNames } from './agents';
+import { SvelteSet } from 'svelte/reactivity';
+import { migrateSessionNames, sessionKey } from './agents';
 import { listen, frontendReady, setWindowTheme, setZoom } from './desktop';
 import {
   indexRefresh,
@@ -14,6 +15,7 @@ import {
   settingsSet,
   notesGet,
   notesSet,
+  suggestSessionName,
 } from './ipc';
 import {
   anyExpanded,
@@ -26,7 +28,7 @@ import { normalizeZoom, stepZoom } from './zoom';
 import { applyTerminalSettings, applyTheme, setTerminalZoom } from '../terminal/manager';
 import { applyPalette, isLight, type Palette } from './theme';
 import { findTheme, loadThemes } from './themes';
-import type { IndexSnapshot, Settings } from '../types';
+import type { IndexSnapshot, SessionMeta, Settings } from '../types';
 
 const EVENT_INDEX_UPDATED = 'index://updated';
 const EVENT_SETTINGS_UPDATED = 'settings://updated';
@@ -178,6 +180,34 @@ export async function refresh(force = false) {
   }
 }
 
+export const renameModelName = () => (appState.settings?.ui.renameModel === 'luna' ? 'Luna' : 'Haiku');
+
+/** Sessions being named by the rename model, by session key. */
+export const naming = new SvelteSet<string>();
+
+/** Names each session with the rename model (#195) and keeps the name. One at a time:
+ *  each run starts a CLI. */
+export async function nameSessions(sessions: SessionMeta[], onNamed: (key: string, name: string) => void) {
+  const failed: string[] = [];
+  for (const s of sessions) naming.add(sessionKey(s));
+  for (const s of sessions) {
+    const key = sessionKey(s);
+    try {
+      const name = await suggestSessionName(s.file);
+      if (!appState.settings) break;
+      const sessionNames = { ...appState.settings.projects.sessionNames, [key]: name };
+      await saveSettings({ ...appState.settings, projects: { ...appState.settings.projects, sessionNames } });
+      onNamed(key, name);
+    } catch (e) {
+      failed.push(`${s.label}: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      naming.delete(key);
+    }
+  }
+  await refresh();
+  if (failed.length) appState.error = `Could not name ${failed.join('; ')}`;
+}
+
 export async function saveSettings(next: Settings) {
   const prev = appState.settings;
   appState.settings = next;
@@ -188,6 +218,8 @@ export async function saveSettings(next: Settings) {
     JSON.stringify(prev?.terminal) !== JSON.stringify(next.terminal)
   ) {
     applySettings(next);
+  } else if (prev?.ui.animations !== next.ui.animations || prev?.ui.animationSpeed !== next.ui.animationSpeed) {
+    applyMotion();
   }
   // This write carries everything a pending debounced one would.
   if (saveTimer !== undefined) {

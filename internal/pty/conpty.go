@@ -41,9 +41,6 @@ func loadConpty(dir string) *conptyProcs {
 	return p
 }
 
-// BundledConPTY reports whether terminals run on the bundled ConPTY rather than the inbox one.
-func BundledConPTY() bool { return conpty != nil }
-
 // A COORD is passed by value, packed into one register.
 func packed(c windows.Coord) uintptr { return uintptr(*(*uint32)(unsafe.Pointer(&c))) }
 

@@ -85,7 +85,7 @@ describe('summarize', () => {
       name,
     );
     expect(s.total).toBe(1.5);
-    expect(monetary(s.byModel[0])).toBe('$1.50 (partial)');
+    expect(monetary(s.byModel[0])).toBe('$1.50');
   });
   it('merges rows that map to the same project', () => {
     const s = summarize(
@@ -212,7 +212,7 @@ it('keeps Codex cost unavailable and combined estimates partial without merging 
   expect(combined.tokens).toBe(124);
   expect(combined.byModel.map(m => m.key)).toEqual(['claude:shared', 'codex:shared']);
   expect(combined.sessionsByProject.get('d:/a')?.map(s => s.key)).toEqual(['claude:s1','codex:s1']);
-  expect(monetary(combined.byProject[0])).toBe('$2.00 (partial)');
+  expect(monetary(combined.byProject[0])).toBe('$2.00');
   const only = summarize([codex], '2026-09-01', '2026-09-30', name);
   expect(monetary(only.byProject[0])).toBe('Unavailable');
   const csv = toCsv([codex], '2026-09-01', '2026-09-30', name);

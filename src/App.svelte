@@ -32,6 +32,7 @@
     currentZoom,
     enterMs,
     initStores,
+    nameSessions,
     refreshMs,
     saveSettings,
     sidebarOpen,
@@ -71,9 +72,12 @@
     setSplitRatio,
     splitWith,
     unsplit,
+    openAgentTab,
     type AttentionReason,
     type Tab,
   } from './terminal/manager';
+  import AgentView from './agent/AgentView.svelte';
+  import { agents, startAgent } from './agent/agent.svelte';
   import { actionList, chordFor, matchChord, type Action } from './lib/keymap';
   import CommandPalette, { type Command } from './lib/CommandPalette.svelte';
   import ContextMenu, { type MenuItem } from './sidebar/ContextMenu.svelte';
@@ -86,7 +90,7 @@
   import { zoomLabel } from './lib/zoom';
   import type { AgentProvider, Project, SessionMeta, TabKey, TabSummary } from './types';
   import { markTitle, tabMark, type SessionMark } from './lib/format';
-  import { nextWaiting, stateWord } from './lib/triage';
+  import { nextWaiting, stateWord, triageOrder } from './lib/triage';
 
   let wrapper: HTMLDivElement;
   let tabs = $state<TabSummary[]>([]);
@@ -96,6 +100,74 @@
 
   /** Which sidebar session each tab is showing. See `resolveSessions` for how. */
   const tabToSession = $derived(resolveSessions(tabSessions, appState.index.projects));
+
+  /**
+   * An agent tab: Claude or Codex as ATC's chat over the sidecar, or with `terminal` (by
+   * default the setting) the CLI's own TUI in a terminal. `session` resumes one; `task` is
+   * the first message.
+   */
+  async function openAgent(key: TabKey, title: string, cwd: string, projectKey: string | null, provider: AgentProvider, o: { session?: string | null; chat?: boolean; task?: string; terminal?: boolean } = {}) {
+    if (o.chat) chatTabs.add(key);
+    if (o.terminal ?? appState.settings?.ui.agentView === 'terminal') {
+      // Typed into PowerShell: single quotes take everything literally but a doubled quote.
+      const task = o.task ? ` '${o.task.replaceAll("'", "''")}'` : '';
+      // A new session is found by what was not there before it started.
+      const known = o.session ? [] : appState.index.projects.flatMap((p) => p.sessions.map(sessionKey));
+      await guard(async () => openTab(key, title, { cwd, initialCommand: `${await agentCommand(provider, o.session ?? null, o.chat)}${task}` }, projectKey, provider, known));
+      return;
+    }
+    const isNew = !getTab(key);
+    openAgentTab(key, title, cwd, projectKey, provider);
+    if (isNew) void startAgent(key, provider, cwd, o);
+  }
+
+  /** What the switch warning is about; null when it is not showing. */
+  let switching = $state<{ key: TabKey; title: string; name: string; toTerminal: boolean; working: boolean; fresh: boolean } | null>(null);
+  let dontWarn = $state(false);
+
+  /** Ctrl+` and the switch buttons: warns first, unless the warning was turned off. */
+  function requestSwitch(key: TabKey) {
+    const t = getTab(key);
+    if (!t?.provider) return;
+    if (appState.settings?.ui.confirmSwitch === false) return void switchView(key);
+    dontWarn = false;
+    switching = {
+      key,
+      title: displayTitle(t),
+      name: providerName(t.provider),
+      toTerminal: !t.term,
+      working: t.term ? t.activity === 'working' : !!agents[key]?.working,
+      fresh: !t.boundSession,
+    };
+  }
+
+  function finishSwitch(confirmed: boolean) {
+    const s = switching;
+    switching = null;
+    if (confirmed && dontWarn && appState.settings) void saveSettings({ ...appState.settings, ui: { ...appState.settings.ui, confirmSwitch: false } });
+    if (s && confirmed) void switchView(s.key);
+    else focusActiveTerminal();
+  }
+
+  /** Moves an agent tab between the chat and the CLI's own terminal, on the same session.
+   *  Only one of them can drive a session, so the tab closes and reopens in the other. */
+  async function switchView(key: TabKey) {
+    const t = getTab(key);
+    if (!t?.provider || !t.cwd) return;
+    const id = t.boundSession?.slice(t.boundSession.indexOf(':') + 1) ?? null;
+    const { provider, cwd, projectKey: pk } = t;
+    const title = displayTitle(t);
+    const chat = chatTabs.has(key);
+    const terminal = !t.term;
+    await closeTab(key);
+    await openAgent(id ? `session:${provider}:${id}` : key, title, cwd, pk, provider, { session: id, chat, terminal });
+  }
+
+  /** Moves an agent tab's chat into its pane, where the manager lays it out. */
+  function portal(node: HTMLElement, target: HTMLElement) {
+    target.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
 
   /** Which sessions have a tab, and what Claude is doing in each. */
   const sessionMarks = $derived.by(() => {
@@ -131,7 +203,12 @@
     // Exited tabs are kept: they are still in the tab bar, and on quit every shell exits
     // just before the window goes, which must not wipe what gets restored.
     const tabs = all.map((t): SavedTab => {
-      const common = { projectKey: t.projectKey, customTitle: t.customTitle, ...(chatTabs.has(t.key) ? { chat: true as const } : {}) };
+      const common = {
+        projectKey: t.projectKey,
+        customTitle: t.customTitle,
+        ...(chatTabs.has(t.key) ? { chat: true as const } : {}),
+        ...(t.provider && t.term ? { terminal: true as const } : {}),
+      };
       const sessionId = sessionIdOf(t);
       if (sessionId && t.cwd) return { kind: 'session', provider: t.provider ?? 'claude', sessionId, cwd: t.cwd, ...common };
       if (t.provider && t.cwd) return { kind: 'agent', provider: t.provider, cwd: t.cwd, ...common };
@@ -168,16 +245,11 @@
         const label = appState.index.projects
           .flatMap((p) => p.sessions)
           .find((s) => s.id === t.sessionId && s.provider === t.provider)?.label;
-        if (t.chat) chatTabs.add(key);
-        const command = await agentCommand(t.provider, t.sessionId, t.chat);
-        await guard(() =>
-          openTab(key, label ?? providerName(t.provider), { cwd: t.cwd, initialCommand: command }, t.projectKey, t.provider),
-        );
+        await openAgent(key, label ?? providerName(t.provider), t.cwd ?? '', t.projectKey, t.provider, { session: t.sessionId, chat: t.chat, terminal: !!t.terminal });
       } else if (t.kind === 'agent') {
         counter += 1;
         key = t.chat ? `agent:${t.provider}:chat-${counter}` : `agent:${t.provider}:${counter}`;
-        if (t.chat) chatTabs.add(key);
-        await guard(async () => openTab(key, providerName(t.provider), { cwd: t.cwd, initialCommand: await agentCommand(t.provider, null, t.chat) }, t.projectKey, t.provider, knownSessions()));
+        await openAgent(key, providerName(t.provider), t.cwd ?? '', t.projectKey, t.provider, { chat: t.chat, terminal: !!t.terminal });
       } else if (t.kind === 'shell' && t.project && t.projectKey) {
         key = `project:${t.projectKey}`;
         const name = appState.index.projects.find((p) => p.key === t.projectKey)?.name ?? 'pwsh';
@@ -276,13 +348,14 @@
       provider: t.provider,
       title: displayTitle(t),
       exited: t.exited,
-      attention: t.attention,
+      attention: t.attention || t.asking,
       done: t.done,
       queued: t.queued,
       cwd: t.cwd,
       activity: t.activity,
       projectKey: t.projectKey,
       since: t.markSince,
+      terminal: !!t.provider && !!t.term,
     }));
     const nextActive = getActiveKey();
     // Picking a tab means the user wants the terminal, not the page covering it.
@@ -359,24 +432,20 @@
     counter += 1;
     const key: TabKey = `agent:${provider}:${counter}`;
     const back = activeKey;
-    // Typed into PowerShell: single quotes take everything literally but a doubled quote.
-    const quoted = `'${task.replaceAll("'", "''")}'`;
+    const path = p.path;
     return guard(async () => {
-      await openTab(key, task.slice(0, 40), { cwd: p.path, initialCommand: `${await agentCommand(provider)} ${quoted}` }, p.key, provider, knownSessions());
+      await openAgent(key, task.slice(0, 40), path, p.key, provider, { task });
       if (back) activate(back);
     });
   }
 
-  function knownSessions(): string[] { return appState.index.projects.flatMap(p => p.sessions.map(sessionKey)); }
 
   /** With `chat`, the agent starts with the chat arguments and cannot change anything. */
   function newAgentIn(p: Project, provider: AgentProvider, chat = false) {
     if (!p.path) return;
     counter += 1;
     const key: TabKey = chat ? `agent:${provider}:chat-${counter}` : `agent:${provider}:${counter}`;
-    if (chat) chatTabs.add(key);
-    const existing = knownSessions();
-    return guard(async () => openTab(key, p.name, { cwd: p.path, initialCommand: await agentCommand(provider, null, chat) }, p.key, provider, existing));
+    openAgent(key, p.name, p.path, p.key, provider, { chat });
   }
 
   /** Ask an agent, or with `chat` chat with one, in the scratch directory. */
@@ -504,6 +573,7 @@
     })),
   );
   const shownState = $derived.by(() => {
+    if (shown && tabMark(shown) === 'attention' && agents[shown.key]?.requests.length) return 'waiting on you';
     const state = shown ? stateWord(tabMark(shown)) : '';
     return state && `${state} ${relativeTime(shown!.since, now)}`;
   });
@@ -512,6 +582,18 @@
     activate(key);
     page = null;
     renamingTab = key;
+  }
+  /** Rename with Haiku or Luna; the tabs showing those sessions take the names too. */
+  function nameSessionsAndTabs(sessions: SessionMeta[]) {
+    void nameSessions(sessions, (id, name) => {
+      for (const [tab, s] of tabToSession) if (s === id) renameTab(tab, name);
+    });
+  }
+  function nameTabs(keys: TabKey[]) {
+    const all = appState.index.projects.flatMap((p) => p.sessions);
+    const sessions = keys.flatMap((k) => all.filter((s) => sessionKey(s) === tabToSession.get(k)));
+    if (sessions.length) nameSessionsAndTabs(sessions);
+    else appState.error = 'No open tab has a session to name yet';
   }
   function finishRename(name?: string) {
     if (renamingTab && name !== undefined) renameTab(renamingTab, name);
@@ -617,8 +699,7 @@
     // A fresh launch already bound to this conversation is reused too.
     const existing = listTabs().find(t => t.boundSession === sessionKey(s));
     if (existing) { activate(existing.key); return; }
-    return guard(async () => openTab(`session:${sessionKey(s)}`, s.label,
-      { cwd, initialCommand: await agentCommand(s.provider, s.id) }, p.key, s.provider));
+    openAgent(`session:${sessionKey(s)}`, s.label, cwd, p.key, s.provider, { session: s.id });
   }
 
   $effect(() => { bindSessions(tabToSession, appState.index.projects.flatMap(p => p.sessions)); });
@@ -677,7 +758,7 @@
     if (appState.settings?.ui.notifications === false) return;
     try {
       let granted = await isPermissionGranted();
-      if (!granted) granted = (await requestPermission()) === 'granted';
+      if (!granted) granted = await requestPermission();
       if (!granted) return;
       sendNotification({ title, body: attentionBody(provider, reason) });
     } catch (e) {
@@ -694,6 +775,12 @@
 
   // One implementation of every chord, so a shortcut behaves identically whether focus
   // is in the terminal or the sidebar.
+  /** With the tab bar hidden (the default), Ctrl+Tab walks the Open view's order (#204). */
+  function visibleOrder(): TabKey[] | undefined {
+    if (appState.settings?.ui.showTabBar) return undefined;
+    return triageOrder(tabs.map((t) => ({ ...t, mark: tabMark(t) }))).map((t) => t.key);
+  }
+
   function runAction(action: Action) {
     switch (action) {
       case 'toggleSidebar':
@@ -709,10 +796,10 @@
         if (activeKey) requestClose(activeKey);
         break;
       case 'nextTab':
-        cycleTab(1);
+        cycleTab(1, visibleOrder());
         break;
       case 'prevTab':
-        cycleTab(-1);
+        cycleTab(-1, visibleOrder());
         break;
       case 'toggleDevtools':
         // Debug builds of Wails open devtools on this chord themselves.
@@ -783,6 +870,9 @@
       }
       case 'toggleMosaic':
         toggleMosaic();
+        break;
+      case 'toggleAgentView':
+        if (activeKey) requestSwitch(activeKey);
         break;
     }
   }
@@ -929,6 +1019,8 @@
         onNewTab={newTab}
         onCloseTab={requestClose}
         onRenameTab={startRename}
+        onNameSessions={nameSessionsAndTabs}
+        onNameTabs={nameTabs}
         onDispatch={dispatch}
       />
       </div>
@@ -968,7 +1060,7 @@
             <!-- svelte-ignore a11y_no_static_element_interactions (Ctrl+Shift+R is the keyboard way) -->
             <b class:exited={shown.exited} ondblclick={() => startRename(shown.key)}>{shown.title}</b>
           {/if}
-          {#if shownState}<span class="facts">{shownState}</span>{/if}
+          {#if shownState}<span class="facts" class:waiting={shownState.startsWith('waiting')}>{shownState}</span>{/if}
         </span>
         <div class="grow"></div>
         <HeaderStats tabKey={shown.key} sessionKey={shownSession} working={mark === 'working'} changes={changes[shown.key]} />
@@ -977,12 +1069,21 @@
         <div class="grow"></div>
       {/if}
       {#snippet actions()}
+        {#if shown?.terminal}<button class="bar-btn" onclick={() => requestSwitch(shown.key)} title="Open as chat ({chordFor('toggleAgentView')})" aria-label="Open as chat"><Icon name="chat" size={14} /></button>{/if}
         {@render barNew()}
         {#if shown}<button class="bar-btn" onclick={() => requestClose(shown.key)} title="Close {shown.title} (Ctrl+Shift+W)" aria-label="Close {shown.title}"><Icon name="close" size={12} /></button>{/if}
       {/snippet}
       {@render barEnd(actions)}
     </header>
     {/if}
+    {#each tabs as t (t.key)}
+      {@const tab = t.provider ? getTab(t.key) : undefined}
+      {#if tab && !tab.term && t.provider}
+        <div use:portal={tab.container}>
+          <AgentView tabKey={t.key} provider={t.provider} cwd={t.cwd} queued={t.queued} onTerminal={() => requestSwitch(t.key)} />
+        </div>
+      {/if}
+    {/each}
     <div class="panes" bind:this={wrapper}>
       {#if split}
         <div
@@ -1020,6 +1121,21 @@
         onPick={finishPicker}
         onCancel={() => finishPicker()}
       />
+    {/if}
+    {#if switching}
+      {@const sw = switching}
+      <ConfirmDialog danger={false} confirmLabel={sw.toTerminal ? 'Open in terminal' : 'Open as chat'} onConfirm={() => finishSwitch(true)} onCancel={() => finishSwitch(false)}>
+        <p class="switch-text">
+          {#if sw.toTerminal}
+            Move <strong>{sw.title}</strong> to the terminal? The chat closes and the session resumes in {sw.name}'s own screen.
+          {:else}
+            Move <strong>{sw.title}</strong> to the chat? The terminal closes and the session reopens as a chat.
+          {/if}
+        </p>
+        {#if sw.working}<p class="switch-text">{sw.name} is working: the turn in progress will stop.</p>{/if}
+        {#if sw.fresh}<p class="switch-text">This tab has no session yet, so a new one starts.</p>{/if}
+        <label class="dont-warn"><input type="checkbox" bind:checked={dontWarn} /> Don't show this again</label>
+      </ConfirmDialog>
     {/if}
     {#if closing}
       <ConfirmDialog
@@ -1117,6 +1233,21 @@
     overflow: hidden;
     color: var(--fg-faint);
     text-overflow: ellipsis;
+  }
+  .switch-text {
+    margin: 0 0 8px;
+  }
+  .dont-warn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    color: var(--fg-dim);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .facts.waiting {
+    color: var(--accent);
   }
   .bar-btn {
     display: grid;

@@ -1,8 +1,8 @@
 # ATC (Agent Terminal Control)
 
-Windows app. Sidebar of Claude Code and Codex sessions, real ConPTY terminal on the right. Code map in ARCHITECTURE.md.
+Windows app. Sidebar of Claude Code and Codex sessions. Agent tabs are a chat over the Agent SDK and Codex's app-server; shell tabs are a real ConPTY terminal. Code map in ARCHITECTURE.md.
 
-Go + Wails v2 host (`app.go`, `internal/`), Svelte 5 + TS + xterm.js 6 frontend. Rust/Tauri is gone. Don't bring back `src-tauri`.
+Go + Wails v2 host (`app.go`, `agents.go`, `internal/`), Node sidecar (`sidecar/`), Svelte 5 + TS + xterm.js 6 frontend. Rust/Tauri is gone. Don't bring back `src-tauri`.
 
 ## Commands
 

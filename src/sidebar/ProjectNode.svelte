@@ -22,7 +22,6 @@
     activeSessionId,
     open: hasTab,
     renaming,
-    renameValue,
     archived,
     onRenameProject,
     onRenameSession,
@@ -48,8 +47,6 @@
     /** A tab is open somewhere for this project. */
     open: boolean;
     renaming: string | null;
-    /** What the session rename box starts with, e.g. a suggested name. */
-    renameValue?: string;
     /** Archived sessions by `provider:id`, dimmed while shown. */
     archived: Set<string>;
     onRenameProject: (p: Project, name: string) => void;
@@ -133,7 +130,6 @@
           mark={sessionMarks.get(sessionKey(session)) ?? null}
           showBranch={!groupByBranch}
           renaming={renaming === `s:${sessionKey(session)}`}
-          {renameValue}
           archived={archived.has(sessionKey(session))}
           onPreview={(s, row) => onPreview(project, s, row)}
           onRename={(name) => onRenameSession(session, name)}

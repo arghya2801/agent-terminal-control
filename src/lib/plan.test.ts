@@ -126,6 +126,15 @@ describe('forecast', () => {
     expect(limitSeries(history, session)).toEqual([{ t: now - h, percent: 30 }, { t: now - 0.5 * h, percent: 50 }]);
   });
 
+  it('leaves out earlier windows while the session has not started', () => {
+    const idle = { ...session, percent: 0, resetsAt: null };
+    const history = [
+      { t: now - 30 * h, limits: [{ ...session, percent: 80, resetsAt: new Date(now - 26 * h).toISOString() }] },
+      { t: now - 0.5 * h, limits: [idle] },
+    ];
+    expect(limitSeries(history, idle)).toEqual([{ t: now - 0.5 * h, percent: 0 }]);
+  });
+
   it('projects the last hour of a 5-hour limit to 100%', () => {
     // 20% an hour from 50% at now: full in 2.5 hours, before the reset at 3 hours.
     expect(forecast([{ t: now - h, percent: 30 }, { t: now, percent: 50 }], session, now)).toBe(now + 2.5 * h);

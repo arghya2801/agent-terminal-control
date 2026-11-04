@@ -17,8 +17,11 @@ The Open view puts the agents waiting on you first, and you can answer them, sta
 tasks and broadcast a line from the sidebar without leaving the tab you are in. A Usage
 page shows plan limits and what the work would have cost at API prices.
 
-Both CLIs run in ATC's own PowerShell and ConPTY terminals. Each CLI manages its own
-authentication, models, permissions and configuration.
+Claude and Codex tabs are a chat by default: Claude runs through the Claude Agent SDK and
+Codex through its app-server, the same CLIs with their own authentication, models,
+permissions, hooks, skills and session files. Ctrl+` or Ctrl+Shift+M moves a tab between the chat and the
+CLI's own TUI on the same session, and Settings > General > "Agent tabs open as" picks
+which one new tabs use. Shell tabs are PowerShell in ConPTY.
 
 ## Why
 
@@ -38,6 +41,8 @@ there.
 - PowerShell 7 (`pwsh`), falling back to Windows PowerShell
 - Claude Code or the Codex CLI for the corresponding agent features. Either can be
   absent without disabling shells or the other provider.
+- Node.js 18 or later on `PATH` for agent tabs, which run in a small Node process.
+  Without it, sessions still open in a terminal.
 
 ## Install
 
@@ -94,6 +99,21 @@ See [the migration and performance report](docs/WAILS-MIGRATION.md) for measured
 build times, build resource use, runtime memory, validation, and migration details.
 
 ## Capabilities
+
+**Agent tabs**
+- Replies stream in as they are written, as formatted text; thinking folds to one line
+- Each tool call is one line with its input, a timer while it runs, the tail of its live
+  output, and its result. Click it for the whole call, output or diff
+- Permission prompts, questions and plan approvals are cards: Allow, Always allow or
+  Deny with a reason; pick answers; approve the plan or say what to change
+- `/` lists Claude's commands and skills, `$` lists Codex's skills, with descriptions
+- The footer picks the model and Claude's permission mode, and shows how long the turn
+  has run; each turn ends with its duration and cost
+- Enter sends, Shift+Enter adds a line, Esc or Stop interrupts. A message sent while the
+  agent works waits, shown above the box, and goes when the turn ends
+- Ctrl+` or Ctrl+Shift+M (or the terminal button) closes the chat and resumes the session
+  in `claude` or `codex`; in a terminal tab, the same keys or the chat button in the header
+  come back
 
 **Sidebar: sessions**
 - Projects derived from Claude and Codex transcripts, resolved to their real paths, with
@@ -300,7 +320,8 @@ Every field is optional; missing ones take their default.
     "args": [],                               // on every launch, e.g. ["--model", "opus"]
     "chatArgs": ["--tools=", "--strict-mcp-config"],  // added for chats
     "resumeArgs": ["--resume", "{session}"],  // {session} is the session id
-    "scratchDir": null                        // null = <config dir>\\scratch
+    "scratchDir": null,                       // null = <config dir>\\scratch
+    "atcLabel": true                          // chat requests say "atc", not the SDK's "sdk-ts"
   }
 }
 ```

@@ -23,9 +23,34 @@
   white-space: nowrap;
 }
 .usage .group {
-  display: flex;
-  gap: 6px;
-  margin: 14px 0 8px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  margin: 0 8px 10px 0;
+  vertical-align: middle;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-chrome);
+}
+.usage .group button.btn {
+  padding: 4px 11px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--fg-dim);
+}
+.usage .group button.btn:hover:not(:disabled) {
+  color: var(--fg-bright);
+}
+.usage .group button.btn.primary {
+  background: var(--bg-surface);
+  color: var(--fg-bright);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25), inset 0 0 0 1px color-mix(in srgb, var(--fg-bright) 8%, transparent);
+}
+.usage .group button.btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: -2px;
 }
 .usage .total {
   display: flex;

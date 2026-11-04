@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { sessionKey } from '../lib/agents';
+  import { fuzzyScore } from '../lib/fuzzy';
   import Page from '../lib/Page.svelte';
   import SectionNav from '../lib/SectionNav.svelte';
   import { openSettingsFile } from '../lib/ipc';
@@ -96,20 +97,33 @@
     };
   }
 
+  /** What the fields held at the last save, so a save writes only what was edited since. */
+  let base = draft && cleaned(draft);
+
   /**
    * The draft is not rewritten with the cleaned copy: a width typed as "3" on the way to
-   * "300" would be snapped to 160 mid-keystroke.
+   * "300" would be snapped to 160 mid-keystroke. Only edited fields are written, onto the
+   * current settings, so a change made elsewhere while the panel is open stays.
    */
   async function save() {
     clearTimeout(pending);
     const prev = appState.settings;
-    if (!draft || !prev) return;
-    const next = cleaned(draft);
-    if (JSON.stringify(next) === JSON.stringify(prev)) return;
-    await saveSettings(next);
+    if (!draft || !prev || !base) return;
+    const edited: Record<string, any> = cleaned(draft);
+    const was: Record<string, any> = base;
+    const next: Record<string, any> = structuredClone($state.snapshot(prev));
+    const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+    for (const [section, value] of Object.entries(edited)) {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        for (const [k, v] of Object.entries(value)) if (!same(v, was[section]?.[k])) next[section] = { ...next[section], [k]: v };
+      } else if (!same(value, was[section])) next[section] = value;
+    }
+    base = edited as Settings;
+    if (same(next, prev)) return;
+    await saveSettings(next as Settings);
     // Renames and the projects directory only show up after a rescan, which is not free.
     const scanned = (s: Settings) => JSON.stringify([s.projects.names, s.projects.sessionNames, s.projects.claudeProjectsDir]);
-    if (scanned(next) !== scanned(prev)) await refresh();
+    if (scanned(next as Settings) !== scanned(prev)) await refresh();
     saved = true;
     clearTimeout(savedTimer);
     savedTimer = setTimeout(() => (saved = false), 1500);
@@ -134,6 +148,50 @@
     draft.projects[field] = map;
   }
 
+  /**
+   * The search box. A row shows when its label fuzzily matches, or when its label, hint and
+   * options hold every word typed; a section with no row left hides its heading. Rows are a
+   * grid's cells, two per row (three in Agents, under a header row of its own).
+   */
+  let query = $state('');
+  let search = $state<HTMLInputElement>();
+  let body = $state<HTMLElement>();
+  let matches = $state(true);
+  onMount(() => search?.focus());
+  $effect(() => {
+    const q = query.trim().toLowerCase();
+    if (!body || !draft) return;
+    const words = q.split(/\s+/);
+    const show = (el: Element, on: boolean) => ((el as HTMLElement).style.display = on ? '' : 'none');
+    let any = false;
+    for (const h of body.querySelectorAll('h2')) {
+      let found = false;
+      for (let el = h.nextElementSibling; el && el.tagName !== 'H2'; el = el.nextElementSibling) {
+        if (!el.matches('.grid, .agents')) {
+          show(el, !q);
+          continue;
+        }
+        const cols = el.matches('.agents') ? 3 : 2;
+        const cells = [...el.children];
+        const first = el.matches('.agents') ? cols : 0;
+        let rows = 0;
+        for (let i = first; i < cells.length; i += cols) {
+          const row = cells.slice(i, i + cols);
+          const text = `${h.textContent} ${row.map((r) => r.textContent).join(' ')}`.toLowerCase();
+          const hit = !q || fuzzyScore(row[0].textContent ?? '', q) !== null || words.every((w) => text.includes(w));
+          for (const cell of row) show(cell, hit);
+          if (hit) rows++;
+        }
+        for (const cell of cells.slice(0, first)) show(cell, rows > 0);
+        show(el, rows > 0);
+        found ||= rows > 0;
+      }
+      show(h, found);
+      any ||= found;
+    }
+    matches = any;
+  });
+
   function sessionLabel(id: string): string {
     const shortId = id.slice(id.indexOf(':') + 1, id.indexOf(':') + 9);
     for (const p of appState.index.projects) {
@@ -146,11 +204,22 @@
 <Page title="Settings" modal {onClose}>
   {#snippet actions()}
     {#if saved}<span class="muted saved">Saved</span>{/if}
+    <input
+      class="search"
+      type="search"
+      placeholder="Search settings"
+      aria-label="Search settings"
+      bind:this={search}
+      bind:value={query}
+      onkeydown={(e) => e.key === 'Escape' && query && (e.stopPropagation(), (query = ''))}
+    />
     <button class="btn" onclick={() => openSettingsFile()}>Open settings.json</button>
   {/snippet}
   {#if !draft}
     <p class="err">Settings could not be loaded.</p>
   {:else}
+    {#if query.trim() && !matches}<p class="muted none">No settings match “{query.trim()}”.</p>{/if}
+    <div class="body" bind:this={body}>
     <SectionNav sections={SECTIONS}>
       <h2 id="s-general">General</h2>
       <div class="grid">
@@ -159,6 +228,14 @@
           <input id="rt" type="checkbox" bind:checked={draft.ui.restoreTabs} />
           <span class="muted">Reopen last time's tabs on launch; agent sessions resume</span>
         </label>
+        <label for="av">Agent tabs open as</label>
+        <div>
+          <select id="av" bind:value={draft.ui.agentView}>
+            <option value="chat">Chat</option>
+            <option value="terminal">Terminal</option>
+          </select>
+          <span class="muted hint">The same CLI and session either way: the chat, or the CLI's own screen. Ctrl+` or Ctrl+Shift+M switches a tab.</span>
+        </div>
         <label for="nt">Notifications</label>
         <label class="check">
           <input id="nt" type="checkbox" bind:checked={draft.ui.notifications} />
@@ -293,6 +370,9 @@
         <label for="ca">Chat arguments<span class="muted hint">Added for chats. Codex keeps its MCP servers; only its commands are read-only. <code>""</code> is an empty argument</span></label>
         <textarea id="ca" bind:value={claudeChatArgs}></textarea>
         <textarea aria-label="Codex chat arguments" bind:value={codexChatArgs}></textarea>
+        <label for="al">Label requests "atc"<span class="muted hint">Chat tabs label their requests <code>atc</code> rather than the Agent SDK's <code>sdk-ts</code>, which some accounts saw drain the 5-hour limit faster. From the next session</span></label>
+        <div class="check"><input id="al" type="checkbox" bind:checked={draft.claude.atcLabel} /></div>
+        <span></span>
       </div>
       <div class="grid folders">
         <label for="pd">Claude projects</label>
@@ -378,6 +458,11 @@
           <input id="cfc" type="checkbox" bind:checked={draft.ui.confirmClose} />
           <span class="muted">Ask before closing a tab with a program running in it</span>
         </label>
+        <label for="cfs">Confirm switch</label>
+        <label class="check">
+          <input id="cfs" type="checkbox" bind:checked={draft.ui.confirmSwitch} />
+          <span class="muted">Warn before moving an agent tab between the chat and the terminal</span>
+        </label>
         <label for="tst">In-app notes</label>
         <div class="check">
           <input id="tst" type="checkbox" bind:checked={draft.ui.toasts} />
@@ -398,6 +483,7 @@
       </div>
 
     </SectionNav>
+    </div>
   {/if}
 </Page>
 
@@ -423,6 +509,33 @@
   }
   .saved {
     animation: atc-fade var(--enter) var(--ease-out);
+  }
+  /* The search wraps the page without boxing it in. */
+  .body {
+    display: contents;
+  }
+  .search {
+    width: 220px;
+    height: 28px;
+    box-sizing: border-box;
+    padding: 0 10px;
+    font: inherit;
+    font-size: 13px;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+  }
+  .search::placeholder {
+    color: var(--fg-faint);
+  }
+  .search:focus-visible {
+    outline: none;
+    border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+  }
+  .none {
+    margin: 24px 0;
+    text-align: center;
   }
   textarea {
     min-height: 52px;

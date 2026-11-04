@@ -207,8 +207,9 @@ export function formatTokens(n: number): string {
   return String(n);
 }
 
-export function monetary(s: { cost: number; partial?: boolean; unavailable?: boolean }): string {
-  return s.unavailable ? 'Unavailable' : `${formatUsd(s.cost)}${s.partial ? ' (partial)' : ''}`;
+/** A cost, or Unavailable. Rows with unknown prices count as nothing; the page says so. */
+export function monetary(s: { cost: number; unavailable?: boolean }): string {
+  return s.unavailable ? 'Unavailable' : formatUsd(s.cost);
 }
 
 /** `type` splits tokens by kind; rows carry no cost per kind, so it is tokens only. */

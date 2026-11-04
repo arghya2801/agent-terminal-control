@@ -132,7 +132,9 @@ export function limitSeries(history: { t: number; limits: PlanLimit[] }[], limit
   const reset = limit.resetsAt ? Date.parse(limit.resetsAt) : NaN;
   // Claude's keys end in the limit's position in the response, which can change.
   const kind = (l: PlanLimit) => l.key.replace(/:\d+$/, '');
-  const sameWindow = (l: PlanLimit) => Number.isNaN(reset) || Math.abs((l.resetsAt ? Date.parse(l.resetsAt) : NaN) - reset) < 10 * 60_000;
+  // A window that has not started has no reset; readings from earlier windows, which had
+  // one, are not part of it (#203).
+  const sameWindow = (l: PlanLimit) => (Number.isNaN(reset) ? !l.resetsAt : Math.abs((l.resetsAt ? Date.parse(l.resetsAt) : NaN) - reset) < 10 * 60_000);
   return history
     .flatMap((h) => {
       const l = h.limits.find((x) => kind(x) === kind(limit) && sameWindow(x));

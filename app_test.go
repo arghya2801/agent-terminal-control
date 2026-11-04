@@ -179,6 +179,29 @@ func TestHeadlessCommandsAndValidation(t *testing.T) {
 		t.Fatal(v)
 	}
 }
+
+// A release build runs the embedded sidecar, written beside the settings once.
+func TestEmbeddedSidecarIsWrittenOnce(t *testing.T) {
+	dir := t.TempDir()
+	path, err := extractSidecar(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(path)
+	if len(b) < 100_000 {
+		t.Fatalf("%s is not the sidecar bundle (%d bytes)", path, len(b))
+	}
+	st, _ := os.Stat(path)
+	if again, err := extractSidecar(dir); err != nil || again != path {
+		t.Fatal(again, err)
+	}
+	if st2, _ := os.Stat(path); !st2.ModTime().Equal(st.ModTime()) {
+		t.Fatal("rewrote an unchanged sidecar")
+	}
+	if _, err := agentExe("claude", "definitely-not-a-cli"); err == nil || !strings.Contains(err.Error(), "Settings > Agents") {
+		t.Fatal(err)
+	}
+}
 func TestBackoffHonoursRetryAfterThenDoublesUpToHalfAnHour(t *testing.T) {
 	var b backoff
 	now := time.Now()

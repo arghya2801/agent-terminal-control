@@ -89,6 +89,8 @@ export interface TabSummary {
   cwd: string | null;
   /** Claude's or Codex's state; null for a plain shell. */
   activity: 'working' | 'idle' | 'interrupted' | null;
+  /** An agent tab showing the CLI's own TUI rather than the chat. */
+  terminal: boolean;
   projectKey: string | null;
   /** When the tab entered its current state. */
   since: number;
@@ -142,6 +144,10 @@ export interface Settings {
     taskProject: string;
     /** Where Ctrl+Shift+T opens a shell: the home folder, or the focused tab's project. */
     newTabIn: 'home' | 'project';
+    /** How agent tabs open: ATC's chat, or the CLI's own TUI in a terminal. */
+    agentView: 'chat' | 'terminal';
+    /** Warn before moving an agent tab between the chat and the terminal. */
+    confirmSwitch: boolean;
     /** Ask before closing a tab with something running in it. */
     confirmClose: boolean;
     /** In-app notes when a background tab finishes while ATC has focus. */
@@ -155,7 +161,7 @@ export interface Settings {
   terminal: TerminalSettings;
   /** `args` go on every launch; `chatArgs` on chats too, so they cannot change anything. */
   codex: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; homeDir: string | null };
-  claude: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; scratchDir: string | null };
+  claude: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; scratchDir: string | null; atcLabel: boolean };
 }
 
 

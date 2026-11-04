@@ -42,14 +42,14 @@ func Defaults() Object {
 		"version":  1,
 		"projects": Object{"claudeProjectsDir": nil, "pinned": []any{}, "names": Object{}, "sessionNames": Object{}, "archived": []any{}},
 		"ui": Object{"sidebarWidth": 260, "sidebarOpen": true, "sessionsPerProject": 15, "zoom": 1.0, "notifications": true, "restoreTabs": true, "theme": "ATC Dark", "groupSubfolders": false, "groupByBranch": false, "sidebarView": "open", "animations": "system", "animationSpeed": 1.0,
-			"usageResetTime": true, "showTabBar": false, "peek": "all", "outputGraph": true, "taskAgent": "claude", "taskProject": "", "newTabIn": "home", "confirmClose": true,
+			"usageResetTime": true, "showTabBar": false, "peek": "all", "outputGraph": true, "taskAgent": "claude", "taskProject": "", "newTabIn": "home", "confirmClose": true, "agentView": "chat", "confirmSwitch": true,
 			"toasts": true, "toastSeconds": 6, "limitsRefreshSec": 90, "codexRefreshSec": 300, "renameModel": "haiku"},
 		"terminal": Object{"fontFamily": "\"FiraCode Nerd Font Mono\", \"Cascadia Mono\", Consolas, monospace", "fontSize": 13, "scrollback": 10000,
 			"cursorStyle": "bar", "cursorBlink": true, "lineHeight": 1.0, "shell": "auto", "loadProfile": true, "gpuTabs": 4},
 		// chatArgs start a chat. Claude gets no built-in tools and no MCP servers; `--tools=`
 		// rather than `--tools ""`, which Windows PowerShell drops. Codex has no switch for
 		// its tools or MCP servers, so it gets a read-only sandbox for commands.
-		"claude": Object{"command": "claude", "args": []any{}, "chatArgs": []any{"--tools=", "--strict-mcp-config"}, "resumeArgs": []any{"--resume", "{session}"}, "scratchDir": nil},
+		"claude": Object{"command": "claude", "args": []any{}, "chatArgs": []any{"--tools=", "--strict-mcp-config"}, "resumeArgs": []any{"--resume", "{session}"}, "scratchDir": nil, "atcLabel": true},
 		"codex":  Object{"command": "codex", "args": []any{}, "chatArgs": []any{"--sandbox", "read-only"}, "resumeArgs": []any{"resume", "{session}"}, "homeDir": nil},
 	}
 }

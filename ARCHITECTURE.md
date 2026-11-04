@@ -17,6 +17,9 @@ graph LR
   Core <--> App
   App <-->|Wails binding + events| Transport[src/lib/desktop.ts]
   Transport <--> UI[Svelte + xterm.js]
+  App <-->|JSON lines| Sidecar[sidecar: Node]
+  Sidecar <-->|Agent SDK| Claude[claude]
+  Sidecar <-->|app-server| Codex[codex]
 ```
 
 ## Desktop boundary
@@ -38,6 +41,8 @@ failed spawn. The other events are `index://updated`, `settings://updated` and
 | File | Does |
 |---|---|
 | `app.go` | Lifecycle, command dispatch, PTY registry, file watching, migration |
+| `agents.go` | The agent sidecar: starting it, routing its sessions, the CLI each one runs |
+| `sidecar/` | Node: `claude.ts` (Agent SDK), `codex.ts` (app-server), `protocol.ts` (the events) |
 | `limits.go` | Claude's plan-limit HTTP request and Codex's app-server limits |
 | `internal/pty/pty_windows.go` | Shell choice, ConPTY, UTF-8 streaming, backpressure, process cleanup |
 | `internal/pty/conpty.go` | Loads the bundled `conpty.dll` beside the exe, else the one in Windows |
@@ -71,7 +76,50 @@ Each tab has its own shell. Busy detection looks at the shell's child processes.
 busy tab asks first, unless `ui.confirmClose` is off, and a confirmed close kills the
 process tree. Quitting stops the limit helpers, the watchers and every owned PTY.
 
-## Agents
+## Agent sessions
+
+Claude and Codex tabs have no terminal. One Node process, the sidecar in `sidecar/`, runs
+every session: Claude through the Agent SDK's `query()`, Codex through `codex app-server`.
+Both become the same events (`sidecar/protocol.ts`): `ready` with commands, skills,
+models and modes; `item`, `delta`, `output`, `result` and `progress` for the chat;
+`request` and `resolved` for permissions, questions and plans; `working`; `exit`.
+
+`agents.go` starts Node on the first session. It needs `node` on PATH, 18 or later. The
+sidecar is `ATC_SIDECAR` when set (the dev host points it at `sidecar/agent.ts`, which
+Node runs with types stripped), else the bundle `npm run build` puts in
+`dist/sidecar/agent.mjs`, embedded with `dist/` and written to `<config>/sidecar/`.
+`AgentOpen` resolves the CLI from settings (npm's `claude.cmd` and `codex.cmd` become the
+scripts beside them, so no shell parses the arguments), passes the `args` and, for chats, `chatArgs` settings, and gives Codex `CODEX_HOME`.
+Each `{id, ev}` line goes to that session's Wails channel. Closing stdin ends every
+session; quitting and a full page reload do that, then kill whatever is left of the tree.
+The sidecar's stderr goes to `<config>/sidecar.log`; the run before it is
+`sidecar.old.log`. It logs each Codex message it ignores once, and only the method and id
+of an approval, whose command can hold secrets.
+
+A resumed tab is often only read, so it starts dormant: its history comes from disk
+(`getSessionMessages`, or Codex's `thread/read` on a shared app-server) and no CLI runs.
+The CLI starts with the first message, or `wake`, which the composer sends when you type.
+A Claude CLI holds about 370 MB and a Codex app-server about 40 MB.
+
+Claude runs with setting sources user, project and local and the `claude_code` system
+prompt preset, so it reads the same settings, CLAUDE.md, hooks, skills and MCP servers as
+in a terminal. Settings arguments pass through as `extraArgs`. Permission prompts arrive
+through `canUseTool`; AskUserQuestion answers go back as `updatedInput.answers`, and
+"Always allow" returns the CLI's own suggestions as `updatedPermissions`. A resumed
+session's history comes from `getSessionMessages`, which follows the `parentUuid` chain.
+Codex history comes from `thread/resume`, approvals are server requests, and `$name` in a
+message adds that skill as a `skill` input.
+
+On the page, `src/agent/agent.svelte.ts` keeps one session per tab and `apply.ts` turns
+events into state. The manager's agent tabs (`openAgentTab`) have `term: null`; App
+portals an `AgentView` into each one's pane, so split, mosaic and zoom apply as they do to
+terminals. The manager hears only state changes (`setAgentState`) and asks the store for
+the Open view's peek and for Reply (`setAgentHooks`). `switchView` (Ctrl+`) closes an
+agent tab and reopens its session the other way: in a terminal with `core.AgentCommand`,
+or as a chat. Only one of them can drive a session. `ui.agentView` picks the view for new
+tabs, and a saved tab keeps its own (`terminal` in `atc.tabs`).
+
+## Agents in a terminal
 
 `core.AgentCommand` builds the PowerShell line that starts Claude or Codex: the command,
 `--no-daemon` for Codex, the `args` setting, the `chatArgs` setting for chats, then
@@ -151,7 +199,8 @@ the other. The header's usage chip shows Claude's 5-hour session limit (`chipLim
 | Path | Does |
 |---|---|
 | `src/App.svelte` | Layout, the pane header (or `TabBar` with `ui.showTabBar`), every chord's action, launching and restoring tabs, toasts |
-| `src/terminal/manager.ts` | Every xterm instance and PTY: open, close, split panes, mosaic, WebGL budget, fitting, state marks, output history, `screenLines`, `sendText` |
+| `src/terminal/manager.ts` | Every tab, terminal or agent, and every PTY: open, close, split panes, mosaic, WebGL budget, fitting, state marks, output history, `screenLines`, `sendText` |
+| `src/agent/` | Agent tabs: the session store, `apply` (events to state), the view, the composer and its command menu, request cards |
 | `src/sidebar/Sidebar.svelte` | The Sessions, Open and Scratch views, the filter, the notes pane |
 | `src/sidebar/OpenList.svelte` | The Open view: triage order, sections, peek, output graph, Reply, broadcast |
 | `src/sidebar/TaskBox.svelte` | The task box at the top of the Open view |
@@ -224,6 +273,43 @@ Things that cost time once. Add to this list.
   class once picked up the Open view's `.open { flex: 1 }`.
 - `manager.ts` keeps terminals in module scope, so a hot update reloads the page instead.
   A pane that goes blank after an edit needs a dev server restart, not debugging.
+
+**Agent sessions**
+- The SDK's streaming input drops a message sent while a turn runs. The store queues it on
+  the tab (`queuePrompt`) and the manager sends it when the tab goes idle.
+- With partial messages on, a streamed block's id is `<message id>:<index>`. The CLI then
+  sends each finished block as its own assistant message, in order, so the k-th block of
+  a message id is the stream with index k.
+- A question or permission makes the tab idle, not working, so the Open view puts it under
+  waiting and notifies once. `resolved` puts it back to working.
+- An SDK session never shows the TUI's "trust this folder?" prompt. Resuming one writes a
+  few hundred bytes of metadata to its transcript, as the TUI does.
+- Two app-servers cannot hold one Codex thread: the second gets "already has an active
+  writer". Stopping the page's browser does not end its sidecar; the next page load does.
+- The app-server that loads a Codex thread (`thread/start` or `thread/resume`) holds it
+  until that process exits; `thread/unsubscribe` says "unsubscribed" and keeps it. Only
+  `thread/read` takes no lock. So every Codex tab reads through one shared app-server, and
+  writes through its own, started with its first message and stopped when the tab closes.
+- An SDK session has no task list: the CLI drops TaskCreate and TaskUpdate (and TodoWrite)
+  from it. Naming them in `allowedTools` adds them back. Bare names there skip
+  `canUseTool`, which is fine for tools that only keep a list.
+- Claude labels each request with `CLAUDE_CODE_ENTRYPOINT`. Under the SDK it is `sdk-ts`
+  or `sdk-cli`, which the 5-hour limit meters at roughly twice the CLI's rate for the same
+  tokens (pingdotgg/t3code#24649; weekly limits are unaffected). `launch` in `agents.go`
+  sets `atc` unless `claude.atcLabel` is false. A Pro account measured on 2026-11-04 showed
+  no SDK penalty (#205), so this is insurance, not a measured fix.
+- A Claude rewind needs `enableFileCheckpointing`. `rewindFiles` restores the files, but
+  only a dry run lists them. The conversation then resumes at the chain entry before the
+  prompt (`resumeSessionAt`). Each prompt the sidecar sends carries its own `uuid`, so it
+  can be found again.
+- Codex's `thread/revert` changes only the history, never files, and its response comes
+  back with no turns. Read the thread with `includeTurns` afterwards.
+- Codex's app-server sessions don't offer `update_plan`, so `turn/plan/updated` may never
+  arrive.
+- Codex's first shell command can take half a minute when `pwsh` loads a heavy profile.
+  The tool line shows it running; nothing is stuck.
+- The first `npm run play` after a lockfile change makes Vite re-optimize dependencies,
+  past the 10 s Wails waits for its URL. Run it again, or start `npx vite` once first.
 
 **Transcripts**
 - `~/.claude/projects/<dir>` names are lossy: `D:\Coding\game_tracker_app` becomes
