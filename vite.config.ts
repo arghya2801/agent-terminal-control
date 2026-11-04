@@ -19,6 +19,11 @@ export default defineConfig({
       ignored: ['**/playground/**', '**/fixtures/**', '**/build/**', '**/benchmarks/**', '**/wails-dev-work/**', '**/.wails-dev/**', '**/.go-cache/**'],
     },
   },
+  // Scan only the app for dependencies. By default Vite crawls every .html under the root,
+  // playground/ included, which pushed startup past the 10 s Wails waits for its URL.
+  optimizeDeps: {
+    entries: ['index.html'],
+  },
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
