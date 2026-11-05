@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clip, firstLine } from '../../sidecar/events';
+import { clip, firstLine } from '../../sidecar/clip';
 
 describe('clip', () => {
   it('keeps the start and the end of long output, and says how much it left out', () => {
