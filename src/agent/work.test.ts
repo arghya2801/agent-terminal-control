@@ -8,8 +8,16 @@ describe('summarize', () => {
   it('says what a run of calls did, counting distinct edited files', () => {
     expect(summarize([tool('1', 'Read', 'a.ts'), tool('2', 'Read', 'b.ts'), tool('3', 'Bash', 'npm test')])).toBe('Read 2 files and ran 1 command');
     expect(summarize([tool('1', 'Edit', 'a.ts'), tool('2', 'Edit', 'a.ts'), tool('3', 'Grep', 'x'), tool('4', 'mcp.thing')])).toBe(
-      'Changed 1 file, searched the code 1 time and used 1 tool',
+      'Changed 1 file, searched the code once and used 1 tool',
     );
+  });
+  it('leaves out failed and declined calls, unless every call failed', () => {
+    const run = [tool('1', 'Edit', 'a.ts', { error: true }), tool('2', 'Edit', 'b.ts', { declined: true, error: true }), tool('3', 'Read', 'c.ts'), tool('4', 'Bash', 'npm test', { done: false })];
+    expect(summarize(run)).toBe('Read 1 file and ran 1 command');
+    expect(summarize([tool('1', 'Edit', 'a.ts', { error: true })])).toBe('Changed 1 file');
+    // After a stop, the unfinished edit didn't happen.
+    expect(summarize([tool('1', 'Read', 'a.ts'), tool('2', 'Edit', 'b.ts', { done: false })], false)).toBe('Read 1 file');
+    expect(summarize([tool('1', 'Read', 'a.ts', { error: true }), tool('2', 'Edit', 'b.ts', { done: false })], false)).toBe('Read 1 file');
   });
 });
 

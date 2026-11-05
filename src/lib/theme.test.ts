@@ -74,7 +74,9 @@ describe('cssVariables', () => {
 
   it('keeps text over an accent fill readable in both polarities', () => {
     expect(cssVariables(dark)['--on-accent']).toBe(dark.background);
-    expect(cssVariables(light)['--on-accent']).toBe(light.brightWhite);
+    // Catppuccin Latte's brightWhite is a grey that reads at about 2.7:1 on its blue.
+    const latte = parsePalette({ background: '#eff1f5', foreground: '#4c4f69', brightBlue: '#1e66f5', brightWhite: '#bcc0cc' }, 'latte')!;
+    expect(cssVariables(latte)['--on-accent']).toBe('#ffffff');
   });
 });
 

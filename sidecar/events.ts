@@ -66,15 +66,8 @@ export class Inbox<T> implements AsyncIterable<T> {
   }
 }
 
-const OUTPUT_CAP = 8 * 1024;
-
-export function clip(s: string, n = OUTPUT_CAP): string {
-  return s.length <= n ? s : s.slice(0, n) + '…';
-}
-
-export function firstLine(s: string): string {
-  return clip(s.trim().split('\n')[0].trim(), 200);
-}
+import { clip, firstLine } from './clip.ts';
+export { clip, firstLine };
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 

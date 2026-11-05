@@ -64,22 +64,28 @@ export function cleanCommand(command: string, cwd: string | null): string {
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const times = (n: number) => (n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`);
 const PHRASES: Record<Action, (n: number) => string> = {
   read: (n) => `read ${plural(n, 'file')}`,
   edit: (n) => `changed ${plural(n, 'file')}`,
   command: (n) => `ran ${plural(n, 'command')}`,
-  'code-search': (n) => `searched the code ${plural(n, 'time')}`,
-  web: (n) => `searched the web ${plural(n, 'time')}`,
+  'code-search': (n) => `searched the code ${times(n)}`,
+  web: (n) => `searched the web ${times(n)}`,
   agent: (n) => `ran ${plural(n, 'subagent')}`,
   tasks: () => 'updated the task list',
   other: (n) => `used ${plural(n, 'tool')}`,
 };
 
 /** One sentence for a run of calls, in the order their kinds first appear. Edits count
- *  distinct files, so three edits to one file read "changed 1 file". */
-export function summarize(items: ChatItem[]): string {
+ *  distinct files, so three edits to one file read "changed 1 file". Calls that failed
+ *  or were declined are left out, since the group's badge reports them; a run where
+ *  every call failed reads as all of them. A call still running counts; one left
+ *  unfinished by a stop never does. */
+export function summarize(items: ChatItem[], live = true): string {
   const counts = new Map<Action, Set<string> | number>();
-  for (const it of items) {
+  const tried = live ? items : items.filter((it) => it.done);
+  const ok = tried.filter((it) => !it.error && !it.declined);
+  for (const it of ok.length ? ok : tried.length ? tried : items) {
     const a = toolAction(it.tool);
     if (a === 'edit') {
       const files = (counts.get(a) as Set<string>) ?? new Set<string>();
