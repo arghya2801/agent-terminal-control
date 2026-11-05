@@ -105,7 +105,7 @@ export function cssVariables(p: Palette): Record<string, string> {
     '--border': lift(78),
     '--fg-bright': p.foreground,
     '--fg-dim': dim(62),
-    '--fg-faint': dim(42),
+    '--fg-faint': dim(55),
     '--accent': p.brightBlue,
     '--accent-strong': p.blue,
     // Text over an accent or danger fill. On a dark theme that is the background; on a

@@ -27,6 +27,7 @@
     toolbar?: Snippet;
   } = $props();
 
+  const uid = $props.id();
   let caret = $state(0);
   let box = $state<HTMLTextAreaElement>();
   let pick = $state(0);
@@ -107,8 +108,11 @@
   /** Which earlier prompt the box shows, counting back from the newest; -1 is none. */
   let recall = $state(-1);
   function step(by: 1 | -1): boolean {
+    if (!text) recall = -1;
     const next = recall + by;
-    if (next < -1 || next >= history.length || (recall === -1 && text)) return false;
+    // An edited recall is a draft now: arrows move in it rather than replace it.
+    const shown = recall === -1 ? '' : history[history.length - 1 - recall];
+    if (next < -1 || next >= history.length || text !== shown) return false;
     recall = next;
     text = next === -1 ? '' : history[history.length - 1 - next];
     queueMicrotask(() => box?.setSelectionRange(text.length, text.length));
@@ -178,11 +182,11 @@
   {/if}
   {#if menu.length}
     <div class="menu">
-      <ul role="listbox" aria-label="Commands and skills">
+      <ul role="listbox" id="{uid}-menu" aria-label="Commands and skills">
         {#each menu as c, i (c.name)}
           {@const at = typed ? c.name.toLowerCase().indexOf(typed.query, 1) : -1}
           {@const source = /^\(([^)]+)\)\s*/.exec(c.description)}
-          <li role="option" aria-selected={i === pick}>
+          <li role="option" id="{uid}-{i}" aria-selected={i === pick}>
             <button class:on={i === pick} onmousedown={(e) => { e.preventDefault(); choose(c); }} onmouseenter={() => (pick = i)} title={c.description}>
               <span class="cmd">{#if at > 0 && typed?.query}{c.name.slice(0, at)}<mark>{c.name.slice(at, at + typed.query.length)}</mark>{c.name.slice(at + typed.query.length)}{:else}{label(c)}{/if}</span>
               {#if c.hint}<span class="hint">{c.hint}</span>{/if}
@@ -205,8 +209,13 @@
     onpaste={onPaste}
     rows="1"
     {disabled}
-    placeholder={disabled ? 'Resume the session to keep going' : waiting ? `Answer ${name} above, or type to tell it something else` : sigils.includes('$') ? `Ask ${name}: / for commands, $ for skills, @ for files` : `Ask ${name}: / for commands and skills, @ for files`}
+    placeholder={disabled ? 'Resume the session to keep going' : waiting ? `Answer ${name} above, or type a message to send after this turn` : sigils.includes('$') ? `Ask ${name}: / for commands, $ for skills, @ for files` : `Ask ${name}: / for commands and skills, @ for files`}
     aria-label="Message {name}"
+    role="combobox"
+    aria-autocomplete="list"
+    aria-expanded={menu.length > 0}
+    aria-controls="{uid}-menu"
+    aria-activedescendant={menu.length ? `${uid}-${pick}` : undefined}
   ></textarea>
   <div class="bar">
     <button class="attach" onclick={() => picker?.click()} {disabled} title="Attach images (or paste or drop them)" aria-label="Attach images"><Icon name="image" size={15} /></button>
@@ -214,7 +223,7 @@
     {@render toolbar?.()}
     <div class="grow"></div>
     {#if working}<button class="round stop" onclick={onStop} title="Stop the turn (Esc)" aria-label="Stop"><Icon name="stop" size={13} /></button>{/if}
-    <button class="round send" onclick={send} disabled={disabled || (!text.trim() && !images.length)} title={working ? 'Send when this turn ends (Enter)' : 'Send (Enter)'} aria-label="Send"><Icon name="up" size={16} /></button>
+    <button class="round send" onclick={send} disabled={disabled || (!text.trim() && !images.length)} title={working ? 'Queue: sends when this turn ends (Enter)' : 'Send (Enter)'} aria-label={working ? 'Queue' : 'Send'}><Icon name="up" size={16} /></button>
   </div>
 </div>
 

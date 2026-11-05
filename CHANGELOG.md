@@ -25,9 +25,14 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Usage over time as a line chart, now the default; Bars beside it switches back. Split by model, project or provider, it draws a line per series; hovering shows a crosshair and each line's value.
 - Rename with Haiku or Luna renames the session straight away, rather than filling the rename box, and the open tab takes the name too. In the Open view, right-click a tab to rename its session or every open session this way.
 - The Open view keeps each tab's project name in sight: a long title is cut short before the project is.
+- Agent chat polish. A stopped turn says "Stopped after", and a group with a stopped call is marked Stopped. Calls that took 5 seconds or more keep their time once finished. The working line names the running call. A "Jump to latest" button shows when you scroll up. Tool rows show their chevron at rest. Long question cards scroll inside the card, with their buttons in view. The queued message shows up to three lines, its full text on hover, and how many images go with it. While a turn runs, the send button reads Queue, and the placeholder under a card says messages go after the turn.
+- Accessibility in agent tabs. Screen readers hear when the agent starts, waits on you, finishes or stops. A permission or question card takes focus when it arrives, unless you are typing. Questions label their options and answer boxes. The `/` `$` `@` menu works as a combobox. Picking a model or mode returns focus to its chip. Faint text has more contrast.
 
 ### Fixed
 - Animations and Animation speed apply as soon as they change, not after a restart.
+- In an agent tab, editing a recalled prompt and pressing Up or Down again moves the cursor instead of throwing the edit away.
+- Copy in an agent tab says so when the clipboard write fails, instead of showing Copied.
+- Ctrl+Shift+F no longer opens a find bar in a chat tab, where it found nothing.
 - Closing Settings saves only what was edited in it, so a change made elsewhere while it was open, such as an edit to settings.json, is kept.
 - The git calls ATC makes on its own, such as reading an agent's changes when it stops, ignore a repository's `core.fsmonitor` setting, which could run a command the repository names.
 - A confirmation dialog always goes away once answered. It moves itself to the top of the page, where closing it did not always find it.

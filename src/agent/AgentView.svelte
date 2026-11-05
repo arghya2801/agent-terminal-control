@@ -8,7 +8,7 @@
   import Icon from '../lib/Icon.svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import ConfirmDialog from '../lib/ConfirmDialog.svelte';
-  import { agents, answer, catalog, interrupt, listFiles, resume, rewind, send, wake, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
+  import { agents, answer, queuedImages, catalog, interrupt, listFiles, resume, rewind, send, wake, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
   import { activity, blocks, summarize, thoughtLine, type Block } from './work';
   import { families, keptEffort, versionOf } from './models';
   import { getActiveKey, queuePrompt } from '../terminal/manager';
@@ -115,7 +115,7 @@
   let opened = $state<Record<string, boolean>>({});
   const groupStatus = (b: Block & { kind: 'group' }, live: boolean) => {
     const all = b.items.filter((it) => !it.declined).map((it) => toolStatus(it, live));
-    return all.includes('running') ? 'running' : all.includes('failed') ? 'failed' : 'done';
+    return all.includes('running') ? 'running' : all.includes('failed') ? 'failed' : all.includes('stopped') ? 'stopped' : 'done';
   };
 
   // The turn timer, ticking only while the agent works.
@@ -131,6 +131,10 @@
     return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s`;
   };
   const cost = (usd?: number) => (usd ? `$${usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)}` : '');
+  // For screen readers: state changes only, not the streaming text.
+  const announce = $derived(
+    !s ? '' : s.exited ? `${name} stopped` : request ? `${name} is waiting on you` : s.working ? `${name} is working` : turns.length ? `${name} finished` : '',
+  );
   const status = $derived(
     !s || s.exited ? '' : request ? 'Waiting on you' : s.working || s.ready || s.dormant ? '' : 'Starting',
   );
@@ -138,7 +142,7 @@
   // Follow the end unless the user has scrolled up. On any resize, not on new items: text
   // streams into an item without adding one, and a request card shrinks the list.
   let list = $state<HTMLDivElement>();
-  let stuck = true;
+  let stuck = $state(true);
   $effect(() => {
     const el = list;
     if (!el) return;
@@ -165,7 +169,10 @@
 
   let copied = $state<string | null>(null);
   async function copy(text: string, id: string) {
-    await navigator.clipboard.writeText(text).catch(() => {});
+    if (!(await navigator.clipboard.writeText(text).then(() => true, () => false))) {
+      appState.error = 'Could not copy to the clipboard';
+      return;
+    }
     copied = id;
     setTimeout(() => copied === id && (copied = null), 1500);
   }
@@ -258,7 +265,7 @@
                       <span class="icon"><Icon name={toolIcon(b.items[0].tool)} size={14} /></span>
                       <span class="what">{summarize(b.items)}</span>
                       <span class="chev" class:turned={open} aria-hidden="true"><Icon name="chevron" size={12} /></span>
-                      {#if failed}<span class="badge">{failed} failed</span>{:else if declined}<span class="badge declined">{declined} declined</span>{/if}
+                      {#if failed}<span class="badge">{failed} failed</span>{:else if declined}<span class="badge declined">{declined} declined</span>{:else if st === 'stopped'}<span class="badge declined">Stopped</span>{/if}
                     </button>
                     {#if open}
                       <div class="calls">
@@ -293,13 +300,13 @@
               {#if live && !request}
                 <div class="step live">
                   <span class="icon"><span class="spinner"></span></span>
-                  <span class="shimmer">{turn.steps.at(-1)?.kind === 'tool' && !turn.steps.at(-1)?.done ? 'Working' : activity(turn.steps, cwd)}</span>
+                  <span class="shimmer">{activity(turn.steps, cwd)}</span>
                   <span class="secs">{clock(now - (s?.since ?? now))}</span>
                 </div>
               {/if}
               {#if !live && (turn.end || reply)}
                 <div class="end" class:bare={!turn.end?.durationMs && !turn.end?.costUsd}>
-                  {#if turn.end?.durationMs}<span>Worked for {clock(turn.end.durationMs)}</span>{/if}
+                  {#if turn.end?.durationMs}<span>{turn.steps.some((x) => x.kind === 'notice' && x.text === 'Interrupted') ? 'Stopped after' : 'Worked for'} {clock(turn.end.durationMs)}</span>{/if}
                   {#if turn.end?.costUsd}<span>{cost(turn.end.costUsd)}</span>{/if}
                   {#if reply}<button class="act" onclick={() => copy(reply, `r${i}`)} title="Copy the reply as Markdown"><Icon name={copied === `r${i}` ? 'check' : 'copy'} size={13} /><span>{copied === `r${i}` ? 'Copied' : 'Copy'}</span></button>{/if}
                 </div>
@@ -312,9 +319,14 @@
   </div>
 
   <div class="dock">
+    <p class="sr" role="status">{announce}</p>
+    {#if !stuck}
+      <button class="jump" onclick={() => list?.scrollTo({ top: list.scrollHeight })}><Icon name="down" size={13} /><span>Jump to latest</span></button>
+    {/if}
     {#if request && s}
       {#key request.id}
-        <RequestCard {request} {name} onAnswer={(a) => answer(tabKey, request.id, a)} />
+        <!-- Not while a draft is being typed, so the card never takes the keystrokes. -->
+        <RequestCard {request} {name} autofocus={getActiveKey() === tabKey && !draft} onAnswer={(a) => answer(tabKey, request.id, a)} />
       {/key}
       {#if s.requests.length > 1}<p class="aside">{s.requests.length - 1} more waiting</p>{/if}
     {/if}
@@ -336,14 +348,15 @@
       </div>
     {/if}
     {#if s?.exited}
-      <p class="aside stopped">
+      <p class="aside exited">
         <span>{name} stopped. The conversation is saved.</span>
         <button class="resume" onclick={() => resume(tabKey)}>Resume</button>
       </p>
     {/if}
     {#if queued}
+      {@const pics = queuedImages(tabKey)}
       <p class="aside queued">
-        <span>Sends when {name} finishes: {queued}</span>
+        <span title={queued}>Sends when {name} finishes: {queued}{pics ? ` (+${pics} image${pics > 1 ? 's' : ''})` : ''}</span>
         <button class="link" onclick={() => queuePrompt(tabKey, null)}>Cancel</button>
       </p>
     {/if}
@@ -596,11 +609,8 @@
   .chev {
     display: grid;
     color: var(--fg-faint);
-    opacity: 0;
-    transition: transform var(--enter) var(--ease-out);
-  }
-  .group .chev {
     opacity: 0.5;
+    transition: transform var(--enter) var(--ease-out);
   }
   .row:hover .chev,
   .row:focus-visible .chev,
@@ -883,7 +893,7 @@
     background: var(--ok);
     color: var(--bg);
   }
-  .stopped {
+  .exited {
     align-items: center;
     padding: 8px 12px;
     margin: 0;
@@ -892,7 +902,7 @@
     background: var(--bg-chrome);
     font-size: 13px;
   }
-  .stopped span {
+  .exited span {
     flex: 1;
   }
   .resume {
@@ -923,9 +933,47 @@
   }
   .queued span {
     flex: 1;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: pre-wrap;
+  }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .jump {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 12px;
+    transform: translateX(-50%);
+    font: inherit;
+    font-size: 12px;
+    color: var(--fg);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-pop);
+    cursor: pointer;
+  }
+  .jump:hover {
+    color: var(--fg-bright);
+    background: var(--bg-hover);
+  }
+  .jump:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+    outline-offset: 1px;
   }
   .link {
     all: unset;
