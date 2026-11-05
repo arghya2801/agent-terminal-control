@@ -804,11 +804,15 @@
       case 'toggleDevtools':
         // Debug builds of Wails open devtools on this chord themselves.
         break;
-      case 'find':
+      case 'find': {
+        // A chat has no terminal to search.
+        const t = tabs.find((x) => x.key === activeKey);
+        if (t?.provider && !t.terminal) break;
         // Re-opening while already open should put the cursor back in the box.
         showFind = false;
         void tick().then(() => (showFind = true));
         break;
+      }
       case 'zoomIn':
         void adjustZoom(1);
         break;
