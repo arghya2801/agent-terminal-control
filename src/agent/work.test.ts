@@ -15,6 +15,8 @@ describe('summarize', () => {
     const run = [tool('1', 'Edit', 'a.ts', { error: true }), tool('2', 'Edit', 'b.ts', { declined: true, error: true }), tool('3', 'Read', 'c.ts'), tool('4', 'Bash', 'npm test', { done: false })];
     expect(summarize(run)).toBe('Read 1 file and ran 1 command');
     expect(summarize([tool('1', 'Edit', 'a.ts', { error: true })])).toBe('Changed 1 file');
+    // After a stop, the unfinished edit didn't happen.
+    expect(summarize([tool('1', 'Read', 'a.ts'), tool('2', 'Edit', 'b.ts', { done: false })], false)).toBe('Read 1 file');
   });
 });
 

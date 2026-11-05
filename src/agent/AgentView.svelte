@@ -295,7 +295,7 @@
                   <div class="step group {st}" class:sub={!!b.items[0].parent}>
                     <button class="row" aria-expanded={open} onclick={() => (opened[b.id] = !open)}>
                       <span class="icon"><Icon name={new Set(b.items.map((x) => toolIcon(x.tool))).size > 1 ? 'tool' : toolIcon(b.items[0].tool)} size={14} /></span>
-                      <span class="what">{summarize(b.items)}</span>
+                      <span class="what">{summarize(b.items, live)}</span>
                       <span class="chev" class:turned={open} aria-hidden="true"><Icon name="chevron" size={12} /></span>
                       {#if failed}<span class="badge">{failed} failed</span>{:else if declined}<span class="badge declined">{declined} declined</span>{:else if st === 'stopped'}<span class="badge declined">Stopped</span>{/if}
                     </button>

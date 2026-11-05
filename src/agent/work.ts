@@ -80,9 +80,10 @@ const PHRASES: Record<Action, (n: number) => string> = {
  *  distinct files, so three edits to one file read "changed 1 file". Only calls that
  *  failed or were declined are left out, since the group's badge reports them; a run
  *  where every call failed reads as all of them. */
-export function summarize(items: ChatItem[]): string {
+export function summarize(items: ChatItem[], live = true): string {
   const counts = new Map<Action, Set<string> | number>();
-  const ok = items.filter((it) => !it.error && !it.declined);
+  // A call still running counts; one left unfinished by a stop does not.
+  const ok = items.filter((it) => !it.error && !it.declined && (live || it.done));
   for (const it of ok.length ? ok : items) {
     const a = toolAction(it.tool);
     if (a === 'edit') {

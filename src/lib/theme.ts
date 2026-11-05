@@ -98,16 +98,17 @@ export function cssVariables(p: Palette): Record<string, string> {
 
   return {
     '--bg': p.background,
-    '--fg': dim(light ? 96 : 88),
+    '--fg': dim(88),
     // Chrome sits just off the terminal's background, panels one step further.
     '--bg-chrome': lift(94),
     '--bg-surface': lift(88),
     '--bg-hover': lift(82),
     '--border': lift(78),
     '--fg-bright': p.foreground,
-    // Light palettes put their foreground closer to the background, so they need more of it.
-    '--fg-dim': dim(light ? 90 : 62),
-    '--fg-faint': dim(light ? 85 : 55),
+    // Light palettes put their foreground closer to the background, so muted text needs
+    // more of it; it stays under --fg so the answer still steps up to --fg-bright.
+    '--fg-dim': dim(light ? 86 : 62),
+    '--fg-faint': dim(light ? 84 : 55),
     '--accent': p.brightBlue,
     '--accent-strong': p.blue,
     // Text over an accent or danger fill.
