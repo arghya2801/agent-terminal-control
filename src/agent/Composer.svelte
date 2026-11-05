@@ -120,6 +120,8 @@
   }
 
   function onKey(e: KeyboardEvent) {
+    // An input method is composing: Enter and the arrows are its, not ours.
+    if (e.isComposing) return;
     if (menu.length) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
@@ -187,7 +189,7 @@
           {@const at = typed ? c.name.toLowerCase().indexOf(typed.query, 1) : -1}
           {@const source = /^\(([^)]+)\)\s*/.exec(c.description)}
           <li role="option" id="{uid}-{i}" aria-selected={i === pick}>
-            <button class:on={i === pick} onmousedown={(e) => { e.preventDefault(); choose(c); }} onmouseenter={() => (pick = i)} title={c.description}>
+            <button class:on={i === pick} onmousedown={(e) => e.preventDefault()} onclick={() => choose(c)} onmouseenter={() => (pick = i)} title={c.description}>
               <span class="cmd">{#if at > 0 && typed?.query}{c.name.slice(0, at)}<mark>{c.name.slice(at, at + typed.query.length)}</mark>{c.name.slice(at + typed.query.length)}{:else}{label(c)}{/if}</span>
               {#if c.hint}<span class="hint">{c.hint}</span>{/if}
               <span class="desc">{source ? c.description.slice(source[0].length) : c.description}</span>
@@ -209,7 +211,7 @@
     onpaste={onPaste}
     rows="1"
     {disabled}
-    placeholder={disabled ? 'Resume the session to keep going' : waiting ? `Answer ${name} above, or type a message to send after this turn` : sigils.includes('$') ? `Ask ${name}: / for commands, $ for skills, @ for files` : `Ask ${name}: / for commands and skills, @ for files`}
+    placeholder={disabled ? 'Resume the session to keep going' : waiting ? `Answer ${name} above, or type a message to send after this turn` : working ? 'Enter queues a message for when this turn ends' : sigils.includes('$') ? `Ask ${name}: / for commands, $ for skills, @ for files` : `Ask ${name}: / for commands and skills, @ for files`}
     aria-label="Message {name}"
     role="combobox"
     aria-autocomplete="list"
@@ -222,8 +224,10 @@
     <input type="file" accept={TYPES.join(',')} multiple hidden bind:this={picker} onchange={(e) => (void attach([...(e.currentTarget.files ?? [])]), (e.currentTarget.value = ''))} />
     {@render toolbar?.()}
     <div class="grow"></div>
+    <div class="ends">
     {#if working}<button class="round stop" onclick={onStop} title="Stop the turn (Esc)" aria-label="Stop"><Icon name="stop" size={13} /></button>{/if}
     <button class="round send" onclick={send} disabled={disabled || (!text.trim() && !images.length)} title={working ? 'Queue: sends when this turn ends (Enter)' : 'Send (Enter)'} aria-label={working ? 'Queue' : 'Send'}><Icon name="up" size={16} /></button>
+    </div>
   </div>
 </div>
 
@@ -284,7 +288,6 @@
     font-size: 12px;
     color: var(--danger);
   }
-  .console.waiting,
   .console.waiting:focus-within {
     border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
   }
@@ -297,7 +300,7 @@
     width: 100%;
     field-sizing: content;
     min-height: 2.6em;
-    max-height: 40vh;
+    max-height: 30vh;
     resize: none;
     font: inherit;
     font-size: 14px;
@@ -315,6 +318,7 @@
   }
   .bar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
     padding: 4px 8px 8px 8px;
@@ -324,11 +328,17 @@
   .grow {
     flex: 1;
   }
+  /* Stop and send wrap as one, at the end. */
+  .ends {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+  }
   .attach {
     display: grid;
     place-items: center;
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     padding: 0;
     border: none;
     border-radius: 8px;

@@ -14,7 +14,7 @@
   import { getActiveKey, queuePrompt } from '../terminal/manager';
   import { providerName } from '../lib/agents';
   import { appState } from '../lib/stores.svelte';
-  import type { ChatItem, Model } from '../../sidecar/protocol';
+  import type { Answer, ChatItem, Model } from '../../sidecar/protocol';
   import type { AgentProvider, TabKey } from '../types';
 
   /** `queued`: a message waiting for the turn to end (the tab's queue, shared with the Open view). */
@@ -109,6 +109,15 @@
     return out;
   });
   const history = $derived(turns.flatMap((t) => (t.prompt?.text ? [t.prompt.text] : [])));
+  const interrupted = (t: Turn) => t.steps.some((x) => x.kind === 'notice' && x.text === 'Interrupted');
+  /** The turn's conclusion: top-level text after its last tool call, once the turn finished
+   *  rather than stopped. None when it did no tool work: then all of its text is the reply. */
+  function answerIds(t: Turn): Set<string> {
+    const top = t.steps.filter((x) => !x.parent);
+    const last = top.findLastIndex((x) => x.kind === 'tool');
+    if (!t.end || last < 0 || interrupted(t)) return new Set();
+    return new Set(top.slice(last + 1).filter((x) => x.kind === 'assistant' && x.text).map((x) => x.id));
+  }
 
   /** Groups the user opened or closed; others follow `live`: the run being worked on stays
    *  open, and folds once something comes after it. */
@@ -163,6 +172,27 @@
   const plan = $derived(s?.plan ?? []);
   const doneSteps = $derived(plan.filter((p) => p.status === 'done').length);
   let planOpen = $state(true);
+  // While a card waits the list starts folded, so the card has the room; it still opens.
+  let planWhileAsked = $state(false);
+  $effect(() => {
+    void request?.id;
+    planWhileAsked = false;
+  });
+  const tasksOpen = $derived(request ? planWhileAsked : planOpen);
+
+  // Answering removes the focused card; focus goes to the next card or the box, not to nothing.
+  let dock = $state<HTMLDivElement>();
+  let refocus = false;
+  function reply(id: string, a: Answer) {
+    refocus = !!(document.activeElement as HTMLElement | null)?.closest('.card');
+    answer(tabKey, id, a);
+  }
+  $effect(() => {
+    void request?.id;
+    if (!refocus) return;
+    refocus = false;
+    queueMicrotask(() => ((dock?.querySelector('.card') ?? dock?.querySelector('textarea')) as HTMLElement | null)?.focus());
+  });
   let rewinding = $state<ChatItem | null>(null);
   // Codex commands such as /undo start no turn, so there is nothing to go back to.
   const canRewind = (p: ChatItem) => !!s && !s.working && !s.exited && (provider === 'claude' || !!p.turn);
@@ -234,16 +264,18 @@
 
       {#each turns as turn, i (i)}
         {@const live = i === turns.length - 1 && !!s?.working}
-        {@const reply = turn.steps.filter((x) => x.kind === 'assistant' && x.text && !x.parent).map((x) => x.text).join('\n\n')}
+        {@const fin = answerIds(turn)}
+        {@const replyText = turn.steps.filter((x) => x.kind === 'assistant' && x.text && !x.parent && (!fin.size || fin.has(x.id))).map((x) => x.text).join('\n\n')}
         <section class="turn">
           {#if turn.prompt}
             {@const p = turn.prompt}
             <div class="you">
-              <div class="actions">
-                {#if p.text}<button class="act" onclick={() => copy(p.text ?? '', p.id)} title="Copy message" aria-label="Copy message"><Icon name={copied === p.id ? 'check' : 'copy'} size={13} /></button>{/if}
-                {#if canRewind(p)}<button class="act" onclick={() => (rewinding = p)} title="Go back to before this message"><Icon name="rewind" size={13} /><span>Rewind</span></button>{/if}
-              </div>
               <div class="bubble">
+                <!-- Beside the card, out of its width, so hidden buttons never narrow it. -->
+                <div class="actions">
+                  {#if p.text}<button class="act" onclick={() => copy(p.text ?? '', p.id)} title="Copy message" aria-label="Copy message"><Icon name={copied === p.id ? 'check' : 'copy'} size={13} /></button>{/if}
+                  {#if canRewind(p)}<button class="act" onclick={() => (rewinding = p)} title="Rewind: go back to before this message" aria-label="Rewind"><Icon name="rewind" size={13} /></button>{/if}
+                </div>
                 {#if p.images?.length}
                   <div class="pics">{#each p.images as src, k (k)}<img {src} alt="Sent with the message" />{/each}</div>
                 {/if}
@@ -278,7 +310,7 @@
                   {#if it.kind === 'tool'}
                     <div class="step tool" class:sub={!!it.parent}><ToolLine item={it} {live} {cwd} /></div>
                   {:else if it.kind === 'assistant'}
-                    {#if it.text}<div class="step text" class:sub={!!it.parent}><Markdown text={it.text} /></div>{/if}
+                    {#if it.text}<div class="step text" class:sub={!!it.parent} class:final={fin.has(it.id)}><Markdown text={it.text} /></div>{/if}
                   {:else if it.kind === 'thinking'}
                     {#if it.text}
                       <details class="step thinking" class:sub={!!it.parent}>
@@ -298,17 +330,19 @@
                 {/if}
               {/each}
               {#if live && !request}
+                {@const last = turn.steps.at(-1)}
                 <div class="step live">
                   <span class="icon"><span class="spinner"></span></span>
-                  <span class="shimmer">{activity(turn.steps, cwd)}</span>
+                  <!-- A running call's own row already says what it runs. -->
+                  {#if !(last?.kind === 'tool' && !last.done)}<span class="shimmer">{activity(turn.steps, cwd)}</span>{/if}
                   <span class="secs">{clock(now - (s?.since ?? now))}</span>
                 </div>
               {/if}
-              {#if !live && (turn.end || reply)}
+              {#if !live && (turn.end || replyText)}
                 <div class="end" class:bare={!turn.end?.durationMs && !turn.end?.costUsd}>
-                  {#if turn.end?.durationMs}<span>{turn.steps.some((x) => x.kind === 'notice' && x.text === 'Interrupted') ? 'Stopped after' : 'Worked for'} {clock(turn.end.durationMs)}</span>{/if}
+                  {#if turn.end?.durationMs}<span>{interrupted(turn) ? 'Stopped after' : 'Worked for'} {clock(turn.end.durationMs)}</span>{/if}
                   {#if turn.end?.costUsd}<span>{cost(turn.end.costUsd)}</span>{/if}
-                  {#if reply}<button class="act" onclick={() => copy(reply, `r${i}`)} title="Copy the reply as Markdown"><Icon name={copied === `r${i}` ? 'check' : 'copy'} size={13} /><span>{copied === `r${i}` ? 'Copied' : 'Copy'}</span></button>{/if}
+                  {#if replyText}<button class="act" onclick={() => copy(replyText, `r${i}`)} title="Copy the reply as Markdown"><Icon name={copied === `r${i}` ? 'check' : 'copy'} size={13} /><span>{copied === `r${i}` ? 'Copied' : 'Copy'}</span></button>{/if}
                 </div>
               {/if}
             </div>
@@ -318,7 +352,7 @@
     </div>
   </div>
 
-  <div class="dock">
+  <div class="dock" bind:this={dock}>
     <p class="sr" role="status">{announce}</p>
     {#if !stuck}
       <button class="jump" onclick={() => list?.scrollTo({ top: list.scrollHeight })}><Icon name="down" size={13} /><span>Jump to latest</span></button>
@@ -326,22 +360,22 @@
     {#if request && s}
       {#key request.id}
         <!-- Not while a draft is being typed, so the card never takes the keystrokes. -->
-        <RequestCard {request} {name} autofocus={getActiveKey() === tabKey && !draft} onAnswer={(a) => answer(tabKey, request.id, a)} />
+        <RequestCard {request} {name} autofocus={getActiveKey() === tabKey && !draft} onAnswer={(a) => reply(request.id, a)} />
       {/key}
       {#if s.requests.length > 1}<p class="aside">{s.requests.length - 1} more waiting</p>{/if}
     {/if}
     {#if doneSteps < plan.length}
       <div class="tasks">
-        <button class="head" aria-expanded={planOpen && !request} onclick={() => (planOpen = !planOpen)}>
+        <button class="head" aria-expanded={tasksOpen} onclick={() => (request ? (planWhileAsked = !planWhileAsked) : (planOpen = !planOpen))}>
           <span class="icon"><Icon name="list" size={14} /></span>
           <span>{doneSteps} of {plan.length} {provider === 'claude' ? 'tasks' : 'steps'} done</span>
           <span class="progress" aria-hidden="true"><span style:width="{(doneSteps / plan.length) * 100}%"></span></span>
-          <span class="chev" class:turned={planOpen && !request} aria-hidden="true"><Icon name="chevron" size={12} /></span>
+          <span class="chev" class:turned={tasksOpen} aria-hidden="true"><Icon name="chevron" size={12} /></span>
         </button>
-        {#if planOpen && !request}
+        {#if tasksOpen}
           <ul>
             {#each plan as step, i (i)}
-              <li class={step.status}><span class="box" aria-hidden="true">{#if step.status === 'done'}<Icon name="check" size={10} />{/if}</span><span>{step.text}</span></li>
+              <li class={step.status}><span class="sr">{step.status === 'done' ? 'Done: ' : step.status === 'active' ? 'In progress: ' : 'To do: '}</span><span class="box" aria-hidden="true">{#if step.status === 'done'}<Icon name="check" size={10} />{/if}</span><span>{step.text}</span></li>
             {/each}
           </ul>
         {/if}
@@ -410,6 +444,8 @@
   .list {
     flex: 1;
     overflow-y: auto;
+    /* The same gutter on both sides keeps the column centred over the dock. */
+    scrollbar-gutter: stable both-edges;
     padding: 32px 24px 16px;
   }
   .column,
@@ -473,11 +509,13 @@
     margin-bottom: 16px;
   }
   .bubble {
+    position: relative;
     max-width: 85%;
     box-sizing: border-box;
-    padding: 9px 15px;
-    border-radius: 18px 18px 6px 18px;
-    background: var(--bg-surface);
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--bg-surface) 60%, var(--bg));
     color: var(--fg-bright);
     line-height: 1.55;
     overflow-wrap: anywhere;
@@ -503,6 +541,9 @@
     object-fit: cover;
   }
   .actions {
+    position: absolute;
+    right: calc(100% + 6px);
+    bottom: 0;
     display: flex;
     gap: 2px;
     opacity: 0;
@@ -545,6 +586,13 @@
   .step + .step.text,
   .step.text + .step {
     margin-top: 10px;
+  }
+  /* The answer after the work: brighter, with room above it. */
+  .step.text.final {
+    color: var(--fg-bright);
+  }
+  .step:not(.final) + .step.text.final {
+    margin-top: 18px;
   }
   .step.sub {
     margin-left: 7px;
@@ -788,6 +836,8 @@
     gap: 10px;
     padding: 8px 24px 18px;
     max-width: calc(680px + 48px);
+    /* A short window keeps some conversation: the request card gives way and scrolls. */
+    max-height: 80vh;
   }
   /* Text scrolling under the dock fades out instead of being cut off. */
   .dock::before {
@@ -808,6 +858,7 @@
     color: var(--fg-dim);
   }
   .tasks {
+    flex-shrink: 0;
     padding: 3px;
     border: 1px solid var(--border);
     border-radius: 12px;

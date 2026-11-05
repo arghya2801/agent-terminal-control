@@ -94,6 +94,7 @@ export function parsePalette(raw: unknown, fallbackName = ''): Palette | null {
 export function cssVariables(p: Palette): Record<string, string> {
   const lift = (pct: number) => `color-mix(in srgb, ${p.background} ${pct}%, ${p.foreground})`;
   const dim = (pct: number) => `color-mix(in srgb, ${p.foreground} ${pct}%, ${p.background})`;
+  const light = isLight(p);
 
   return {
     '--bg': p.background,
@@ -104,13 +105,13 @@ export function cssVariables(p: Palette): Record<string, string> {
     '--bg-hover': lift(82),
     '--border': lift(78),
     '--fg-bright': p.foreground,
-    '--fg-dim': dim(62),
-    '--fg-faint': dim(55),
+    // Light palettes put their foreground closer to the background, so they need more of it.
+    '--fg-dim': dim(light ? 84 : 62),
+    '--fg-faint': dim(light ? 76 : 55),
     '--accent': p.brightBlue,
     '--accent-strong': p.blue,
-    // Text over an accent or danger fill. On a dark theme that is the background; on a
-    // light one the background would vanish into the fill.
-    '--on-accent': isLight(p) ? p.brightWhite : p.background,
+    // Text over an accent or danger fill.
+    '--on-accent': onAccent(p),
     '--danger': p.brightRed,
     '--danger-strong': p.red,
     '--warn': p.brightYellow,
@@ -126,6 +127,17 @@ export function cssVariables(p: Palette): Record<string, string> {
  */
 export function isLight(p: Palette): boolean {
   return luminance(p.background) > 0.4;
+}
+
+/** Text over the accent fill: the background when it passes 4.5:1, else white or black.
+ *  A light palette's `brightWhite` can be a grey that fails on blue. */
+function onAccent(p: Palette): string {
+  const ratio = (c: string) => {
+    const [a, b] = [luminance(c), luminance(p.brightBlue)].sort((x, y) => y - x);
+    return (a + 0.05) / (b + 0.05);
+  };
+  if (ratio(p.background) >= 4.5) return p.background;
+  return ratio('#ffffff') >= ratio('#000000') ? '#ffffff' : '#000000';
 }
 
 function luminance(hex: string): number {

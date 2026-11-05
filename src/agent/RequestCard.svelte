@@ -46,6 +46,16 @@
   }
   const deny = () => onAnswer({ allow: false, message: reason.trim() || undefined });
 
+  /** A single-choice group: arrows move to the next option and pick it, as radios do. */
+  function onArrow(e: KeyboardEvent, q: { id: string; multi?: boolean; options: { label: string }[] }, at: number) {
+    const by = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;
+    if (q.multi || !by) return;
+    e.preventDefault();
+    const next = (at + by + q.options.length) % q.options.length;
+    toggle(q, q.options[next].label);
+    ((e.currentTarget as HTMLElement).parentElement?.children[next] as HTMLElement | undefined)?.focus();
+  }
+
   /** With focus in the card and not in a text box: 1-9 pick an option of a lone question. */
   function onKey(e: KeyboardEvent) {
     if ((e.target as HTMLElement).tagName === 'INPUT') return;
@@ -73,7 +83,8 @@
         <div class="options" role={q.multi ? 'group' : 'radiogroup'} aria-labelledby="{uid}-{qi}">
           {#each q.options as o, oi (o.label)}
             {@const on = !!chosen[q.id]?.includes(o.label)}
-            <button class="option" class:on role={q.multi ? 'checkbox' : 'radio'} aria-checked={on} onclick={() => toggle(q, o.label)}>
+            <!-- A radio group is one tab stop: the chosen option, or the first. -->
+            <button class="option" class:on role={q.multi ? 'checkbox' : 'radio'} aria-checked={on} tabindex={q.multi || on || (oi === 0 && !chosen[q.id]?.length) ? 0 : -1} onclick={() => toggle(q, o.label)} onkeydown={(e) => onArrow(e, q, oi)}>
               <span class="mark" class:square={q.multi}>{#if on}<Icon name="check" size={10} />{/if}</span>
               <span class="label"><b>{o.label}</b>{#if o.description}<span>{o.description}</span>{/if}</span>
               {#if (request.questions?.length ?? 0) === 1 && oi < 9}<kbd class="num" title="Press {oi + 1}">{oi + 1}</kbd>{/if}
@@ -85,7 +96,7 @@
     {/each}
     </div>
     <div class="actions">
-      <span class="grow"></span>
+      <span class="grow hint">{complete ? '' : (request.questions?.length ?? 0) > 1 ? 'Answer each question to send' : 'Pick an option or type an answer'}</span>
       <button class="btn" onclick={deny}>Skip</button>
       <button class="btn primary" disabled={!complete} onclick={() => onAnswer({ allow: true, answers })}>Answer</button>
     </div>
@@ -103,7 +114,7 @@
         <button class="btn primary" onclick={() => onAnswer({ allow: true })}>Approve plan</button>
       {:else}
         <button class="btn deny" onclick={deny}>Deny</button>
-        {#if request.always}<button class="btn" onclick={() => onAnswer({ allow: true, always: true })} title="Allow this and the same kind of call for the rest of the session">Always allow</button>{/if}
+        {#if request.always}<button class="btn" onclick={() => onAnswer({ allow: true, always: true })} title="Allow this and the same kind of call for the rest of the session">Allow for session</button>{/if}
         <button class="btn primary" onclick={() => onAnswer({ allow: true })}>Allow</button>
       {/if}
     </div>
@@ -123,6 +134,13 @@
     display: flex;
     flex-direction: column;
     max-height: 60vh;
+    /* Shrinks with the dock in a short window; the body scrolls. */
+    min-height: 0;
+    flex-shrink: 1;
+  }
+  .hint {
+    font-size: 12px;
+    color: var(--fg-faint);
   }
   .card:focus-visible {
     outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
@@ -131,6 +149,7 @@
   .body {
     min-height: 0;
     overflow-y: auto;
+    margin-bottom: 8px;
   }
   header,
   .actions {

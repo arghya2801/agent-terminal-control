@@ -35,6 +35,12 @@
   // While it runs, the last lines of its output, so a long command shows it is alive.
   const tail = $derived(status === 'running' && item.output ? item.output.trimEnd().split('\n').slice(-3).join('\n') : '');
   const expandable = $derived(!!(item.body || item.output));
+  // Long output says how long, counting what the sidecar left out of the middle.
+  const outLines = $derived.by(() => {
+    const out = item.output?.trimEnd() ?? '';
+    const omitted = Number(/\n… (\d+) lines omitted …\n/.exec(out)?.[1] ?? 0);
+    return out ? out.split('\n').length + omitted : 0;
+  });
   // A failed call says why under its row: the user's reason, or the error's first line.
   const first = $derived(
     (item.output ?? '')
@@ -49,7 +55,8 @@
 </script>
 
 <div class="tool {status}" class:open class:declined={item.declined}>
-  <button class="line" onclick={() => expandable && (open = !open)} aria-expanded={expandable ? open : undefined} title={item.input} class:static={!expandable}>
+  <!-- Nothing to open: a plain row, not a button that does nothing. -->
+  <svelte:element this={expandable ? 'button' : 'div'} class="line" role={expandable ? undefined : 'group'} onclick={() => expandable && (open = !open)} aria-expanded={expandable ? open : undefined} title={item.input} class:static={!expandable}>
     <span class="icon"><Icon name={toolIcon(item.tool)} size={14} /></span>
     <span class="verb">{verb}</span>
     {#if input}<code class="target">{input}</code>{/if}
@@ -58,10 +65,11 @@
     <span class="meta">
       {#if counts}<span class="add">+{counts.add}</span><span class="del">−{counts.del}</span>{/if}
       <!-- Finished calls keep their time only when it was long enough to matter. -->
+      {#if status !== 'running' && outLines >= 20}<span>{outLines.toLocaleString()} lines</span>{/if}
       {#if item.seconds && (status === 'running' || item.seconds >= 5)}<span>{secs(item.seconds)}</span>{/if}
       {#if status === 'stopped'}<span>Stopped</span>{/if}
     </span>
-  </button>
+  </svelte:element>
   {#if tail && !open}<pre class="tail">{tail}</pre>{/if}
   {#if status === 'failed' && !open && why}<p class="why">{why}</p>{/if}
   {#if open}
@@ -217,6 +225,8 @@
     border-left: 1px solid var(--border);
     max-height: 4.65em;
     overflow: hidden;
+    /* One visual line per output line, so the newest of the three is never wrapped out of view. */
+    white-space: pre;
     color: var(--fg-dim);
     font-size: calc(var(--mono-size) - 1px);
   }
@@ -224,9 +234,11 @@
     margin: 0 0 4px 24px;
     font-size: 13px;
     color: var(--fg-dim);
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   @media (prefers-reduced-motion: reduce) {
     .chev {

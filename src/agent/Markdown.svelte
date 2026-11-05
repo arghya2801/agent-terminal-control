@@ -26,10 +26,13 @@
 
   function copy(e: MouseEvent, text: string) {
     const button = e.currentTarget as HTMLButtonElement;
-    void navigator.clipboard.writeText(text).then(() => {
-      button.textContent = 'Copied';
-      setTimeout(() => (button.textContent = 'Copy'), 1500);
-    });
+    void navigator.clipboard.writeText(text).then(
+      () => {
+        button.textContent = 'Copied';
+        setTimeout(() => (button.textContent = 'Copy'), 1500);
+      },
+      () => (appState.error = 'Could not copy to the clipboard'),
+    );
   }
 
   function open(e: MouseEvent, url: string) {
@@ -141,6 +144,8 @@
   }
   .md :global(.code pre) {
     margin: 0;
+    /* Room for Copy, so it never sits on the end of a long first line. */
+    padding-right: 64px;
   }
   .md :global(.code .copy) {
     position: absolute;
