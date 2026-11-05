@@ -4,12 +4,14 @@
   import { matchCommands, typedCommand, type Sigil } from './commands';
   import type { Command, Image } from '../../sidecar/protocol';
 
-  let { text = $bindable(''), name, history, sigils, commands, working, waiting = false, disabled, onSend, onStop, onFiles, onInput, toolbar }: {
+  let { text = $bindable(''), name, history, hints = true, sigils, commands, working, waiting = false, disabled, onSend, onStop, onFiles, onInput, toolbar }: {
     /** What is in the box; a rewind puts its prompt back here. */
     text?: string;
     name: string;
     /** Earlier prompts, oldest first: Up and Down walk them from an empty box. */
     history: string[];
+    /** The `/ $ @` hint in the placeholder; off while the empty state already shows it. */
+    hints?: boolean;
     /** What opens the menu: `/` for commands, and `$` for Codex's skills. */
     sigils: Sigil[];
     commands: Command[];
@@ -211,7 +213,7 @@
     onpaste={onPaste}
     rows="1"
     {disabled}
-    placeholder={disabled ? 'Resume the session to keep going' : waiting ? `Answer ${name} above, or type a message to send after this turn` : working ? 'Enter queues a message for when this turn ends' : sigils.includes('$') ? `Ask ${name}: / for commands, $ for skills, @ for files` : `Ask ${name}: / for commands and skills, @ for files`}
+    placeholder={disabled ? 'Resume the session to keep going' : waiting ? `Answer ${name} above, or type a message to send after this turn` : working ? 'Enter queues a message for when this turn ends' : !hints ? `Ask ${name}` : sigils.includes('$') ? `Ask ${name}: / for commands, $ for skills, @ for files` : `Ask ${name}: / for commands and skills, @ for files`}
     aria-label="Message {name}"
     role="combobox"
     aria-autocomplete="list"

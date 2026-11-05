@@ -78,11 +78,11 @@ const PHRASES: Record<Action, (n: number) => string> = {
 
 /** One sentence for a run of calls, in the order their kinds first appear. Edits count
  *  distinct files, so three edits to one file read "changed 1 file". Only calls that
- *  succeeded count, since the group's badge reports the rest; a run where none has yet
- *  reads as all of them. */
+ *  failed or were declined are left out, since the group's badge reports them; a run
+ *  where every call failed reads as all of them. */
 export function summarize(items: ChatItem[]): string {
   const counts = new Map<Action, Set<string> | number>();
-  const ok = items.filter((it) => it.done && !it.error && !it.declined);
+  const ok = items.filter((it) => !it.error && !it.declined);
   for (const it of ok.length ? ok : items) {
     const a = toolAction(it.tool);
     if (a === 'edit') {

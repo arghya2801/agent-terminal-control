@@ -20,6 +20,7 @@
 <script lang="ts">
   import Icon from '../lib/Icon.svelte';
   import { cleanCommand, relativePaths, toolVerb } from './work';
+  import { clippedLines } from '../../sidecar/clip';
 
   /** `cwd`: paths under it show relative to it. */
   let { item, live, cwd = null }: { item: ChatItem; live: boolean; cwd?: string | null } = $props();
@@ -36,11 +37,7 @@
   const tail = $derived(status === 'running' && item.output ? item.output.trimEnd().split('\n').slice(-3).join('\n') : '');
   const expandable = $derived(!!(item.body || item.output));
   // Long output says how long, counting what the sidecar left out of the middle.
-  const outLines = $derived.by(() => {
-    const out = item.output?.trimEnd() ?? '';
-    const omitted = Number(/\n… (\d+) lines omitted …\n/.exec(out)?.[1] ?? 0);
-    return out ? out.split('\n').length + omitted : 0;
-  });
+  const outLines = $derived(clippedLines(item.output?.trimEnd() ?? ''));
   // A failed call says why under its row: the user's reason, or the error's first line.
   const first = $derived(
     (item.output ?? '')

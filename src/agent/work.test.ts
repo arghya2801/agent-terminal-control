@@ -11,10 +11,10 @@ describe('summarize', () => {
       'Changed 1 file, searched the code once and used 1 tool',
     );
   });
-  it('counts only calls that succeeded, unless none has', () => {
+  it('leaves out failed and declined calls, unless every call failed', () => {
     const run = [tool('1', 'Edit', 'a.ts', { error: true }), tool('2', 'Edit', 'b.ts', { declined: true, error: true }), tool('3', 'Read', 'c.ts'), tool('4', 'Bash', 'npm test', { done: false })];
-    expect(summarize(run)).toBe('Read 1 file');
-    expect(summarize([tool('1', 'Bash', 'npm test', { done: false })])).toBe('Ran 1 command');
+    expect(summarize(run)).toBe('Read 1 file and ran 1 command');
+    expect(summarize([tool('1', 'Edit', 'a.ts', { error: true })])).toBe('Changed 1 file');
   });
 });
 

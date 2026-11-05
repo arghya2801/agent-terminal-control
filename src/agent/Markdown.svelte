@@ -140,17 +140,17 @@
   }
   .md :global(.code) {
     position: relative;
-    margin: 0 0 0.75em;
+    /* Room above for Copy, which sits on the top border. */
+    margin: 14px 0 0.75em;
   }
   .md :global(.code pre) {
     margin: 0;
-    /* Room for Copy, so it never sits on the end of a long first line. */
-    padding-right: 64px;
   }
   .md :global(.code .copy) {
+    /* On the top border, outside the scrolling code, so it never covers a line. */
     position: absolute;
-    top: 6px;
-    right: 6px;
+    top: -10px;
+    right: 10px;
     font: inherit;
     font-size: 11px;
     color: var(--fg-dim);

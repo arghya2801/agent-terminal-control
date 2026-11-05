@@ -294,7 +294,7 @@
                   {@const declined = b.items.filter((x) => x.declined).length}
                   <div class="step group {st}" class:sub={!!b.items[0].parent}>
                     <button class="row" aria-expanded={open} onclick={() => (opened[b.id] = !open)}>
-                      <span class="icon"><Icon name={toolIcon(b.items[0].tool)} size={14} /></span>
+                      <span class="icon"><Icon name={new Set(b.items.map((x) => toolIcon(x.tool))).size > 1 ? 'tool' : toolIcon(b.items[0].tool)} size={14} /></span>
                       <span class="what">{summarize(b.items)}</span>
                       <span class="chev" class:turned={open} aria-hidden="true"><Icon name="chevron" size={12} /></span>
                       {#if failed}<span class="badge">{failed} failed</span>{:else if declined}<span class="badge declined">{declined} declined</span>{:else if st === 'stopped'}<span class="badge declined">Stopped</span>{/if}
@@ -331,10 +331,12 @@
               {/each}
               {#if live && !request}
                 {@const last = turn.steps.at(-1)}
+                {@const lastBlock = all.at(-1)}
+                {@const rowShown = lastBlock?.kind === 'step' || (!!lastBlock && (opened[lastBlock.id] ?? true))}
                 <div class="step live">
                   <span class="icon"><span class="spinner"></span></span>
-                  <!-- A running call's own row already says what it runs. -->
-                  {#if !(last?.kind === 'tool' && !last.done)}<span class="shimmer">{activity(turn.steps, cwd)}</span>{/if}
+                  <!-- A running call's own row already says what it runs, unless its group is folded. -->
+                  {#if !(last?.kind === 'tool' && !last.done && rowShown)}<span class="shimmer">{activity(turn.steps, cwd)}</span>{/if}
                   <span class="secs">{clock(now - (s?.since ?? now))}</span>
                 </div>
               {/if}
@@ -398,6 +400,7 @@
       bind:text={draft}
       {name}
       {history}
+      hints={turns.length > 0}
       sigils={provider === 'claude' ? ['/', '@'] : ['/', '$', '@']}
       {commands}
       onFiles={() => listFiles(tabKey)}
@@ -510,7 +513,8 @@
   }
   .bubble {
     position: relative;
-    max-width: 85%;
+    /* Leaves room beside it for Copy and Rewind, even in a narrow pane. */
+    max-width: min(85%, calc(100% - 64px));
     box-sizing: border-box;
     padding: 10px 14px;
     border: 1px solid var(--border);

@@ -142,8 +142,9 @@
     font-size: 12px;
     color: var(--fg-faint);
   }
+  /* Only code focuses the card itself, on arrival; its buttons keep the full ring. */
   .card:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+    outline: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
     outline-offset: 1px;
   }
   .body {
