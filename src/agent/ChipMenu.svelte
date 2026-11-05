@@ -56,6 +56,7 @@
   function choose(v: string) {
     onPick(v);
     open = false;
+    (root?.querySelector('.chip') as HTMLElement | null)?.focus();
   }
   /** The flyout opens to the left when the right has no room for it. */
   let leftward = $state(false);

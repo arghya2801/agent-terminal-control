@@ -77,7 +77,7 @@ function itemOf(it: Obj): ChatItem | null {
     case 'plan':
       return { id: it.id, kind: 'assistant', text: it.text };
     case 'commandExecution':
-      return { id: it.id, kind: 'tool', tool: 'Shell', input: firstLine(it.command), body: clip(it.command), output: clip(it.aggregatedOutput ?? ''), done, error: it.status === 'failed' || it.status === 'declined' || (it.exitCode ?? 0) !== 0, declined: it.status === 'declined' || undefined };
+      return { id: it.id, kind: 'tool', tool: 'Shell', input: firstLine(it.command), body: clip(it.command), output: clip(it.aggregatedOutput ?? ''), done, seconds: it.durationMs != null ? it.durationMs / 1000 : undefined, error: it.status === 'failed' || it.status === 'declined' || (it.exitCode ?? 0) !== 0, declined: it.status === 'declined' || undefined };
     case 'fileChange': {
       const changes: Obj[] = it.changes ?? [];
       return { id: it.id, kind: 'tool', tool: 'Edit', input: changes.map((c) => c.path).join(', '), body: clip(changes.map((c) => c.diff).join('\n')), done, error: it.status === 'failed' || it.status === 'declined', declined: it.status === 'declined' || undefined };

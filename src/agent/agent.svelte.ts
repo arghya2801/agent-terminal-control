@@ -129,6 +129,8 @@ export function send(key: TabKey, text: string, images: Image[] = []) {
     queuePrompt(key, had ? `${had}\n\n${text}` : text || IMAGES);
   } else op(key, { op: 'send', text, images });
 }
+/** Images held with the queued message. */
+export const queuedImages = (key: TabKey) => live.get(key)?.images.length ?? 0;
 /** The queue's text for a message of only images, which the queue shows. */
 const IMAGES = '(images)';
 export const interrupt = (key: TabKey) => op(key, { op: 'interrupt' });

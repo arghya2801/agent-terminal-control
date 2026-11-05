@@ -44,6 +44,7 @@
       ?.trim()
       .slice(0, 200) ?? '',
   );
+  const secs = (n: number) => (n < 60 ? `${Math.round(n)}s` : `${Math.floor(n / 60)}m ${String(Math.round(n % 60)).padStart(2, '0')}s`);
   const why = $derived(item.declined && first ? `You declined: “${first}”` : item.declined ? 'You declined this' : first);
 </script>
 
@@ -56,7 +57,8 @@
     {#if status === 'failed'}<span class="badge" class:declined={item.declined}>{item.declined ? 'Declined' : 'Failed'}</span>{/if}
     <span class="meta">
       {#if counts}<span class="add">+{counts.add}</span><span class="del">−{counts.del}</span>{/if}
-      {#if status === 'running' && item.seconds}<span>{Math.round(item.seconds)}s</span>{/if}
+      <!-- Finished calls keep their time only when it was long enough to matter. -->
+      {#if item.seconds && (status === 'running' || item.seconds >= 5)}<span>{secs(item.seconds)}</span>{/if}
       {#if status === 'stopped'}<span>Stopped</span>{/if}
     </span>
   </button>
@@ -158,7 +160,7 @@
   .chev {
     display: grid;
     color: var(--fg-faint);
-    opacity: 0;
+    opacity: 0.5;
     transition: transform var(--enter) var(--ease-out);
   }
   .line:hover .chev,

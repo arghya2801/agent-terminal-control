@@ -1,10 +1,17 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import Icon from '../lib/Icon.svelte';
   import Markdown from './Markdown.svelte';
   import { toolAction } from './work';
   import type { AgentRequest, Answer } from '../../sidecar/protocol';
 
-  let { request, name, onAnswer }: { request: AgentRequest; name: string; onAnswer: (a: Answer) => void } = $props();
+  /** `autofocus`: take focus on arrival, so number keys and Tab start in the card. */
+  let { request, name, onAnswer, autofocus = false }: { request: AgentRequest; name: string; onAnswer: (a: Answer) => void; autofocus?: boolean } = $props();
+  const uid = $props.id();
+  let card = $state<HTMLElement>();
+  onMount(() => {
+    if (autofocus) card?.focus();
+  });
 
   let reason = $state('');
   let chosen = $state<Record<string, string[]>>({});
@@ -52,17 +59,18 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions (keys for the options and buttons inside) -->
-<section class="card {request.kind}" role="group" aria-label={title} onkeydown={onKey}>
+<section class="card {request.kind}" role="group" aria-label={title} tabindex="-1" bind:this={card} onkeydown={onKey}>
   <header>
     <span class="badge"><Icon name={icon} size={14} /></span>
     <h3>{title}</h3>
   </header>
 
   {#if request.kind === 'question'}
-    {#each request.questions ?? [] as q (q.id)}
+    <div class="body">
+    {#each request.questions ?? [] as q, qi (q.id)}
       <div class="question">
-        <p>{q.question}{#if q.multi}<span class="muted"> Pick any.</span>{/if}</p>
-        <div class="options" role={q.multi ? 'group' : 'radiogroup'}>
+        <p id="{uid}-{qi}">{q.question}{#if q.multi}<span class="muted"> Pick any.</span>{/if}</p>
+        <div class="options" role={q.multi ? 'group' : 'radiogroup'} aria-labelledby="{uid}-{qi}">
           {#each q.options as o, oi (o.label)}
             {@const on = !!chosen[q.id]?.includes(o.label)}
             <button class="option" class:on role={q.multi ? 'checkbox' : 'radio'} aria-checked={on} onclick={() => toggle(q, o.label)}>
@@ -72,9 +80,10 @@
             </button>
           {/each}
         </div>
-        <input class="field" placeholder="Or type your own answer" bind:value={other[q.id]} oninput={() => !q.multi && (chosen[q.id] = [])} />
+        <input class="field" placeholder="Or type your own answer" aria-label="Your own answer: {q.question}" bind:value={other[q.id]} oninput={() => !q.multi && (chosen[q.id] = [])} />
       </div>
     {/each}
+    </div>
     <div class="actions">
       <span class="grow"></span>
       <button class="btn" onclick={deny}>Skip</button>
@@ -88,7 +97,7 @@
     {/if}
     <div class="actions">
       <!-- Codex's decline takes no reason. -->
-      {#if name === 'Codex'}<span class="grow"></span>{:else}<input class="field grow" placeholder={request.kind === 'plan' ? 'What to change (optional)' : `Why not? (optional, sent with Deny)`} bind:value={reason} />{/if}
+      {#if name === 'Codex'}<span class="grow"></span>{:else}<input class="field grow" placeholder={request.kind === 'plan' ? 'What to change (optional)' : `Why not? (optional, sent with Deny)`} aria-label={request.kind === 'plan' ? 'What to change' : 'Reason for denying'} bind:value={reason} />{/if}
       {#if request.kind === 'plan'}
         <button class="btn" onclick={deny}>Keep planning</button>
         <button class="btn primary" onclick={() => onAnswer({ allow: true })}>Approve plan</button>
@@ -110,6 +119,22 @@
     background: var(--bg-chrome);
     box-shadow: 0 8px 28px rgb(0 0 0 / 0.22);
     animation: card-in var(--enter) var(--ease-out);
+    /* A long question scrolls inside the card; the buttons stay in view. */
+    display: flex;
+    flex-direction: column;
+    max-height: 60vh;
+  }
+  .card:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+    outline-offset: 1px;
+  }
+  .body {
+    min-height: 0;
+    overflow-y: auto;
+  }
+  header,
+  .actions {
+    flex: none;
   }
   @keyframes card-in {
     from {
