@@ -77,14 +77,15 @@ const PHRASES: Record<Action, (n: number) => string> = {
 };
 
 /** One sentence for a run of calls, in the order their kinds first appear. Edits count
- *  distinct files, so three edits to one file read "changed 1 file". Only calls that
- *  failed or were declined are left out, since the group's badge reports them; a run
- *  where every call failed reads as all of them. */
+ *  distinct files, so three edits to one file read "changed 1 file". Calls that failed
+ *  or were declined are left out, since the group's badge reports them; a run where
+ *  every call failed reads as all of them. A call still running counts; one left
+ *  unfinished by a stop never does. */
 export function summarize(items: ChatItem[], live = true): string {
   const counts = new Map<Action, Set<string> | number>();
-  // A call still running counts; one left unfinished by a stop does not.
-  const ok = items.filter((it) => !it.error && !it.declined && (live || it.done));
-  for (const it of ok.length ? ok : items) {
+  const tried = live ? items : items.filter((it) => it.done);
+  const ok = tried.filter((it) => !it.error && !it.declined);
+  for (const it of ok.length ? ok : tried.length ? tried : items) {
     const a = toolAction(it.tool);
     if (a === 'edit') {
       const files = (counts.get(a) as Set<string>) ?? new Set<string>();

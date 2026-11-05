@@ -17,6 +17,7 @@ describe('summarize', () => {
     expect(summarize([tool('1', 'Edit', 'a.ts', { error: true })])).toBe('Changed 1 file');
     // After a stop, the unfinished edit didn't happen.
     expect(summarize([tool('1', 'Read', 'a.ts'), tool('2', 'Edit', 'b.ts', { done: false })], false)).toBe('Read 1 file');
+    expect(summarize([tool('1', 'Read', 'a.ts', { error: true }), tool('2', 'Edit', 'b.ts', { done: false })], false)).toBe('Read 1 file');
   });
 });
 
