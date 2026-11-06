@@ -6,6 +6,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-06
+
 ### Changed
 - Claude and Codex tabs are a chat instead of a terminal. Claude runs through the Claude Agent SDK and Codex through its app-server: the same CLIs, logins, settings, hooks, skills, MCP servers and session files. Replies stream in; each tool call is one line with a timer, its live output and its result; permission prompts, questions and plan approvals are cards with buttons; `/` (Claude) and `$` (Codex) list commands and skills with their descriptions; the footer picks the model and Claude's permission mode and shows the turn's running time, and each turn ends with its duration and cost. "Open in terminal" resumes the session in the CLI's own TUI. Agent tabs need Node.js 18 or later on PATH.
 - In agent tabs, a run of tool calls reads as one line ("Read 3 files and ran 2 commands") that opens to the calls; the turn being worked on stays open. Each turn hangs off a rail with a light per call. The working line says what the agent is doing ("Running npm test", or its current thought), paths show relative to the project, Up and Down recall earlier prompts, and replies and code blocks have a Copy button.
@@ -342,7 +344,8 @@ ATC now runs on a Go/Wails host instead of Rust/Tauri. The interface is the same
 
 First release.
 
-[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.5.0...v0.6.0
