@@ -84,7 +84,7 @@
     if (Date.now() - planState.claudeAt > refreshMs('claude')) void loadClaudeLimits();
     if (Date.now() - planState.codexAt > refreshMs('codex')) void loadCodexLimits();
     // Each Codex read starts a `codex app-server` process, so it refreshes less often.
-    const codexPoll = setInterval(() => void loadCodexLimits(), refreshMs('codex'));
+    const codexPoll = setInterval(() => !document.hidden && void loadCodexLimits(), refreshMs('codex'));
     const tick = setInterval(() => (now = Date.now()), 30_000);
     return () => {
       void codexUsageStop();
