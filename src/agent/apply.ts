@@ -40,6 +40,14 @@ function notify(s: AgentState, text: string, error = false) {
 /** How much of a running command's output the page keeps. */
 const LIVE_OUTPUT = 8192;
 
+/** The echo of a message the page sent carries only how many images it had (#229): the
+ *  first echo takes the oldest images in `sent`, and a repeat of it leaves them alone. */
+export function withSentImages(ev: AgentEvent, items: ChatItem[], sent: string[][]): AgentEvent {
+  if (ev.t !== 'item' || !ev.item.sentImages) return ev;
+  const { sentImages: _, ...item } = ev.item;
+  return { ...ev, item: items.some((i) => i.id === item.id) ? item : { ...item, images: sent.shift() ?? [] } };
+}
+
 /** Apply one event in place. Items are matched by id, so a streamed draft, its final text
  *  and a tool's result all land on the same item. */
 export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
@@ -55,9 +63,14 @@ export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
     case 'session':
       s.sessionId = ev.id;
       return;
-    case 'history':
-      for (const e of ev.events) apply(s, e, now);
+    case 'history': {
+      // Applied to plain arrays, then assigned once: one event at a time through the
+      // reactive state made opening a long transcript slow (#229).
+      const draft = { ...s, items: s.items.slice(), requests: s.requests.slice(), plan: s.plan.slice() };
+      for (const e of ev.events) apply(draft, e, now);
+      Object.assign(s, draft);
       return;
+    }
     case 'clear':
       Object.assign(s, { items: [], requests: [], plan: [] });
       return;

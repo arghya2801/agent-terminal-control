@@ -27,6 +27,9 @@ export interface ChatItem {
   turn?: string;
   /** The user said no to this call. */
   declined?: boolean;
+  /** A live echo of a message the page sent: how many images it had. The page already
+   *  holds them, so they don't come back over IPC (#229). */
+  sentImages?: number;
   /** Images sent with a user message, as data URLs. */
   images?: string[];
 }

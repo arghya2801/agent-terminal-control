@@ -29,7 +29,8 @@ type sidecar struct {
 	mu       sync.Mutex
 	cmd      *exec.Cmd
 	stdin    io.WriteCloser
-	channels map[string]string // session id -> its event channel
+	channels map[string]string        // session id -> its event channel
+	closing  map[string]chan struct{} // sessions AgentClose is waiting on, closed at their exit
 }
 
 var nextAgent atomic.Uint64
@@ -101,7 +102,13 @@ func (s *sidecar) send(a *App, op core.Object, channel string) (string, error) {
 	s.channels[id] = channel
 	s.mu.Unlock()
 	op["id"] = id
-	return id, s.write(op)
+	if e := s.write(op); e != nil {
+		s.mu.Lock()
+		delete(s.channels, id)
+		s.mu.Unlock()
+		return "", e
+	}
+	return id, nil
 }
 
 // AgentSend passes one operation to a session: send, interrupt, answer, mode, model or
@@ -112,16 +119,39 @@ func (a *App) AgentSend(id string, op core.Object) error {
 	default:
 		return fmt.Errorf("unknown agent operation: %v", op["op"])
 	}
+	a.agents.mu.Lock()
+	_, live := a.agents.channels[id]
+	a.agents.mu.Unlock()
+	if !live {
+		return fmt.Errorf("this session has ended; Resume it to keep going")
+	}
 	op["id"] = id
 	return a.agents.write(op)
 }
 
-// AgentClose ends a session. Its CLI exits; the session stays on disk to resume.
+// AgentClose ends a session and returns once its CLI has exited, or after 5 seconds: a
+// terminal resuming the session next must not find it still held (#227). The session
+// stays on disk to resume.
 func (a *App) AgentClose(id string) error {
-	a.agents.mu.Lock()
-	delete(a.agents.channels, id)
-	a.agents.mu.Unlock()
-	return a.agents.write(core.Object{"op": "close", "id": id})
+	s, done := &a.agents, make(chan struct{})
+	s.mu.Lock()
+	delete(s.channels, id)
+	if s.closing == nil {
+		s.closing = map[string]chan struct{}{}
+	}
+	s.closing[id] = done
+	s.mu.Unlock()
+	e := s.write(core.Object{"op": "close", "id": id})
+	if e == nil {
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+		}
+	}
+	s.mu.Lock()
+	delete(s.closing, id)
+	s.mu.Unlock()
+	return e
 }
 
 // agentExe is the CLI a session runs. npm installs both CLIs as .cmd shims: the SDK cannot
@@ -162,8 +192,13 @@ func (s *sidecar) start(a *App) error {
 	// The last run's log says why it stopped; the next chat or Resume starts a new one.
 	logPath := filepath.Join(a.config, "sidecar.log")
 	_ = os.Rename(logPath, filepath.Join(a.config, "sidecar.old.log"))
-	if cmd.Stderr, e = os.Create(logPath); e != nil {
+	logFile, e := os.Create(logPath)
+	if e != nil {
 		cmd.Stderr = io.Discard
+	} else {
+		// The child has its own handle once started; holding ours keeps the next rename from working.
+		cmd.Stderr = logFile
+		defer logFile.Close()
 	}
 	stdin, e := cmd.StdinPipe()
 	if e != nil {
@@ -203,6 +238,10 @@ func (s *sidecar) read(a *App, cmd *exec.Cmd, stdout io.Reader) {
 			// A session's last event: nothing more goes to its channel.
 			if json.Unmarshal(m.Ev, &ev) == nil && ev.T == "exit" {
 				delete(s.channels, m.ID)
+				if done, ok := s.closing[m.ID]; ok {
+					close(done)
+					delete(s.closing, m.ID)
+				}
 			}
 			s.mu.Unlock()
 			if channel != "" {
@@ -215,8 +254,13 @@ func (s *sidecar) read(a *App, cmd *exec.Cmd, stdout io.Reader) {
 	}
 	cmd.Wait()
 	s.mu.Lock()
-	gone := s.channels
-	s.cmd, s.stdin, s.channels = nil, nil, map[string]string{}
+	// After stop, a newer sidecar may own the state; this one's end must not wipe it (#226).
+	var gone map[string]string
+	if s.cmd == cmd {
+		gone = s.channels
+		s.cmd, s.stdin, s.channels = nil, nil, map[string]string{}
+		s.releaseClosing()
+	}
 	s.mu.Unlock()
 	for _, channel := range gone {
 		a.emit(channel, core.Object{"t": "exit", "message": "The agent sidecar stopped. sidecar.log in the config folder says why."})
@@ -242,6 +286,10 @@ func (s *sidecar) write(v any) error {
 func (s *sidecar) stop() {
 	s.mu.Lock()
 	cmd, stdin := s.cmd, s.stdin
+	// Cleared now, not when read sees the exit: an AgentOpen meanwhile starts a new sidecar
+	// instead of writing to this one's closed pipe (#226).
+	s.cmd, s.stdin, s.channels = nil, nil, map[string]string{}
+	s.releaseClosing()
 	s.mu.Unlock()
 	if cmd == nil {
 		return
@@ -255,6 +303,14 @@ func (s *sidecar) stop() {
 	}
 	// A CLI that outlived Node still names it as its parent.
 	pty.KillTree(uint32(cmd.Process.Pid))
+}
+
+// releaseClosing lets every waiting AgentClose return. Call with mu held.
+func (s *sidecar) releaseClosing() {
+	for _, done := range s.closing {
+		close(done)
+	}
+	s.closing = nil
 }
 
 // extractSidecar writes the embedded sidecar into the config folder, where Node can run

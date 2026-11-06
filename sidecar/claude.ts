@@ -333,10 +333,9 @@ export class Claude {
   send(text: string, images: Image[] = []) {
     // `/clear` starts the CLI on a fresh conversation; the view starts over with it.
     if (text.trim() === '/clear') this.live({ t: 'clear' });
-    const shown = images.map((i) => `data:${i.mediaType};base64,${i.data}`);
     const uuid = randomUUID();
     this.chain(uuid, null, true);
-    this.live({ t: 'item', item: { id: uuid, kind: 'user', text, ...(shown.length ? { images: shown } : {}) } });
+    this.live({ t: 'item', item: { id: uuid, kind: 'user', text, ...(images.length ? { sentImages: images.length } : {}) } });
     this.live({ t: 'working', on: true });
     this.wake();
     const content = images.length

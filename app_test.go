@@ -164,14 +164,6 @@ func TestHeadlessCommandsAndValidation(t *testing.T) {
 	if err != nil || !core.IsDir(path) {
 		t.Fatal(path, err)
 	}
-	file := filepath.Join(dir, "export.csv")
-	if err = a.WriteTextFile(file, "name,tokens\n世界,123\n"); err != nil {
-		t.Fatal(err)
-	}
-	b, _ := os.ReadFile(file)
-	if string(b) != "name,tokens\n世界,123\n" {
-		t.Fatal(string(b))
-	}
 	os.MkdirAll(filepath.Join(dir, "themes"), 0700)
 	os.WriteFile(filepath.Join(dir, "themes", "valid.json"), []byte(`{"background":"#123456"}`), 0600)
 	os.WriteFile(filepath.Join(dir, "themes", "bad.json"), []byte("{bad"), 0600)

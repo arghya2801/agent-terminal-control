@@ -73,7 +73,6 @@ export function pickFolder(): Promise<string | null> { return App.FolderDialog()
 export function scratchDir(): Promise<string> { return App.ScratchDir(); }
 
 /** Writes text to a path the user picked in the save dialog. */
-export function writeTextFile(path: string, contents: string): Promise<void> { return App.WriteTextFile(path, contents); }
 
 /** Opens settings.json in the user's default editor, creating it if needed. */
 export function openSettingsFile(): Promise<void> { return App.OpenSettingsFile(); }

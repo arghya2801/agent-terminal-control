@@ -40,7 +40,8 @@ function run(op: AgentOp) {
     return;
   }
   const s = sessions.get(op.id);
-  if (!s) return;
+  // A closed op for a gone session needs no answer; anything else would vanish unseen.
+  if (!s) return void (op.op !== 'close' && emit(op.id, { t: 'error', message: 'This session has ended. Resume it to keep going.' }));
   switch (op.op) {
     case 'send':
       return s.send(op.text, op.images);
@@ -66,7 +67,7 @@ function run(op: AgentOp) {
       );
     case 'close':
       sessions.delete(op.id);
-      return s.close();
+      return void s.close();
   }
 }
 

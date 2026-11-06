@@ -188,8 +188,9 @@ type Hit struct {
 }
 
 // SearchTranscripts finds sessions whose prompts or replies contain query, newest first,
-// one hit per session (#159).
+// one hit per session (#159). A search the user has typed past stops scanning (#229).
 func (a *App) SearchTranscripts(query string) ([]Hit, error) {
+	this := a.searches.Add(1)
 	q := strings.ToLower(strings.TrimSpace(query))
 	if len([]rune(q)) < 2 {
 		return []Hit{}, nil
@@ -212,7 +213,7 @@ func (a *App) SearchTranscripts(query string) ([]Hit, error) {
 	sort.Slice(files, func(i, j int) bool { return files[i].mod.After(files[j].mod) })
 	hits := []Hit{}
 	for _, f := range files {
-		if len(hits) >= 50 {
+		if len(hits) >= 50 || a.searches.Load() != this {
 			break
 		}
 		if h, ok := searchFile(f.path, f.provider, q); ok {

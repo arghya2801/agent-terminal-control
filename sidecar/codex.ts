@@ -142,6 +142,8 @@ class Server {
   private calls = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
   private next = 1;
   private started: Promise<void>;
+  /** Settles once the process has gone, and with it any thread it held. */
+  private exited: Promise<void>;
   private dead = false;
   /** Set for the shared reader. */
   private key: string;
@@ -149,6 +151,7 @@ class Server {
   constructor(key: string, o: Launch, args: string[]) {
     this.key = key;
     this.proc = spawnCodex(o, args);
+    this.exited = new Promise((done) => (this.proc.once('exit', () => done()), this.proc.once('error', () => done())));
     this.proc.stderr.on('data', (d) => log('codex:', String(d).trimEnd()));
     this.proc.on('exit', (code) => this.end(code ? `Codex exited with ${code}` : undefined));
     this.proc.on('error', (e) => this.end(`Can't start Codex: ${e.message}`));
@@ -215,13 +218,15 @@ class Server {
     if (!this.key) for (const s of this.sessions) s.ended(message);
   }
 
-  /** A tab closed; the server stops with its last one, which frees the threads it loaded. */
-  release(s: Codex) {
+  /** A tab closed; the server stops with its last one, which frees the threads it loaded.
+   *  Settles once that has happened. */
+  release(s: Codex): Promise<void> {
     this.sessions.delete(s);
     for (const [thread, owner] of this.threads) if (owner === s) this.threads.delete(thread);
-    if (this.sessions.size) return;
+    if (this.sessions.size) return Promise.resolve();
     if (readers.get(this.key) === this) readers.delete(this.key);
     this.kill();
+    return this.exited;
   }
 
   kill() {
@@ -352,7 +357,7 @@ export class Codex {
       return s;
     })().catch((e) => {
       // Another process may hold the thread; the next message tries again.
-      this.server?.release(this);
+      void this.server?.release(this);
       this.server = this.waking = undefined;
       throw e;
     });
@@ -381,7 +386,9 @@ export class Codex {
       case 'item/started':
       case 'item/completed': {
         const item = itemOf(p.item);
-        if (item) this.live({ t: 'item', item: item.kind === 'user' ? { ...item, turn: p.turnId } : item });
+        // The page sent this message's images and still holds them; only their count comes back.
+        const { images, ...rest } = item ?? {};
+        if (item) this.live({ t: 'item', item: item.kind === 'user' ? { ...rest, turn: p.turnId, ...(images?.length ? { sentImages: images.length } : {}) } as ChatItem : item });
         else this.seen(`item ${p.item?.type}`);
         if (item?.kind === 'tool' && item.done) this.live({ t: 'result', id: item.id, output: item.output ?? '', error: !!item.error, declined: item.declined });
         return;
@@ -556,10 +563,12 @@ export class Codex {
     this.live({ t: 'model', model });
   }
 
-  close() {
+  /** Says it ended only once its own server has exited: a terminal resuming the thread
+   *  next would otherwise find it still held (#227). */
+  async close() {
     this.closing = true;
-    this.reader.release(this);
-    this.server?.release(this);
+    void this.reader.release(this);
+    await this.server?.release(this);
     this.live({ t: 'exit' });
   }
 }
