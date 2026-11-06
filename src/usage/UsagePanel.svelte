@@ -3,8 +3,8 @@
   import { sessionKey, providerName } from '../lib/agents';
   import Page from '../lib/Page.svelte';
   import SectionNav from '../lib/SectionNav.svelte';
-  import { save } from '../lib/desktop';
-  import { usageCosts, writeTextFile } from '../lib/ipc';
+  import { saveText } from '../lib/desktop';
+  import { usageCosts } from '../lib/ipc';
   import { appState, refreshMs } from '../lib/stores.svelte';
   import { sessionStats, formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv, type Split } from '../lib/costs';
   import {
@@ -149,12 +149,7 @@
     if (exporting) return;
     exporting = true;
     try {
-      const path = await save({
-        defaultPath: `atc-spend-${from}-to-${to}.csv`,
-        filters: [{ name: 'CSV', extensions: ['csv'] }],
-      });
-      if (!path) return;
-      await writeTextFile(path, toCsv(filteredRows, lo, hi, projectOf));
+      await saveText({ defaultPath: `atc-spend-${from}-to-${to}.csv`, filters: [{ name: 'CSV', extensions: ['csv'] }] }, toCsv(filteredRows, lo, hi, projectOf));
       exportError = null;
     } catch (e) {
       exportError = String(e);

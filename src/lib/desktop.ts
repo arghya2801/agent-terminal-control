@@ -43,8 +43,9 @@ export function setZoom(zoom: number) {
 export function pageZoom(): number {
   return Number(document.documentElement.style.zoom) || 1;
 }
-export function save(options: { defaultPath: string; filters: { name: string; extensions: string[] }[] }): Promise<string | null> {
-  return App.SaveDialog(options.defaultPath, options.filters);
+/** Asks where to save `contents` and writes them; Go picks the path, never the page. */
+export function saveText(options: { defaultPath: string; filters: { name: string; extensions: string[] }[] }, contents: string): Promise<string | null> {
+  return App.SaveTextFile(options.defaultPath, options.filters, contents);
 }
 export function isPermissionGranted(): Promise<boolean> { return App.NotificationPermission(); }
 export function requestPermission(): Promise<boolean> { return App.NotificationRequest(); }

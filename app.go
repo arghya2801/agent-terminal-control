@@ -489,17 +489,14 @@ func (a *App) OpenURL(url string) error {
 	return openTarget(url)
 }
 
-func (a *App) WriteTextFile(path, contents string) error {
-	return os.WriteFile(path, []byte(contents), 0600)
-}
-
 type FileFilter struct {
 	Name       string   `json:"name"`
 	Extensions []string `json:"extensions"`
 }
 
-// SaveDialog returns the chosen path, or null when cancelled.
-func (a *App) SaveDialog(defaultPath string, filters []FileFilter) (any, error) {
+// SaveTextFile asks where to save contents and writes them there, returning the path, or
+// null when cancelled. The page never names the path, so it can't write anywhere else (#230).
+func (a *App) SaveTextFile(defaultPath string, filters []FileFilter, contents string) (any, error) {
 	wf := []wr.FileFilter{}
 	for _, f := range filters {
 		patterns := []string{}
@@ -509,7 +506,10 @@ func (a *App) SaveDialog(defaultPath string, filters []FileFilter) (any, error) 
 		wf = append(wf, wr.FileFilter{DisplayName: f.Name, Pattern: strings.Join(patterns, ";")})
 	}
 	path, e := wr.SaveFileDialog(a.ctx, wr.SaveDialogOptions{DefaultFilename: defaultPath, Filters: wf})
-	return core.Nullable(path), e
+	if e != nil || path == "" {
+		return nil, e
+	}
+	return path, os.WriteFile(path, []byte(contents), 0600)
 }
 
 // FolderDialog returns the chosen folder, or null when cancelled.
