@@ -931,10 +931,17 @@
     };
   });
 
-  // Re-armed when the refresh setting changes.
+  // Re-armed when the refresh setting changes. A hidden or minimised window skips its turn
+  // and catches up when shown: every ATC window and Claude Code share the account's limit.
   $effect(() => {
-    const poll = setInterval(() => void loadClaudeLimits(), refreshMs('claude'));
-    return () => clearInterval(poll);
+    const ms = refreshMs('claude');
+    const stale = () => !document.hidden && Date.now() - planState.claudeAt >= ms / 2 && void loadClaudeLimits();
+    const poll = setInterval(stale, ms);
+    document.addEventListener('visibilitychange', stale);
+    return () => {
+      clearInterval(poll);
+      document.removeEventListener('visibilitychange', stale);
+    };
   });
 
   // The terminal shares the wrapper's geometry, so it re-measures whenever the panel

@@ -35,6 +35,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - In an agent tab, editing a recalled prompt and pressing Up or Down again moves the cursor instead of throwing the edit away.
 - Copy in an agent tab says so when the clipboard write fails, instead of showing Copied.
 - Ctrl+Shift+F no longer opens a find bar in a chat tab, where it found nothing.
+- Fewer "rate-limiting usage checks" errors: Claude's plan limits refresh every 5 minutes by default (was 90 seconds), and a hidden or minimised ATC window skips its checks and catches up when shown. Every ATC window and Claude Code share the account's limit on these checks. A saved setting keeps its value; change it in Settings > Advanced.
 - In an agent tab, a group of tool calls no longer counts failed or declined calls as done ("Changed 2 files" when one edit failed). Copy on a code block reports a failure and no longer covers the code. An input method's Enter no longer picks from the `/` menu.
 - Closing Settings saves only what was edited in it, so a change made elsewhere while it was open, such as an edit to settings.json, is kept.
 - The git calls ATC makes on its own, such as reading an agent's changes when it stops, ignore a repository's `core.fsmonitor` setting, which could run a command the repository names.

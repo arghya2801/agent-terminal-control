@@ -122,7 +122,7 @@ function applyMotion(pref = appState.settings?.ui.animations) {
 /** How often to re-read Claude's or Codex's plan limits, from settings, never under 15 s. */
 export function refreshMs(which: 'claude' | 'codex'): number {
   const ui = appState.settings?.ui;
-  const seconds = which === 'claude' ? ui?.limitsRefreshSec ?? 90 : ui?.codexRefreshSec ?? 300;
+  const seconds = which === 'claude' ? ui?.limitsRefreshSec ?? 300 : ui?.codexRefreshSec ?? 300;
   return Math.max(15, seconds || 0) * 1000;
 }
 

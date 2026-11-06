@@ -64,7 +64,7 @@
         sessionsPerProject: clamp(draft.ui.sessionsPerProject, 1, 500, 15),
         sidebarWidth: clamp(draft.ui.sidebarWidth, 160, 800, 260),
         toastSeconds: clamp(draft.ui.toastSeconds, 1, 60, 6),
-        limitsRefreshSec: clamp(draft.ui.limitsRefreshSec, 15, 3600, 90),
+        limitsRefreshSec: clamp(draft.ui.limitsRefreshSec, 15, 3600, 300),
         codexRefreshSec: clamp(draft.ui.codexRefreshSec, 15, 3600, 300),
       },
       terminal: {
@@ -473,12 +473,12 @@
         <label for="lr">Claude limits every</label>
         <div class="check">
           <input id="lr" type="number" min="15" max="3600" step="15" bind:value={draft.ui.limitsRefreshSec} />
-          <span class="muted">seconds</span>
+          <span class="muted">seconds, while ATC is showing. Every ATC window and Claude Code share the account's limit on these checks</span>
         </div>
         <label for="cr">Codex limits every</label>
         <div class="check">
           <input id="cr" type="number" min="15" max="3600" step="15" bind:value={draft.ui.codexRefreshSec} />
-          <span class="muted">seconds. Each read starts a Codex process</span>
+          <span class="muted">seconds at most, only while the usage chip's peek or the usage page is open. Each read starts a Codex process and stops it</span>
         </div>
       </div>
 

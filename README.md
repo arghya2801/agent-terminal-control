@@ -301,8 +301,8 @@ Every field is optional; missing ones take their default.
     "confirmClose": true,               // ask before closing a tab with a program running
     "toasts": true,                     // in-app notes while ATC is focused
     "toastSeconds": 6,
-    "limitsRefreshSec": 90,             // Claude plan limits
-    "codexRefreshSec": 300              // Codex limits; each read starts a Codex process
+    "limitsRefreshSec": 300,            // Claude plan limits, while ATC is showing
+    "codexRefreshSec": 300              // Codex limits, at most this often while the usage peek or page is open
   },
   "terminal": {
     "fontFamily": "\"FiraCode Nerd Font Mono\", Consolas, monospace",
