@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { apply, emptyState, peek } from './apply';
+import { apply, emptyState, peek, withSentImages } from './apply';
 import type { AgentEvent } from '../../sidecar/protocol';
 
 // The events a real Haiku turn produced: a streamed tool call, its result, a streamed reply.
@@ -21,6 +21,26 @@ const turn: AgentEvent[] = [
 ];
 
 describe('apply', () => {
+  it('builds history in one assignment that matches applying it event by event', () => {
+    const oneByOne = emptyState();
+    for (const ev of turn) apply(oneByOne, ev, 1000);
+    const batched = emptyState();
+    const before = batched.items;
+    apply(batched, { t: 'history', events: turn }, 1000);
+    expect(batched).toEqual(oneByOne);
+    // Replaced, not pushed into item by item.
+    expect(batched.items).not.toBe(before);
+  });
+  it('gives an echoed message the images the page sent, once', () => {
+    const s = emptyState();
+    const sent = [['data:image/png;base64,AAA'], ['data:image/png;base64,BBB']];
+    const echo: AgentEvent = { t: 'item', item: { id: 'u1', kind: 'user', text: 'look', sentImages: 1 } };
+    apply(s, withSentImages(echo, s.items, sent));
+    // Codex repeats the item when it completes; that repeat must not take the next images.
+    apply(s, withSentImages(echo, s.items, sent));
+    expect(s.items).toEqual([{ id: 'u1', kind: 'user', text: 'look', images: ['data:image/png;base64,AAA'] }]);
+    expect(sent).toEqual([['data:image/png;base64,BBB']]);
+  });
   it('lands drafts, finals and results on the same items', () => {
     const s = emptyState();
     for (const ev of turn) apply(s, ev, 1000);

@@ -5,7 +5,7 @@
  */
 import { agentCatalog, agentClose, agentOpen, agentSend, Channel } from '../lib/ipc';
 import { countOutput, getTab, onClosed, queuePrompt, setAgentHooks, setAgentState } from '../terminal/manager';
-import { apply, emptyState, peek, type AgentState } from './apply';
+import { apply, emptyState, peek, withSentImages, type AgentState } from './apply';
 import type { AgentEvent, Answer, ChatItem, Image, Model } from '../../sidecar/protocol';
 import type { AgentProvider, TabKey } from '../types';
 
@@ -21,9 +21,11 @@ interface Live {
   chat: boolean;
   channel: Channel<AgentEvent>;
   /** Sent once the session is ready: a task from the task box, or Reply before then. */
-  queued: { text: string; images: Image[] }[];
-  /** The images of the manager's queued message, sent when it is. */
-  images: Image[];
+  queued: { text: string; images: string[] }[];
+  /** The images of the manager's queued message, as data URLs, sent when it is. */
+  images: string[];
+  /** Images of sent messages, for their echoes, which carry only a count. */
+  sent: string[][];
 }
 const live = new Map<TabKey, Live>();
 
@@ -31,7 +33,7 @@ export async function startAgent(key: TabKey, provider: AgentProvider, cwd: stri
   if (live.has(key)) return;
   agents[key] = { ...emptyState(), fresh: !o.session && !o.task };
   const channel = new Channel<AgentEvent>();
-  const l: Live = { id: null, provider, cwd, chat: !!o.chat, channel, queued: o.task ? [{ text: o.task, images: [] }] : [], images: [] };
+  const l: Live = { id: null, provider, cwd, chat: !!o.chat, channel, queued: o.task ? [{ text: o.task, images: [] }] : [], images: [], sent: [] };
   live.set(key, l);
   channel.onmessage = (ev) => receive(key, ev);
   try {
@@ -80,7 +82,7 @@ function receive(key: TabKey, ev: AgentEvent) {
   const s = agents[key];
   const l = live.get(key);
   if (!s || !l) return;
-  apply(s, ev);
+  apply(s, withSentImages(ev, s.items, l.sent));
   switch (ev.t) {
     case 'delta':
     case 'output':
@@ -117,7 +119,8 @@ const op = (key: TabKey, o: Record<string, unknown>) => {
 
 /** A message sent while the agent works waits for the turn to end: the SDK's streaming input
  *  drops one sent mid-turn. The manager's queue sends it when the tab goes idle. */
-export function send(key: TabKey, text: string, images: Image[] = []) {
+/** `images` are data URLs; the one copy the page keeps is the one it shows. */
+export function send(key: TabKey, text: string, images: string[] = []) {
   const l = live.get(key);
   if (!l || (!text.trim() && !images.length)) return;
   if (agents[key]) agents[key].fresh = false;
@@ -127,8 +130,12 @@ export function send(key: TabKey, text: string, images: Image[] = []) {
     // Nothing queued means any held images were cancelled with their text.
     l.images = [...(had ? l.images : []), ...images];
     queuePrompt(key, had ? `${had}\n\n${text}` : text || IMAGES);
-  } else op(key, { op: 'send', text, images });
+  } else {
+    if (images.length) l.sent.push(images);
+    op(key, { op: 'send', text, images: images.map(toImage) });
+  }
 }
+const toImage = (url: string): Image => ({ mediaType: url.slice(5, url.indexOf(';')), data: url.slice(url.indexOf(',') + 1) });
 /** Images held with the queued message. */
 export const queuedImages = (key: TabKey) => live.get(key)?.images.length ?? 0;
 /** The queue's text for a message of only images, which the queue shows. */
@@ -159,13 +166,22 @@ export function resume(key: TabKey) {
   void startAgent(key, l.provider, l.cwd, { chat: l.chat, session });
 }
 
+/** Sessions still closing, by tab, until their CLI has exited. */
+const closing = new Map<TabKey, Promise<void>>();
+/** Settles once the tab's last session has let go of its transcript, so a terminal can
+ *  resume it without two writers (#227). */
+export const whenClosed = (key: TabKey) => closing.get(key) ?? Promise.resolve();
+
 /** End a tab's session; it stays on disk to resume. */
 function end(key: TabKey) {
   const l = live.get(key);
   if (!l) return;
   live.delete(key);
   l.channel.dispose();
-  if (l.id) void agentClose(l.id).catch(() => {});
+  if (l.id) {
+    const done: Promise<void> = agentClose(l.id).catch(() => {}).finally(() => closing.get(key) === done && closing.delete(key));
+    closing.set(key, done);
+  }
   delete agents[key];
 }
 onClosed(end);

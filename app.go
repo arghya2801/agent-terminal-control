@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -41,6 +42,7 @@ type App struct {
 	lastIndex    string
 	lastSettings string
 	agents       sidecar
+	searches     atomic.Uint64 // the latest transcript search; older ones stop scanning
 }
 
 func NewApp(config string) *App {

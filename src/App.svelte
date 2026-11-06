@@ -77,7 +77,7 @@
     type Tab,
   } from './terminal/manager';
   import AgentView from './agent/AgentView.svelte';
-  import { agents, startAgent } from './agent/agent.svelte';
+  import { agents, startAgent, whenClosed } from './agent/agent.svelte';
   import { actionList, chordFor, matchChord, type Action } from './lib/keymap';
   import CommandPalette, { type Command } from './lib/CommandPalette.svelte';
   import ContextMenu, { type MenuItem } from './sidebar/ContextMenu.svelte';
@@ -160,6 +160,7 @@
     const chat = chatTabs.has(key);
     const terminal = !t.term;
     await closeTab(key);
+    await whenClosed(key);
     await openAgent(id ? `session:${provider}:${id}` : key, title, cwd, pk, provider, { session: id, chat, terminal });
   }
 

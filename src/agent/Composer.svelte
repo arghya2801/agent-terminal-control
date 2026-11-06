@@ -2,7 +2,7 @@
   import { untrack, type Snippet } from 'svelte';
   import Icon from '../lib/Icon.svelte';
   import { matchCommands, typedCommand, type Sigil } from './commands';
-  import type { Command, Image } from '../../sidecar/protocol';
+  import type { Command } from '../../sidecar/protocol';
 
   let { text = $bindable(''), name, history, hints = true, sigils, commands, working, waiting = false, disabled, onSend, onStop, onFiles, onInput, toolbar }: {
     /** What is in the box; a rewind puts its prompt back here. */
@@ -19,7 +19,8 @@
     /** A card above waits for an answer. */
     waiting?: boolean;
     disabled: boolean;
-    onSend: (text: string, images: Image[]) => void;
+    /** Images as data URLs. */
+    onSend: (text: string, images: string[]) => void;
     onStop: () => void;
     /** Typing `@` asks for the project's files, which arrive as `@path` commands. */
     onFiles?: () => void;
@@ -59,7 +60,7 @@
 
   function send() {
     if ((!text.trim() && !images.length) || disabled) return;
-    onSend(text.trim(), images.map(({ mediaType, data }) => ({ mediaType, data })));
+    onSend(text.trim(), images.map((i) => i.url));
     text = '';
     images = [];
     problem = '';
@@ -67,7 +68,8 @@
   }
 
   /** Pictures to send with the message: pasted, or dropped on the box. */
-  let images = $state<(Image & { url: string; name: string })[]>([]);
+  /** One copy each, as a data URL: it shows here and in the chat, and is sent as is. */
+  let images = $state<{ url: string; name: string }[]>([]);
   let problem = $state('');
   let dragging = $state(false);
   let picker = $state<HTMLInputElement>();
@@ -90,7 +92,7 @@
         r.onload = () => done(String(r.result));
         r.readAsDataURL(f);
       });
-      images = [...images, { mediaType: f.type, data: url.slice(url.indexOf(',') + 1), url, name: f.name || 'pasted image' }];
+      images = [...images, { url, name: f.name || 'pasted image' }];
     }
   }
   function onPaste(e: ClipboardEvent) {
