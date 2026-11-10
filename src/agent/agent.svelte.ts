@@ -4,9 +4,9 @@
  * `apply`; the manager hears only what the tab list shows.
  */
 import { agentCatalog, agentClose, agentOpen, agentSend, Channel } from '../lib/ipc';
-import { countOutput, getTab, onClosed, queuePrompt, setAgentHooks, setAgentState } from '../terminal/manager';
-import { apply, emptyState, peek, withSentImages, type AgentState } from './apply';
-import type { AgentEvent, Answer, ChatItem, Image, Model } from '../../sidecar/protocol';
+import { countOutput, getTab, markDone, onClosed, queuePrompt, setAgentHooks, setAgentState } from '../terminal/manager';
+import { apply, emptyState, withSentImages, type AgentState } from './apply';
+import type { AgentEvent, Answer, ChatItem, Command, Image, Model } from '../../sidecar/protocol';
 import type { AgentProvider, TabKey } from '../types';
 
 /** Each tab's session. `fresh`: nothing sent and nothing resumed, so the tab can still
@@ -29,8 +29,33 @@ interface Live {
 }
 const live = new Map<TabKey, Live>();
 
+const stored = <T,>(k: string, fallback: T): T => {
+  try {
+    return JSON.parse(localStorage.getItem(k) ?? '') ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
+const store = (k: string, v: unknown) => {
+  try {
+    localStorage.setItem(k, JSON.stringify(v));
+  } catch {}
+};
+const PREFS = 'atc.agentPrefs';
+const prefs = stored<Partial<Record<AgentProvider, { model?: string; effort?: string | null }>>>(PREFS, {});
+function remember(provider: AgentProvider | undefined, p: { model?: string; effort?: string | null }) {
+  if (!provider) return;
+  prefs[provider] = { ...prefs[provider], ...p };
+  store(PREFS, prefs);
+}
+
+const COMMANDS = 'atc.commands';
+const commandCache = stored<Record<string, Command[]>>(COMMANDS, {});
+export const knownCommands = (provider: AgentProvider, cwd: string) => commandCache[`${provider}:${cwd}`] ?? commandCache[provider] ?? [];
+
 export async function startAgent(key: TabKey, provider: AgentProvider, cwd: string, o: Start = {}) {
   if (live.has(key)) return;
+  if (!o.session) o = { ...o, model: o.model ?? prefs[provider]?.model, effort: o.effort ?? prefs[provider]?.effort ?? undefined };
   agents[key] = { ...emptyState(), fresh: !o.session && !o.task };
   const channel = new Channel<AgentEvent>();
   const l: Live = { id: null, provider, cwd, chat: !!o.chat, channel, queued: o.task ? [{ text: o.task, images: [] }] : [], images: [], sent: [] };
@@ -52,6 +77,7 @@ export function switchProvider(key: TabKey, provider: AgentProvider, model: stri
   const l = live.get(key);
   if (!l || !agents[key]?.fresh || l.provider === provider) return;
   end(key);
+  remember(provider, { model, effort: null });
   setAgentState(key, { provider });
   void startAgent(key, provider, l.cwd, { chat: l.chat, model });
 }
@@ -90,6 +116,7 @@ function receive(key: TabKey, ev: AgentEvent) {
       break;
     case 'ready':
     case 'dormant':
+      if (ev.t === 'ready') store(COMMANDS, Object.assign(commandCache, { [`${l.provider}:${l.cwd}`]: ev.commands, [l.provider]: ev.commands }));
       setAgentState(key, { activity: s.working ? 'working' : 'idle' });
       for (const q of l.queued.splice(0)) send(key, q.text, q.images);
       break;
@@ -124,6 +151,7 @@ export function send(key: TabKey, text: string, images: string[] = []) {
   const l = live.get(key);
   if (!l || (!text.trim() && !images.length)) return;
   if (agents[key]) agents[key].fresh = false;
+  if (getTab(key)?.done) markDone(key, false);
   if (!l.id || !(agents[key]?.ready || agents[key]?.dormant)) l.queued.push({ text, images });
   else if (agents[key].working) {
     const had = getTab(key)?.queued;
@@ -143,8 +171,8 @@ const IMAGES = '(images)';
 export const interrupt = (key: TabKey) => op(key, { op: 'interrupt' });
 export const answer = (key: TabKey, request: string, a: Answer) => op(key, { op: 'answer', request, answer: a });
 export const setMode = (key: TabKey, mode: string) => op(key, { op: 'mode', mode });
-export const setModel = (key: TabKey, model: string) => op(key, { op: 'model', model });
-export const setEffort = (key: TabKey, effort: string | null) => op(key, { op: 'effort', effort });
+export const setModel = (key: TabKey, model: string) => (remember(live.get(key)?.provider, { model }), op(key, { op: 'model', model }));
+export const setEffort = (key: TabKey, effort: string | null) => (remember(live.get(key)?.provider, { effort }), op(key, { op: 'effort', effort }));
 export const listFiles = (key: TabKey) => op(key, { op: 'files' });
 /** Start a dormant session's CLI ahead of the first message, so its commands are listed. */
 export function wake(key: TabKey) {
@@ -187,7 +215,6 @@ function end(key: TabKey) {
 onClosed(end);
 
 setAgentHooks({
-  peek: (key) => (agents[key] ? peek(agents[key]) : []),
   send: (key, text) => {
     const images = live.get(key)?.images.splice(0) ?? [];
     send(key, images.length && text === IMAGES ? '' : text, images);

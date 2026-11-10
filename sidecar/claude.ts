@@ -181,6 +181,7 @@ export class Claude {
           t: 'ready',
           commands: init.commands.map((c) => ({ name: `/${c.name}`, description: c.description, hint: c.argumentHint || undefined })),
           models: init.models.map(toModel),
+          model: this.o.model || undefined,
           mode: (init as { current_permission_mode?: string }).current_permission_mode,
           modes: MODES,
           effort: this.o.effort || null,

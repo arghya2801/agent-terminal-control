@@ -366,6 +366,28 @@ func (a *App) UsageContext() core.Object { return a.costs.Context(a.getSettings(
 
 func (a *App) NewerRelease() any { return newerRelease(appVersion) }
 
+func (a *App) Shells() []string { return pty.Shells() }
+
+var logMu sync.Mutex
+
+// AppendLog adds one timestamped line to atc.log in the config folder, dropping lines
+// more than two days old.
+func (a *App) AppendLog(line string) error {
+	const layout = "2006-01-02 15:04:05.000"
+	logMu.Lock()
+	defer logMu.Unlock()
+	path, now := filepath.Join(a.config, "atc.log"), time.Now()
+	old, _ := os.ReadFile(path)
+	keep := []string{}
+	for l := range strings.SplitSeq(string(old), "\n") {
+		if t, e := time.ParseInLocation(layout, l[:min(len(l), len(layout))], time.Local); e == nil && now.Sub(t) < 48*time.Hour {
+			keep = append(keep, l)
+		}
+	}
+	keep = append(keep, now.Format(layout)+" "+strings.ReplaceAll(line, "\n", " "))
+	return os.WriteFile(path, []byte(strings.Join(keep, "\n")+"\n"), 0o600)
+}
+
 func (a *App) AgentCommand(provider, sessionID string, chat bool) (string, error) {
 	if provider != "claude" && provider != "codex" {
 		return "", fmt.Errorf("unknown provider: %s", provider)

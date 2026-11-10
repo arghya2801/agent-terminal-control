@@ -114,7 +114,7 @@ On the page, `src/agent/agent.svelte.ts` keeps one session per tab and `apply.ts
 events into state. The manager's agent tabs (`openAgentTab`) have `term: null`; App
 portals an `AgentView` into each one's pane, so split, mosaic and zoom apply as they do to
 terminals. The manager hears only state changes (`setAgentState`) and asks the store for
-the Open view's peek and for Reply (`setAgentHooks`). `switchView` (Ctrl+`) closes an
+Reply (`setAgentHooks`). `switchView` (Ctrl+`) closes an
 agent tab and reopens its session the other way: in a terminal with `core.AgentCommand`,
 or as a chat. Only one of them can drive a session. `ui.agentView` picks the view for new
 tabs, and a saved tab keeps its own (`terminal` in `atc.tabs`).
@@ -202,9 +202,9 @@ the other. The header's usage chip shows Claude's 5-hour session limit (`chipLim
 | `src/terminal/manager.ts` | Every tab, terminal or agent, and every PTY: open, close, split panes, mosaic, WebGL budget, fitting, state marks, output history, `screenLines`, `sendText` |
 | `src/agent/` | Agent tabs: the session store, `apply` (events to state), the view, the composer and its command menu, request cards |
 | `src/sidebar/Sidebar.svelte` | The Sessions, Open and Scratch views, the filter, the notes pane |
-| `src/sidebar/OpenList.svelte` | The Open view: triage order, sections, peek, output graph, Reply, broadcast |
+| `src/sidebar/OpenList.svelte` | The Open view: triage order, sections, output graph, Reply, broadcast |
 | `src/sidebar/TaskBox.svelte` | The task box at the top of the Open view |
-| `src/lib/triage.ts` | `triageOrder`, `nextWaiting`, `triageGroup`, `peekLine` |
+| `src/lib/triage.ts` | `triageOrder`, `nextWaiting`, `triageGroup`, `stateWord` |
 | `src/lib/stores.svelte.ts` | `appState`: index, settings, notes; zoom, animation speed, refresh intervals |
 | `src/lib/keymap.ts` | Chords, the shortcut list, newline handling for Claude and Codex |
 | `src/lib/restore.ts` | Parsing saved tabs, which are untrusted |
@@ -217,9 +217,7 @@ A tab's state comes from its terminal title. Claude prefixes `✳` when idle and
 `exited`, and the manager records when each tab entered its mark.
 
 The Open view sorts with `triageOrder`: attention, interrupted, idle, working, open,
-exited, longest in state first. The peek is the last readable lines of the screen;
-`peekLine` skips box drawing, prompts and key hints with a regex that has to follow the
-agents' UIs. `screenLines` joins rows the terminal wrapped, so a peek never splits a word.
+exited, longest in state first.
 
 The UI zooms with CSS `zoom` on the page, because Wails cannot change WebView2's zoom
 after startup. The terminal area undoes that zoom and scales its font, or xterm measures

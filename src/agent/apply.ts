@@ -147,9 +147,3 @@ export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
       return;
   }
 }
-
-/** The last lines of the agent's latest reply, for the Open view's peek. */
-export function peek(s: AgentState): string[] {
-  const last = s.items.findLast((i) => i.kind === 'assistant' && i.text);
-  return (last?.text ?? '').split('\n').filter((l) => l.trim()).slice(-3);
-}

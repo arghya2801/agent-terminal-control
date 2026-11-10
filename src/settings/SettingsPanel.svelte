@@ -4,7 +4,7 @@
   import { fuzzyScore } from '../lib/fuzzy';
   import Page from '../lib/Page.svelte';
   import SectionNav from '../lib/SectionNav.svelte';
-  import { openSettingsFile } from '../lib/ipc';
+  import { openSettingsFile, shells } from '../lib/ipc';
   import { appState, refresh, saveSettings, themeState } from '../lib/stores.svelte';
   import { cssVariables } from '../lib/theme';
   import type { Settings } from '../types';
@@ -27,7 +27,15 @@
   );
   // Arguments are edited one per line. A blank line is dropped, so an empty argument,
   // as in Claude's `--tools ""`, is written as "".
-  const joinArgs = (args: string[] | undefined) => (args ?? []).map((a) => (a === '' ? '""' : a)).join('\n');
+  let installed = $state<string[]>([]);
+  onMount(() => void shells().then((s) => (installed = s), () => {}));
+  const shellName = (v: string) =>
+    v === 'powershell' || /WindowsPowerShell/i.test(v) ? 'Windows PowerShell 5.1'
+    : /7-preview/i.test(v) ? 'PowerShell 7 Preview'
+    : /WindowsApps/i.test(v) ? 'PowerShell 7 (Microsoft Store)'
+    : 'PowerShell 7';
+
+  const joinArgs =(args: string[] | undefined) => (args ?? []).map((a) => (a === '' ? '""' : a)).join('\n');
   function splitArgs(s: string): string[] {
     return s
       .split('\n')
@@ -327,15 +335,6 @@
           <input id="gb" type="checkbox" bind:checked={draft.ui.groupByBranch} />
           <span class="muted">Group each project's sessions by git branch</span>
         </label>
-        <label for="pk">Screen peek</label>
-        <div>
-          <select id="pk" bind:value={draft.ui.peek}>
-            <option value="all">Every row</option>
-            <option value="waiting">Waiting agents only</option>
-            <option value="off">Off</option>
-          </select>
-          <span class="muted hint">The last line on a tab's screen, under its name in the Open view</span>
-        </div>
         <label for="og">Output graph</label>
         <label class="check">
           <input id="og" type="checkbox" bind:checked={draft.ui.outputGraph} />
@@ -430,11 +429,11 @@
         <label for="sh">Shell</label>
         <div>
           <select id="sh" bind:value={draft.terminal.shell}>
-            <option value="auto">PowerShell 7 if installed</option>
-            <option value="pwsh">PowerShell 7</option>
-            <option value="powershell">Windows PowerShell</option>
+            <option value="auto">Windows PowerShell 5.1 if installed, else PowerShell 7</option>
+            {#each installed as path (path)}<option value={path} title={path}>{shellName(path)}</option>{/each}
+            {#if draft.terminal.shell !== 'auto' && !installed.includes(draft.terminal.shell)}<option value={draft.terminal.shell}>{shellName(draft.terminal.shell)}</option>{/if}
           </select>
-          <span class="muted hint">For new tabs. Agents start with PowerShell commands, so only PowerShell is offered.</span>
+          <span class="muted hint">The PowerShells installed on this machine, for new tabs. Agents start with PowerShell commands, so only PowerShell is offered.</span>
         </div>
         <label for="lp">PowerShell profile</label>
         <label class="check">

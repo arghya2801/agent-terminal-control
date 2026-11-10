@@ -8,7 +8,7 @@
   import Icon from '../lib/Icon.svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import ConfirmDialog from '../lib/ConfirmDialog.svelte';
-  import { agents, answer, queuedImages, catalog, interrupt, listFiles, resume, rewind, send, wake, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
+  import { agents, answer, queuedImages, catalog, interrupt, knownCommands, listFiles, resume, rewind, send, wake, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
   import { activity, blocks, summarize, thoughtLine, type Block } from './work';
   import { families, keptEffort, versionOf } from './models';
   import { getActiveKey, queuePrompt } from '../terminal/manager';
@@ -152,6 +152,16 @@
   // streams into an item without adding one, and a request card shrinks the list.
   let list = $state<HTMLDivElement>();
   let stuck = $state(true);
+  let lastTop = 0;
+  function onScroll(el: HTMLDivElement) {
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 40) stuck = true;
+    else if (el.scrollTop < lastTop) stuck = false;
+    lastTop = el.scrollTop;
+  }
+  function follow() {
+    stuck = true;
+    list?.scrollTo({ top: list.scrollHeight });
+  }
   $effect(() => {
     const el = list;
     if (!el) return;
@@ -168,7 +178,7 @@
 
   let draft = $state('');
   // Names starting `__` are the CLI's own plumbing, not something to type.
-  const commands = $derived([...(s?.commands ?? []).filter((c) => !c.name.startsWith('/__')), ...(s?.files ?? []).map((f) => ({ name: `@${f}`, description: '' }))]);
+  const commands = $derived([...(s?.ready ? s.commands : knownCommands(provider, cwd ?? '')).filter((c) => !c.name.startsWith('/__')), ...(s?.files ?? []).map((f) => ({ name: `@${f}`, description: '' }))]);
   const plan = $derived(s?.plan ?? []);
   const doneSteps = $derived(plan.filter((p) => p.status === 'done').length);
   let planOpen = $state(true);
@@ -250,7 +260,7 @@
   style:--mono={appState.settings?.terminal.fontFamily}
   style:--mono-size="{Math.max(11, (appState.settings?.terminal.fontSize ?? 13) - 1)}px"
 >
-  <div class="list" bind:this={list} onscroll={(e) => (stuck = e.currentTarget.scrollHeight - e.currentTarget.scrollTop - e.currentTarget.clientHeight < 40)}>
+  <div class="list" bind:this={list} onscroll={(e) => onScroll(e.currentTarget)}>
     <div class="column">
       {#if (s?.ready || s?.dormant) && !turns.length}
         <div class="empty">
@@ -357,7 +367,7 @@
   <div class="dock" bind:this={dock}>
     <p class="sr" role="status">{announce}</p>
     {#if !stuck}
-      <button class="jump" onclick={() => list?.scrollTo({ top: list.scrollHeight })}><Icon name="down" size={13} /><span>Jump to latest</span></button>
+      <button class="jump" onclick={follow}><Icon name="down" size={13} /><span>Jump to latest</span></button>
     {/if}
     {#if request && s}
       {#key request.id}
@@ -403,12 +413,13 @@
       hints={turns.length > 0}
       sigils={provider === 'claude' ? ['/', '@'] : ['/', '$', '@']}
       {commands}
+      ready={!!s?.ready || knownCommands(provider, cwd ?? '').length > 0}
       onFiles={() => listFiles(tabKey)}
       onInput={() => wake(tabKey)}
       working={!!s?.working}
       waiting={!!request}
       disabled={!s || s.exited}
-      onSend={(text, images) => send(tabKey, text, images)}
+      onSend={(text, images) => (follow(), send(tabKey, text, images))}
       onStop={() => interrupt(tabKey)}
     >
       {#snippet toolbar()}

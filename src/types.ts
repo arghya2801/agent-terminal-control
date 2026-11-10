@@ -14,7 +14,7 @@ export interface SpawnOpts {
   rows: number;
   /** Typed into the shell after it starts, e.g. `claude --resume <uuid>`. */
   initialCommand?: string | null;
-  /** `pwsh` or `powershell` to prefer that one; anything else prefers pwsh. */
+  /** A PowerShell's path, or `pwsh` or `powershell`, to prefer that one; anything else prefers Windows PowerShell. */
   shell?: string;
   noProfile?: boolean;
 }
@@ -136,8 +136,6 @@ export interface Settings {
     usageResetTime: boolean;
     /** Tabs across the top as well as in the sidebar's Open view. */
     showTabBar: boolean;
-    /** Which Open view rows show the last line on their screen. */
-    peek: 'all' | 'waiting' | 'off';
     outputGraph: boolean;
     /** What the task box starts with: its agent, and a project key or '' for the focused tab's. */
     taskAgent: AgentProvider;
@@ -172,7 +170,7 @@ export interface TerminalSettings {
   cursorStyle: 'bar' | 'block' | 'underline';
   cursorBlink: boolean;
   lineHeight: number;
-  /** `auto`, `pwsh` or `powershell`. */
+  /** `auto`, a PowerShell's path, `pwsh` or `powershell`. */
   shell: string;
   loadProfile: boolean;
   /** Tabs drawn with WebGL at once; 0 draws every tab in software. */

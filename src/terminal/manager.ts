@@ -176,7 +176,6 @@ function notify() {
     if (mark !== t.mark) {
       t.mark = mark;
       t.markSince = now;
-      if (mark === 'working') t.done = false;
       if (mark === 'exited') t.queued = null;
       if ((mark === 'idle' || mark === 'attention') && t.queued) {
         const text = t.queued;
@@ -206,22 +205,6 @@ export function outputHistory(key: TabKey): number[] {
   if (!tab) return [];
   roll(tab, Date.now());
   return [...tab.buckets];
-}
-
-/** The lines on screen in a tab, as text, with rows the terminal wrapped joined back up. */
-export function screenLines(key: TabKey): string[] {
-  const tab = tabs.get(key);
-  if (!tab) return [];
-  if (!tab.term) return agentPeek(key);
-  const b = tab.term.buffer.active;
-  const lines: string[] = [];
-  for (let y = b.baseY; y < b.baseY + tab.term.rows; y++) {
-    const line = b.getLine(y);
-    const text = line?.translateToString() ?? '';
-    if (line?.isWrapped && lines.length) lines[lines.length - 1] += text;
-    else lines.push(text);
-  }
-  return lines.map((l) => l.trimEnd());
 }
 
 /** Put tab `from` where tab `to` is (#74). The Map's order is the tab bar's order. */
@@ -345,12 +328,11 @@ export function countOutput(key: TabKey, n: number) {
 }
 
 /** What the manager asks of the agent store, which imports the manager and not the
- *  reverse: the Open view's peek, and Reply and queued prompts. */
-let agentHooks: { peek: (key: TabKey) => string[]; send: (key: TabKey, text: string) => void } = { peek: () => [], send: () => {} };
+ *  reverse: Reply and queued prompts. */
+let agentHooks: { send: (key: TabKey, text: string) => void } = { send: () => {} };
 export function setAgentHooks(h: typeof agentHooks) {
   agentHooks = h;
 }
-const agentPeek = (key: TabKey) => agentHooks.peek(key);
 
 type CloseListener = (key: TabKey) => void;
 const closeListeners = new Set<CloseListener>();
@@ -515,6 +497,7 @@ export async function openTab(
 
   // --- input path. MUST be wired before pty_spawn (see the module comment).
   term.onData((d) => {
+    if (tab.done && d.includes('\r')) markDone(tab.key, false);
     if (tab.ptyId) void ptyWrite(tab.ptyId, d);
   });
   term.onBinary((d) => {
@@ -548,7 +531,7 @@ export async function openTab(
     }
   };
 
-  tab.ptyId = await ptySpawn({ ...opts, cols: dims.cols, rows: dims.rows, shell: termOptions.shell, noProfile: !termOptions.loadProfile }, channel);
+  tab.ptyId = await ptySpawn({ ...opts, cols: dims.cols, rows: dims.rows, shell: termOptions.shell, noProfile: !termOptions.loadProfile || !!opts.initialCommand }, channel);
   notify();
   return tab;
 }
@@ -871,6 +854,7 @@ export function sendText(key: TabKey, text: string) {
   if (tab && !tab.term && !tab.exited) {
     agentHooks.send(key, text);
     tab.attention = false;
+    tab.done = false;
     return notify();
   }
   if (!tab?.ptyId || tab.exited) return;
@@ -878,6 +862,7 @@ export function sendText(key: TabKey, text: string) {
   void ptyWrite(id, text).then(() => setTimeout(() => void ptyWrite(id, '\r'), 50));
   // Answered: no longer waiting on you, though it was never shown.
   tab.attention = false;
+  tab.done = false;
   notify();
 }
 
@@ -889,10 +874,10 @@ export function queuePrompt(key: TabKey, text: string | null) {
   notify();
 }
 
-export function markDone(key: TabKey) {
+export function markDone(key: TabKey, done = true) {
   const tab = tabs.get(key);
   if (!tab) return;
-  tab.done = true;
+  tab.done = done;
   tab.attention = false;
   notify();
 }

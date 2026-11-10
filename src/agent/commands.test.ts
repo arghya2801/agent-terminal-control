@@ -10,10 +10,11 @@ const commands = [
 ];
 
 describe('typedCommand', () => {
-  it('finds a slash command only at the start of a message', () => {
+  it('finds a slash command anywhere, but not inside a path', () => {
     expect(typedCommand('/rev', 4, ['/'])).toEqual({ start: 0, query: 'rev', sigil: '/' });
     expect(typedCommand('/review now', 11, ['/'])).toBeNull();
-    expect(typedCommand('see /rev', 8, ['/'])).toBeNull();
+    expect(typedCommand('see /rev', 8, ['/'])).toEqual({ start: 4, query: 'rev', sigil: '/' });
+    expect(typedCommand('open src/ap', 11, ['/'])).toBeNull();
   });
 
   it('finds a $skill token anywhere when skills are on offer', () => {

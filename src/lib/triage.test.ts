@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nextWaiting, peekLine, triageGroup, triageOrder } from './triage';
+import { nextWaiting, triageGroup, triageOrder } from './triage';
 
 const tab = (key: string, mark: Parameters<typeof triageOrder>[0][0]['mark'], since: number) => ({ key, mark, since });
 
@@ -29,25 +29,5 @@ describe('triageGroup', () => {
   it('puts every blocked state under one heading', () => {
     expect(['attention', 'interrupted', 'idle', 'working', 'open', 'exited'].map((m) => triageGroup(m as never)))
       .toEqual(['Waiting on you', 'Waiting on you', 'Waiting on you', 'Working', 'Shells', 'Exited']);
-  });
-});
-
-describe('peekLine', () => {
-  it('reads past Claude Code chrome to the question', () => {
-    const screen = [
-      ' Do you want to make this edit to app.go?',
-      ' ❯ 1. Yes',
-      '╭──────────────────────────╮',
-      '│ >                        │',
-      '╰──────────────────────────╯',
-      '  ? for shortcuts',
-      '',
-    ];
-    expect(peekLine(screen)).toBe('❯ 1. Yes');
-    expect(peekLine(screen, 3)).toBe('Do you want to make this edit to app.go? ❯ 1. Yes');
-  });
-
-  it('is null for an empty screen', () => {
-    expect(peekLine(['', '──────', ' > '])).toBeNull();
   });
 });

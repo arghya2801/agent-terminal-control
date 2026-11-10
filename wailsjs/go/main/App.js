@@ -22,6 +22,10 @@ export function AgentSend(arg1, arg2) {
   return window['go']['main']['App']['AgentSend'](arg1, arg2);
 }
 
+export function AppendLog(arg1) {
+  return window['go']['main']['App']['AppendLog'](arg1);
+}
+
 export function ClaudeUsage() {
   return window['go']['main']['App']['ClaudeUsage']();
 }
@@ -144,6 +148,10 @@ export function SettingsGet() {
 
 export function SettingsSet(arg1) {
   return window['go']['main']['App']['SettingsSet'](arg1);
+}
+
+export function Shells() {
+  return window['go']['main']['App']['Shells']();
 }
 
 export function SuggestSessionName(arg1) {

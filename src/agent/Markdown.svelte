@@ -8,6 +8,7 @@
   import { onDestroy, untrack } from 'svelte';
   import { openUrl } from '../lib/ipc';
   import { appState } from '../lib/stores.svelte';
+  import Tokens from './Tokens.svelte';
 
   let { text }: { text: string } = $props();
   // A streaming reply changes `text` with every token, and each parse reads all of it. So the
@@ -55,7 +56,7 @@
   {:else if n.type === 'delete'}<del>{@render kids(n)}</del>
   {:else if n.type === 'inlineCode'}<code>{n.value}</code>
   {:else if n.type === 'code'}
-    <div class="code"><pre><code>{n.value}</code></pre><button class="copy" onclick={(e) => copy(e, n.value)}>Copy</button></div>
+    <div class="code"><pre><code><Tokens text={n.value} lang={n.lang} /></code></pre><button class="copy" onclick={(e) => copy(e, n.value)}>Copy</button></div>
   {:else if n.type === 'break'}<br />
   {:else if n.type === 'thematicBreak'}<hr />
   {:else if n.type === 'blockquote'}<blockquote>{@render kids(n)}</blockquote>
@@ -137,8 +138,7 @@
   .md :global(pre code) {
     background: none;
     padding: 0;
-  }
-  .md :global(.code) {
+  }  .md :global(.code) {
     position: relative;
     /* Room above for Copy, which sits on the top border. */
     margin: 14px 0 0.75em;

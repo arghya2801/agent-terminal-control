@@ -13,6 +13,8 @@ export function AgentOpen(arg1:string,arg2:string,arg3:string,arg4:boolean,arg5:
 
 export function AgentSend(arg1:string,arg2:Record<string, any>):Promise<void>;
 
+export function AppendLog(arg1:string):Promise<void>;
+
 export function ClaudeUsage():Promise<any>;
 
 export function CodexUsage():Promise<any>;
@@ -74,6 +76,8 @@ export function SessionPreview(arg1:string):Promise<Array<main.Turn>>;
 export function SettingsGet():Promise<Record<string, any>>;
 
 export function SettingsSet(arg1:any):Promise<void>;
+
+export function Shells():Promise<Array<string>>;
 
 export function SuggestSessionName(arg1:string):Promise<string>;
 
