@@ -6,6 +6,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-10
+
 ### Changed
 - The header has a button to switch an agent tab between chat and terminal, also when the tab bar is on (#247).
 - Switching an agent tab between chat and terminal always warns while the agent is working, even with the warning turned off, since the turn stops (#246).
@@ -362,7 +364,8 @@ ATC now runs on a Go/Wails host instead of Rust/Tauri. The interface is the same
 
 First release.
 
-[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.0...v0.6.1
