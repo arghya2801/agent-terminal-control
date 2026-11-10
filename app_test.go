@@ -369,3 +369,18 @@ func TestClaudeUsageResponseAndErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestTheLogKeepsTwoDaysOfLines(t *testing.T) {
+	a := NewApp(t.TempDir())
+	old := time.Now().Add(-49 * time.Hour).Format("2006-01-02 15:04:05.000")
+	recent := time.Now().Add(-time.Hour).Format("2006-01-02 15:04:05.000")
+	os.WriteFile(filepath.Join(a.config, "atc.log"), []byte(old+" gone\n"+recent+" kept\n"), 0o600)
+	if e := a.AppendLog("new\nline"); e != nil {
+		t.Fatal(e)
+	}
+	b, _ := os.ReadFile(filepath.Join(a.config, "atc.log"))
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	if len(lines) != 2 || !strings.HasSuffix(lines[0], " kept") || !strings.HasSuffix(lines[1], " new line") {
+		t.Fatal(lines)
+	}
+}

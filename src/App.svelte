@@ -73,6 +73,7 @@
     splitWith,
     unsplit,
     openAgentTab,
+    markDone,
     type AttentionReason,
     type Tab,
   } from './terminal/manager';
@@ -84,7 +85,7 @@
   import type { IconName } from './lib/Icon.svelte';
   import { relativeTime } from './lib/format';
   import { parseSavedTabs, type SavedTab } from './lib/restore';
-  import { agentCommand, gitChanges, pickFolder, scratchDir, type GitChanges } from './lib/ipc';
+  import { agentCommand, appendLog, gitChanges, pickFolder, scratchDir, type GitChanges } from './lib/ipc';
   import { projectKey } from './lib/paths';
   import { resolveSessions, type TabRef } from './lib/sessions';
   import { zoomLabel } from './lib/zoom';
@@ -129,15 +130,16 @@
   function requestSwitch(key: TabKey) {
     const t = getTab(key);
     if (!t?.provider) return;
-    if (appState.settings?.ui.confirmSwitch === false) return void switchView(key);
+    const working = t.term ? t.activity === 'working' : !!agents[key]?.working;
+    if (!working && appState.settings?.ui.confirmSwitch === false) return void switchView(key);
     dontWarn = false;
     switching = {
       key,
       title: displayTitle(t),
       name: providerName(t.provider),
       toTerminal: !t.term,
-      working: t.term ? t.activity === 'working' : !!agents[key]?.working,
-      fresh: !t.boundSession,
+      working,
+      fresh: !sessionIdOf(t),
     };
   }
 
@@ -154,14 +156,28 @@
   async function switchView(key: TabKey) {
     const t = getTab(key);
     if (!t?.provider || !t.cwd) return;
-    const id = t.boundSession?.slice(t.boundSession.indexOf(':') + 1) ?? null;
+    const id = sessionIdOf(t);
     const { provider, cwd, projectKey: pk } = t;
     const title = displayTitle(t);
     const chat = chatTabs.has(key);
     const terminal = !t.term;
+    const t0 = performance.now();
+    const at = () => `${Math.round(performance.now() - t0)} ms`;
     await closeTab(key);
+    const closed = at();
     await whenClosed(key);
-    await openAgent(id ? `session:${provider}:${id}` : key, title, cwd, pk, provider, { session: id, chat, terminal });
+    const released = at();
+    const next: TabKey = id ? `session:${provider}:${id}` : key;
+    await openAgent(next, title, cwd, pk, provider, { session: id, chat, terminal });
+    const opened = at();
+    const ready = await new Promise<string>((done) => {
+      const finish = (v: string) => (clearTimeout(timer), off(), done(v));
+      const check = () => getTab(next)?.activity != null && finish(at());
+      const timer = setTimeout(() => finish('not seen in 30 s'), 30_000);
+      const off = onChange(check);
+      check();
+    });
+    void appendLog(`switch ${terminal ? 'chat to terminal' : 'terminal to chat'} (${provider}${id ? ` ${id}` : ''}): tab closed ${closed}, old CLI gone ${released}, new tab open ${opened}, ${providerName(provider)} ready ${ready}`).catch(() => {});
   }
 
   /** Moves an agent tab's chat into its pane, where the manager lays it out. */
@@ -210,9 +226,10 @@
         ...(chatTabs.has(t.key) ? { chat: true as const } : {}),
         ...(t.provider && t.term ? { terminal: true as const } : {}),
       };
+      const done = t.done ? { done: true as const } : {};
       const sessionId = sessionIdOf(t);
-      if (sessionId && t.cwd) return { kind: 'session', provider: t.provider ?? 'claude', sessionId, cwd: t.cwd, ...common };
-      if (t.provider && t.cwd) return { kind: 'agent', provider: t.provider, cwd: t.cwd, ...common };
+      if (sessionId && t.cwd) return { kind: 'session', provider: t.provider ?? 'claude', sessionId, cwd: t.cwd, ...common, ...done };
+      if (t.provider && t.cwd) return { kind: 'agent', provider: t.provider, cwd: t.cwd, ...common, ...done };
       return { kind: 'shell', cwd: t.cwd, project: t.key.startsWith('project:'), projectKey: t.projectKey, customTitle: t.customTitle };
     });
     try {
@@ -262,6 +279,7 @@
         await guard(() => openTab(key, `pwsh ${counter}`, { cwd: t.cwd }, t.projectKey));
       }
       if (t.customTitle) renameTab(key, t.customTitle);
+      if (t.kind !== 'shell' && t.done) markDone(key);
       keys.push(key);
     }
     const focus = keys[saved.active];
@@ -988,6 +1006,10 @@
     <button class="bar-btn zoom" onclick={() => adjustZoom(0)} title="Reset zoom (Ctrl+0)">{zoomLabel(currentZoom())}</button>
   {/if}
   <UsageChip active={page === 'usage'} onOpen={openUsage} onClose={closeUsage} />
+  {#if shown?.provider && page !== 'usage'}
+    {@const label = shown.terminal ? 'Open as chat' : 'Open in terminal'}
+    <button class="bar-btn" onclick={() => requestSwitch(shown.key)} title="{label} ({chordFor('toggleAgentView')})" aria-label={label}><Icon name={shown.terminal ? 'chat' : 'terminal'} size={14} /></button>
+  {/if}
   {@render actions?.()}
   <button class="bar-btn" onclick={moreMenu} title="Usage, settings and shortcuts" aria-label="More"><Icon name="more" /></button>
 {/snippet}
@@ -1081,7 +1103,6 @@
         <div class="grow"></div>
       {/if}
       {#snippet actions()}
-        {#if shown?.terminal}<button class="bar-btn" onclick={() => requestSwitch(shown.key)} title="Open as chat ({chordFor('toggleAgentView')})" aria-label="Open as chat"><Icon name="chat" size={14} /></button>{/if}
         {@render barNew()}
         {#if shown}<button class="bar-btn" onclick={() => requestClose(shown.key)} title="Close {shown.title} (Ctrl+Shift+W)" aria-label="Close {shown.title}"><Icon name="close" size={12} /></button>{/if}
       {/snippet}

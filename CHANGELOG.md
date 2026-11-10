@@ -6,6 +6,24 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Changed
+- The header has a button to switch an agent tab between chat and terminal, also when the tab bar is on (#247).
+- Switching an agent tab between chat and terminal always warns while the agent is working, even with the warning turned off, since the turn stops (#246).
+- Code blocks in agent tabs are syntax highlighted, and so are the commands Claude runs and the code in its edits (#244).
+- The message box placeholder is fainter (#245).
+- Open view rows drop the screen preview. The session name has the first line to itself; the project, state, time and context use sit on the second. The Screen peek setting is gone (#242).
+- Typing `/` or `$` in an agent tab says when commands and skills are still loading, or when nothing matches. `/` opens the menu anywhere in a message, as in Claude's CLI, not only at the start (#243).
+- `/` lists commands and skills at once, from the last list seen for that project (or provider), while the session's CLI starts.
+- New chats start on the model and effort you picked last for that provider.
+- Switching an agent tab between chat and terminal logs how long each step took to `atc.log` in the config folder.
+- Agent tabs opened in a terminal skip the PowerShell profile, so they start faster.
+- The Shell setting lists the PowerShells installed on the machine. "auto" now picks Windows PowerShell 5.1 when it is there, since it starts faster than PowerShell 7.
+
+### Fixed
+- Agent tabs scroll to the bottom when you send a message, and keep following while the agent works. Scrolling up stops it; scrolling back to the bottom resumes it (#248).
+- A tab marked done stays done through a recap and across restarts, until you send it something (#241).
+- Switching a terminal agent tab to chat resumes its session when ATC has matched it but not yet bound it, instead of starting a new one (#247).
+
 ## [0.7.0] - 2026-11-06
 
 ### Changed

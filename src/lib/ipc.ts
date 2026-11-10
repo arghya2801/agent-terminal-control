@@ -89,6 +89,12 @@ export function listThemes(): Promise<{ stem: string; palette: unknown }[]> { re
 /** Plan limits as `/usage` shows them. Shape belongs to the API, so kept loose. */
 export function claudeUsage(): Promise<Record<string, unknown>> { return App.ClaudeUsage(); }
 
+/** One line in atc.log in the config folder. */
+export function appendLog(line: string): Promise<void> { return App.AppendLog(line); }
+
+/** The PowerShells installed, as paths, Windows PowerShell first. */
+export function shells(): Promise<string[]> { return App.Shells(); }
+
 /** With `chat`, the agent starts with the chat arguments from settings: no tools for Claude, a read-only sandbox for Codex. */
 export function agentCommand(provider: AgentProvider, sessionId: string | null = null, chat = false): Promise<string> { return App.AgentCommand(provider, sessionId ?? '', chat); }
 

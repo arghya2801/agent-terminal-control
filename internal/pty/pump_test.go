@@ -179,6 +179,22 @@ func TestResolvesAPowerShellToAnAbsoluteExistingPathWithoutAVerbatimPrefix(t *te
 		t.Fatal("expected a PowerShell, got", stem)
 	}
 }
+func TestListsEachPowerShellOnceWindowsPowerShellFirstAndHonoursAChosenPath(t *testing.T) {
+	all := Shells()
+	if len(all) == 0 || !strings.EqualFold(filepath.Base(all[0]), "powershell.exe") {
+		t.Fatal(all)
+	}
+	if auto, _ := shellFor("auto"); auto != all[0] {
+		t.Fatal(auto, all)
+	}
+	last := all[len(all)-1]
+	if got, _ := shellFor(last); got != last {
+		t.Fatal(got, last)
+	}
+	if got, _ := shellFor(`C:\nowhere\pwsh.exe`); got != all[0] {
+		t.Fatal(got)
+	}
+}
 func TestTheNoProfileEnvVarAddsTheFlagOnlyWhenSetToOne(t *testing.T) {
 	for value, want := range map[string]bool{"": false, "0": false, "1": true} {
 		t.Setenv("ATC_SHELL_NO_PROFILE", value)

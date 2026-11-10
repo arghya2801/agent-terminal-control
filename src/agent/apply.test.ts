@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { apply, emptyState, peek, withSentImages } from './apply';
+import { apply, emptyState, withSentImages } from './apply';
 import type { AgentEvent } from '../../sidecar/protocol';
 
 // The events a real Haiku turn produced: a streamed tool call, its result, a streamed reply.
@@ -53,7 +53,6 @@ describe('apply', () => {
     ]);
     expect(s.items[2]).toMatchObject({ output: 'v24.13.1', done: true, seconds: 2 });
     expect([s.sessionId, s.working, s.since]).toEqual(['s1', false, 1000]);
-    expect(peek(s)).toEqual(['v24.13.1']);
   });
 
   it('keeps streamed text until the final block replaces it, and appends live output', () => {

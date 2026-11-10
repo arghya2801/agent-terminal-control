@@ -8,8 +8,8 @@
   import { providerName } from '../lib/agents';
   import StatusDot from '../lib/StatusDot.svelte';
   import { appState } from '../lib/stores.svelte';
-  import { isWaiting, peekLine, stateWord, triageGroup, triageOrder } from '../lib/triage';
-  import { activate, focusActiveTerminal, markDone, outputHistory, queuePrompt, screenLines, sendText } from '../terminal/manager';
+  import { isWaiting, stateWord, triageGroup, triageOrder } from '../lib/triage';
+  import { activate, focusActiveTerminal, markDone, outputHistory, queuePrompt, sendText } from '../terminal/manager';
   import type { TabKey, TabSummary } from '../types';
 
   /** The sidebar's Open view: every tab, most urgent first, under a heading per state (#132). */
@@ -32,7 +32,6 @@
     return () => clearInterval(timer);
   });
 
-  const peekRows = $derived(appState.settings?.ui.peek ?? 'all');
   const graph = $derived(appState.settings?.ui.outputGraph !== false);
 
   const projectName = (key: string | null) => (key ? appState.index.projects.find((p) => p.key === key)?.name ?? '' : '');
@@ -91,8 +90,6 @@
   {@const s = markTitle(tab.mark, providerName(tab.provider ?? 'claude'))}
   {@const wait = isWaiting(tab.mark) && !tab.done}
   {@const fill = contextFill.get(tab.key)}
-  {@const showPeek = peekRows === 'all' || (peekRows === 'waiting' && wait)}
-  {@const peek = showPeek ? peekLine((void now, screenLines(tab.key)), wait ? 3 : 1) : null}
   {#if i === 0 || shown[i - 1].group !== tab.group}
     <div class="section">{tab.group} <span class="n">{shown.filter((t) => t.group === tab.group).length}</span></div>
   {/if}
@@ -113,13 +110,16 @@
   >
     <StatusDot mark={tab.mark} title={s} />
     <span class="icon">{#if tab.provider}<ProviderIcon provider={tab.provider} />{:else}<Icon name="terminal" size={12} />{/if}</span>
-    <span class="text"><span class="title"><Highlight text={tab.title} {query} /></span>{#if projectName(tab.projectKey)}<small><Highlight text={projectName(tab.projectKey)} {query} /></small>{/if}</span>
-    <time>{stateWord(tab.mark)} {relativeTime(tab.since, now)}{#if fill !== undefined}<span class="ctx" class:full={fill >= 0.8} title="Context window {Math.round(fill * 100)}% full">{Math.round(fill * 100)}%</span>{/if}</time>
-    {#if peek}<span class="peek">{peek}</span>{/if}
+    <span class="title"><Highlight text={tab.title} {query} /></span>
+    <span class="meta">
+      {#if projectName(tab.projectKey)}<span class="project"><Highlight text={projectName(tab.projectKey)} {query} /></span>{/if}
+      <time>{stateWord(tab.mark)} {relativeTime(tab.since, now)}</time>
+      {#if fill !== undefined}<span class="ctx" class:full={fill >= 0.8} title="Context window {Math.round(fill * 100)}% full">{Math.round(fill * 100)}%</span>{/if}
+    </span>
     {#if !wait && graph}<svg class="spark" viewBox="0 0 60 10" preserveAspectRatio="none" aria-hidden="true"><path d={sparkPath((void now, outputHistory(tab.key)))} /></svg>{/if}
   </button>
   {#if wait && !tab.exited}
-    <button class="hover-btn" onclick={() => markDone(tab.key)} aria-label="Mark {tab.title} done" title="Done: move it out of Waiting on you until it works again"><Icon name="check" size={12} /></button>
+    <button class="hover-btn" onclick={() => markDone(tab.key)} aria-label="Mark {tab.title} done" title="Done: move it out of Waiting on you until you send it something"><Icon name="check" size={12} /></button>
   {:else if tab.mark === 'working' && queuing !== tab.key}
     <button class="hover-btn" onclick={() => startQueue(tab.key)} aria-label="Queue a message for {tab.title}" title="Type the next message; it is sent when the agent stops">Queue</button>
   {/if}
@@ -197,7 +197,7 @@
     box-shadow: inset 3px 0 0 var(--warn);
     background: color-mix(in srgb, var(--warn) 10%, transparent);
   }
-  .row.exited .text {
+  .row.exited .title {
     opacity: 0.6;
     text-decoration: line-through;
   }
@@ -206,65 +206,42 @@
     place-items: center;
     color: var(--fg-faint);
   }
-  /* The title gives way first, so the project stays readable. */
-  .text {
-    display: flex;
+  .title {
+    grid-column: 3 / 5;
     min-width: 0;
-    align-items: baseline;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .title,
-  small {
+  .meta {
+    grid-column: 3;
+    grid-row: 2;
+    display: flex;
+    min-width: 0;
+    gap: 6px;
+    color: var(--fg-faint);
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  .meta > * + *::before {
+    content: '·';
+    margin-right: 6px;
+  }
+  .project {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  small {
+  time,
+  .ctx {
     flex-shrink: 0;
-    max-width: 55%;
-    margin-left: 6px;
-    color: var(--fg-faint);
-    font-size: 11px;
-  }
-  time {
-    color: var(--fg-faint);
-    font-size: 10px;
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
   }
   .attention time {
     color: var(--accent);
   }
-  .ctx {
-    margin-left: 6px;
-    color: var(--fg-faint);
-  }
   .ctx.full {
     color: var(--warn);
-  }
-  .peek {
-    grid-column: 3 / 4;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--fg-faint);
-    font-family: ui-monospace, monospace;
-    font-size: 10px;
-    line-height: 1.4;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  /* A waiting agent's question gets the row's full width and its last three lines: the
-     text sits at the bottom of the box and any overflow is cut off the top. */
-  .wait .peek {
-    display: flex;
-    max-height: 4.2em;
-    flex-direction: column;
-    justify-content: flex-end;
-    grid-column: 3 / 5;
-    white-space: normal;
-  }
-  .attention .peek {
-    color: var(--fg);
   }
   .spark {
     grid-column: 4;

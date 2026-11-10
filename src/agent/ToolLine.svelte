@@ -19,6 +19,7 @@
 
 <script lang="ts">
   import Icon from '../lib/Icon.svelte';
+  import Tokens from './Tokens.svelte';
   import { cleanCommand, relativePaths, toolVerb } from './work';
   import { clippedLines } from '../../sidecar/clip';
 
@@ -28,6 +29,11 @@
   const command = $derived(toolAction(item.tool) === 'command');
   const input = $derived(command ? cleanCommand(item.input ?? '', cwd) : relativePaths(item.input ?? '', cwd));
 
+  const lang = $derived(
+    command ? (/powershell/i.test(item.tool ?? '') ? 'powershell' : 'sh')
+    : /^(Edit|MultiEdit|Write)$/.test(item.tool ?? '') ? (/\.(\w+)$/.exec((item.input ?? '').trim().split(/\s/)[0])?.[1] ?? null)
+    : null,
+  );
   const diff = $derived(/^(Edit|MultiEdit|apply_patch)$/.test(item.tool ?? '') || !!item.body?.startsWith('*** Begin Patch'));
   const lines = $derived((command ? cleanCommand(item.body ?? '', cwd) : (item.body ?? '')).replace(/\n$/, '').split('\n'));
   const counts = $derived(diff ? { add: lines.filter((l: string) => l.startsWith('+')).length, del: lines.filter((l: string) => l.startsWith('-')).length } : null);
@@ -56,7 +62,7 @@
   <svelte:element this={expandable ? 'button' : 'div'} class="line" role={expandable ? undefined : 'group'} onclick={() => expandable && (open = !open)} aria-expanded={expandable ? open : undefined} title={item.input} class:static={!expandable}>
     <span class="icon"><Icon name={toolIcon(item.tool)} size={14} /></span>
     <span class="verb">{verb}</span>
-    {#if input}<code class="target">{input}</code>{/if}
+    {#if input}<code class="target"><Tokens text={input} lang={command ? lang : null} /></code>{/if}
     {#if expandable}<span class="chev" aria-hidden="true"><Icon name="chevron" size={12} /></span>{/if}
     {#if status === 'failed'}<span class="badge" class:declined={item.declined}>{item.declined ? 'Declined' : 'Failed'}</span>{/if}
     <span class="meta">
@@ -72,7 +78,7 @@
   {#if open}
     <div class="detail">
       {#if item.body}
-        <pre class="body" class:cmd={command}>{#each lines as l}<span class:add={diff && l.startsWith('+')} class:del={diff && l.startsWith('-')}>{l}</span>{'\n'}{/each}</pre>
+        <pre class="body" class:cmd={command}>{#each lines as l}<span class:add={diff && l.startsWith('+')} class:del={diff && l.startsWith('-')}><Tokens text={l} {lang} /></span>{'\n'}{/each}</pre>
       {/if}
       {#if item.output}<pre class="output" class:error={item.error}>{item.output}</pre>{/if}
     </div>

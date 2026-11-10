@@ -4,7 +4,7 @@
   import { matchCommands, typedCommand, type Sigil } from './commands';
   import type { Command } from '../../sidecar/protocol';
 
-  let { text = $bindable(''), name, history, hints = true, sigils, commands, working, waiting = false, disabled, onSend, onStop, onFiles, onInput, toolbar }: {
+  let { text = $bindable(''), name, history, hints = true, sigils, commands, ready = true, working, waiting = false, disabled, onSend, onStop, onFiles, onInput, toolbar }: {
     /** What is in the box; a rewind puts its prompt back here. */
     text?: string;
     name: string;
@@ -15,6 +15,8 @@
     /** What opens the menu: `/` for commands, and `$` for Codex's skills. */
     sigils: Sigil[];
     commands: Command[];
+    /** False until the session has listed its commands. */
+    ready?: boolean;
     working: boolean;
     /** A card above waits for an answer. */
     waiting?: boolean;
@@ -204,6 +206,10 @@
       </ul>
       <div class="keys" aria-hidden="true"><kbd>↑</kbd><kbd>↓</kbd> to move <kbd>Tab</kbd> or <kbd>Enter</kbd> to pick <kbd>Esc</kbd> to close</div>
     </div>
+  {:else if typed && typed.sigil !== '@' && !dismissed}
+    <div class="menu" role="status">
+      <div class="keys note">{ready ? `Nothing matches ${typed.sigil}${typed.query}` : `Loading ${typed.sigil === '$' ? 'skills' : 'commands and skills'}...`}</div>
+    </div>
   {/if}
   <textarea
     bind:this={box}
@@ -318,7 +324,7 @@
     outline: none;
   }
   textarea::placeholder {
-    color: var(--fg-faint);
+    color: color-mix(in srgb, var(--fg-faint) 65%, transparent);
   }
   .bar {
     display: flex;
@@ -445,6 +451,9 @@
     border-top: 1px solid var(--border);
     font-size: 11.5px;
     color: var(--fg-faint);
+  }
+  .note {
+    border-top: none;
   }
   kbd {
     font: inherit;

@@ -65,17 +65,38 @@ func dimension(n int) int16 {
 	return int16(n)
 }
 
-// Shell finds PowerShell, 7 first, then Windows PowerShell.
+// Shell finds PowerShell, Windows PowerShell first, then 7.
 func Shell() (string, error) { return shellFor("") }
 
-// shellFor finds the PowerShell that pref names, "pwsh" or "powershell", and falls back
-// to the other one when it is not installed.
+func pwshCandidates() []string {
+	pf := os.Getenv("ProgramFiles")
+	return []string{pf + `\PowerShell\7\pwsh.exe`, pf + `\PowerShell\7-preview\pwsh.exe`, "pwsh.exe"}
+}
+func classicCandidates() []string {
+	return []string{os.Getenv("SystemRoot") + `\System32\WindowsPowerShell\v1.0\powershell.exe`, "powershell.exe"}
+}
+
+// Shells lists the PowerShells installed, Windows PowerShell first, each once.
+func Shells() []string {
+	out := []string{}
+	seen := map[string]bool{}
+	for _, c := range append(classicCandidates(), pwshCandidates()...) {
+		if p, e := exec.LookPath(c); e == nil && !seen[strings.ToLower(p)] {
+			seen[strings.ToLower(p)] = true
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// shellFor finds the PowerShell that pref names: a path, "pwsh" or "powershell". It falls
+// back to the others when that one is not installed, Windows PowerShell first.
 func shellFor(pref string) (string, error) {
-	pwsh := []string{os.Getenv("ProgramFiles") + `\PowerShell\7\pwsh.exe`, "pwsh.exe"}
-	classic := []string{os.Getenv("SystemRoot") + `\System32\WindowsPowerShell\v1.0\powershell.exe`, "powershell.exe"}
-	candidates := append(pwsh, classic...)
-	if pref == "powershell" {
-		candidates = append(classic, pwsh...)
+	candidates := append(classicCandidates(), pwshCandidates()...)
+	if pref == "pwsh" {
+		candidates = append(pwshCandidates(), classicCandidates()...)
+	} else if strings.ContainsAny(pref, `\/`) {
+		candidates = append([]string{pref}, candidates...)
 	}
 	for _, candidate := range candidates {
 		if path, e := exec.LookPath(candidate); e == nil {

@@ -293,7 +293,6 @@ Every field is optional; missing ones take their default.
     "notifications": true,              // notify when a background session needs you
     "restoreTabs": true,                // reopen last session's tabs on launch
     "showTabBar": false,                // tabs across the top as well as in the sidebar
-    "peek": "all",                      // Open view screen peek: "all", "waiting" or "off"
     "outputGraph": true,                // Open view output graph
     "taskAgent": "claude",              // what the task box starts with
     "taskProject": "",                  // "" = the focused tab's project
@@ -311,7 +310,7 @@ Every field is optional; missing ones take their default.
     "cursorStyle": "bar",               // "block" or "underline"
     "cursorBlink": true,
     "lineHeight": 1.0,
-    "shell": "auto",                    // "pwsh" or "powershell"
+    "shell": "auto",                    // Windows PowerShell first; or a pwsh.exe path, "pwsh" or "powershell"
     "loadProfile": true,                // false starts tabs with -NoProfile
     "gpuTabs": 4                        // tabs drawn with WebGL; 0 = software rendering
   },
