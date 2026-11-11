@@ -102,4 +102,13 @@ describe('apply', () => {
     apply(s, { t: 'rewound', to: 'you2' });
     expect(s.items.at(-1)?.id).toBe('r1');
   });
+
+  it('replaces the background list on each event and empties it when the session exits', () => {
+    const s = emptyState();
+    apply(s, { t: 'background', tasks: [{ id: 'b1', kind: 'local_bash', description: 'npm run dev', since: 1 }] });
+    apply(s, { t: 'background', tasks: [{ id: 'b2', kind: 'local_agent', description: 'Explore', since: 2 }] });
+    expect(s.background.map((b) => b.id)).toEqual(['b2']);
+    apply(s, { t: 'exit' });
+    expect(s.background).toEqual([]);
+  });
 });

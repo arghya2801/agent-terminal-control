@@ -189,6 +189,7 @@ export const naming = new SvelteSet<string>();
  *  each run starts a CLI. */
 export async function nameSessions(sessions: SessionMeta[], onNamed: (key: string, name: string) => void) {
   const failed: string[] = [];
+  sessions = sessions.filter((s) => !naming.has(sessionKey(s)));
   for (const s of sessions) naming.add(sessionKey(s));
   for (const s of sessions) {
     const key = sessionKey(s);

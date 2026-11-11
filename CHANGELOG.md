@@ -6,6 +6,15 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Added
+- Agent tabs list the shell commands and subagents running in the background above the message box, with the last tool each ran, a progress summary on hover, and a Stop button. Claude only (#259).
+- Find (Ctrl+Shift+F) searches the text of agent chats too. Folded tool groups are not searched (#257).
+- Alt+Up and Alt+Down in an agent tab jump to the previous or next message you sent (#251).
+
+### Fixed
+- A skill's instructions no longer show in an agent tab as a message from you (#256).
+- Rename with Haiku or Luna shows "Naming…" on the session's row while it runs, and another session can be renamed meanwhile (#255).
+
 ## [0.7.1] - 2026-11-10
 
 ### Changed

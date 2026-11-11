@@ -47,6 +47,8 @@ function run(op: AgentOp) {
       return s.send(op.text, op.images);
     case 'interrupt':
       return s.interrupt();
+    case 'stopTask':
+      return s instanceof Claude ? s.stopTask(op.task) : undefined;
     case 'answer':
       return s.answer(op.request, op.answer);
     case 'mode':

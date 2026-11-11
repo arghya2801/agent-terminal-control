@@ -59,9 +59,9 @@
     bind:value={query}
     oninput={() => search(1)}
     onkeydown={onKey}
-    placeholder="Find in terminal"
+    placeholder="Find"
     spellcheck="false"
-    aria-label="Find in terminal"
+    aria-label="Find"
   />
   <span class="count" class:none={!!query && count === 0}>{label}</span>
   <button onclick={() => search(-1)} title="Previous (Shift+Enter)" aria-label="Previous match">

@@ -109,3 +109,12 @@ button {
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
 }
+
+/* Find in a chat (#257). */
+::highlight(chat-find) {
+  background-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+::highlight(chat-find-current) {
+  background-color: var(--accent);
+  color: var(--bg);
+}

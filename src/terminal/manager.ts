@@ -22,6 +22,7 @@ import '@xterm/xterm/css/xterm.css';
 import { Channel, ptyAck, ptyBusy, ptyKill, ptyResize, ptySpawn, ptyWrite } from '../lib/ipc';
 import { isCopy, isNativePaste, newlineInput, matchChord, type Action } from '../lib/keymap';
 import { decodeOsc52 } from '../lib/osc52';
+import { clearChatFind, findInChat } from '../agent/find';
 import type { Palette } from '../lib/theme';
 import { claudeTitle, tabMark, usableTitle, type Activity, type TabMark } from '../lib/format';
 import { cycleIndex } from './cycle';
@@ -649,6 +650,11 @@ function bindFindResults() {
 
 export function findInActiveTab(query: string, direction: 1 | -1 = 1): void {
   const tab = activeKey ? tabs.get(activeKey) : null;
+  if (tab && !tab.term) {
+    const r = findInChat(tab.container, query, direction);
+    for (const l of findListeners) l(r);
+    return;
+  }
   if (!tab?.search) return;
   if (!query) {
     tab.search.clearDecorations();
@@ -661,6 +667,7 @@ export function findInActiveTab(query: string, direction: 1 | -1 = 1): void {
 }
 
 export function clearFind(): void {
+  clearChatFind();
   const tab = activeKey ? tabs.get(activeKey) : null;
   tab?.search?.clearDecorations();
 }

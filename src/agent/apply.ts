@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentRequest, ChatItem, Command, Model, Step } from '../../sidecar/protocol';
+import type { AgentEvent, AgentRequest, BackgroundTask, ChatItem, Command, Model, Step } from '../../sidecar/protocol';
 
 /** Everything the chat view shows for one session, built only from sidecar events. */
 export interface AgentState {
@@ -20,12 +20,13 @@ export interface AgentState {
   /** Resumed, with no CLI running yet: sending starts one. */
   dormant: boolean;
   plan: Step[];
+  background: BackgroundTask[];
   /** For the `@` menu, as the last `files` answer listed them. */
   files: string[];
 }
 
 export function emptyState(): AgentState {
-  return { items: [], requests: [], commands: [], models: [], modes: [], model: null, mode: null, effort: null, sessionId: null, ready: false, working: false, since: 0, exited: false, dormant: false, plan: [], files: [] };
+  return { items: [], requests: [], commands: [], models: [], modes: [], model: null, mode: null, effort: null, sessionId: null, ready: false, working: false, since: 0, exited: false, dormant: false, plan: [], background: [], files: [] };
 }
 
 let notices = 0;
@@ -135,6 +136,9 @@ export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
     case 'plan':
       s.plan = ev.steps;
       return;
+    case 'background':
+      s.background = ev.tasks;
+      return;
     case 'files':
       s.files = ev.files;
       return;
@@ -142,7 +146,7 @@ export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
       notify(s, ev.message, true);
       return;
     case 'exit':
-      Object.assign(s, { exited: true, working: false, requests: [] });
+      Object.assign(s, { exited: true, working: false, requests: [], background: [] });
       if (ev.message) notify(s, ev.message, true);
       return;
   }
