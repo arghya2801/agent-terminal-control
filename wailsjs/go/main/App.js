@@ -181,3 +181,7 @@ export function UsageContext() {
 export function UsageCosts() {
   return window['go']['main']['App']['UsageCosts']();
 }
+
+export function Version() {
+  return window['go']['main']['App']['Version']();
+}

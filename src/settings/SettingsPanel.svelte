@@ -5,7 +5,7 @@
   import Page from '../lib/Page.svelte';
   import SectionNav from '../lib/SectionNav.svelte';
   import AccountsSection from './AccountsSection.svelte';
-  import { openSettingsFile, shells } from '../lib/ipc';
+  import { appVersion, openSettingsFile, openUrl, shells } from '../lib/ipc';
   import { appState, refresh, saveSettings, themeState } from '../lib/stores.svelte';
   import { cssVariables } from '../lib/theme';
   import type { Account, Settings } from '../types';
@@ -21,6 +21,7 @@
     { id: 's-agents', label: 'Agents' },
     { id: 's-names', label: 'Names' },
     { id: 's-advanced', label: 'Advanced' },
+    { id: 's-about', label: 'About' },
   ];
 
   /** What the fields show. Saved a moment after each edit, cleaned up on the way out. */
@@ -31,6 +32,8 @@
   // as in Claude's `--tools ""`, is written as "".
   let installed = $state<string[]>([]);
   onMount(() => void shells().then((s) => (installed = s), () => {}));
+  let version = $state('');
+  onMount(() => void appVersion().then((v) => (version = v), () => {}));
   const shellName = (v: string) =>
     v === 'powershell' || /WindowsPowerShell/i.test(v) ? 'Windows PowerShell 5.1'
     : /7-preview/i.test(v) ? 'PowerShell 7 Preview'
@@ -484,6 +487,15 @@
         <div class="check">
           <input id="cr" type="number" min="15" max="3600" step="15" bind:value={draft.ui.codexRefreshSec} />
           <span class="muted">seconds at most, only while the usage chip's peek or the usage page is open. Each read starts a Codex process and stops it</span>
+        </div>
+      </div>
+
+      <h2 id="s-about">About</h2>
+      <div class="grid">
+        <label for="ver">Version</label>
+        <div class="check">
+          <span id="ver">ATC {version}</span>
+          <button class="btn" onclick={() => openUrl('https://github.com/arghya2801/agent-terminal-control/releases')}>Releases</button>
         </div>
       </div>
 

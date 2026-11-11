@@ -5,6 +5,8 @@ import { root } from './playground.mjs';
 import { ensureConpty } from './conpty.mjs';
 if (!process.env.PACKAGE_SKIP_BUILD) execFileSync(process.execPath, ['scripts/build.mjs'], { cwd: root, stdio: 'inherit', windowsHide: true });
 const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
+// MSI and NSIS take only numbers; a beta's files keep its full version in their names.
+const numeric = version.split('-')[0];
 const local = process.env.LOCALAPPDATA || '';
 const paths = (process.env.PATH || '').split(delimiter);
 function tool(name, extra) { const found = [...paths, ...extra].map((p) => join(p, name)).find(existsSync); if (!found) throw new Error(`${name} missing: install NSIS and WiX Toolset 3.x`); return found; }
@@ -15,7 +17,7 @@ const binary = join(root, 'build/bin/atc.exe'), icon = join(root, 'packaging/ico
 const output = join(root, 'build/bin'); mkdirSync(output, { recursive: true });
 await ensureConpty(output);
 const licenses = join(root, 'packaging');
-execFileSync(nsis, [`/DVERSION=${version}`, `/DBINARY=${binary}`, `/DICON=${icon}`, `/DBIN=${output}`, `/DLICENSES=${licenses}`, `/DOUTPUT=${join(output, `ATC_${version}_x64-setup.exe`)}`, join(root, 'packaging/atc.nsi')], { stdio: 'inherit', windowsHide: true });
+execFileSync(nsis, [`/DVERSION=${numeric}`, `/DBINARY=${binary}`, `/DICON=${icon}`, `/DBIN=${output}`, `/DLICENSES=${licenses}`, `/DOUTPUT=${join(output, `ATC_${version}_x64-setup.exe`)}`, join(root, 'packaging/atc.nsi')], { stdio: 'inherit', windowsHide: true });
 const object = join(output, 'atc.wixobj');
-execFileSync(candle, ['-nologo', '-arch', 'x64', `-dVersion=${version}`, `-dBinary=${binary}`, `-dIcon=${icon}`, `-dBin=${output}`, `-dLicenses=${licenses}`, `-dLicense=${join(root, 'packaging/install.rtf')}`, '-out', object, join(root, 'packaging/atc.wxs')], { stdio: 'inherit', windowsHide: true });
+execFileSync(candle, ['-nologo', '-arch', 'x64', `-dVersion=${numeric}`, `-dBinary=${binary}`, `-dIcon=${icon}`, `-dBin=${output}`, `-dLicenses=${licenses}`, `-dLicense=${join(root, 'packaging/install.rtf')}`, '-out', object, join(root, 'packaging/atc.wxs')], { stdio: 'inherit', windowsHide: true });
 execFileSync(light, ['-nologo', '-ext', 'WixUIExtension', '-out', join(output, `ATC_${version}_x64_en-US.msi`), object], { stdio: 'inherit', windowsHide: true });
