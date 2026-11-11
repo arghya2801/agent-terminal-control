@@ -59,7 +59,7 @@
     onOpenProject: (p: Project) => void;
     onOpenSession: (p: Project, s: SessionMeta) => void;
     onNewShell: (p: Project) => void;
-    onNewAgent: (p: Project, provider: AgentProvider) => void;
+    onNewAgent: (p: Project, provider: AgentProvider, chat?: boolean, account?: string) => void;
     /** A chat in the scratch directory that cannot change anything. */
     onNewChat: (provider: AgentProvider) => void;
     /** Asks Claude or Codex, then starts it in the project (#146). */

@@ -4,15 +4,17 @@
   import { fuzzyScore } from '../lib/fuzzy';
   import Page from '../lib/Page.svelte';
   import SectionNav from '../lib/SectionNav.svelte';
+  import AccountsSection from './AccountsSection.svelte';
   import { openSettingsFile, shells } from '../lib/ipc';
   import { appState, refresh, saveSettings, themeState } from '../lib/stores.svelte';
   import { cssVariables } from '../lib/theme';
-  import type { Settings } from '../types';
+  import type { Account, Settings } from '../types';
 
-  let { onClose }: { onClose: () => void } = $props();
+  let { onClose, onSignIn }: { onClose: () => void; onSignIn: (a: Account) => void } = $props();
 
   const SECTIONS = [
     { id: 's-general', label: 'General' },
+    { id: 's-accounts', label: 'Accounts' },
     { id: 's-appearance', label: 'Appearance' },
     { id: 's-terminal', label: 'Terminal' },
     { id: 's-sidebar', label: 'Sidebar' },
@@ -177,6 +179,7 @@
       for (let el = h.nextElementSibling; el && el.tagName !== 'H2'; el = el.nextElementSibling) {
         if (!el.matches('.grid, .agents')) {
           show(el, !q);
+          found ||= !q;
           continue;
         }
         const cols = el.matches('.agents') ? 3 : 2;
@@ -250,6 +253,9 @@
           <span class="muted">When a background session finishes or needs you and ATC is not focused</span>
         </label>
       </div>
+
+      <h2 id="s-accounts">Claude accounts</h2>
+      <AccountsSection bind:account={draft.claude.account} {onSignIn} />
 
       <h2 id="s-appearance">Appearance</h2>
       <div class="grid">

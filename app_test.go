@@ -260,7 +260,7 @@ func TestLimitHistoryKeepsChangesForEightDays(t *testing.T) {
 }
 func TestClaudeUsageHonorsIsolatedHome(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
-	if _, err := claudeUsage(); err == nil || !strings.Contains(err.Error(), "not signed in") {
+	if _, err := claudeUsage(nil); err == nil || !strings.Contains(err.Error(), "not signed in") {
 		t.Fatal(err)
 	}
 }
@@ -355,7 +355,7 @@ func TestClaudeUsageResponseAndErrors(t *testing.T) {
 				}
 				return &http.Response{StatusCode: tc.status, Body: io.NopCloser(strings.NewReader(tc.body)), Header: make(http.Header)}, nil
 			})}
-			result, err := claudeUsage()
+			result, err := claudeUsage(nil)
 			if (err != nil) != tc.wantError {
 				t.Fatal(err)
 			}
@@ -365,7 +365,7 @@ func TestClaudeUsageResponseAndErrors(t *testing.T) {
 		})
 	}
 	core.Save(filepath.Join(home, ".credentials.json"), core.Object{"claudeAiOauth": core.Object{"accessToken": "test-token", "expiresAt": 1}})
-	if _, err := claudeUsage(); err == nil || !strings.Contains(err.Error(), "expired") {
+	if _, err := claudeUsage(nil); err == nil || !strings.Contains(err.Error(), "expired") {
 		t.Fatal(err)
 	}
 }

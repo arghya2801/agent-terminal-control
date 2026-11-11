@@ -13,7 +13,7 @@
   import { filterProjects } from '../lib/filter';
   import { groupSubfolders } from '../lib/group';
   import { isPinned, togglePinned } from '../lib/pinned';
-  import { appState, naming, refresh, renameModelName, saveSettings } from '../lib/stores.svelte';
+  import { accountState, appState, naming, refresh, renameModelName, saveSettings } from '../lib/stores.svelte';
   import type { AgentProvider, Project, SessionMeta, TabKey } from '../types';
   import type { SessionMark } from '../lib/format';
 
@@ -47,7 +47,7 @@
     onOpenProject: (p: Project) => void;
     onOpenSession: (p: Project, s: SessionMeta) => void;
     onNewShell: (p: Project) => void;
-    onNewAgent: (p: Project, provider: AgentProvider) => void;
+    onNewAgent: (p: Project, provider: AgentProvider, chat?: boolean, account?: string) => void;
     onNameSessions: (sessions: SessionMeta[]) => void;
   } = $props();
 
@@ -169,6 +169,8 @@
       y: e.clientY,
       items: [
         { label: 'Open in Claude', icon: 'agent', disabled: !path || !p.exists, run: () => onNewAgent(p, 'claude') },
+        ...(accountState.list.length ? [{ label: 'Open in Claude as Claude login', icon: 'agent' as const, disabled: !path || !p.exists, run: () => onNewAgent(p, 'claude', false, '') }] : []),
+        ...accountState.list.map((a) => ({ label: `Open in Claude as ${a.label}`, icon: 'agent' as const, disabled: !path || !p.exists, run: () => onNewAgent(p, 'claude', false, a.id) })),
         { label: 'Open in Codex', icon: 'agent', disabled: !path || !p.exists, run: () => onNewAgent(p, 'codex') },
         { label: 'Open terminal here', icon: 'terminal', disabled: !path || !p.exists, run: () => onNewShell(p) },
         { label: 'Rename…', icon: 'pencil', sep: true, disabled: !path, run: () => (renaming = `p:${p.key}`) },

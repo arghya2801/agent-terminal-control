@@ -267,6 +267,24 @@ shows an error there rather than hiding the section.
 This integration targets native Windows. It does not discover WSL or remote Codex
 histories, or convert conversations between providers.
 
+## Claude accounts
+
+Settings > Claude accounts holds more than one Claude login. Add a **subscription**
+(**Get a token** runs `claude setup-token` in a tab; sign in there and the token comes
+back to the form) or an **API key** (checked before it is saved). Each account can be
+shown, copied, edited or removed there, and one is the default for new Claude tabs.
+
+A tab runs as one account: pick it from the chat's account chip, or **Open in Claude as**
+in a project's right-click menu. Switching a running chat restarts Claude on the same
+conversation. A resumed session uses the account it last ran as. The tab header names the
+account.
+
+ATC passes the account to Claude as `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`, so
+history, settings, skills and `CLAUDE.md` in `~/.claude` stay shared and are never edited.
+**Claude login** means whoever is signed in there. Secrets are kept in `accounts.dat` in
+ATC's config folder, encrypted with Windows DPAPI for your Windows user. The limits meter
+follows the default account; an API key account has no plan limits.
+
 ## Settings
 
 Settings live in `%APPDATA%\Agent Terminal Control\settings.json`, which is

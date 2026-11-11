@@ -1,3 +1,26 @@
+export namespace core {
+	
+	export class Account {
+	    id: string;
+	    label: string;
+	    kind: string;
+	    secret: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Account(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.label = source["label"];
+	        this.kind = source["kind"];
+	        this.secret = source["secret"];
+	    }
+	}
+
+}
+
 export namespace main {
 	
 	export class FileFilter {
@@ -58,6 +81,7 @@ export namespace pty {
 	    initialCommand: string;
 	    shell: string;
 	    noProfile: boolean;
+	    account: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Options(source);
@@ -71,6 +95,7 @@ export namespace pty {
 	        this.initialCommand = source["initialCommand"];
 	        this.shell = source["shell"];
 	        this.noProfile = source["noProfile"];
+	        this.account = source["account"];
 	    }
 	}
 	export class Stats {
