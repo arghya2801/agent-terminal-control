@@ -13,7 +13,7 @@
   import type { TabKey, TabSummary } from '../types';
 
   /** The sidebar's Open view: every tab, most urgent first, under a heading per state (#132). */
-  let { tabs, activeKey, query, contextFill, changes, onClose }: {
+  let { tabs, activeKey, query, contextFill, changes, naming, onClose }: {
     tabs: TabSummary[];
     activeKey: TabKey | null;
     query: string;
@@ -21,6 +21,8 @@
     contextFill: Map<TabKey, number>;
     /** What each tab's agent has changed in its working tree; null outside git. */
     changes: Record<TabKey, GitChanges | null>;
+    /** Tabs whose session the rename model is naming now. */
+    naming: Set<TabKey>;
     /** Asks first when something is still running in the tab. */
     onClose: (key: TabKey) => void;
   } = $props();
@@ -113,7 +115,7 @@
     <span class="title"><Highlight text={tab.title} {query} /></span>
     <span class="meta">
       {#if projectName(tab.projectKey)}<span class="project"><Highlight text={projectName(tab.projectKey)} {query} /></span>{/if}
-      <time>{stateWord(tab.mark)} {relativeTime(tab.since, now)}</time>
+      <time>{naming.has(tab.key) ? 'Naming…' : `${stateWord(tab.mark)} ${relativeTime(tab.since, now)}`}</time>
       {#if fill !== undefined}<span class="ctx" class:full={fill >= 0.8} title="Context window {Math.round(fill * 100)}% full">{Math.round(fill * 100)}%</span>{/if}
     </span>
     {#if !wait && graph}<svg class="spark" viewBox="0 0 60 10" preserveAspectRatio="none" aria-hidden="true"><path d={sparkPath((void now, outputHistory(tab.key)))} /></svg>{/if}

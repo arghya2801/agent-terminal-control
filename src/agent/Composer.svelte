@@ -148,7 +148,7 @@
     // Up from the first line, Down from the last, so moving inside a long prompt still works.
     const firstLine = !text.slice(0, box?.selectionStart ?? 0).includes('\n');
     const lastLine = !text.slice(box?.selectionEnd ?? 0).includes('\n');
-    if ((e.key === 'ArrowUp' && firstLine && step(1)) || (e.key === 'ArrowDown' && lastLine && step(-1))) {
+    if (!e.altKey && ((e.key === 'ArrowUp' && firstLine && step(1)) || (e.key === 'ArrowDown' && lastLine && step(-1)))) {
       e.preventDefault();
       return;
     }

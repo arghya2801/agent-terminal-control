@@ -33,6 +33,7 @@
     enterMs,
     initStores,
     nameSessions,
+    naming,
     refreshMs,
     saveSettings,
     sidebarOpen,
@@ -608,6 +609,7 @@
       for (const [tab, s] of tabToSession) if (s === id) renameTab(tab, name);
     });
   }
+  const namingTabs = $derived(new Set(tabs.filter((t) => naming.has(tabToSession.get(t.key) ?? '')).map((t) => t.key)));
   function nameTabs(keys: TabKey[]) {
     const all = appState.index.projects.flatMap((p) => p.sessions);
     const sessions = keys.flatMap((k) => all.filter((s) => sessionKey(s) === tabToSession.get(k)));
@@ -824,9 +826,6 @@
         // Debug builds of Wails open devtools on this chord themselves.
         break;
       case 'find': {
-        // A chat has no terminal to search.
-        const t = tabs.find((x) => x.key === activeKey);
-        if (t?.provider && !t.terminal) break;
         // Re-opening while already open should put the cursor back in the box.
         showFind = false;
         void tick().then(() => (showFind = true));
@@ -1055,6 +1054,7 @@
         onRenameTab={startRename}
         onNameSessions={nameSessionsAndTabs}
         onNameTabs={nameTabs}
+        {namingTabs}
         onDispatch={dispatch}
       />
       </div>

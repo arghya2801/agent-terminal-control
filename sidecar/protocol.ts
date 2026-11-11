@@ -46,6 +46,20 @@ export interface Step {
   status: 'pending' | 'active' | 'done';
 }
 
+/** A shell command or subagent running in the background (#259). */
+export interface BackgroundTask {
+  id: string;
+  /** As the CLI names it: `local_bash`, `local_agent`, `monitor`... */
+  kind: string;
+  description: string;
+  /** When it was first seen, in ms. */
+  since: number;
+  /** A subagent's last tool, its tool calls so far, and its progress summary. */
+  tool?: string;
+  tools?: number;
+  summary?: string;
+}
+
 export interface Command {
   /** As typed: `/compact`, or `$skill` for a Codex skill. */
   name: string;
@@ -117,6 +131,8 @@ export type AgentEvent =
   | { t: 'effort'; effort: string | null }
   /** The whole plan as it now stands. */
   | { t: 'plan'; steps: Step[] }
+  /** Every live background task, replacing the last list. */
+  | { t: 'background'; tasks: BackgroundTask[] }
   /** The project's files, relative, answering `files`. */
   | { t: 'files'; files: string[] }
   /** A provider's models, answering `catalog`, before any session of it runs. */
@@ -130,6 +146,7 @@ export type AgentOp =
   | { op: 'effort'; id: string; effort: string | null }
   | { op: 'send'; id: string; text: string; images?: Image[] }
   | { op: 'interrupt'; id: string }
+  | { op: 'stopTask'; id: string; task: string }
   | { op: 'answer'; id: string; request: string; answer: Answer }
   | { op: 'mode'; id: string; mode: string }
   | { op: 'model'; id: string; model: string }

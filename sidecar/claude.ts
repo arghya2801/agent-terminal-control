@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { relative } from 'node:path';
 import { getSessionMessages, query, type ModelInfo, type PermissionResult, type PermissionUpdate, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { clip, emit, Inbox, log, summarize, textOf } from './events.ts';
-import type { AgentEvent, AgentRequest, Answer, Image, Model, Step } from './protocol.ts';
+import type { AgentEvent, AgentRequest, Answer, BackgroundTask, Image, Model, Step } from './protocol.ts';
 
 /** How a Claude process starts, from settings: the CLI, its arguments, extra environment. */
 type Launch = { cwd: string; exe: string; args: string[]; env?: Record<string, string> };
@@ -74,7 +74,8 @@ function promptOf(text: string): AgentEvent | null {
   const stdout = /<local-command-stdout>(.*?)<\/local-command-stdout>/s.exec(text);
   if (stdout) return stdout[1].trim() ? { t: 'item', item: { id: '', kind: 'notice', text: clip(stdout[1].trim()) } } : null;
   if (text.startsWith('[Request interrupted')) return { t: 'item', item: { id: '', kind: 'notice', text: 'Interrupted' } };
-  if (!text.trim() || text.trimStart().startsWith('<') || text.startsWith('Caveat:')) return null;
+  // A skill's body arrives as a user message; history leaves it out (#256).
+  if (!text.trim() || text.trimStart().startsWith('<') || text.startsWith('Caveat:') || text.startsWith('Base directory for this skill:')) return null;
   return { t: 'item', item: { id: '', kind: 'user', text } };
 }
 
@@ -97,6 +98,7 @@ export class Claude {
   private blocks = new Map<string, number>();
   /** The message streaming now, per subagent (null is the main thread). */
   private streaming = new Map<string | null, string>();
+  private bg = new Map<string, BackgroundTask>();
   private n = 0;
   private closing = false;
   private rewinding = false;
@@ -114,6 +116,9 @@ export class Claude {
   /** A query on a fresh inbox. A rewind opens a new one at `at` and keeps the mode. */
   private open(resume?: string, at?: string, mode?: string) {
     this.inbox = new Inbox<SDKUserMessage>();
+    // Background tasks belong to the CLI process; a new one starts with none.
+    this.bg.clear();
+    this.live({ t: 'background', tasks: [] });
     return query({
       prompt: this.inbox,
       options: {
@@ -222,6 +227,14 @@ export class Claude {
         } else if (m.subtype === 'compact_boundary') out({ t: 'item', item: { id: m.uuid, kind: 'notice', text: 'Conversation compacted' } });
         else if (m.subtype === 'api_retry') out({ t: 'item', item: { id: m.uuid, kind: 'notice', text: `API error, retrying (attempt ${m.attempt} of ${m.max_retries})` } });
         else if (m.subtype === 'local_command_output') out({ t: 'item', item: { id: m.uuid, kind: 'notice', text: clip(m.content) } });
+        else if (m.subtype === 'background_tasks_changed') {
+          const was = this.bg;
+          this.bg = new Map(m.tasks.filter((t) => !t.ambient).map((t) => [t.task_id, was.get(t.task_id) ?? { id: t.task_id, kind: t.task_type, description: t.description, since: Date.now() }]));
+          out({ t: 'background', tasks: [...this.bg.values()] });
+        } else if (m.subtype === 'task_progress' && this.bg.has(m.task_id)) {
+          Object.assign(this.bg.get(m.task_id)!, { tool: m.last_tool_name, tools: m.usage.tool_uses, summary: m.summary });
+          out({ t: 'background', tasks: [...this.bg.values()] });
+        }
         return;
       case 'stream_event': {
         const e = m.event as Block;
@@ -390,6 +403,10 @@ export class Claude {
 
   interrupt() {
     void this.q?.interrupt().catch((e) => log(this.id, 'interrupt:', String(e)));
+  }
+
+  stopTask(task: string) {
+    void this.q?.stopTask(task).catch((e) => this.live({ t: 'error', message: `Can't stop the task: ${e?.message ?? e}` }));
   }
 
   mode(mode: string) {

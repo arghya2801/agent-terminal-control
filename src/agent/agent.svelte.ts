@@ -169,6 +169,7 @@ export const queuedImages = (key: TabKey) => live.get(key)?.images.length ?? 0;
 /** The queue's text for a message of only images, which the queue shows. */
 const IMAGES = '(images)';
 export const interrupt = (key: TabKey) => op(key, { op: 'interrupt' });
+export const stopTask = (key: TabKey, task: string) => op(key, { op: 'stopTask', task });
 export const answer = (key: TabKey, request: string, a: Answer) => op(key, { op: 'answer', request, answer: a });
 export const setMode = (key: TabKey, mode: string) => op(key, { op: 'mode', mode });
 export const setModel = (key: TabKey, model: string) => (remember(live.get(key)?.provider, { model }), op(key, { op: 'model', model }));

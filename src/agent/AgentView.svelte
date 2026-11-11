@@ -8,13 +8,13 @@
   import Icon from '../lib/Icon.svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import ConfirmDialog from '../lib/ConfirmDialog.svelte';
-  import { agents, answer, queuedImages, catalog, interrupt, knownCommands, listFiles, resume, rewind, send, wake, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
+  import { agents, answer, queuedImages, catalog, interrupt, stopTask, knownCommands, listFiles, resume, rewind, send, wake, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
   import { activity, blocks, summarize, thoughtLine, type Block } from './work';
   import { families, keptEffort, versionOf } from './models';
   import { getActiveKey, queuePrompt } from '../terminal/manager';
   import { providerName } from '../lib/agents';
   import { appState } from '../lib/stores.svelte';
-  import type { Answer, ChatItem, Model } from '../../sidecar/protocol';
+  import type { Answer, BackgroundTask, ChatItem, Model } from '../../sidecar/protocol';
   import type { AgentProvider, TabKey } from '../types';
 
   /** `queued`: a message waiting for the turn to end (the tab's queue, shared with the Open view). */
@@ -127,10 +127,10 @@
     return all.includes('running') ? 'running' : all.includes('failed') ? 'failed' : all.includes('stopped') ? 'stopped' : 'done';
   };
 
-  // The turn timer, ticking only while the agent works.
+  // The turn timer, ticking only while the agent works or something runs in the background.
   let now = $state(Date.now());
   $effect(() => {
-    if (!s?.working) return;
+    if (!s?.working && !s?.background.length) return;
     now = Date.now();
     const t = setInterval(() => (now = Date.now()), 1000);
     return () => clearInterval(t);
@@ -162,6 +162,17 @@
     stuck = true;
     list?.scrollTo({ top: list.scrollHeight });
   }
+  /** Alt+Up and Alt+Down: the previous or next prompt to the top of the list (#251). */
+  function jumpPrompt(e: KeyboardEvent) {
+    if (!e.altKey || e.ctrlKey || e.shiftKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !list) return;
+    e.preventDefault();
+    const top = list.getBoundingClientRect().top + 8;
+    const ys = [...list.querySelectorAll('.you')].map((el) => el.getBoundingClientRect().top - top);
+    const y = e.key === 'ArrowDown' ? ys.find((v) => v > 1) : ys.findLast((v) => v < -1);
+    if (y === undefined) return e.key === 'ArrowDown' && follow();
+    stuck = false;
+    list.scrollBy({ top: y });
+  }
   $effect(() => {
     const el = list;
     if (!el) return;
@@ -189,6 +200,8 @@
     planWhileAsked = false;
   });
   const tasksOpen = $derived(request ? planWhileAsked : planOpen);
+  let bgOpen = $state(false);
+  const bgLine = (b: BackgroundTask) => [b.tool && `last ran ${b.tool}`, b.tools && `${b.tools} tool calls`, clock(now - b.since)].filter(Boolean).join(', ');
 
   // Answering removes the focused card; focus goes to the next card or the box, not to nothing.
   let dock = $state<HTMLDivElement>();
@@ -255,8 +268,10 @@
   {#if s && !s.fresh}<p class="locked">This conversation stays on {name}. A new tab can use {providerName(other)}.</p>{/if}
 {/snippet}
 
+<!-- svelte-ignore a11y_no_static_element_interactions (keys bubbling up from the list and the box) -->
 <div
   class="agent"
+  onkeydown={jumpPrompt}
   style:--mono={appState.settings?.terminal.fontFamily}
   style:--mono-size="{Math.max(11, (appState.settings?.terminal.fontSize ?? 13) - 1)}px"
 >
@@ -266,7 +281,7 @@
         <div class="empty">
           <span class="mark"><ProviderIcon {provider} /></span>
           <p class="lead">Ask {name} anything</p>
-          <p>Type <kbd>/</kbd> for {provider === 'codex' ? 'commands, ' : 'commands and skills, '}{#if provider === 'codex'}<kbd>$</kbd> for skills, {/if}<kbd>@</kbd> for files. <kbd>Enter</kbd> sends, <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line.</p>
+          <p>Type <kbd>/</kbd> for {provider === 'codex' ? 'commands, ' : 'commands and skills, '}{#if provider === 'codex'}<kbd>$</kbd> for skills, {/if}<kbd>@</kbd> for files. <kbd>Enter</kbd> sends, <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line. <kbd>Alt</kbd>+<kbd>↑</kbd> and <kbd>↓</kbd> jump between your messages.</p>
         </div>
       {:else if !s?.ready && !s?.dormant && !s?.exited && !turns.length}
         <div class="empty"><p class="lead">Starting {name}</p></div>
@@ -388,6 +403,29 @@
           <ul>
             {#each plan as step, i (i)}
               <li class={step.status}><span class="sr">{step.status === 'done' ? 'Done: ' : step.status === 'active' ? 'In progress: ' : 'To do: '}</span><span class="box" aria-hidden="true">{#if step.status === 'done'}<Icon name="check" size={10} />{/if}</span><span>{step.text}</span></li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+    {/if}
+    {#if s?.background.length}
+      <div class="tasks">
+        <button class="head" aria-expanded={bgOpen} onclick={() => (bgOpen = !bgOpen)}>
+          <span class="icon"><span class="spinner"></span></span>
+          <span>{s.background.length} running in the background</span>
+          <span class="chev" class:turned={bgOpen} aria-hidden="true"><Icon name="chevron" size={12} /></span>
+        </button>
+        {#if bgOpen}
+          <ul>
+            {#each s.background as b (b.id)}
+              <li class="bg" title={[b.description, b.summary].filter(Boolean).join('\n\n')}>
+                <Icon name={b.kind === 'local_agent' ? 'agent' : 'terminal'} size={12} />
+                <span class="bg-text">
+                  <span class="bg-what">{b.description}</span>
+                  <span class="bg-meta">{b.summary ?? bgLine(b)}</span>
+                </span>
+                <button class="link" onclick={() => stopTask(tabKey, b.id)}>Stop</button>
+              </li>
             {/each}
           </ul>
         {/if}
@@ -932,6 +970,21 @@
     align-items: center;
     gap: 10px;
     color: var(--fg-dim);
+  }
+  .tasks li.bg .bg-text {
+    display: grid;
+    flex: 1;
+    min-width: 0;
+  }
+  .bg-what,
+  .bg-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bg-meta {
+    color: var(--fg-faint);
+    font-size: 12px;
   }
   .tasks li.active {
     color: var(--fg-bright);

@@ -129,7 +129,7 @@ const DESCRIPTIONS: Record<Action, { group: Group; label: string }> = {
   palette: { group: 'View', label: 'Command palette' },
   focusSearch: { group: 'View', label: 'Filter the sidebar' },
   switchSidebarView: { group: 'View', label: 'Switch the sidebar between sessions, open tabs and scratch' },
-  find: { group: 'View', label: 'Find in the terminal' },
+  find: { group: 'View', label: 'Find in the terminal or chat' },
   zoomIn: { group: 'View', label: 'Zoom in' },
   zoomOut: { group: 'View', label: 'Zoom out' },
   zoomReset: { group: 'View', label: 'Reset zoom' },

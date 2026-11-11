@@ -1,12 +1,13 @@
 <script lang="ts">
   import ProviderIcon from '../lib/ProviderIcon.svelte';
-  import { providerName } from '../lib/agents';
+  import { providerName, sessionKey } from '../lib/agents';
   import { markTitle, relativeTime, type SessionMark } from '../lib/format';
   import StatusDot from '../lib/StatusDot.svelte';
   import { subfolderLabel } from '../lib/group';
   import InlineRename from '../lib/InlineRename.svelte';
   import Highlight from '../lib/Highlight.svelte';
   import type { SessionMeta } from '../types';
+  import { naming } from '../lib/stores.svelte';
 
   let {
     session,
@@ -83,7 +84,7 @@
         <Highlight text={session.gitBranch} {query} />
       </span>
     {/if}
-    <span class="age">{mark ? 'open' : age}</span>
+    <span class="age">{naming.has(sessionKey(session)) ? 'Naming…' : mark ? 'open' : age}</span>
   </span>
 </button>
 {/if}
