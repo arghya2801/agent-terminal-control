@@ -17,6 +17,16 @@ export interface SpawnOpts {
   /** A PowerShell's path, or `pwsh` or `powershell`, to prefer that one; anything else prefers Windows PowerShell. */
   shell?: string;
   noProfile?: boolean;
+  /** The Claude account the tab's CLI runs as; '' is the ~/.claude login. */
+  account?: string;
+}
+
+/** A Claude login ATC passes to the CLI (#252): a `claude setup-token` token, or an API key. */
+export interface Account {
+  id: string;
+  label: string;
+  kind: 'oauth' | 'apiKey';
+  secret: string;
 }
 
 export interface StatsSnapshot {
@@ -78,6 +88,8 @@ export interface Project {
 export interface TabSummary {
   key: TabKey;
   provider: AgentProvider | null;
+  /** The Claude account it runs as; '' is the ~/.claude login. */
+  account: string;
   title: string;
   exited: boolean;
   attention: boolean;
@@ -110,6 +122,8 @@ export interface Settings {
     names: Record<string, string>;
     /** User-chosen session labels, by session uuid. */
     sessionNames: Record<string, string>;
+    /** The Claude account each session last ran as, by `provider:id` (#252). */
+    sessionAccounts: Record<string, string>;
     /** Sessions hidden from the sidebar, by `provider:id`; still on disk (#163). */
     archived: string[];
   };
@@ -159,7 +173,7 @@ export interface Settings {
   terminal: TerminalSettings;
   /** `args` go on every launch; `chatArgs` on chats too, so they cannot change anything. */
   codex: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; homeDir: string | null };
-  claude: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; scratchDir: string | null; atcLabel: boolean };
+  claude: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; scratchDir: string | null; atcLabel: boolean; account: string };
 }
 
 

@@ -400,6 +400,7 @@ func (a *App) PtySpawn(opts pty.Options, channel string) (string, error) {
 	if channel == "" {
 		return "", fmt.Errorf("missing PTY event channel")
 	}
+	opts.Env = a.accountEnv(opts.Account)
 	id := pty.ID()
 	p, e := pty.Spawn(opts, func(event pty.Event) { a.emit(channel, event) })
 	if e != nil {
@@ -589,8 +590,14 @@ func (a *App) GitChanges(dir string) (any, error) {
 	return out, nil
 }
 
+// ClaudeUsage is the default account's plan limits. Only the ~/.claude login's go in the
+// history, so another account's readings never mix into its fill graph.
 func (a *App) ClaudeUsage() (any, error) {
-	v, e := claudeUsage()
+	acc, ok := a.account(a.defaultAccount())
+	if ok {
+		return claudeUsage(&acc)
+	}
+	v, e := claudeUsage(nil)
 	if e == nil {
 		a.history.record(a.config, "claude", v)
 	}

@@ -4,9 +4,9 @@
  */
 
 import * as App from '../../wailsjs/go/main/App';
-import { pty } from '../../wailsjs/go/models';
+import { core, pty } from '../../wailsjs/go/models';
 import { Channel } from './desktop';
-import type { AgentProvider, CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot } from '../types';
+import type { Account, AgentProvider, CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot } from '../types';
 import type { AgentEvent } from '../../sidecar/protocol';
 
 export { Channel };
@@ -16,12 +16,18 @@ export function ptySpawn(opts: SpawnOpts, onEvent: Channel<PtyEvent>): Promise<s
   return App.PtySpawn(pty.Options.createFrom(opts), onEvent.name).catch((error) => { onEvent.dispose(); throw error; });
 }
 
+/** Claude accounts (#252); secrets come back masked, except from `accountSecret`. */
+export function accountList(): Promise<Account[]> { return App.AccountList() as Promise<Account[]>; }
+export function accountSecret(id: string): Promise<string> { return App.AccountSecret(id); }
+export function accountSave(a: Account): Promise<Account> { return App.AccountSave(core.Account.createFrom(a)) as Promise<Account>; }
+export function accountRemove(id: string): Promise<void> { return App.AccountRemove(id); }
+
 export function ptyWrite(id: string, data: string): Promise<void> { return App.PtyWrite(id, data); }
 
 /** Start a Claude or Codex session in the sidecar, resuming `session` when set. */
-export function agentOpen(provider: AgentProvider, cwd: string, o: { session?: string | null; chat?: boolean; model?: string; effort?: string }, events: Channel<AgentEvent>): Promise<string> {
+export function agentOpen(provider: AgentProvider, cwd: string, o: { session?: string | null; chat?: boolean; model?: string; effort?: string; account?: string }, events: Channel<AgentEvent>): Promise<string> {
   events.attach();
-  return App.AgentOpen(provider, cwd, o.session ?? '', !!o.chat, o.model ?? '', o.effort ?? '', events.name).catch((error) => { events.dispose(); throw error; });
+  return App.AgentOpen(provider, cwd, o.session ?? '', !!o.chat, o.model ?? '', o.effort ?? '', o.account ?? '', events.name).catch((error) => { events.dispose(); throw error; });
 }
 
 /** A provider's models on `events`, then an exit, without starting a session. */

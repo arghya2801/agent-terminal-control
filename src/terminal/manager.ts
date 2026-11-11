@@ -55,6 +55,8 @@ const RESIZE_DEBOUNCE_MS = 50;
 
 export interface Tab {
   provider: AgentProvider | null;
+  /** The Claude account the tab's CLI runs as; '' is the ~/.claude login (#252). */
+  account: string;
   boundSession: string | null;
   existingSessions: string[];
   codexSequence: number | null;
@@ -276,7 +278,7 @@ function paneContainer(key: TabKey): HTMLDivElement {
  * Focus an existing tab for `key`, or create an agent tab: a pane with no terminal, which
  * App fills with the chat. Its state comes from `setAgentState`, not from a title.
  */
-export function openAgentTab(key: TabKey, title: string, cwd: string | null, projectKey: string | null, provider: AgentProvider): Tab {
+export function openAgentTab(key: TabKey, title: string, cwd: string | null, projectKey: string | null, provider: AgentProvider, account = ''): Tab {
   const existing = tabs.get(key);
   if (existing) {
     activate(key);
@@ -287,7 +289,7 @@ export function openAgentTab(key: TabKey, title: string, cwd: string | null, pro
   container.style.zoom = String(zoom);
   const now = Date.now();
   const tab: Tab = {
-    provider, boundSession: key.startsWith('session:') ? key.slice(8) : null, existingSessions: [], codexSequence: null,
+    provider, account, boundSession: key.startsWith('session:') ? key.slice(8) : null, existingSessions: [], codexSequence: null,
     key, title, autoTitle: null, customTitle: null, activity: null, claudeName: null, attention: false, asking: false, done: false,
     queued: null, projectKey, startedAt: now, lastOutputAt: now, cwd, term: null, fit: null, search: null, container,
     ptyId: null, exited: false, exitCode: null, dims: null, unacked: 0, mark: 'open', markSince: now,
@@ -299,10 +301,11 @@ export function openAgentTab(key: TabKey, title: string, cwd: string | null, pro
 }
 
 /** What an agent tab's session reports: its state, its session id, that it exited. */
-export function setAgentState(key: TabKey, s: { activity?: Activity | null; session?: string; exited?: boolean; waiting?: boolean; provider?: AgentProvider }) {
+export function setAgentState(key: TabKey, s: { activity?: Activity | null; session?: string; exited?: boolean; waiting?: boolean; provider?: AgentProvider; account?: string }) {
   const tab = tabs.get(key);
   if (!tab || tab.term) return;
   if (s.provider) tab.provider = s.provider;
+  if (s.account !== undefined) tab.account = s.account;
   // A question or a permission pauses the turn: the tab waits on the user, and says so once.
   if (s.waiting) {
     tab.activity = 'idle';
@@ -440,6 +443,7 @@ export async function openTab(
     existingSessions, codexSequence: null,
     key,
     title,
+    account: opts.account ?? '',
     autoTitle: null,
     customTitle: null,
     activity: null,
@@ -670,6 +674,17 @@ export function clearFind(): void {
   clearChatFind();
   const tab = activeKey ? tabs.get(activeKey) : null;
   tab?.search?.clearDecorations();
+}
+
+/** A terminal's text, its wrapped rows joined, for finding what a program printed. */
+export function screenText(key: TabKey): string {
+  const b = tabs.get(key)?.term?.buffer.active;
+  let out = '';
+  for (let i = 0; b && i < b.length; i++) {
+    const line = b.getLine(i);
+    if (line) out += (line.isWrapped ? '' : '\n') + line.translateToString(true);
+  }
+  return out;
 }
 
 export function focusActiveTerminal(): void {

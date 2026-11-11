@@ -9,6 +9,7 @@ import { SvelteSet } from 'svelte/reactivity';
 import { migrateSessionNames, sessionKey } from './agents';
 import { listen, frontendReady, setWindowTheme, setZoom } from './desktop';
 import {
+  accountList,
   indexRefresh,
   indexSnapshot,
   settingsGet,
@@ -28,7 +29,7 @@ import { normalizeZoom, stepZoom } from './zoom';
 import { applyTerminalSettings, applyTheme, setTerminalZoom } from '../terminal/manager';
 import { applyPalette, isLight, type Palette } from './theme';
 import { findTheme, loadThemes } from './themes';
-import type { IndexSnapshot, SessionMeta, Settings } from '../types';
+import type { Account, IndexSnapshot, SessionMeta, Settings } from '../types';
 
 const EVENT_INDEX_UPDATED = 'index://updated';
 const EVENT_SETTINGS_UPDATED = 'settings://updated';
@@ -148,6 +149,7 @@ export async function initStores() {
     appState.settings = await settingsGet();
     applySettings(appState.settings);
     appState.notes = await notesGet();
+    await loadAccounts();
     applySnapshot(await indexSnapshot());
     appState.error = null;
   } catch (e) {
@@ -207,6 +209,32 @@ export async function nameSessions(sessions: SessionMeta[], onNamed: (key: strin
   }
   await refresh();
   if (failed.length) appState.error = `Could not name ${failed.join('; ')}`;
+}
+
+/** Claude accounts (#252), secrets masked. */
+export const accountState = $state({ list: [] as Account[], /** An account to add, filled in by Get a token. */ draft: null as Account | null });
+export async function loadAccounts() {
+  try {
+    accountState.list = await accountList();
+  } catch (e) {
+    appState.error = String(e);
+  }
+}
+export const accountLabel = (id: string) => accountState.list.find((a) => a.id === id)?.label ?? 'Claude login';
+/** The account a Claude tab runs as: the one its session last ran as, else the default.
+ *  '' is the ~/.claude login, which a removed account falls back to. */
+export function accountFor(session?: string | null): string {
+  const known = (id: string) => id === '' || accountState.list.some((a) => a.id === id);
+  const last = session ? appState.settings?.projects.sessionAccounts?.[session] : undefined;
+  if (last !== undefined && known(last)) return last;
+  const d = appState.settings?.claude.account ?? '';
+  return known(d) ? d : '';
+}
+/** Notes which account `session` (`provider:id`) ran as, once there are accounts to tell apart. */
+export async function rememberAccount(session: string, id: string) {
+  const s = appState.settings;
+  if (!s || !accountState.list.length || s.projects.sessionAccounts?.[session] === id) return;
+  await saveSettings({ ...s, projects: { ...s.projects, sessionAccounts: { ...s.projects.sessionAccounts, [session]: id } } });
 }
 
 export async function saveSettings(next: Settings) {

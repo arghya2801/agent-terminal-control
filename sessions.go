@@ -336,6 +336,7 @@ func (a *App) SuggestSessionName(file string) (string, error) {
 	} else {
 		cmd, e = agentCmd(ctx, core.Str(core.Obj(s["claude"])["command"]), "-p", "--no-session-persistence", "--model", "haiku", "--tools=", "--strict-mcp-config")
 		if e == nil {
+			cmd.Env = append(os.Environ(), envList(a.accountEnv(a.defaultAccount()))...)
 			var out bytes.Buffer
 			cmd.Stdout = &out
 			e = run(cmd, b.String())

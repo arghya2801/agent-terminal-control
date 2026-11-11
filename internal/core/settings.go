@@ -40,7 +40,7 @@ func ConfigDir() string {
 func Defaults() Object {
 	return Object{
 		"version":  1,
-		"projects": Object{"claudeProjectsDir": nil, "pinned": []any{}, "names": Object{}, "sessionNames": Object{}, "archived": []any{}},
+		"projects": Object{"claudeProjectsDir": nil, "pinned": []any{}, "names": Object{}, "sessionNames": Object{}, "sessionAccounts": Object{}, "archived": []any{}},
 		"ui": Object{"sidebarWidth": 260, "sidebarOpen": true, "sessionsPerProject": 15, "zoom": 1.0, "notifications": true, "restoreTabs": true, "theme": "ATC Dark", "groupSubfolders": false, "groupByBranch": false, "sidebarView": "open", "animations": "system", "animationSpeed": 1.0,
 			"usageResetTime": true, "showTabBar": false, "outputGraph": true, "taskAgent": "claude", "taskProject": "", "newTabIn": "home", "confirmClose": true, "agentView": "chat", "confirmSwitch": true,
 			"toasts": true, "toastSeconds": 6, "limitsRefreshSec": 300, "codexRefreshSec": 300, "renameModel": "haiku"},
@@ -49,7 +49,7 @@ func Defaults() Object {
 		// chatArgs start a chat. Claude gets no built-in tools and no MCP servers; `--tools=`
 		// rather than `--tools ""`, which Windows PowerShell drops. Codex has no switch for
 		// its tools or MCP servers, so it gets a read-only sandbox for commands.
-		"claude": Object{"command": "claude", "args": []any{}, "chatArgs": []any{"--tools=", "--strict-mcp-config"}, "resumeArgs": []any{"--resume", "{session}"}, "scratchDir": nil, "atcLabel": true},
+		"claude": Object{"command": "claude", "args": []any{}, "chatArgs": []any{"--tools=", "--strict-mcp-config"}, "resumeArgs": []any{"--resume", "{session}"}, "scratchDir": nil, "atcLabel": true, "account": ""},
 		"codex":  Object{"command": "codex", "args": []any{}, "chatArgs": []any{"--sandbox", "read-only"}, "resumeArgs": []any{"resume", "{session}"}, "homeDir": nil},
 	}
 }
@@ -60,7 +60,7 @@ func Merge(dst, src Object) {
 		}
 		if m, ok := v.(map[string]any); ok {
 			if d, ok := dst[k].(map[string]any); ok {
-				if k == "names" || k == "sessionNames" {
+				if k == "names" || k == "sessionNames" || k == "sessionAccounts" {
 					dst[k] = m
 				} else {
 					Merge(d, m)

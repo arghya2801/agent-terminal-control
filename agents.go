@@ -37,9 +37,9 @@ var nextAgent atomic.Uint64
 
 // AgentOpen starts a Claude or Codex session in cwd, resuming session when it is set, and
 // streams its events on channel. chat adds the chat arguments; model and effort, when set,
-// choose them for the session.
-func (a *App) AgentOpen(provider, cwd, session string, chat bool, model, effort, channel string) (string, error) {
-	op, e := a.launch(provider, cwd, chat)
+// choose them for the session; account is the Claude account it runs as.
+func (a *App) AgentOpen(provider, cwd, session string, chat bool, model, effort, account, channel string) (string, error) {
+	op, e := a.launch(provider, cwd, chat, account)
 	if e != nil {
 		return "", e
 	}
@@ -50,7 +50,7 @@ func (a *App) AgentOpen(provider, cwd, session string, chat bool, model, effort,
 // AgentCatalog lists a provider's models on channel, then exits, without starting a
 // session. The sidecar asks each CLI once.
 func (a *App) AgentCatalog(provider, channel string) error {
-	op, e := a.launch(provider, core.Home(), false)
+	op, e := a.launch(provider, core.Home(), false, a.defaultAccount())
 	if e != nil {
 		return e
 	}
@@ -61,7 +61,7 @@ func (a *App) AgentCatalog(provider, channel string) error {
 
 // launch is what starting provider in cwd takes: the CLI from settings, its arguments,
 // and Codex's home.
-func (a *App) launch(provider, cwd string, chat bool) (core.Object, error) {
+func (a *App) launch(provider, cwd string, chat bool, account string) (core.Object, error) {
 	if provider != "claude" && provider != "codex" {
 		return nil, fmt.Errorf("unknown provider: %s", provider)
 	}
@@ -85,6 +85,11 @@ func (a *App) launch(provider, cwd string, chat bool) (core.Object, error) {
 	}
 	if provider == "claude" && cfg["atcLabel"] != false {
 		env["CLAUDE_CODE_ENTRYPOINT"] = "atc"
+	}
+	if provider == "claude" {
+		for k, v := range a.accountEnv(account) {
+			env[k] = v
+		}
 	}
 	if !core.IsDir(cwd) {
 		cwd = core.Home()

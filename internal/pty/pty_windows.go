@@ -32,6 +32,9 @@ type Options struct {
 	// Shell is "pwsh" or "powershell" to prefer that one; anything else prefers pwsh.
 	Shell     string `json:"shell"`
 	NoProfile bool   `json:"noProfile"`
+	// Account is the Claude account the tab's CLI runs as; App turns it into Env.
+	Account string            `json:"account"`
+	Env     map[string]string `json:"-"`
 }
 type Stats struct {
 	BytesOut           uint64 `json:"bytesOut"`
@@ -178,7 +181,14 @@ func Start(args []string, opts Options, emit func(Event)) (*Session, error) {
 			return nil, e
 		}
 	}
-	env := append(ChildEnv("TERM", "NO_COLOR"), "TERM=xterm-256color")
+	drop := []string{"TERM", "NO_COLOR"}
+	for k := range opts.Env {
+		drop = append(drop, k)
+	}
+	env := append(ChildEnv(drop...), "TERM=xterm-256color")
+	for k, v := range opts.Env {
+		env = append(env, k+"="+v)
+	}
 	sort.Slice(env, func(i, j int) bool { return strings.ToUpper(env[i]) < strings.ToUpper(env[j]) })
 	block := utf16.Encode([]rune(strings.Join(env, "\x00") + "\x00\x00"))
 	var pi windows.ProcessInformation

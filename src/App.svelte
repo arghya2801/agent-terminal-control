@@ -27,6 +27,9 @@
     pageZoom,
   } from './lib/desktop';
   import {
+    accountFor,
+    accountLabel,
+    accountState,
     adjustZoom,
     appState,
     currentZoom,
@@ -35,6 +38,7 @@
     nameSessions,
     naming,
     refreshMs,
+    rememberAccount,
     saveSettings,
     sidebarOpen,
     toggleSidebar,
@@ -56,6 +60,7 @@
     onChange,
     onChord,
     openTab,
+    screenText,
     refit,
     refitNow,
     tabAt,
@@ -90,7 +95,7 @@
   import { projectKey } from './lib/paths';
   import { resolveSessions, type TabRef } from './lib/sessions';
   import { zoomLabel } from './lib/zoom';
-  import type { AgentProvider, Project, SessionMeta, TabKey, TabSummary } from './types';
+  import type { Account, AgentProvider, Project, SessionMeta, TabKey, TabSummary } from './types';
   import { markTitle, tabMark, type SessionMark } from './lib/format';
   import { nextWaiting, stateWord, triageOrder } from './lib/triage';
 
@@ -108,19 +113,20 @@
    * default the setting) the CLI's own TUI in a terminal. `session` resumes one; `task` is
    * the first message.
    */
-  async function openAgent(key: TabKey, title: string, cwd: string, projectKey: string | null, provider: AgentProvider, o: { session?: string | null; chat?: boolean; task?: string; terminal?: boolean } = {}) {
+  async function openAgent(key: TabKey, title: string, cwd: string, projectKey: string | null, provider: AgentProvider, o: { session?: string | null; chat?: boolean; task?: string; terminal?: boolean; account?: string } = {}) {
     if (o.chat) chatTabs.add(key);
+    const account = provider === 'claude' ? (o.account ?? accountFor(o.session ? `claude:${o.session}` : null)) : '';
     if (o.terminal ?? appState.settings?.ui.agentView === 'terminal') {
       // Typed into PowerShell: single quotes take everything literally but a doubled quote.
       const task = o.task ? ` '${o.task.replaceAll("'", "''")}'` : '';
       // A new session is found by what was not there before it started.
       const known = o.session ? [] : appState.index.projects.flatMap((p) => p.sessions.map(sessionKey));
-      await guard(async () => openTab(key, title, { cwd, initialCommand: `${await agentCommand(provider, o.session ?? null, o.chat)}${task}` }, projectKey, provider, known));
+      await guard(async () => openTab(key, title, { cwd, account, initialCommand: `${await agentCommand(provider, o.session ?? null, o.chat)}${task}` }, projectKey, provider, known));
       return;
     }
     const isNew = !getTab(key);
-    openAgentTab(key, title, cwd, projectKey, provider);
-    if (isNew) void startAgent(key, provider, cwd, o);
+    openAgentTab(key, title, cwd, projectKey, provider, account);
+    if (isNew) void startAgent(key, provider, cwd, { ...o, account });
   }
 
   /** What the switch warning is about; null when it is not showing. */
@@ -158,7 +164,7 @@
     const t = getTab(key);
     if (!t?.provider || !t.cwd) return;
     const id = sessionIdOf(t);
-    const { provider, cwd, projectKey: pk } = t;
+    const { provider, cwd, projectKey: pk, account } = t;
     const title = displayTitle(t);
     const chat = chatTabs.has(key);
     const terminal = !t.term;
@@ -169,7 +175,7 @@
     await whenClosed(key);
     const released = at();
     const next: TabKey = id ? `session:${provider}:${id}` : key;
-    await openAgent(next, title, cwd, pk, provider, { session: id, chat, terminal });
+    await openAgent(next, title, cwd, pk, provider, { session: id, chat, terminal, account });
     const opened = at();
     const ready = await new Promise<string>((done) => {
       const finish = (v: string) => (clearTimeout(timer), off(), done(v));
@@ -196,6 +202,14 @@
       if (id) marks.set(id, t.activity);
     }
     return marks;
+  });
+
+  // Which account each Claude session ran as, so resuming it picks that one again (#252).
+  $effect(() => {
+    for (const [key, session] of tabToSession) {
+      const t = getTab(key);
+      if (t?.provider === 'claude') void rememberAccount(session, t.account);
+    }
   });
 
   /** The sidebar row to highlight: the session the focused tab is showing. */
@@ -226,6 +240,7 @@
         customTitle: t.customTitle,
         ...(chatTabs.has(t.key) ? { chat: true as const } : {}),
         ...(t.provider && t.term ? { terminal: true as const } : {}),
+        ...(t.account ? { account: t.account } : {}),
       };
       const done = t.done ? { done: true as const } : {};
       const sessionId = sessionIdOf(t);
@@ -264,11 +279,11 @@
         const label = appState.index.projects
           .flatMap((p) => p.sessions)
           .find((s) => s.id === t.sessionId && s.provider === t.provider)?.label;
-        await openAgent(key, label ?? providerName(t.provider), t.cwd ?? '', t.projectKey, t.provider, { session: t.sessionId, chat: t.chat, terminal: !!t.terminal });
+        await openAgent(key, label ?? providerName(t.provider), t.cwd ?? '', t.projectKey, t.provider, { session: t.sessionId, chat: t.chat, terminal: !!t.terminal, account: t.account });
       } else if (t.kind === 'agent') {
         counter += 1;
         key = t.chat ? `agent:${t.provider}:chat-${counter}` : `agent:${t.provider}:${counter}`;
-        await openAgent(key, providerName(t.provider), t.cwd ?? '', t.projectKey, t.provider, { chat: t.chat, terminal: !!t.terminal });
+        await openAgent(key, providerName(t.provider), t.cwd ?? '', t.projectKey, t.provider, { chat: t.chat, terminal: !!t.terminal, account: t.account });
       } else if (t.kind === 'shell' && t.project && t.projectKey) {
         key = `project:${t.projectKey}`;
         const name = appState.index.projects.find((p) => p.key === t.projectKey)?.name ?? 'pwsh';
@@ -366,6 +381,7 @@
     tabs = all.map((t) => ({
       key: t.key,
       provider: t.provider,
+      account: t.account,
       title: displayTitle(t),
       exited: t.exited,
       attention: t.attention || t.asking,
@@ -461,11 +477,11 @@
 
 
   /** With `chat`, the agent starts with the chat arguments and cannot change anything. */
-  function newAgentIn(p: Project, provider: AgentProvider, chat = false) {
+  function newAgentIn(p: Project, provider: AgentProvider, chat = false, account?: string) {
     if (!p.path) return;
     counter += 1;
     const key: TabKey = chat ? `agent:${provider}:chat-${counter}` : `agent:${provider}:${counter}`;
-    openAgent(key, p.name, p.path, p.key, provider, { chat });
+    openAgent(key, p.name, p.path, p.key, provider, { chat, account });
   }
 
   /** Ask an agent, or with `chat` chat with one, in the scratch directory. */
@@ -621,6 +637,28 @@
     renamingTab = null;
     // After the Enter's keypress, or the terminal gets it and the agent reads an empty answer.
     setTimeout(focusActiveTerminal);
+  }
+
+  /** Get a token (#252): `claude setup-token` in a tab of its own. The token it prints goes
+   *  back to Settings, filled in, to check against the tab and save. */
+  async function signIn(a: Account) {
+    page = null;
+    counter += 1;
+    const key: TabKey = `plain:${counter}`;
+    const exe = appState.settings?.claude.command || 'claude';
+    await guard(() => openTab(key, `Sign in: ${a.label}`, { cwd: null, initialCommand: `& '${exe.replaceAll("'", "''")}' setup-token` }));
+    const until = Date.now() + 15 * 60_000;
+    let seen = '';
+    const timer = setInterval(() => {
+      const token = /sk-ant-oat01-[\w-]+/.exec(screenText(key))?.[0] ?? '';
+      // The same token twice running, so a line still being drawn is not taken.
+      if (token && token === seen) {
+        clearInterval(timer);
+        accountState.draft = { ...a, secret: token };
+        page = 'settings';
+      } else if (!getTab(key) || Date.now() > until) clearInterval(timer);
+      seen = token;
+    }, 1000);
   }
 
   /** A menu dropped from a header button. */
@@ -1095,6 +1133,7 @@
             <b class:exited={shown.exited} ondblclick={() => startRename(shown.key)}>{shown.title}</b>
           {/if}
           {#if shownState}<span class="facts" class:waiting={shownState.startsWith('waiting')}>{shownState}</span>{/if}
+          {#if shown.provider === 'claude' && accountState.list.length}<span class="facts" title="The Claude account this tab runs as">{accountLabel(shown.account)}</span>{/if}
         </span>
         <div class="grow"></div>
         <HeaderStats tabKey={shown.key} sessionKey={shownSession} working={mark === 'working'} changes={changes[shown.key]} />
@@ -1200,7 +1239,7 @@
 
   <!-- Popups, outside everything they make inert. -->
   {#if page === 'settings'}
-    <SettingsPanel onClose={() => (page = null)} />
+    <SettingsPanel onClose={() => (page = null)} onSignIn={signIn} />
   {:else if page === 'shortcuts'}
     <ShortcutsPanel onClose={() => (page = null)} />
   {/if}

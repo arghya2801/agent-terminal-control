@@ -62,9 +62,16 @@ func (b *backoff) err() error {
 	return fmt.Errorf("Claude is rate-limiting usage checks; retrying at %s", b.until.Local().Format("15:04"))
 }
 
-func claudeUsage() (any, error) {
+// claudeUsage reads the plan limits of the ~/.claude login, or of acc when it is set.
+func claudeUsage(acc *core.Account) (any, error) {
 	if e := claudeBackoff.blocked(time.Now()); e != nil {
 		return nil, e
+	}
+	if acc != nil {
+		if acc.Kind != "oauth" {
+			return nil, fmt.Errorf("an API key account has no plan limits")
+		}
+		return oauthUsage(acc.Secret, nil)
 	}
 	home := os.Getenv("CLAUDE_CONFIG_DIR")
 	if home == "" {
@@ -86,6 +93,10 @@ func claudeUsage() (any, error) {
 	if exp := core.Num(oauth["expiresAt"]); exp > 0 && exp <= float64(time.Now().UnixMilli()) {
 		return nil, fmt.Errorf("login token expired: run `claude` once to refresh it")
 	}
+	return oauthUsage(token, oauth["subscriptionType"])
+}
+
+func oauthUsage(token string, plan any) (any, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "GET", "https://api.anthropic.com/api/oauth/usage", nil)
@@ -107,7 +118,9 @@ func claudeUsage() (any, error) {
 	if e = json.NewDecoder(res.Body).Decode(&body); e != nil {
 		return nil, fmt.Errorf("usage response unreadable: %w", e)
 	}
-	body["subscriptionType"] = oauth["subscriptionType"]
+	if plan != nil {
+		body["subscriptionType"] = plan
+	}
 	return body, nil
 }
 

@@ -8,12 +8,13 @@ import { countOutput, getTab, markDone, onClosed, queuePrompt, setAgentHooks, se
 import { apply, emptyState, withSentImages, type AgentState } from './apply';
 import type { AgentEvent, Answer, ChatItem, Command, Image, Model } from '../../sidecar/protocol';
 import type { AgentProvider, TabKey } from '../types';
+import { accountFor, appState } from '../lib/stores.svelte';
 
 /** Each tab's session. `fresh`: nothing sent and nothing resumed, so the tab can still
- *  move to the other provider. */
-export const agents = $state<Record<string, AgentState & { fresh: boolean }>>({});
+ *  move to the other provider. `account`: the Claude account it runs as (#252). */
+export const agents = $state<Record<string, AgentState & { fresh: boolean; account: string }>>({});
 
-type Start = { session?: string | null; chat?: boolean; task?: string; model?: string; effort?: string };
+type Start = { session?: string | null; chat?: boolean; task?: string; model?: string; effort?: string; account?: string };
 interface Live {
   id: string | null;
   provider: AgentProvider;
@@ -56,7 +57,8 @@ export const knownCommands = (provider: AgentProvider, cwd: string) => commandCa
 export async function startAgent(key: TabKey, provider: AgentProvider, cwd: string, o: Start = {}) {
   if (live.has(key)) return;
   if (!o.session) o = { ...o, model: o.model ?? prefs[provider]?.model, effort: o.effort ?? prefs[provider]?.effort ?? undefined };
-  agents[key] = { ...emptyState(), fresh: !o.session && !o.task };
+  if (provider === 'claude') o = { ...o, account: o.account ?? accountFor(o.session ? `claude:${o.session}` : null) };
+  agents[key] = { ...emptyState(), fresh: !o.session && !o.task, account: o.account ?? '' };
   const channel = new Channel<AgentEvent>();
   const l: Live = { id: null, provider, cwd, chat: !!o.chat, channel, queued: o.task ? [{ text: o.task, images: [] }] : [], images: [], sent: [] };
   live.set(key, l);
@@ -186,13 +188,26 @@ export function wake(key: TabKey) {
 export const rewind = (key: TabKey, prompt: ChatItem) => op(key, { op: 'rewind', to: prompt.turn ?? prompt.id });
 
 /** Start a stopped tab's session again from its transcript. */
+/** Run the tab as another Claude account: its CLI restarts and resumes the conversation. */
+export function switchAccount(key: TabKey, account: string) {
+  const l = live.get(key);
+  const s = agents[key];
+  if (!l || !s || s.account === account) return;
+  if (s.working) return void (appState.error = 'Stop the turn first, then switch accounts');
+  const session = s.sessionId;
+  end(key);
+  setAgentState(key, { exited: false, account });
+  void startAgent(key, l.provider, l.cwd, { chat: l.chat, session, account, model: session ? undefined : s.model ?? undefined });
+}
+
 export function resume(key: TabKey) {
   const l = live.get(key);
   const session = agents[key]?.sessionId;
+  const account = agents[key]?.account;
   if (!l || !agents[key]?.exited) return;
   end(key);
   setAgentState(key, { exited: false });
-  void startAgent(key, l.provider, l.cwd, { chat: l.chat, session });
+  void startAgent(key, l.provider, l.cwd, { chat: l.chat, session, account });
 }
 
 /** Sessions still closing, by tab, until their CLI has exited. */

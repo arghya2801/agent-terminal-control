@@ -7,6 +7,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ## [Unreleased]
 
 ### Added
+- Claude accounts: add subscription tokens and API keys in Settings, see and edit them there, pick a default, and run each Claude tab as any of them. Nothing in `~/.claude` changes; secrets are kept encrypted in ATC's config folder (#252).
 - Agent tabs list the shell commands and subagents running in the background above the message box, with the last tool each ran, a progress summary on hover, and a Stop button. Claude only (#259).
 - Find (Ctrl+Shift+F) searches the text of agent chats too. Folded tool groups are not searched (#257).
 - Alt+Up and Alt+Down in an agent tab jump to the previous or next message you sent (#251).

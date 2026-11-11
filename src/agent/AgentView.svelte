@@ -8,12 +8,12 @@
   import Icon from '../lib/Icon.svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import ConfirmDialog from '../lib/ConfirmDialog.svelte';
-  import { agents, answer, queuedImages, catalog, interrupt, stopTask, knownCommands, listFiles, resume, rewind, send, wake, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
+  import { agents, answer, queuedImages, catalog, interrupt, stopTask, switchAccount, knownCommands, listFiles, resume, rewind, send, wake, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
   import { activity, blocks, summarize, thoughtLine, type Block } from './work';
   import { families, keptEffort, versionOf } from './models';
   import { getActiveKey, queuePrompt } from '../terminal/manager';
   import { providerName } from '../lib/agents';
-  import { appState } from '../lib/stores.svelte';
+  import { accountLabel, accountState, appState } from '../lib/stores.svelte';
   import type { Answer, BackgroundTask, ChatItem, Model } from '../../sidecar/protocol';
   import type { AgentProvider, TabKey } from '../types';
 
@@ -473,6 +473,17 @@
         {#if s?.modes.length && s.mode}
           <ChipMenu title={provider === 'codex' ? 'Sandbox and approvals, from the next message' : 'Permission mode'} sections={[{ items: s.modes.map((m) => ({ value: m, label: MODES[m] ?? m, description: MODE_HELP[m] })) }]} value={s.mode ?? 'default'} onPick={(m) => setMode(tabKey, m)} width={340}>
             {#snippet label()}<span class:plan={s?.mode === 'plan'}>{MODES[s?.mode ?? 'default'] ?? s?.mode}</span>{/snippet}
+          </ChipMenu>
+        {/if}
+        {#if provider === 'claude' && accountState.list.length}
+          <ChipMenu
+            title={s?.fresh ? 'Account' : 'Account. Switching restarts Claude on this conversation'}
+            sections={[{ items: [{ value: '', label: 'Claude login', description: 'Whoever is signed in to Claude Code' }, ...accountState.list.map((a) => ({ value: a.id, label: a.label, description: a.kind === 'oauth' ? 'Subscription' : 'API key' }))] }]}
+            value={s?.account ?? ''}
+            onPick={(id) => switchAccount(tabKey, id)}
+            width={280}
+          >
+            {#snippet label()}<span>{accountLabel(s?.account ?? '')}</span>{/snippet}
           </ChipMenu>
         {/if}
         {#if status}<span class="status" class:waiting={!!request}>{status}</span>{/if}

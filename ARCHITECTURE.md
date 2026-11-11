@@ -119,6 +119,25 @@ agent tab and reopens its session the other way: in a terminal with `core.AgentC
 or as a chat. Only one of them can drive a session. `ui.agentView` picks the view for new
 tabs, and a saved tab keeps its own (`terminal` in `atc.tabs`).
 
+### Claude accounts
+
+`accounts.go` and `core/accounts.go` (#252). An account is a label, a kind (`oauth`, a
+`claude setup-token` token, or `apiKey`) and a secret, all in `<config>/accounts.dat` as
+JSON sealed with DPAPI (`CryptProtectData`, current user). Nothing goes in
+`settings.json` but `claude.account`, the default id, and `projects.sessionAccounts`,
+which account each `provider:id` last ran as. `AccountList` masks secrets;
+`AccountSecret` is the one call that returns one.
+
+Go turns an account id into env on each launch, so the secret never reaches the page
+except through Show, Copy and Edit: `launch()` for the sidecar, `PtySpawn` (`Options.Account`
+-> `Options.Env`, dropped from `ChildEnv` first) for terminals. An `oauth` account also
+sets an empty `ANTHROPIC_API_KEY`, which the CLI ignores, so a key in the Windows
+environment cannot outrank the token. '' or an unknown id adds nothing: the `~/.claude`
+login applies. The page picks the id: `accountFor` in the store (the session's last, then
+the default), carried on the manager's `Tab.account`, saved in `atc.tabs`, and recorded
+into `sessionAccounts` by an effect in App. Rename with Haiku, the model catalog and the
+limits meter use the default.
+
 ## Agents in a terminal
 
 `core.AgentCommand` builds the PowerShell line that starts Claude or Codex: the command,
