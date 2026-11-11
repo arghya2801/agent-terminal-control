@@ -269,6 +269,8 @@ histories, or convert conversations between providers.
 
 ## Claude accounts
 
+Step by step: [docs/ACCOUNTS.md](docs/ACCOUNTS.md).
+
 Settings > Claude accounts holds more than one Claude login. Add a **subscription**
 (**Get a token** runs `claude setup-token` in a tab; sign in there and the token comes
 back to the form) or an **API key** (checked before it is saved). Each account can be
