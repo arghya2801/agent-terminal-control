@@ -6,7 +6,10 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.7.3-beta] - 2026-11-11
+
 ### Added
+- Settings > About shows the version, with a link to the releases.
 - Claude accounts: add subscription tokens and API keys in Settings, see and edit them there, pick a default, and run each Claude tab as any of them. Nothing in `~/.claude` changes; secrets are kept encrypted in ATC's config folder (#252).
 - Agent tabs list the shell commands and subagents running in the background above the message box, with the last tool each ran, a progress summary on hover, and a Stop button. Claude only (#259).
 - Find (Ctrl+Shift+F) searches the text of agent chats too. Folded tool groups are not searched (#257).
@@ -374,7 +377,8 @@ ATC now runs on a Go/Wails host instead of Rust/Tauri. The interface is the same
 
 First release.
 
-[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.3-beta...HEAD
+[0.7.3-beta]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.1...v0.7.3-beta
 [0.7.1]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.1...v0.6.2
