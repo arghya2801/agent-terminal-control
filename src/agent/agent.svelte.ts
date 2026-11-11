@@ -43,8 +43,8 @@ const store = (k: string, v: unknown) => {
   } catch {}
 };
 const PREFS = 'atc.agentPrefs';
-const prefs = stored<Partial<Record<AgentProvider, { model?: string; effort?: string | null }>>>(PREFS, {});
-function remember(provider: AgentProvider | undefined, p: { model?: string; effort?: string | null }) {
+const prefs = stored<Partial<Record<AgentProvider, { model?: string }>>>(PREFS, {});
+function remember(provider: AgentProvider | undefined, p: { model?: string }) {
   if (!provider) return;
   prefs[provider] = { ...prefs[provider], ...p };
   store(PREFS, prefs);
@@ -56,7 +56,8 @@ export const knownCommands = (provider: AgentProvider, cwd: string) => commandCa
 
 export async function startAgent(key: TabKey, provider: AgentProvider, cwd: string, o: Start = {}) {
   if (live.has(key)) return;
-  if (!o.session) o = { ...o, model: o.model ?? prefs[provider]?.model, effort: o.effort ?? prefs[provider]?.effort ?? undefined };
+  if (!o.session) o = { ...o, model: o.model ?? prefs[provider]?.model };
+  o = { ...o, effort: o.effort ?? (appState.settings?.[provider].defaultEffort || undefined) };
   if (provider === 'claude') o = { ...o, account: o.account ?? accountFor(o.session ? `claude:${o.session}` : null) };
   agents[key] = { ...emptyState(), fresh: !o.session && !o.task, account: o.account ?? '' };
   const channel = new Channel<AgentEvent>();
@@ -79,7 +80,7 @@ export function switchProvider(key: TabKey, provider: AgentProvider, model: stri
   const l = live.get(key);
   if (!l || !agents[key]?.fresh || l.provider === provider) return;
   end(key);
-  remember(provider, { model, effort: null });
+  remember(provider, { model });
   setAgentState(key, { provider });
   void startAgent(key, provider, l.cwd, { chat: l.chat, model });
 }
@@ -171,11 +172,27 @@ export const queuedImages = (key: TabKey) => live.get(key)?.images.length ?? 0;
 /** The queue's text for a message of only images, which the queue shows. */
 const IMAGES = '(images)';
 export const interrupt = (key: TabKey) => op(key, { op: 'interrupt' });
+/** Force send (Ctrl+X Ctrl+S): the queued message and `text` go now. Claude stops what it is
+ *  doing and takes them; Codex has no such message, so its turn stops and the queue sends. */
+export function sendNow(key: TabKey, text = '', images: string[] = []) {
+  const l = live.get(key);
+  if (!l || !agents[key]?.working) return send(key, text, images);
+  if (l.provider !== 'claude') return void (send(key, text, images), interrupt(key));
+  const queued = getTab(key)?.queued;
+  const all = [queued === IMAGES ? '' : (queued ?? ''), text].filter(Boolean).join('\n\n');
+  const pics = [...l.images, ...images];
+  queuePrompt(key, null);
+  l.images = [];
+  if (!all && !pics.length) return;
+  if (pics.length) l.sent.push(pics);
+  op(key, { op: 'send', text: all, images: pics.map(toImage), now: true });
+}
 export const stopTask = (key: TabKey, task: string) => op(key, { op: 'stopTask', task });
+export const askBtw = (key: TabKey, question: string) => op(key, { op: 'btw', question });
 export const answer = (key: TabKey, request: string, a: Answer) => op(key, { op: 'answer', request, answer: a });
 export const setMode = (key: TabKey, mode: string) => op(key, { op: 'mode', mode });
 export const setModel = (key: TabKey, model: string) => (remember(live.get(key)?.provider, { model }), op(key, { op: 'model', model }));
-export const setEffort = (key: TabKey, effort: string | null) => (remember(live.get(key)?.provider, { effort }), op(key, { op: 'effort', effort }));
+export const setEffort = (key: TabKey, effort: string | null) => op(key, { op: 'effort', effort });
 export const listFiles = (key: TabKey) => op(key, { op: 'files' });
 /** Start a dormant session's CLI ahead of the first message, so its commands are listed. */
 export function wake(key: TabKey) {

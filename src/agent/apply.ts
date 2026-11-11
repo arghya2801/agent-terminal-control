@@ -21,12 +21,14 @@ export interface AgentState {
   dormant: boolean;
   plan: Step[];
   background: BackgroundTask[];
+  /** The last /btw side question, until dismissed. */
+  btw: { question: string; answer?: string; error?: string } | null;
   /** For the `@` menu, as the last `files` answer listed them. */
   files: string[];
 }
 
 export function emptyState(): AgentState {
-  return { items: [], requests: [], commands: [], models: [], modes: [], model: null, mode: null, effort: null, sessionId: null, ready: false, working: false, since: 0, exited: false, dormant: false, plan: [], background: [], files: [] };
+  return { items: [], requests: [], commands: [], models: [], modes: [], model: null, mode: null, effort: null, sessionId: null, ready: false, working: false, since: 0, exited: false, dormant: false, plan: [], background: [], btw: null, files: [] };
 }
 
 let notices = 0;
@@ -138,6 +140,9 @@ export function apply(s: AgentState, ev: AgentEvent, now = Date.now()) {
       return;
     case 'background':
       s.background = ev.tasks;
+      return;
+    case 'btw':
+      s.btw = { question: ev.question, answer: ev.answer, error: ev.error };
       return;
     case 'files':
       s.files = ev.files;

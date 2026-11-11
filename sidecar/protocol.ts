@@ -131,6 +131,8 @@ export type AgentEvent =
   | { t: 'effort'; effort: string | null }
   /** The whole plan as it now stands. */
   | { t: 'plan'; steps: Step[] }
+  /** A /btw side question: asked, then answered or failed. Not part of the conversation. */
+  | { t: 'btw'; question: string; answer?: string; error?: string }
   /** Every live background task, replacing the last list. */
   | { t: 'background'; tasks: BackgroundTask[] }
   /** The project's files, relative, answering `files`. */
@@ -144,9 +146,11 @@ export type AgentOp =
   | { op: 'open'; id: string; provider: Provider; cwd: string; resume?: string; exe: string; args: string[]; env?: Record<string, string>; model?: string; effort?: string }
   | { op: 'catalog'; id: string; provider: Provider; cwd: string; exe: string; args: string[]; env?: Record<string, string> }
   | { op: 'effort'; id: string; effort: string | null }
-  | { op: 'send'; id: string; text: string; images?: Image[] }
+  /** `now`: Claude stops what it is doing and takes this message (force send). */
+  | { op: 'send'; id: string; text: string; images?: Image[]; now?: boolean }
   | { op: 'interrupt'; id: string }
   | { op: 'stopTask'; id: string; task: string }
+  | { op: 'btw'; id: string; question: string }
   | { op: 'answer'; id: string; request: string; answer: Answer }
   | { op: 'mode'; id: string; mode: string }
   | { op: 'model'; id: string; model: string }

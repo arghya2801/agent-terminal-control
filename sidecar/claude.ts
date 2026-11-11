@@ -344,7 +344,7 @@ export class Claude {
     return { behavior: 'allow', updatedInput: input, ...(answer.always && suggestions ? { updatedPermissions: suggestions } : {}) };
   }
 
-  send(text: string, images: Image[] = []) {
+  send(text: string, images: Image[] = [], now = false) {
     // `/clear` starts the CLI on a fresh conversation; the view starts over with it.
     if (text.trim() === '/clear') this.live({ t: 'clear' });
     const uuid = randomUUID();
@@ -355,7 +355,7 @@ export class Claude {
     const content = images.length
       ? [...images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mediaType, data: i.data } })), ...(text ? [{ type: 'text', text }] : [])]
       : text;
-    this.inbox.push({ type: 'user', uuid, message: { role: 'user', content }, parent_tool_use_id: null, session_id: '' } as SDKUserMessage);
+    this.inbox.push({ type: 'user', uuid, message: { role: 'user', content }, parent_tool_use_id: null, session_id: '', ...(now ? { priority: 'now' } : {}) } as SDKUserMessage);
   }
 
   /** Files go back to how they were before prompt `to`, as Esc Esc does, then the session
@@ -403,6 +403,19 @@ export class Claude {
 
   interrupt() {
     void this.q?.interrupt().catch((e) => log(this.id, 'interrupt:', String(e)));
+  }
+
+  /** A side question (/btw, as in Claude Code): answered from the conversation so far,
+   *  even mid-turn, without joining it. `askSideQuestion` is on the query but not yet in
+   *  the SDK's types. */
+  btw(question: string) {
+    this.live({ t: 'btw', question });
+    const q = this.wake() as (Query & { askSideQuestion?: (q: string) => Promise<{ response: string } | null> }) | undefined;
+    if (!q?.askSideQuestion) return this.live({ t: 'btw', question, error: 'This Claude Agent SDK has no side questions' });
+    q.askSideQuestion(question).then(
+      (r) => this.live({ t: 'btw', question, answer: r?.response || 'No answer' }),
+      (e) => this.live({ t: 'btw', question, error: String(e?.message ?? e) }),
+    );
   }
 
   stopTask(task: string) {

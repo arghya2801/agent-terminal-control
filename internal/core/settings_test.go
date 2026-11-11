@@ -80,9 +80,9 @@ func TestCommandsQuotePathsIdsAndHomeAsLiteralPowerShellArguments(t *testing.T) 
 	Obj(s["codex"])["command"] = `C:\O'Brien\codex.exe`
 	Obj(s["codex"])["homeDir"] = `D:\Codex home\$literal`
 	for _, c := range []struct{ provider, session, want string }{
-		{"codex", "id';$(bad)", `$env:CODEX_HOME = 'D:\Codex home\$literal'; & 'C:\O''Brien\codex.exe' --no-daemon resume 'id'';$(bad)'`},
-		{"claude", "abc", "claude --resume abc"},
-		{"claude", "", "claude"},
+		{"codex", "id';$(bad)", `$env:CODEX_HOME = 'D:\Codex home\$literal'; & 'C:\O''Brien\codex.exe' --no-daemon -c 'model_reasoning_effort=medium' resume 'id'';$(bad)'`},
+		{"claude", "abc", "claude --effort medium --resume abc"},
+		{"claude", "", "claude --effort medium"},
 	} {
 		if got := AgentCommand(s, c.provider, c.session, false); got != c.want {
 			t.Errorf("%q != %q", got, c.want)
@@ -92,23 +92,27 @@ func TestCommandsQuotePathsIdsAndHomeAsLiteralPowerShellArguments(t *testing.T) 
 func TestLaunchAndChatArgumentsComeBeforeResume(t *testing.T) {
 	s := Defaults()
 	Obj(s["claude"])["args"] = []any{"--model", "opus"}
-	if got := AgentCommand(s, "claude", "abc", true); got != "claude --model opus '--tools=' --strict-mcp-config --resume abc" {
+	if got := AgentCommand(s, "claude", "abc", true); got != "claude --effort medium --model opus '--tools=' --strict-mcp-config --resume abc" {
 		t.Fatal(got)
 	}
-	if got := AgentCommand(Defaults(), "codex", "", true); got != "codex --no-daemon --sandbox read-only" {
+	if got := AgentCommand(Defaults(), "codex", "", true); got != "codex --no-daemon -c 'model_reasoning_effort=medium' --sandbox read-only" {
 		t.Fatal(got)
+	}
+	Obj(s["claude"])["defaultEffort"] = ""
+	if got := AgentCommand(s, "claude", "", false); got != "claude --model opus" {
+		t.Fatal("an empty default effort leaves it to the CLI:", got)
 	}
 }
 func TestCodexAlwaysRunsStandalone(t *testing.T) {
-	if got := AgentCommand(Defaults(), "codex", "abc", false); got != "codex --no-daemon resume abc" {
+	if got := AgentCommand(Defaults(), "codex", "abc", false); got != "codex --no-daemon -c 'model_reasoning_effort=medium' resume abc" {
 		t.Fatal(got)
 	}
-	if got := AgentCommand(Defaults(), "claude", "", false); got != "claude" {
+	if got := AgentCommand(Defaults(), "claude", "", false); got != "claude --effort medium" {
 		t.Fatal(got)
 	}
 }
 func TestSimpleArgumentsStayReadableAndExpressionsStayLiteral(t *testing.T) {
-	if got := AgentCommand(Defaults(), "codex", "", false); got != "codex --no-daemon" {
+	if got := AgentCommand(Defaults(), "codex", "", false); got != "codex --no-daemon -c 'model_reasoning_effort=medium'" {
 		t.Fatal(got)
 	}
 	if Argument("0199-abc") != "0199-abc" {
