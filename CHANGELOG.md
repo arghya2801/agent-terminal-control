@@ -6,6 +6,15 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Added
+- Force send: Ctrl+X Ctrl+S in an agent tab, or Send now beside a queued message, sends it at once. Claude stops what it is doing and takes it; a Codex turn stops and the message sends as it ends.
+- `/btw` in a Claude tab asks a side question, as in Claude Code: Claude answers from the conversation so far, even mid-turn, without stopping. The answer shows above the message box and stays out of the conversation.
+- Settings > Agents > Default effort, Medium unless changed, for new and resumed Claude and Codex tabs, in the chat and in a terminal.
+
+### Changed
+- Waiting on you lists the agent that stopped most recently first. Ctrl+Shift+J still jumps to the one that has waited longest.
+- New chats no longer start at the effort picked last; they start at the default effort. The effort picker's Default is now CLI default, which leaves the effort to the CLI's own settings.
+
 ## [0.7.3-beta] - 2026-11-11
 
 ### Added

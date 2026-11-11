@@ -49,8 +49,8 @@ func Defaults() Object {
 		// chatArgs start a chat. Claude gets no built-in tools and no MCP servers; `--tools=`
 		// rather than `--tools ""`, which Windows PowerShell drops. Codex has no switch for
 		// its tools or MCP servers, so it gets a read-only sandbox for commands.
-		"claude": Object{"command": "claude", "args": []any{}, "chatArgs": []any{"--tools=", "--strict-mcp-config"}, "resumeArgs": []any{"--resume", "{session}"}, "scratchDir": nil, "atcLabel": true, "account": ""},
-		"codex":  Object{"command": "codex", "args": []any{}, "chatArgs": []any{"--sandbox", "read-only"}, "resumeArgs": []any{"resume", "{session}"}, "homeDir": nil},
+		"claude": Object{"command": "claude", "args": []any{}, "chatArgs": []any{"--tools=", "--strict-mcp-config"}, "resumeArgs": []any{"--resume", "{session}"}, "scratchDir": nil, "atcLabel": true, "account": "", "defaultEffort": "medium"},
+		"codex":  Object{"command": "codex", "args": []any{}, "chatArgs": []any{"--sandbox", "read-only"}, "resumeArgs": []any{"resume", "{session}"}, "homeDir": nil, "defaultEffort": "medium"},
 	}
 }
 func Merge(dst, src Object) {
@@ -235,6 +235,12 @@ func AgentCommand(s Object, provider, session string, chat bool) string {
 	parts := []string{exe}
 	if provider == "codex" {
 		parts = append(parts, "--no-daemon")
+	}
+	// Before the args, so an effort given there still wins.
+	if e := Str(cfg["defaultEffort"]); e != "" && provider == "codex" {
+		parts = append(parts, "-c", Argument("model_reasoning_effort="+e))
+	} else if e != "" {
+		parts = append(parts, "--effort", Argument(e))
 	}
 	add := func(key string) {
 		for _, a := range Arr(cfg[key]) {

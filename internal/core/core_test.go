@@ -62,7 +62,7 @@ func TestAgentQuoting(t *testing.T) {
 	Obj(s["codex"])["command"] = `C:\O'Brien\codex.exe`
 	Obj(s["codex"])["homeDir"] = `D:\Codex home\$literal`
 	got := AgentCommand(s, "codex", "id';$(bad)", false)
-	want := `$env:CODEX_HOME = 'D:\Codex home\$literal'; & 'C:\O''Brien\codex.exe' --no-daemon resume 'id'';$(bad)'`
+	want := `$env:CODEX_HOME = 'D:\Codex home\$literal'; & 'C:\O''Brien\codex.exe' --no-daemon -c 'model_reasoning_effort=medium' resume 'id'';$(bad)'`
 	if got != want {
 		t.Fatalf("%q != %q", got, want)
 	}

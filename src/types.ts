@@ -172,8 +172,8 @@ export interface Settings {
   };
   terminal: TerminalSettings;
   /** `args` go on every launch; `chatArgs` on chats too, so they cannot change anything. */
-  codex: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; homeDir: string | null };
-  claude: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; scratchDir: string | null; atcLabel: boolean; account: string };
+  codex: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; homeDir: string | null; defaultEffort: string };
+  claude: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; scratchDir: string | null; atcLabel: boolean; account: string; defaultEffort: string };
 }
 
 

@@ -120,7 +120,7 @@ func (s *sidecar) send(a *App, op core.Object, channel string) (string, error) {
 // effort.
 func (a *App) AgentSend(id string, op core.Object) error {
 	switch core.Str(op["op"]) {
-	case "send", "interrupt", "stopTask", "answer", "mode", "model", "effort", "rewind", "files", "wake":
+	case "send", "interrupt", "stopTask", "btw", "answer", "mode", "model", "effort", "rewind", "files", "wake":
 	default:
 		return fmt.Errorf("unknown agent operation: %v", op["op"])
 	}

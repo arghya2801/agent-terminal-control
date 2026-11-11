@@ -8,7 +8,7 @@
   import Icon from '../lib/Icon.svelte';
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import ConfirmDialog from '../lib/ConfirmDialog.svelte';
-  import { agents, answer, queuedImages, catalog, interrupt, stopTask, switchAccount, knownCommands, listFiles, resume, rewind, send, wake, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
+  import { agents, answer, queuedImages, catalog, interrupt, askBtw, sendNow, stopTask, switchAccount, knownCommands, listFiles, resume, rewind, send, wake, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
   import { activity, blocks, summarize, thoughtLine, type Block } from './work';
   import { families, keptEffort, versionOf } from './models';
   import { getActiveKey, queuePrompt } from '../terminal/manager';
@@ -189,7 +189,9 @@
 
   let draft = $state('');
   // Names starting `__` are the CLI's own plumbing, not something to type.
-  const commands = $derived([...(s?.ready ? s.commands : knownCommands(provider, cwd ?? '')).filter((c) => !c.name.startsWith('/__')), ...(s?.files ?? []).map((f) => ({ name: `@${f}`, description: '' }))]);
+  const BTW = { name: '/btw', description: 'Ask a side question; Claude keeps working and the answer stays out of the conversation', hint: '<question>' };
+  const listed = $derived((s?.ready ? s.commands : knownCommands(provider, cwd ?? '')).filter((c) => !c.name.startsWith('/__')));
+  const commands = $derived([...(provider === 'claude' && !listed.some((c) => c.name === '/btw') ? [BTW] : []), ...listed, ...(s?.files ?? []).map((f) => ({ name: `@${f}`, description: '' }))]);
   const plan = $derived(s?.plan ?? []);
   const doneSteps = $derived(plan.filter((p) => p.status === 'done').length);
   let planOpen = $state(true);
@@ -258,7 +260,7 @@
     <div class="effort" role="group" aria-label="Reasoning effort">
       <span class="lbl">Effort{provider === 'codex' ? ', from the next message' : ''}</span>
       <div class="seg">
-        <button class:on={!s.effort} onclick={() => setEffort(tabKey, null)} title="The model's own default">{current.defaultEffort ? `Default (${effortName(current.defaultEffort).toLowerCase()})` : 'Default'}</button>
+        <button class:on={!s.effort} onclick={() => setEffort(tabKey, null)} title={provider === 'claude' ? 'No effort passed: Claude uses effortLevel from ~/.claude/settings.json, else the model default' : 'No effort passed: Codex uses its config.toml, else the model default'}>{current.defaultEffort ? `CLI default (${effortName(current.defaultEffort).toLowerCase()})` : 'CLI default'}</button>
         {#each current.efforts as e (e)}
           <button class:on={s.effort === e} onclick={() => setEffort(tabKey, e)}>{effortName(e)}</button>
         {/each}
@@ -408,6 +410,19 @@
         {/if}
       </div>
     {/if}
+    {#if s?.btw}
+      {@const b = s.btw}
+      <div class="tasks btw">
+        <div class="head">
+          <span class="icon"><Icon name="sparkle" size={14} /></span>
+          <span class="bg-what" title={b.question}>/btw {b.question}</span>
+          <button class="link" onclick={() => s && (s.btw = null)}>Dismiss</button>
+        </div>
+        <div class="btw-body">
+          {#if b.error}<p class="btw-err">{b.error}</p>{:else if b.answer !== undefined}<Markdown text={b.answer} />{:else}<span class="shimmer">Thinking about it, without stopping {name}</span>{/if}
+        </div>
+      </div>
+    {/if}
     {#if s?.background.length}
       <div class="tasks">
         <button class="head" aria-expanded={bgOpen} onclick={() => (bgOpen = !bgOpen)}>
@@ -441,6 +456,7 @@
       {@const pics = queuedImages(tabKey)}
       <p class="aside queued">
         <span title={queued}>Sends when {name} finishes: {queued}{pics ? ` (+${pics} image${pics > 1 ? 's' : ''})` : ''}</span>
+        <button class="link" onclick={() => sendNow(tabKey)} title={provider === 'claude' ? 'Ctrl+X Ctrl+S: Claude stops what it is doing and takes this now' : 'Ctrl+X Ctrl+S: stop the turn; this sends as it ends'}>Send now</button>
         <button class="link" onclick={() => queuePrompt(tabKey, null)}>Cancel</button>
       </p>
     {/if}
@@ -457,7 +473,13 @@
       working={!!s?.working}
       waiting={!!request}
       disabled={!s || s.exited}
-      onSend={(text, images) => (follow(), send(tabKey, text, images))}
+      onSend={(text, images) => {
+        const btw = provider === 'claude' && /^\/btw\s+([\s\S]+)/.exec(text);
+        if (btw) return askBtw(tabKey, btw[1].trim());
+        follow();
+        send(tabKey, text, images);
+      }}
+      onSendNow={(text, images) => (follow(), sendNow(tabKey, text, images))}
       onStop={() => interrupt(tabKey)}
     >
       {#snippet toolbar()}
@@ -981,6 +1003,18 @@
     align-items: center;
     gap: 10px;
     color: var(--fg-dim);
+  }
+  .btw .head {
+    cursor: default;
+  }
+  .btw-body {
+    max-height: 14em;
+    overflow-y: auto;
+    padding: 0 12px 8px;
+  }
+  .btw-err {
+    margin: 0;
+    color: var(--danger-strong);
   }
   .tasks li.bg .bg-text {
     display: grid;

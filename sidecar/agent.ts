@@ -44,9 +44,11 @@ function run(op: AgentOp) {
   if (!s) return void (op.op !== 'close' && emit(op.id, { t: 'error', message: 'This session has ended. Resume it to keep going.' }));
   switch (op.op) {
     case 'send':
-      return s.send(op.text, op.images);
+      return s instanceof Claude ? s.send(op.text, op.images, op.now) : s.send(op.text, op.images);
     case 'interrupt':
       return s.interrupt();
+    case 'btw':
+      return s instanceof Claude ? s.btw(op.question) : emit(op.id, { t: 'btw', question: op.question, error: 'Codex has no /btw' });
     case 'stopTask':
       return s instanceof Claude ? s.stopTask(op.task) : undefined;
     case 'answer':

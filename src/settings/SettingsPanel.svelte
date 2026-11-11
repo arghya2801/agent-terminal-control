@@ -378,6 +378,15 @@
         <label for="ca">Chat arguments<span class="muted hint">Added for chats. Codex keeps its MCP servers; only its commands are read-only. <code>""</code> is an empty argument</span></label>
         <textarea id="ca" bind:value={claudeChatArgs}></textarea>
         <textarea aria-label="Codex chat arguments" bind:value={codexChatArgs}></textarea>
+        <label for="de">Default effort<span class="muted hint">New and resumed chat and terminal tabs start here. The chat's picker changes one tab</span></label>
+        <select id="de" bind:value={draft.claude.defaultEffort}>
+          <option value="">CLI default</option>
+          {#each ['low', 'medium', 'high', 'xhigh', 'max'] as e (e)}<option value={e}>{e}</option>{/each}
+        </select>
+        <select aria-label="Codex default effort" bind:value={draft.codex.defaultEffort}>
+          <option value="">CLI default</option>
+          {#each ['minimal', 'low', 'medium', 'high', 'xhigh'] as e (e)}<option value={e}>{e}</option>{/each}
+        </select>
         <label for="al">Label requests "atc"<span class="muted hint">Chat tabs label their requests <code>atc</code> rather than the Agent SDK's <code>sdk-ts</code>, which some accounts saw drain the 5-hour limit faster. From the next session</span></label>
         <div class="check"><input id="al" type="checkbox" bind:checked={draft.claude.atcLabel} /></div>
         <span></span>

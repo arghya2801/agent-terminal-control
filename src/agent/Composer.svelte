@@ -4,7 +4,7 @@
   import { matchCommands, typedCommand, type Sigil } from './commands';
   import type { Command } from '../../sidecar/protocol';
 
-  let { text = $bindable(''), name, history, hints = true, sigils, commands, ready = true, working, waiting = false, disabled, onSend, onStop, onFiles, onInput, toolbar }: {
+  let { text = $bindable(''), name, history, hints = true, sigils, commands, ready = true, working, waiting = false, disabled, onSend, onSendNow, onStop, onFiles, onInput, toolbar }: {
     /** What is in the box; a rewind puts its prompt back here. */
     text?: string;
     name: string;
@@ -23,6 +23,8 @@
     disabled: boolean;
     /** Images as data URLs. */
     onSend: (text: string, images: string[]) => void;
+    /** Ctrl+X Ctrl+S: the queued message, and what is in the box, go now. */
+    onSendNow?: (text: string, images: string[]) => void;
     onStop: () => void;
     /** Typing `@` asks for the project's files, which arrive as `@path` commands. */
     onFiles?: () => void;
@@ -37,6 +39,7 @@
   let box = $state<HTMLTextAreaElement>();
   let pick = $state(0);
   let dismissed = $state(false);
+  let chordAt = 0;
 
   const typed = $derived(typedCommand(text, caret, sigils));
   const atFiles = $derived(typed?.sigil === '@');
@@ -60,9 +63,9 @@
     box.focus();
   }
 
-  function send() {
-    if ((!text.trim() && !images.length) || disabled) return;
-    onSend(text.trim(), images.map((i) => i.url));
+  function send(now = false) {
+    if ((!now && !text.trim() && !images.length) || disabled) return;
+    (now && onSendNow ? onSendNow : onSend)(text.trim(), images.map((i) => i.url));
     text = '';
     images = [];
     problem = '';
@@ -128,6 +131,19 @@
   function onKey(e: KeyboardEvent) {
     // An input method is composing: Enter and the arrows are its, not ours.
     if (e.isComposing) return;
+    // Ctrl+X then Ctrl+S, as in Claude Code: force send. Ctrl+X still cuts a selection.
+    const ctrl = e.ctrlKey && !e.shiftKey && !e.altKey;
+    if (ctrl && e.key.toLowerCase() === 'x' && working && box?.selectionStart === box?.selectionEnd) {
+      e.preventDefault();
+      chordAt = Date.now();
+      return;
+    }
+    if (ctrl && e.key.toLowerCase() === 's' && Date.now() - chordAt < 2000) {
+      e.preventDefault();
+      chordAt = 0;
+      send(true);
+      return;
+    }
     if (menu.length) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
@@ -221,7 +237,7 @@
     onpaste={onPaste}
     rows="1"
     {disabled}
-    placeholder={disabled ? 'Resume the session to keep going' : waiting ? `Answer ${name} above, or type a message to send after this turn` : working ? 'Enter queues a message for when this turn ends' : !hints ? `Ask ${name}` : sigils.includes('$') ? `Ask ${name}: / for commands, $ for skills, @ for files` : `Ask ${name}: / for commands and skills, @ for files`}
+    placeholder={disabled ? 'Resume the session to keep going' : waiting ? `Answer ${name} above, or type a message to send after this turn` : working ? 'Enter queues a message for when this turn ends; Ctrl+X Ctrl+S sends it now' : !hints ? `Ask ${name}` : sigils.includes('$') ? `Ask ${name}: / for commands, $ for skills, @ for files` : `Ask ${name}: / for commands and skills, @ for files`}
     aria-label="Message {name}"
     role="combobox"
     aria-autocomplete="list"
@@ -236,7 +252,7 @@
     <div class="grow"></div>
     <div class="ends">
     {#if working}<button class="round stop" onclick={onStop} title="Stop the turn (Esc)" aria-label="Stop"><Icon name="stop" size={13} /></button>{/if}
-    <button class="round send" onclick={send} disabled={disabled || (!text.trim() && !images.length)} title={working ? 'Queue: sends when this turn ends (Enter)' : 'Send (Enter)'} aria-label={working ? 'Queue' : 'Send'}><Icon name="up" size={16} /></button>
+    <button class="round send" onclick={() => send()} disabled={disabled || (!text.trim() && !images.length)} title={working ? 'Queue: sends when this turn ends (Enter)' : 'Send (Enter)'} aria-label={working ? 'Queue' : 'Send'}><Icon name="up" size={16} /></button>
     </div>
   </div>
 </div>
