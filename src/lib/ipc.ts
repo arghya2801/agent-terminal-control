@@ -70,6 +70,7 @@ export function openInExplorer(path: string): Promise<void> { return App.OpenInE
 export function newerRelease(): Promise<{ version: string; url: string } | null> { return App.NewerRelease(); }
 
 /** Open an http(s) link in the default browser. */
+export function appVersion(): Promise<string> { return App.Version(); }
 export function openUrl(url: string): Promise<void> { return App.OpenURL(url); }
 
 /** The native folder picker; null when cancelled. */

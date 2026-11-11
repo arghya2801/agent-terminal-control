@@ -93,3 +93,5 @@ export function SuggestSessionName(arg1:string):Promise<string>;
 export function UsageContext():Promise<Record<string, any>>;
 
 export function UsageCosts():Promise<Array<any>>;
+
+export function Version():Promise<string>;

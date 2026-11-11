@@ -63,7 +63,7 @@ func TestNewerComparesVersionsNumerically(t *testing.T) {
 	for _, c := range []struct {
 		a, b string
 		want bool
-	}{{"0.10.0", "0.9.3", true}, {"0.6.0", "0.6.0", false}, {"0.6", "0.6.1", false}, {"1.0.0", "0.99.99", true}} {
+	}{{"0.10.0", "0.9.3", true}, {"0.6.0", "0.6.0", false}, {"0.6", "0.6.1", false}, {"1.0.0", "0.99.99", true}, {"0.7.1", "0.7.3-beta", false}, {"0.7.3", "0.7.3-beta", true}, {"0.7.3-beta", "0.7.3", false}} {
 		if newer(c.a, c.b) != c.want {
 			t.Error(c)
 		}

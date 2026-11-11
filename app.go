@@ -364,6 +364,8 @@ func (a *App) UsageCosts() []any { return a.costs.Rows(a.getSettings(), a.config
 
 func (a *App) UsageContext() core.Object { return a.costs.Context(a.getSettings(), a.config) }
 
+func (a *App) Version() string { return appVersion }
+
 func (a *App) NewerRelease() any { return newerRelease(appVersion) }
 
 func (a *App) Shells() []string { return pty.Shells() }
@@ -637,8 +639,11 @@ func newerRelease(current string) any {
 	return core.Object{"version": strings.TrimPrefix(r.Tag, "v"), "url": r.URL}
 }
 
-// newer compares dotted versions number by number; a missing part counts as 0.
+// newer compares dotted versions number by number; a missing part counts as 0. A
+// prerelease (`0.7.3-beta`) comes before the release of the same number.
 func newer(a, b string) bool {
+	a, preA, _ := strings.Cut(a, "-")
+	b, preB, _ := strings.Cut(b, "-")
 	x, y := strings.Split(a, "."), strings.Split(b, ".")
 	for i := 0; i < max(len(x), len(y)); i++ {
 		var m, n int
@@ -652,7 +657,7 @@ func newer(a, b string) bool {
 			return m > n
 		}
 	}
-	return false
+	return preA == "" && preB != ""
 }
 
 func validURL(url string) bool {
