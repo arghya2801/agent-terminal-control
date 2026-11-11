@@ -6,23 +6,21 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.7.2-beta] - 2026-11-11
+
 ### Added
 - Force send: Ctrl+X Ctrl+S in an agent tab, or Send now beside a queued message, sends it at once. Claude stops what it is doing and takes it; a Codex turn stops and the message sends as it ends.
 - `/btw` in a Claude tab asks a side question, as in Claude Code: Claude answers from the conversation so far, even mid-turn, without stopping. The answer shows above the message box and stays out of the conversation.
 - Settings > Agents > Default effort, Medium unless changed, for new and resumed Claude and Codex tabs, in the chat and in a terminal.
-
-### Changed
-- Waiting on you lists the agent that stopped most recently first. Ctrl+Shift+J still jumps to the one that has waited longest.
-- New chats no longer start at the effort picked last; they start at the default effort. The effort picker's Default is now CLI default, which leaves the effort to the CLI's own settings.
-
-## [0.7.3-beta] - 2026-11-11
-
-### Added
 - Settings > About shows the version, with a link to the releases.
 - Claude accounts: add subscription tokens and API keys in Settings, see and edit them there, pick a default, and run each Claude tab as any of them. Nothing in `~/.claude` changes; secrets are kept encrypted in ATC's config folder (#252).
 - Agent tabs list the shell commands and subagents running in the background above the message box, with the last tool each ran, a progress summary on hover, and a Stop button. Claude only (#259).
 - Find (Ctrl+Shift+F) searches the text of agent chats too. Folded tool groups are not searched (#257).
 - Alt+Up and Alt+Down in an agent tab jump to the previous or next message you sent (#251).
+
+### Changed
+- Waiting on you lists the agent that stopped most recently first. Ctrl+Shift+J still jumps to the one that has waited longest.
+- New chats no longer start at the effort picked last; they start at the default effort. The effort picker's Default is now CLI default, which leaves the effort to the CLI's own settings.
 
 ### Fixed
 - A skill's instructions no longer show in an agent tab as a message from you (#256).
@@ -386,8 +384,8 @@ ATC now runs on a Go/Wails host instead of Rust/Tauri. The interface is the same
 
 First release.
 
-[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.3-beta...HEAD
-[0.7.3-beta]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.1...v0.7.3-beta
+[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.2-beta...HEAD
+[0.7.2-beta]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.1...v0.7.2-beta
 [0.7.1]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.1...v0.6.2
