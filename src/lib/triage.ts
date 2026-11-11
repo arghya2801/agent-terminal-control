@@ -12,17 +12,20 @@ export interface Triaged {
   done?: boolean;
 }
 
-/** Done agents sort after shells, before exited tabs. */
-const rank = (t: Triaged) => (t.done && isWaiting(t.mark) ? 4.5 : URGENCY[t.mark]);
+/** Done agents sort after shells, before exited tabs. Every agent waiting on you ranks
+ *  the same, whether it asked, stopped or finished. */
+const rank = (t: Triaged) => (!isWaiting(t.mark) ? URGENCY[t.mark] : t.done ? 4.5 : 0);
 
-/** Urgency, then whoever has been in that state longest. Stable for equal entries. */
+/** Urgency, then the agent that started waiting on you most recently, then whoever has
+ *  been in any other state longest. Stable for equal entries. */
 export function triageOrder<T extends Triaged>(tabs: T[]): T[] {
-  return [...tabs].sort((a, b) => rank(a) - rank(b) || a.since - b.since);
+  return [...tabs].sort((a, b) => rank(a) - rank(b) || (rank(a) === 0 ? b.since - a.since : a.since - b.since));
 }
 
 /** The agent that has waited longest for you, other than the one on screen. */
 export function nextWaiting<T extends Triaged>(tabs: T[], activeKey: string | null): T | null {
-  return triageOrder(tabs).find((t) => t.key !== activeKey && isWaiting(t.mark) && !t.done) ?? null;
+  const waiting = tabs.filter((t) => t.key !== activeKey && isWaiting(t.mark) && !t.done);
+  return waiting.reduce<T | null>((a, t) => (!a || t.since < a.since ? t : a), null);
 }
 
 /** Blocked until you answer: finished, stopped or idle. */

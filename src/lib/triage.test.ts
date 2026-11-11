@@ -4,9 +4,9 @@ import { nextWaiting, triageGroup, triageOrder } from './triage';
 const tab = (key: string, mark: Parameters<typeof triageOrder>[0][0]['mark'], since: number) => ({ key, mark, since });
 
 describe('triageOrder', () => {
-  it('puts blocked agents first, longest waiting first', () => {
+  it('puts blocked agents first, the one that stopped most recently first', () => {
     const order = triageOrder([tab('w', 'working', 1), tab('i', 'idle', 5), tab('a2', 'attention', 9), tab('a1', 'attention', 3), tab('x', 'exited', 0)]);
-    expect(order.map((t) => t.key)).toEqual(['a1', 'a2', 'i', 'w', 'x']);
+    expect(order.map((t) => t.key)).toEqual(['a2', 'i', 'a1', 'w', 'x']);
   });
 
   it('moves done agents below shells and skips them when jumping', () => {
@@ -21,6 +21,7 @@ describe('nextWaiting', () => {
   it('skips the tab on screen and agents that are still working', () => {
     const tabs = [tab('a', 'attention', 1), tab('w', 'working', 0), tab('i', 'idle', 2)];
     expect(nextWaiting(tabs, 'a')?.key).toBe('i');
+    expect(nextWaiting([tab('new', 'idle', 9), tab('old', 'attention', 3)], null)?.key).toBe('old');
     expect(nextWaiting([tab('w', 'working', 0)], null)).toBeNull();
   });
 });
