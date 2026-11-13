@@ -1,7 +1,7 @@
 import type { TabMark } from './format';
 
 /** Most urgent first: the agents that are blocked on you, then the ones that will be. */
-const URGENCY: Record<TabMark, number> = { attention: 0, interrupted: 1, idle: 2, working: 3, open: 4, exited: 5 };
+const URGENCY: Record<TabMark, number> = { blocked: 0, attention: 0, interrupted: 1, idle: 2, working: 3, open: 4, exited: 5 };
 
 export interface Triaged {
   key: string;
@@ -12,14 +12,14 @@ export interface Triaged {
   done?: boolean;
 }
 
-/** Done agents sort after shells, before exited tabs. Every agent waiting on you ranks
- *  the same, whether it asked, stopped or finished. */
-const rank = (t: Triaged) => (!isWaiting(t.mark) ? URGENCY[t.mark] : t.done ? 4.5 : 0);
+/** Done agents sort after shells, before exited tabs. An agent asking a question or for
+ *  permission comes first; the rest waiting on you rank the same. */
+const rank = (t: Triaged) => (!isWaiting(t.mark) ? URGENCY[t.mark] : t.done ? 4.5 : t.mark === 'blocked' ? -1 : 0);
 
 /** Urgency, then the agent that started waiting on you most recently, then whoever has
  *  been in any other state longest. Stable for equal entries. */
 export function triageOrder<T extends Triaged>(tabs: T[]): T[] {
-  return [...tabs].sort((a, b) => rank(a) - rank(b) || (rank(a) === 0 ? b.since - a.since : a.since - b.since));
+  return [...tabs].sort((a, b) => rank(a) - rank(b) || (rank(a) <= 0 ? b.since - a.since : a.since - b.since));
 }
 
 /** The agent that has waited longest for you, other than the one on screen. */
@@ -40,6 +40,6 @@ export function triageGroup(mark: TabMark, done = false): string {
 
 /** What the row says about how long it has been in its state. */
 export function stateWord(mark: TabMark): string {
-  return { attention: 'waiting', interrupted: 'stopped', idle: 'idle', working: 'working', open: '', exited: 'exited' }[mark];
+  return { blocked: 'asking', attention: 'waiting', interrupted: 'stopped', idle: 'idle', working: 'working', open: '', exited: 'exited' }[mark];
 }
 

@@ -24,7 +24,7 @@ import { isCopy, isNativePaste, newlineInput, matchChord, type Action } from '..
 import { decodeOsc52 } from '../lib/osc52';
 import { clearChatFind, findInChat } from '../agent/find';
 import type { Palette } from '../lib/theme';
-import { claudeTitle, tabMark, usableTitle, type Activity, type TabMark } from '../lib/format';
+import { blockedScreen, claudeTitle, tabMark, usableTitle, type Activity, type TabMark } from '../lib/format';
 import { cycleIndex } from './cycle';
 import type { AgentProvider, SessionMeta, Dims, PtyEvent, SpawnOpts, TabKey, TerminalSettings } from '../types';
 import {
@@ -146,7 +146,7 @@ type Listener = () => void;
 const listeners = new Set<Listener>();
 type ChordListener = (action: Action) => void;
 const chordListeners = new Set<ChordListener>();
-export type AttentionReason = 'finished' | 'bell';
+export type AttentionReason = 'finished' | 'blocked' | 'bell';
 type AttentionListener = (tab: Tab, reason: AttentionReason) => void;
 const attentionListeners = new Set<AttentionListener>();
 
@@ -165,6 +165,43 @@ function flagAttention(tab: Tab, reason: AttentionReason) {
   // The focused tab needs no badge; it only needs the notification.
   if (background) tab.attention = true;
   for (const l of attentionListeners) l(tab, reason);
+}
+
+const blockTimers = new Map<TabKey, ReturnType<typeof setTimeout>>();
+let detectBlocked = true;
+/** Settings > Advanced > Detect questions. Off clears what was detected. */
+export function setBlockedDetection(on: boolean) {
+  if (on === detectBlocked) return;
+  detectBlocked = on;
+  for (const t of tabs.values()) if (t.term) watchBlocked(t);
+}
+/** Tabs whose agent just stopped working: "finished" unless the screen shows a question. */
+const finishing = new Set<TabKey>();
+
+/** The rows on screen, ignoring where the user has scrolled. */
+function visibleText(term: Terminal): string {
+  const b = term.buffer.active;
+  const rows: string[] = [];
+  for (let i = b.baseY; i < b.baseY + term.rows; i++) rows.push(b.getLine(i)?.translateToString(true) ?? '');
+  return rows.join('\n');
+}
+
+/** Once a terminal agent's output settles, read its screen for a question or permission prompt. */
+function watchBlocked(tab: Tab) {
+  clearTimeout(blockTimers.get(tab.key));
+  blockTimers.set(tab.key, setTimeout(() => {
+    blockTimers.delete(tab.key);
+    if (tabs.get(tab.key) !== tab || !tab.term) return;
+    const agent = tab.provider === 'codex' ? 'codex' : tab.activity !== null ? 'claude' : null;
+    // Claude's spinner outranks the screen; Codex's approval shows while its session works.
+    const asking = detectBlocked && !!agent && !tab.exited && (agent === 'codex' || tab.activity !== 'working') && blockedScreen(visibleText(tab.term), agent, tab.autoTitle ?? '');
+    const finished = finishing.delete(tab.key);
+    if (asking === tab.asking && (asking || !finished)) return;
+    tab.asking = asking;
+    if (asking) flagAttention(tab, 'blocked');
+    else if (finished) flagAttention(tab, 'finished');
+    notify();
+  }, 250));
 }
 
 /** Svelte subscribes here; the manager never imports Svelte. */
@@ -310,7 +347,7 @@ export function setAgentState(key: TabKey, s: { activity?: Activity | null; sess
   if (s.waiting) {
     tab.activity = 'idle';
     tab.asking = true;
-    flagAttention(tab, 'bell');
+    flagAttention(tab, 'blocked');
   } else if (s.activity !== undefined) {
     tab.asking = false;
     if (tab.activity === 'working' && s.activity === 'idle') flagAttention(tab, 'finished');
@@ -474,6 +511,7 @@ export async function openTab(
 
   term.onBell(() => {
     flagAttention(tab, 'bell');
+    watchBlocked(tab);
     notify();
   });
 
@@ -481,10 +519,11 @@ export async function openTab(
     const claude = claudeTitle(t);
     // The status glyph is drawn by StatusDot; keeping it here showed it twice.
     tab.autoTitle = claude?.name || usableTitle(t);
-    if (tab.provider === 'codex') { notify(); return; }
+    if (tab.provider === 'codex') { watchBlocked(tab); notify(); return; }
     const was = tab.activity;
     tab.activity = claude?.activity ?? null;
-    if (was === 'working' && tab.activity === 'idle') flagAttention(tab, 'finished');
+    if (was === 'working' && tab.activity === 'idle') finishing.add(tab.key);
+    watchBlocked(tab);
     tab.claudeName = claude?.name ?? null;
     notify();
   });
@@ -516,6 +555,7 @@ export async function openTab(
       tab.lastOutputAt = Date.now();
       roll(tab, tab.lastOutputAt);
       tab.buckets[BUCKETS - 1] += msg.d.length;
+      if (tab.provider || tab.activity !== null) watchBlocked(tab);
       // The callback fires once xterm has parsed the payload: the honest ack point.
       term.write(msg.d, () => {
         tab.unacked += new TextEncoder().encode(msg.d).byteLength;
@@ -554,7 +594,7 @@ export function bindSessions(bindings: Map<TabKey, string>, sessions: SessionMet
     if (!session) continue;
     const sequence = session.activitySequence ?? 0;
     if (tab.codexSequence === sequence) continue;
-    if (tab.codexSequence !== null && sequence > tab.codexSequence && session.activity === 'idle') flagAttention(tab, 'finished');
+    if (tab.codexSequence !== null && sequence > tab.codexSequence && session.activity === 'idle' && !tab.asking) flagAttention(tab, 'finished');
     tab.codexSequence = sequence;
     tab.activity = session.activity === 'working' ? 'working' : session.activity === 'idle' ? 'idle' : session.activity === 'interrupted' ? 'interrupted' : null;
     changed = true;

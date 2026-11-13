@@ -9,6 +9,11 @@ describe('triageOrder', () => {
     expect(order.map((t) => t.key)).toEqual(['a2', 'i', 'a1', 'w', 'x']);
   });
 
+  it('puts an agent asking a question or for permission above the ones that finished', () => {
+    const order = triageOrder([tab('a', 'attention', 9), tab('b', 'blocked', 1)]);
+    expect(order.map((t) => t.key)).toEqual(['b', 'a']);
+  });
+
   it('moves done agents below shells and skips them when jumping', () => {
     const tabs = [{ ...tab('d', 'idle', 0), done: true }, tab('s', 'open', 1), tab('x', 'exited', 0), tab('i', 'idle', 5)];
     expect(triageOrder(tabs).map((t) => t.key)).toEqual(['i', 's', 'd', 'x']);

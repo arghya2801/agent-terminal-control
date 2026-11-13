@@ -276,6 +276,8 @@
   onkeydown={jumpPrompt}
   style:--mono={appState.settings?.terminal.fontFamily}
   style:--mono-size="{Math.max(11, (appState.settings?.terminal.fontSize ?? 13) - 1)}px"
+  style:--chat-scale={(appState.settings?.ui.chatFontSize || 13) / 13}
+  style:font-family={appState.settings?.ui.chatFontFamily?.trim() || null}
 >
   <div class="list" bind:this={list} onscroll={(e) => onScroll(e.currentTarget)}>
     <div class="column">
@@ -523,7 +525,7 @@
     flex-direction: column;
     background: var(--bg);
     color: var(--fg);
-    font-size: 14px;
+    font-size: calc(14px * var(--chat-scale, 1));
     line-height: 1.6;
   }
   .list {
@@ -562,13 +564,13 @@
     margin-bottom: 6px;
   }
   .lead {
-    font-size: 16px;
+    font-size: calc(16px * var(--chat-scale, 1));
     font-weight: 600;
     color: var(--fg-bright);
   }
   kbd {
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--chat-scale, 1));
     padding: 0 5px;
     border: 1px solid var(--border);
     border-bottom-width: 2px;
@@ -647,7 +649,7 @@
     height: 24px;
     padding: 0 7px;
     border-radius: 6px;
-    font-size: 12px;
+    font-size: calc(12px * var(--chat-scale, 1));
     color: var(--fg-faint);
     cursor: pointer;
   }
@@ -696,7 +698,7 @@
     padding: 0 8px;
     margin-left: -8px;
     border-radius: 7px;
-    font-size: 13px;
+    font-size: calc(13px * var(--chat-scale, 1));
     color: var(--fg-dim);
     cursor: pointer;
     white-space: nowrap;
@@ -730,7 +732,7 @@
     padding: 0 7px;
     line-height: 18px;
     border-radius: 9px;
-    font-size: 11px;
+    font-size: calc(11px * var(--chat-scale, 1));
     color: var(--danger);
     background: color-mix(in srgb, var(--danger) 12%, transparent);
     border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
@@ -768,7 +770,7 @@
     margin: 2px 0 8px 7px;
     padding-left: 15px;
     border-left: 1px solid var(--border);
-    font-size: 13px;
+    font-size: calc(13px * var(--chat-scale, 1));
     color: var(--fg-dim);
   }
 
@@ -778,7 +780,7 @@
     align-items: center;
     gap: 12px;
     margin: 14px 0;
-    font-size: 12px;
+    font-size: calc(12px * var(--chat-scale, 1));
     color: var(--fg-faint);
   }
   .notice::before,
@@ -811,7 +813,7 @@
     margin: 8px 0;
     padding: 9px 12px;
     border-radius: 10px;
-    font-size: 13px;
+    font-size: calc(13px * var(--chat-scale, 1));
     color: var(--danger);
     background: color-mix(in srgb, var(--danger) 9%, transparent);
     border: 1px solid color-mix(in srgb, var(--danger) 22%, transparent);
@@ -831,7 +833,7 @@
     gap: 8px;
     min-height: 28px;
     margin-top: 2px;
-    font-size: 13px;
+    font-size: calc(13px * var(--chat-scale, 1));
   }
   .spinner {
     width: 10px;
@@ -855,7 +857,7 @@
   .secs {
     flex: none;
     color: var(--fg-faint);
-    font-size: 12px;
+    font-size: calc(12px * var(--chat-scale, 1));
     font-variant-numeric: tabular-nums;
   }
   @keyframes spin {
@@ -888,7 +890,7 @@
     gap: 12px;
     min-height: 24px;
     margin-top: 6px;
-    font-size: 12px;
+    font-size: calc(12px * var(--chat-scale, 1));
     color: var(--fg-faint);
     font-variant-numeric: tabular-nums;
   }
@@ -940,7 +942,7 @@
     display: flex;
     gap: 1ch;
     margin: 0 6px;
-    font-size: 12px;
+    font-size: calc(12px * var(--chat-scale, 1));
     color: var(--fg-dim);
   }
   .tasks {
@@ -949,7 +951,7 @@
     border: 1px solid var(--border);
     border-radius: 12px;
     background: var(--bg-chrome);
-    font-size: 13px;
+    font-size: calc(13px * var(--chat-scale, 1));
   }
   .head {
     all: unset;
@@ -1029,7 +1031,7 @@
   }
   .bg-meta {
     color: var(--fg-faint);
-    font-size: 12px;
+    font-size: calc(12px * var(--chat-scale, 1));
   }
   .tasks li.active {
     color: var(--fg-bright);
@@ -1064,7 +1066,7 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--bg-chrome);
-    font-size: 13px;
+    font-size: calc(13px * var(--chat-scale, 1));
   }
   .exited span {
     flex: 1;
@@ -1073,7 +1075,7 @@
     height: 28px;
     padding: 0 12px;
     font: inherit;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--chat-scale, 1));
     font-weight: 600;
     border: none;
     border-radius: 7px;
@@ -1123,7 +1125,7 @@
     padding: 0 12px;
     transform: translateX(-50%);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--chat-scale, 1));
     color: var(--fg);
     background: var(--bg-surface);
     border: 1px solid var(--border);
@@ -1160,7 +1162,7 @@
     gap: 5px;
   }
   .lbl {
-    font-size: 11px;
+    font-size: calc(11px * var(--chat-scale, 1));
     font-weight: 600;
     color: var(--fg-faint);
   }
@@ -1171,7 +1173,7 @@
   }
   .seg button {
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--chat-scale, 1));
     color: var(--fg-dim);
     background: transparent;
     border: 1px solid var(--border);
@@ -1192,7 +1194,7 @@
   }
   .locked {
     margin: 6px 0 0;
-    font-size: 11px;
+    font-size: calc(11px * var(--chat-scale, 1));
     color: var(--fg-faint);
   }
   .status {

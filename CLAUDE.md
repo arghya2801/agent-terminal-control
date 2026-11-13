@@ -20,6 +20,7 @@ Go + Wails v2 host (`app.go`, `agents.go`, `internal/`), Node sidecar (`sidecar/
 - Add a CHANGELOG.md line for every user-visible change.
 - Test in the dev app, not only with unit tests.
 - Docs are dry and plain. No personal names in paths or docs.
+- How-tos and dated reports go in `docs/` and get a line in the README's Docs list. How the code works goes in ARCHITECTURE.md.
 
 ## Releases
 

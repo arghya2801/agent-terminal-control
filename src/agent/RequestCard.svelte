@@ -139,7 +139,7 @@
     flex-shrink: 1;
   }
   .hint {
-    font-size: 12px;
+    font-size: calc(12px * var(--chat-scale, 1));
     color: var(--fg-faint);
   }
   /* Only code focuses the card itself, on arrival; its buttons keep the full ring. */
@@ -184,7 +184,7 @@
   }
   h3 {
     margin: 0;
-    font-size: 13.5px;
+    font-size: calc(13.5px * var(--chat-scale, 1));
     font-weight: 600;
     color: var(--fg-bright);
   }
@@ -285,7 +285,7 @@
     color: var(--fg-bright);
   }
   .label span {
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--chat-scale, 1));
     color: var(--fg-dim);
   }
   .field {
@@ -294,7 +294,7 @@
     min-width: 0;
     height: 32px;
     font: inherit;
-    font-size: 13px;
+    font-size: calc(13px * var(--chat-scale, 1));
     color: var(--fg);
     background: var(--bg);
     border: 1px solid var(--border);
@@ -324,7 +324,7 @@
     height: 32px;
     padding: 0 14px;
     font: inherit;
-    font-size: 13px;
+    font-size: calc(13px * var(--chat-scale, 1));
     font-weight: 500;
     color: var(--fg);
     background: var(--bg-surface);
@@ -368,7 +368,7 @@
   .num {
     margin-left: auto;
     align-self: center;
-    font-size: 11px;
+    font-size: calc(11px * var(--chat-scale, 1));
     color: var(--fg-faint);
     border: 1px solid var(--border);
     border-bottom-width: 2px;

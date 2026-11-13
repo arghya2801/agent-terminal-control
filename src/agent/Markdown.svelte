@@ -100,9 +100,9 @@
     line-height: 1.3;
     margin-top: 1em;
   }
-  .md :global(h3) { font-size: 17px; }
-  .md :global(h4) { font-size: 15px; }
-  .md :global(h5) { font-size: 13px; }
+  .md :global(h3) { font-size: calc(17px * var(--chat-scale, 1)); }
+  .md :global(h4) { font-size: calc(15px * var(--chat-scale, 1)); }
+  .md :global(h5) { font-size: calc(13px * var(--chat-scale, 1)); }
   .md :global(ul) {
     padding-left: 1.4em;
   }
@@ -152,7 +152,7 @@
     top: -10px;
     right: 10px;
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--chat-scale, 1));
     color: var(--fg-dim);
     background: var(--bg-surface);
     border: 1px solid var(--border);
@@ -187,7 +187,7 @@
   }
   .md :global(table) {
     border-collapse: collapse;
-    font-size: 13px;
+    font-size: calc(13px * var(--chat-scale, 1));
   }
   .md :global(:is(th, td)) {
     padding: 6px 12px;

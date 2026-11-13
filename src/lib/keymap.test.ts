@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SHIFT_ENTER, chordLabel, isCopy, isNativePaste, newlineInput, matchChord, shortcutGroups, type ChordEvent } from './keymap';
+import { SHIFT_ENTER, chordFor, chordFromEvent, chordLabel, chordsFor, isCopy, isNativePaste, newlineInput, matchChord, parseChord, setKeyOverrides, shortcutGroups, type ChordEvent } from './keymap';
 
 const press = (key: string, mods: Partial<ChordEvent> = {}): ChordEvent => ({
   key,
@@ -33,6 +33,7 @@ describe('matchChord', () => {
     // Released with the task panel; the shell gets Ctrl+Shift+E back.
     expect(matchChord(ctrlShift('E'))).toBeNull();
     expect(matchChord(ctrlShift('A'))).toBe('askAgent');
+    expect(matchChord(ctrlShift('Y'))).toBe('pickTheme');
     expect(matchChord(press(',', { ctrlKey: true }))).toBe('openSettings');
   });
 
@@ -105,7 +106,7 @@ describe('matchChord', () => {
     });
 
     it('ignores unmapped Ctrl+Shift letters', () => {
-      expect(matchChord(ctrlShift('Y'))).toBeNull();
+      expect(matchChord(ctrlShift('Q'))).toBeNull();
     });
 
     it('ignores Ctrl+I, which is Tab on some terminals', () => {
@@ -249,5 +250,39 @@ describe('split pane chords (#21)', () => {
     expect(matchChord({ key: '\\', ctrlKey: true, shiftKey: true })).toBe('toggleSplit');
     expect(matchChord({ key: 'O', ctrlKey: true, shiftKey: true })).toBe('focusOtherPane');
     expect(matchChord({ key: 'o', ctrlKey: true, shiftKey: false })).toBeNull();
+  });
+});
+
+describe('custom shortcuts', () => {
+  it('reads back every label it writes', () => {
+    for (const b of [{ key: 't', ctrl: true, shift: true }, { key: '+', ctrl: true, shift: true }, { key: 'add', ctrl: true, shift: false }, { key: ',', ctrl: true, shift: false }, { key: 'tab', ctrl: true, shift: true }]) {
+      expect(parseChord(chordLabel(b))).toEqual(b);
+    }
+    expect(parseChord('Shift+T')).toBeNull();
+    expect(parseChord('Ctrl+')).toBeNull();
+  });
+
+  it('records a chord only once it has Ctrl and a key', () => {
+    expect(chordFromEvent(press('Y', { ctrlKey: true, shiftKey: true }))).toBe('Ctrl+Shift+Y');
+    expect(chordFromEvent(press('Control', { ctrlKey: true }))).toBeNull();
+    expect(chordFromEvent(press('y'))).toBeNull();
+    expect(chordFromEvent(press('y', { ctrlKey: true, altKey: true }))).toBeNull();
+  });
+
+  it('replaces, removes and restores the chords of an action', () => {
+    setKeyOverrides({ newTab: 'Ctrl+Shift+Q', toggleSplit: '' });
+    expect(matchChord(press('Q', { ctrlKey: true, shiftKey: true }))).toBe('newTab');
+    expect(matchChord(press('T', { ctrlKey: true, shiftKey: true }))).toBeNull();
+    expect(chordsFor('toggleSplit')).toEqual([]);
+    expect(chordsFor('toggleSplit', true).length).toBe(2);
+    setKeyOverrides({});
+    expect(chordFor('newTab')).toBe('Ctrl+Shift+T');
+    expect(matchChord(press('T', { ctrlKey: true, shiftKey: true }))).toBe('newTab');
+  });
+
+  it('keeps the defaults for an unknown action or a chord it cannot read', () => {
+    setKeyOverrides({ nope: 'Ctrl+Shift+Q', newTab: 'Shift+T' });
+    expect(chordFor('newTab')).toBe('Ctrl+Shift+T');
+    setKeyOverrides({});
   });
 });

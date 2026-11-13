@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -623,20 +622,12 @@ func (a *App) CodexUsageStop() { a.limits.stop() }
 // newerRelease is the latest GitHub release when it is newer than the running build, else
 // nil. Offline or rate-limited simply means no notice.
 func newerRelease(current string) any {
-	c := http.Client{Timeout: 15 * time.Second}
-	res, e := c.Get("https://api.github.com/repos/arghya2801/agent-terminal-control/releases/latest")
-	if e != nil {
+	r, e := latestRelease()
+	if e != nil || !newer(strings.TrimPrefix(r.Tag, "v"), current) || !validURL(r.URL) {
 		return nil
 	}
-	defer res.Body.Close()
-	var r struct {
-		Tag string `json:"tag_name"`
-		URL string `json:"html_url"`
-	}
-	if res.StatusCode != http.StatusOK || json.NewDecoder(res.Body).Decode(&r) != nil || !newer(strings.TrimPrefix(r.Tag, "v"), current) || !validURL(r.URL) {
-		return nil
-	}
-	return core.Object{"version": strings.TrimPrefix(r.Tag, "v"), "url": r.URL}
+	exe, _ := os.Executable()
+	return core.Object{"version": strings.TrimPrefix(r.Tag, "v"), "url": r.URL, "installable": installKind(exe) != ""}
 }
 
 // newer compares dotted versions number by number; a missing part counts as 0. A

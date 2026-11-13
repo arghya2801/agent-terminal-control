@@ -13,15 +13,15 @@ A Windows terminal for Claude Code and Codex sessions.</p>
 
 A Windows terminal with one project tree for Claude Code and Codex sessions.
 Clicking a project opens a shell there; clicking a session resumes that conversation.
-The Open view puts the agents waiting on you first, and you can answer them, start new
-tasks and broadcast a line from the sidebar without leaving the tab you are in. A Usage
-page shows plan limits and what the work would have cost at API prices.
+The Open view lists the agents waiting on you first. From the sidebar you can queue
+their next message, start new tasks and broadcast a line, without leaving the tab you
+are in. A Usage page shows plan limits and what the work would have cost at API prices.
 
-Claude and Codex tabs are a chat by default: Claude runs through the Claude Agent SDK and
-Codex through its app-server, the same CLIs with their own authentication, models,
-permissions, hooks, skills and session files. Ctrl+` or Ctrl+Shift+M moves a tab between the chat and the
-CLI's own TUI on the same session, and Settings > General > "Agent tabs open as" picks
-which one new tabs use. Shell tabs are PowerShell in ConPTY.
+Claude and Codex tabs are a chat by default. Claude runs through the Claude Agent SDK and
+Codex through its app-server, so they use the same CLIs with their own logins, models,
+permissions, hooks, skills and session files. Ctrl+` or Ctrl+Shift+M moves a tab between
+the chat and the CLI's own TUI on the same session. Settings > General > "Agent tabs
+open as" picks which one new tabs use. Shell tabs are PowerShell in ConPTY.
 
 ## Why
 
@@ -30,15 +30,16 @@ stepping through `claude --resume`'s picker to find it. ATC reads
 `~/.claude/projects` (and Codex's history) directly and lists every session under the
 project it belongs to, so resuming is one click.
 
-Each tab is xterm.js over a Windows ConPTY, the same pseudo console Windows Terminal
-uses. Claude Code's and Codex's TUIs, PSReadLine, colours and Ctrl+C work as they do
-there.
+Shell tabs, and agents opened in a terminal, are xterm.js over a Windows ConPTY, the
+same pseudo console Windows Terminal uses. Claude Code's and Codex's TUIs, PSReadLine,
+colours and Ctrl+C work as they do there.
 
 ## Requirements
 
 - Windows 10 1809 or later (ConPTY)
 - WebView2 runtime (preinstalled on Windows 11)
-- PowerShell 7 (`pwsh`), falling back to Windows PowerShell
+- Windows PowerShell or PowerShell 7. By default ATC picks Windows PowerShell 5.1, which
+  starts faster; the Shell setting picks PowerShell 7 instead
 - Claude Code or the Codex CLI for the corresponding agent features. Either can be
   absent without disabling shells or the other provider.
 - Node.js 18 or later on `PATH` for agent tabs, which run in a small Node process.
@@ -62,8 +63,10 @@ ConPTY built into Windows unless those two files sit beside it.
 
 ### Updating
 
-There is no auto-update. Download the new release and run the same kind of file you
-installed:
+**Check for updates** in the ⋯ menu or the command palette, or the "is out" note at the
+bottom of the sidebar, downloads the same kind of file you installed, closes ATC and runs
+it. Open terminals and agents end. To update by hand, download the new release and run
+the same kind of file you installed:
 
 - **MSI.** Run the new `.msi`. It replaces the installed version in place. Close ATC
   first, or Windows asks to close it or restart.
@@ -94,9 +97,9 @@ npm run desktop:package  # executable + MSI + NSIS installers
 Requires Go 1.26 or later, Node 24, and WebView2. Packaging also requires NSIS and
 WiX Toolset 3.x. Output lands in `build/bin/`.
 
-The desktop host was ported from Rust/Tauri to Go/Wails, keeping the Svelte UI.
-See [the migration and performance report](docs/WAILS-MIGRATION.md) for measured
-build times, build resource use, runtime memory, validation, and migration details.
+The desktop host moved from Rust/Tauri to Go/Wails in 0.4.0 and kept the Svelte UI.
+[docs/WAILS-MIGRATION.md](docs/WAILS-MIGRATION.md) has the build times, memory and test
+results from that move.
 
 ## Capabilities
 
@@ -106,14 +109,24 @@ build times, build resource use, runtime memory, validation, and migration detai
   output, and its result. Click it for the whole call, output or diff
 - Permission prompts, questions and plan approvals are cards: Allow, Always allow or
   Deny with a reason; pick answers; approve the plan or say what to change
-- `/` lists Claude's commands and skills, `$` lists Codex's skills, with descriptions
-- The footer picks the model and Claude's permission mode, and shows how long the turn
-  has run; each turn ends with its duration and cost
+- `/` lists Claude's commands and skills, `$` lists Codex's skills, with descriptions.
+  `@` picks a project file
+- The footer picks the model, its effort and Claude's permission mode, and shows how long
+  the turn has run. Each turn ends with its duration and cost
 - Enter sends, Shift+Enter adds a line, Esc or Stop interrupts. A message sent while the
-  agent works waits, shown above the box, and goes when the turn ends
+  agent works waits above the box and goes when the turn ends; Ctrl+X Ctrl+S or Send now
+  sends it at once
+- `/btw` asks Claude a side question without stopping it. The answer stays out of the
+  conversation
+- Paste or drop images into the message box. Rewind from one of your messages takes the
+  conversation back to before it, and in Claude tabs the files too
+- Claude's task list, and the shell commands and subagents running in the background,
+  show above the message box
+- Alt+Up and Alt+Down jump between the messages you sent
+- The account chip runs a Claude tab as another account; see [Claude accounts](#claude-accounts)
 - Ctrl+` or Ctrl+Shift+M (or the terminal button) closes the chat and resumes the session
-  in `claude` or `codex`; in a terminal tab, the same keys or the chat button in the header
-  come back
+  in `claude` or `codex`. In a terminal tab, the same keys or the chat button in the
+  header come back
 
 **Sidebar: sessions**
 - Projects derived from Claude and Codex transcripts, resolved to their real paths, with
@@ -121,27 +134,32 @@ build times, build resource use, runtime memory, validation, and migration detai
 - Sessions listed newest first, labelled by the name the agent gives the session, falling
   back to its title, the first message, then the session id
 - Filter: the search icon in the sidebar header, or start typing on a row. Matches
-  project name, path, session name and branch
+  project name, path, session name and branch. With three or more characters, an "In
+  transcripts" section lists sessions whose prompts or replies mention it
+- Space on a session previews its last prompts and replies without resuming it
 - Git branch shown per session; optionally group sessions by branch, or group subfolders
   under the project containing them
 - Sessions appear as they are created, without a restart
 - Pinned projects sort first
 - A dot on every session with an open tab: pulsing while the agent works, green when it
-  is waiting for you, blue when it finished in a background tab
-- Right-click a project: open Claude, Codex or a shell, rename, open in Explorer, copy
-  path, pin/unpin
-- Right-click a session: rename, copy session id, copy resume command, open in Explorer
+  is waiting for you, blue when it finished in a background tab, and a blue diamond when
+  it asks a question or for permission
+- Right-click a project: open Claude (or Claude as another account), Codex or a shell,
+  rename, open in Explorer, copy path, pin or unpin, archive old sessions
+- Right-click a session: preview, rename, rename with Haiku or Luna, archive, copy session
+  id, copy resume command, open in Explorer
 - Full keyboard use: Tab (or Down from the filter) enters the list, arrows move and
   expand, Enter opens, `Shift+F10` or the Menu key opens the context menu, Esc returns to
   the terminal
 - Drag the sidebar's edge to resize it; double-click to reset
 
 **Sidebar: open** (`Ctrl+Shift+K` switches views)
-- Every open tab, the ones waiting on you first and longest-waiting first, under Waiting
-  on you, Working and Shells. Each row has a dot for its state, the agent, the project,
-  how long it has been in that state, the last line on its screen and 5 minutes of output
-- A waiting agent shows up to three lines of its question and a Reply button: type the
-  answer and press Enter to send it without leaving the tab you are in
+- Every open tab, under Waiting on you, Working, Shells and Done. Agents asking a question
+  or for permission come first, then the one that stopped most recently. Each row has a
+  dot for its state, the tab's name, the project, how long it has been in that state,
+  how full its context window is, and 5 minutes of output unless it is waiting
+- Hover a row for Done, which moves a waiting agent to Done until it works again, and
+  Queue, which types your next message in when the agent stops
 - A task box at the top: type a task and press Enter to start it in the background. The
   icon at its left switches between Claude and Codex; the project line under it picks
   where it runs, by default the focused tab's project
@@ -154,7 +172,7 @@ build times, build resource use, runtime memory, validation, and migration detai
   collapse it; drag its top edge to resize
 
 **Terminal**
-- Tabs, each a separate `pwsh` process, reopened on the next launch. By default there is
+- Tabs, each a separate PowerShell process, reopened on the next launch. By default there is
   no tab bar: the sidebar's Open view switches tabs, and the header names the one shown,
   its project, branch and state. Double-click the name to rename it. Settings > Appearance
   > Tab bar brings back tabs across the top, which drag to reorder
@@ -163,20 +181,22 @@ build times, build resource use, runtime memory, validation, and migration detai
 - Clicking a project or session reuses its existing tab rather than opening a second one,
   including a session reached with `/resume` inside a tab
 - Closing a tab asks only when something is still running in it, and names it
-- Windows notification when a background session finishes while ATC is not focused
+- A Windows notification when a background agent finishes or asks something while ATC is
+  not focused, and a note in the corner while it is
 - Ask either agent outside any project, in a shared scratch directory, or chat with one
   that cannot change anything: Claude with no tools or MCP servers, Codex in a read-only
   sandbox. Both start from the `+` in the sidebar's Scratch view, and are listed there
 - Search across scrollback with match counts
-- Themes for the whole app: ATC Dark, Nord, Rosé Pine, Catppuccin Mocha and Latte, plus
-  your own
+- 45 themes for the whole app, among them ATC Dark, One Dark, Dracula, GitHub, Tokyo Night,
+  Catppuccin, Rosé Pine, Gruvbox and Solarized in dark and light, plus your own
 - Whole-application zoom, persisted
 - Sessions with no recorded working directory are shown but not launchable
 
 **Usage** (`Ctrl+Shift+U`)
 - The usage chip in the header shows Claude's 5-hour session limit and when it resets.
   Hover it for every limit and today's spend; click it for this page
-- Claude and Codex plan limits, refreshed while the page is open
+- Claude and Codex plan limits, refreshed while the page is open, each with a line of how
+  it filled and when it runs out at the recent pace
 - Local tokens and API-price estimates by provider, project, model and session, over any
   date range, with CSV export
 - A spend chart that splits by model, project, provider or token type, shows a running
@@ -190,8 +210,8 @@ build times, build resource use, runtime memory, validation, and migration detai
 - The focused tab's session on its own: cost, tokens by model and cache share
 
 **Configuration**
-- Settings page in the app (`Ctrl+,`), and `settings.json` applied live; edits take
-  effect without a restart. The Advanced section has the rarer ones: shell, profile,
+- Settings page in the app (`Ctrl+,`), one section at a time, with a search across all of
+  them, and `settings.json` applied live; edits take effect without a restart. The Advanced section has the rarer ones: shell, profile,
   GPU drawing, close confirmation and refresh intervals
 - A list of every shortcut (`Ctrl+Shift+?`)
 
@@ -200,7 +220,8 @@ build times, build resource use, runtime memory, validation, and migration detai
 Application shortcuts use `Ctrl+Shift`, which neither PowerShell, Claude Code nor Codex
 binds. They are intercepted before the terminal sees them, so they never reach the shell.
 Everything else, including `Ctrl+C`, `Ctrl+R`, `Tab` and `Shift+Tab`, is passed through
-untouched.
+untouched. Settings > Keyboard changes any of them: Change records a new chord, Clear
+removes it, Reset brings back the default, and Reset all undoes every change.
 
 | Shortcut | Action |
 |---|---|
@@ -212,13 +233,15 @@ untouched.
 | `Ctrl+Shift+O` | Focus the other pane |
 | `Ctrl+Shift+J` | Go to the agent that has waited longest |
 | `Ctrl+Shift+G` | Show every tab at once, or back to one |
+| `` Ctrl+` `` / `Ctrl+Shift+M` | Switch an agent tab between chat and terminal |
 | `Ctrl+Shift+L` | Choose Claude or Codex in this tab's project |
 | `Ctrl+Shift+N` | Open a terminal in this tab's project |
 | `Ctrl+Shift+A` | Choose an agent in the shared scratch directory |
 | `Ctrl+Shift+B` | Show or hide the sidebar |
 | `Ctrl+Shift+P` | Command palette: actions, tabs, projects and sessions |
+| `Ctrl+Shift+Y` | Change theme: arrows preview each one, Enter keeps it, Esc puts the old one back |
 | `Ctrl+Shift+K` | Switch the sidebar between sessions, open tabs and scratch |
-| `Ctrl+Shift+F` | Find in terminal |
+| `Ctrl+Shift+F` | Find in the terminal or chat |
 | `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | Zoom in / out / reset |
 | `Ctrl+Shift+U` | Usage and spend |
 | `Ctrl+,` | Settings |
@@ -249,7 +272,8 @@ Configure Codex in Settings or add this block to `settings.json`:
   "args": [],
   "chatArgs": ["--sandbox", "read-only"],
   "resumeArgs": ["resume", "{session}"],
-  "homeDir": null
+  "homeDir": null,
+  "defaultEffort": "medium"
 }
 ```
 
@@ -312,8 +336,27 @@ Every field is optional; missing ones take their default.
     "groupByBranch": false,             // sessions under the branch they ran on
     "notifications": true,              // notify when a background session needs you
     "restoreTabs": true,                // reopen last session's tabs on launch
+    "sidebarView": "open",              // "sessions", "open" or "scratch"
     "showTabBar": false,                // tabs across the top as well as in the sidebar
+    "usageResetTime": true,             // when the 5-hour limit resets, beside the usage chip
     "outputGraph": true,                // Open view output graph
+    "agentView": "chat",                // agent tabs open as "chat" or "terminal"
+    "confirmSwitch": true,              // warn before moving a tab between chat and terminal
+    "renameModel": "haiku",             // "haiku" or "luna", for Rename with Haiku or Luna
+    "chatFontSize": 13,                 // agent chat text, 9 to 24
+    "chatFontFamily": "",               // "" = the app's font
+    "accent": "",                       // a hex colour for the chrome's accent; "" = the theme's
+    "backdrop": "mica",                 // "mica", "acrylic" (both from the next launch) or "solid"
+    "stateShapes": false,               // a shape per tab state as well as a colour
+    "notifyFinished": true,             // notify when an agent finishes
+    "notifyAsking": true,               // notify when an agent asks a question or for permission
+    "toastCorner": "bottom-right",      // or "bottom-left", "top-right", "top-left"
+    "blockedDetection": true,           // read terminal agents' screens for a question
+    "checkUpdates": true,               // ask GitHub for a newer release on launch
+    "rowProject": true,                 // Open view rows: the project,
+    "rowState": true,                   // the state and how long,
+    "rowContext": true,                 // and how full the context window is
+    "keys": { "newTab": "Ctrl+Shift+Q" }, // shortcut overrides; "" removes one
     "taskAgent": "claude",              // what the task box starts with
     "taskProject": "",                  // "" = the focused tab's project
     "newTabIn": "home",                 // "project" opens Ctrl+Shift+T in the focused tab's project
@@ -324,7 +367,7 @@ Every field is optional; missing ones take their default.
     "codexRefreshSec": 300              // Codex limits, at most this often while the usage peek or page is open
   },
   "terminal": {
-    "fontFamily": "\"FiraCode Nerd Font Mono\", Consolas, monospace",
+    "fontFamily": "\"FiraCode Nerd Font Mono\", \"Cascadia Mono\", Consolas, monospace",
     "fontSize": 13,
     "scrollback": 10000,
     "cursorStyle": "bar",               // "block" or "underline"
@@ -340,10 +383,14 @@ Every field is optional; missing ones take their default.
     "chatArgs": ["--tools=", "--strict-mcp-config"],  // added for chats
     "resumeArgs": ["--resume", "{session}"],  // {session} is the session id
     "scratchDir": null,                       // null = <config dir>\\scratch
-    "atcLabel": true                          // chat requests say "atc", not the SDK's "sdk-ts"
+    "atcLabel": true,                         // chat requests say "atc", not the SDK's "sdk-ts"
+    "account": "",                            // default account id; "" = the ~/.claude login
+    "defaultEffort": "medium"                 // low to max; "" leaves it to the CLI
   }
 }
 ```
+
+The `codex` block is under [Codex](#codex). Its `defaultEffort` runs from minimal to xhigh.
 
 A malformed file is ignored rather than overwritten; the app keeps its current settings.
 
@@ -367,10 +414,16 @@ Beside it:
   }
   ```
 
+- **`accounts.dat`**, **`usage-history.json`**, **`limits-history.jsonl`**, **`atc.log`**
+  and **`sidecar.log`** are ATC's own: Claude account secrets, usage kept after Claude
+  deletes old transcripts, plan-limit readings, and logs.
+
 Local token totals include linked child-agent usage. Cached input and reasoning are
 subsets, not extra tokens. Costs are baseline API-price equivalents, not subscription
 charges, and exclude tier, regional, long-context and tool surcharges. Unknown models stay
 unpriced, and totals containing them are marked partial.
+
+Codex pricing sources: [OpenAI pricing](https://developers.openai.com/api/docs/pricing), [GPT-5.5](https://developers.openai.com/api/docs/models/gpt-5.5), [GPT-5.4](https://developers.openai.com/api/docs/models/gpt-5.4) and [GPT-5.3-Codex](https://developers.openai.com/api/docs/models/gpt-5.3-codex). The checked rates also apply to dated snapshots; a broad prefix never matches an unknown model variant.
 
 ## Not included
 
@@ -381,15 +434,28 @@ unpriced, and totals containing them are marked partial.
 ## How it works
 
 Go owns the PTY. A reader goroutine feeds a bounded queue; a second goroutine
-coalesces output on an 8ms tick and sends it through Wails events. The frontend
-acknowledges bytes once xterm has parsed them, which applies backpressure to the shell
-rather than dropping output.
+coalesces output on an 8 ms tick and sends it through Wails events. The frontend
+acknowledges bytes once xterm has parsed them, which slows the shell down instead of
+dropping output.
+
+Agent chat tabs run in one Node process, the sidecar, which drives Claude through the
+Agent SDK and Codex through `codex app-server`.
 
 Session metadata comes from the head of each transcript, which holds the label, working
-directory and branch, and its last 64 KiB, which holds renames. Both are cached against
-file size and modification time. The working
-directory is read from inside the file, never decoded from the directory name, which is
-lossy. More in [ARCHITECTURE.md](ARCHITECTURE.md).
+directory and branch, and its last 64 KiB, which holds renames. ATC caches both against
+file size and modification time. It reads the working directory from inside the file and
+never decodes it from the directory name, which is lossy.
+
+## Docs
+
+- [ARCHITECTURE.md](ARCHITECTURE.md): the code map, how each part works, and the gotchas
+  that cost time once
+- [CHANGELOG.md](CHANGELOG.md): what changed in each release
+- [docs/ACCOUNTS.md](docs/ACCOUNTS.md): running Claude tabs as more than one account
+- [docs/WAILS-MIGRATION.md](docs/WAILS-MIGRATION.md): measurements from the move from
+  Rust/Tauri to Go/Wails in 0.4.0
+- [docs/CODEX-VALIDATION.md](docs/CODEX-VALIDATION.md): the check of the Codex
+  integration in September 2026
 
 ## Development
 
@@ -428,5 +494,3 @@ creates sample project directories, points both discovery roots there, and sets
 histories or copy credentials. Fixtures cover current and older metadata, renames,
 desktop and editor sessions, missing working directories, child agents, and malformed or
 partial records.
-
-Codex pricing sources: [OpenAI pricing](https://developers.openai.com/api/docs/pricing), [GPT-5.5](https://developers.openai.com/api/docs/models/gpt-5.5), [GPT-5.4](https://developers.openai.com/api/docs/models/gpt-5.4) and [GPT-5.3-Codex](https://developers.openai.com/api/docs/models/gpt-5.3-codex). The checked rates also apply to dated snapshots; unknown model variants are never matched by a broad prefix.

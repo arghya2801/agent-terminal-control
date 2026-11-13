@@ -308,3 +308,17 @@ func TestTheScratchDirectoryDefaultsUnderTheConfigDirectory(t *testing.T) {
 		t.Fatal("blank means default")
 	}
 }
+
+func TestShortcutOverridesReplaceTheMapAndMustBeStrings(t *testing.T) {
+	s, e := ParseSettings([]byte(`{"ui":{"keys":{"newTab":"Ctrl+Shift+Y","find":""}}}`))
+	if e != nil {
+		t.Fatal(e)
+	}
+	keys := Obj(Obj(s["ui"])["keys"])
+	if len(keys) != 2 || keys["newTab"] != "Ctrl+Shift+Y" || keys["find"] != "" {
+		t.Fatal(keys)
+	}
+	if _, e := ParseSettings([]byte(`{"ui":{"keys":{"newTab":5}}}`)); e == nil {
+		t.Fatal("a non-string shortcut was accepted")
+	}
+}

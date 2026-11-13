@@ -8,7 +8,7 @@ settings, skills and `CLAUDE.md` stay shared across accounts.
 
 Open Settings (Ctrl+,) and go to **Claude accounts**.
 
-**Subscription**
+### Subscription
 
 1. Click **Add subscription** and type a name, such as `Work`.
 2. Click **Get a token**. ATC opens a tab running `claude setup-token`.
@@ -19,7 +19,7 @@ Open Settings (Ctrl+,) and go to **Claude accounts**.
 If the token does not come back, copy it from the tab (it starts with `sk-ant-oat01-`)
 and paste it into the box yourself.
 
-**API key**
+### API key
 
 1. Click **Add API key** and type a name.
 2. Paste a key from the Anthropic Console (it starts with `sk-ant-api03-`).
@@ -42,7 +42,7 @@ Each account has **Show** and **Copy** for its secret, **Edit** to change its na
 secret, and **Remove**. Tabs on a removed account fall back to the default the next time
 they start.
 
-## Good to know
+## Notes
 
 - Secrets are kept in `accounts.dat` in ATC's config folder
   (`%APPDATA%\Agent Terminal Control`), encrypted for your Windows user. The file is

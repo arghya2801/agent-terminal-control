@@ -146,7 +146,7 @@
     align-items: center;
     gap: 6px;
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--chat-scale, 1));
     color: var(--fg-dim);
     background: var(--bg-surface);
     border: 1px solid transparent;
@@ -166,7 +166,7 @@
     outline: 1px solid var(--accent);
   }
   .caret {
-    font-size: 9px;
+    font-size: calc(9px * var(--chat-scale, 1));
     color: var(--fg-faint);
   }
   .panel,
@@ -195,7 +195,7 @@
     align-items: center;
     gap: 6px;
     padding: 5px 8px 3px;
-    font-size: 11px;
+    font-size: calc(11px * var(--chat-scale, 1));
     font-weight: 600;
     color: var(--fg-faint);
   }
@@ -243,7 +243,7 @@
     width: 22px;
     flex: none;
     border-radius: 6px;
-    font-size: 14px;
+    font-size: calc(14px * var(--chat-scale, 1));
     color: var(--fg-faint);
     cursor: pointer;
   }
@@ -284,25 +284,25 @@
   }
   .name {
     flex: none;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--chat-scale, 1));
     color: var(--fg-bright);
   }
   .desc {
     min-width: 0;
-    font-size: 11.5px;
+    font-size: calc(11.5px * var(--chat-scale, 1));
     color: var(--fg-faint);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .badge {
-    font-size: 11px;
+    font-size: calc(11px * var(--chat-scale, 1));
     color: var(--fg-faint);
     font-variant-numeric: tabular-nums;
   }
   .check {
     color: var(--accent);
-    font-size: 12px;
+    font-size: calc(12px * var(--chat-scale, 1));
     visibility: hidden;
   }
   .check.on {

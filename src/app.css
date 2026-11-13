@@ -49,6 +49,15 @@ body,
   color: var(--fg);
 }
 
+/* Settings > Appearance > Backdrop: Solid paints over Mica. */
+:root[data-solid] {
+  --glass-chrome: var(--bg-chrome);
+  --glass-bg: var(--bg);
+}
+:root[data-solid] body {
+  background: var(--bg);
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;

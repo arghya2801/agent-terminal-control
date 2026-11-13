@@ -43,7 +43,10 @@ func Defaults() Object {
 		"projects": Object{"claudeProjectsDir": nil, "pinned": []any{}, "names": Object{}, "sessionNames": Object{}, "sessionAccounts": Object{}, "archived": []any{}},
 		"ui": Object{"sidebarWidth": 260, "sidebarOpen": true, "sessionsPerProject": 15, "zoom": 1.0, "notifications": true, "restoreTabs": true, "theme": "ATC Dark", "groupSubfolders": false, "groupByBranch": false, "sidebarView": "open", "animations": "system", "animationSpeed": 1.0,
 			"usageResetTime": true, "showTabBar": false, "outputGraph": true, "taskAgent": "claude", "taskProject": "", "newTabIn": "home", "confirmClose": true, "agentView": "chat", "confirmSwitch": true,
-			"toasts": true, "toastSeconds": 6, "limitsRefreshSec": 300, "codexRefreshSec": 300, "renameModel": "haiku"},
+			"toasts": true, "toastSeconds": 6, "limitsRefreshSec": 300, "codexRefreshSec": 300, "renameModel": "haiku",
+			"chatFontSize": 13, "chatFontFamily": "", "accent": "", "backdrop": "mica", "stateShapes": false,
+			"notifyFinished": true, "notifyAsking": true, "toastCorner": "bottom-right",
+			"blockedDetection": true, "checkUpdates": true, "rowProject": true, "rowState": true, "rowContext": true, "keys": Object{}},
 		"terminal": Object{"fontFamily": "\"FiraCode Nerd Font Mono\", \"Cascadia Mono\", Consolas, monospace", "fontSize": 13, "scrollback": 10000,
 			"cursorStyle": "bar", "cursorBlink": true, "lineHeight": 1.0, "shell": "auto", "loadProfile": true, "gpuTabs": 4},
 		// chatArgs start a chat. Claude gets no built-in tools and no MCP servers; `--tools=`
@@ -60,7 +63,7 @@ func Merge(dst, src Object) {
 		}
 		if m, ok := v.(map[string]any); ok {
 			if d, ok := dst[k].(map[string]any); ok {
-				if k == "names" || k == "sessionNames" || k == "sessionAccounts" {
+				if k == "names" || k == "sessionNames" || k == "sessionAccounts" || k == "keys" {
 					dst[k] = m
 				} else {
 					Merge(d, m)

@@ -26,7 +26,8 @@ import {
   type Collapsed,
 } from './expansion';
 import { normalizeZoom, stepZoom } from './zoom';
-import { applyTerminalSettings, applyTheme, setTerminalZoom } from '../terminal/manager';
+import { applyTerminalSettings, applyTheme, setBlockedDetection, setTerminalZoom } from '../terminal/manager';
+import { setKeyOverrides } from './keymap';
 import { applyPalette, isLight, type Palette } from './theme';
 import { findTheme, loadThemes } from './themes';
 import type { Account, IndexSnapshot, SessionMeta, Settings } from '../types';
@@ -65,9 +66,11 @@ export const themeState = $state({ themes: [] as Palette[] });
  * when the name is unknown, so deleting a theme file leaves a working app rather than an
  * unstyled one.
  */
-function applyThemeByName(name: string) {
+function applyThemeByName(name: string, accent = '') {
   const palette = findTheme(themeState.themes, name);
-  applyPalette(palette, document.documentElement);
+  // The accent setting colours the chrome only; terminals keep the theme's blue.
+  const chrome = /^#[0-9a-f]{6}$/i.test(accent) ? { ...palette, blue: accent, brightBlue: accent } : palette;
+  applyPalette(chrome, document.documentElement);
   setWindowTheme(isLight(palette));
   applyTheme(palette);
 }
@@ -99,9 +102,24 @@ function applySnapshot(snap: IndexSnapshot) {
 function applySettings(s: Settings) {
   s.projects.sessionNames = migrateSessionNames(s.projects.sessionNames);
   applyTerminalSettings(s.terminal);
-  applyThemeByName(s.ui.theme);
+  applyThemeByName(s.ui.theme, s.ui.accent);
   applyZoom(s.ui.zoom);
   applyMotion();
+  applyUi(s.ui);
+}
+
+/** The cheap ones, applied on every save: no refit, no recolouring. */
+function applyUi(ui: Settings['ui']) {
+  const root = document.documentElement;
+  root.toggleAttribute('data-solid', ui.backdrop === 'solid');
+  root.toggleAttribute('data-shapes', ui.stateShapes);
+  setBlockedDetection(ui.blockedDetection !== false);
+  setKeyOverrides(ui.keys ?? {});
+}
+
+/** Show a theme without saving it, for the theme picker. The saved theme's name puts it back. */
+export function previewTheme(name: string) {
+  applyThemeByName(name, appState.settings?.ui.accent);
 }
 
 // Windows' "Show animations" reaches the page as reduced motion, and changes live.
@@ -244,11 +262,13 @@ export async function saveSettings(next: Settings) {
   if (
     prev?.ui.zoom !== next.ui.zoom ||
     prev?.ui.theme !== next.ui.theme ||
+    prev?.ui.accent !== next.ui.accent ||
     JSON.stringify(prev?.terminal) !== JSON.stringify(next.terminal)
   ) {
     applySettings(next);
-  } else if (prev?.ui.animations !== next.ui.animations || prev?.ui.animationSpeed !== next.ui.animationSpeed) {
-    applyMotion();
+  } else {
+    if (prev?.ui.animations !== next.ui.animations || prev?.ui.animationSpeed !== next.ui.animationSpeed) applyMotion();
+    applyUi(next.ui);
   }
   // This write carries everything a pending debounced one would.
   if (saveTimer !== undefined) {

@@ -88,7 +88,7 @@
 <style>
   .tool {
     color: var(--fg-dim);
-    font-size: 13px;
+    font-size: calc(13px * var(--chat-scale, 1));
   }
   .line {
     all: unset;
@@ -143,7 +143,7 @@
     gap: 6px;
     margin-left: auto;
     padding-left: 8px;
-    font-size: 12px;
+    font-size: calc(12px * var(--chat-scale, 1));
     color: var(--fg-faint);
     font-variant-numeric: tabular-nums;
   }
@@ -161,7 +161,7 @@
     color: var(--danger);
     background: color-mix(in srgb, var(--danger) 12%, transparent);
     border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
-    font-size: 11px;
+    font-size: calc(11px * var(--chat-scale, 1));
   }
   .badge.declined {
     color: var(--fg-dim);
@@ -235,7 +235,7 @@
   }
   .why {
     margin: 0 0 4px 24px;
-    font-size: 13px;
+    font-size: calc(13px * var(--chat-scale, 1));
     color: var(--fg-dim);
     display: -webkit-box;
     -webkit-box-orient: vertical;

@@ -36,7 +36,8 @@ export type Action =
   | 'palette'
   | 'jumpWaiting'
   | 'toggleMosaic'
-  | 'toggleAgentView';
+  | 'toggleAgentView'
+  | 'pickTheme';
 
 /** The subset of KeyboardEvent this needs, so tests require no DOM. */
 export interface ChordEvent {
@@ -104,6 +105,7 @@ const BINDINGS: Binding[] = [
   { key: '`', ctrl: true, shift: false, action: 'toggleAgentView' },
   // For when something else holds Ctrl+`, such as a clipboard manager.
   { key: 'm', ctrl: true, shift: true, action: 'toggleAgentView' },
+  { key: 'y', ctrl: true, shift: true, action: 'pickTheme' },
 ];
 
 /**
@@ -127,6 +129,7 @@ const DESCRIPTIONS: Record<Action, { group: Group; label: string }> = {
   toggleAgentView: { group: 'View', label: 'Switch an agent tab between chat and terminal' },
   toggleSidebar: { group: 'View', label: 'Show or hide the sidebar' },
   palette: { group: 'View', label: 'Command palette' },
+  pickTheme: { group: 'View', label: 'Change theme' },
   focusSearch: { group: 'View', label: 'Filter the sidebar' },
   switchSidebarView: { group: 'View', label: 'Switch the sidebar between sessions, open tabs and scratch' },
   find: { group: 'View', label: 'Find in the terminal or chat' },
@@ -149,6 +152,7 @@ const KEY_LABELS: Record<string, string> = {
   add: 'Numpad +',
   subtract: 'Numpad −',
   ',': 'Comma',
+  ' ': 'Space',
 };
 
 export function chordLabel(b: { key: string; ctrl: boolean; shift: boolean }): string {
@@ -159,11 +163,51 @@ export function chordLabel(b: { key: string; ctrl: boolean; shift: boolean }): s
   return parts.join('+');
 }
 
+/** A chord as `chordLabel` writes it, back into a binding. Ctrl is required. */
+export function parseChord(label: string): { key: string; ctrl: boolean; shift: boolean } | null {
+  let rest = label.trim();
+  let ctrl = false;
+  let shift = false;
+  for (let m; (m = /^(ctrl|shift)\+(?=.)/i.exec(rest)); rest = rest.slice(m[0].length)) {
+    if (m[1].toLowerCase() === 'ctrl') ctrl = true;
+    else shift = true;
+  }
+  if (!ctrl || !rest) return null;
+  const key = Object.entries(KEY_LABELS).find(([, l]) => l.toLowerCase() === rest.toLowerCase())?.[0] ?? rest.toLowerCase();
+  return { key, ctrl, shift };
+}
+
+/** The chord a keypress makes, for recording a shortcut; null until it has Ctrl and a key. */
+export function chordFromEvent(e: ChordEvent): string | null {
+  if (!e.ctrlKey || e.altKey || e.metaKey || ['control', 'shift', 'alt', 'meta'].includes(e.key.toLowerCase())) return null;
+  return chordLabel({ key: e.key.toLowerCase(), ctrl: true, shift: e.shiftKey });
+}
+
+/** Settings > Keyboard. Each replaces every default chord of its action; '' leaves it none. */
+let overrides: Partial<Record<Action, Binding[]>> = {};
+export function setKeyOverrides(keys: Record<string, string>) {
+  overrides = {};
+  for (const [action, chord] of Object.entries(keys)) {
+    const b = chord ? parseChord(chord) : null;
+    if (!(action in DESCRIPTIONS) || (chord && !b)) continue;
+    overrides[action as Action] = b ? [{ ...b, action: action as Action }] : [];
+  }
+}
+
+function bindings(): Binding[] {
+  return [...BINDINGS.filter((b) => !(b.action in overrides)), ...Object.values(overrides).flat()];
+}
+
+/** Every chord `action` has now, or has by default. */
+export function chordsFor(action: Action, defaults = false): string[] {
+  return (defaults ? BINDINGS : bindings()).filter((b) => b.action === action).map(chordLabel);
+}
+
 /** The first chord bound to `action`, for showing beside a menu item or tooltip. */
 export function chordFor(action: Action): string | undefined {
-  const b = BINDINGS.find((b) => b.action === action);
-  return b && chordLabel(b);
+  return chordsFor(action)[0];
 }
+
 
 /** Every action with its name and chord, for the command palette. */
 export function actionList(): { action: Action; label: string; chord: string | undefined }[] {
@@ -182,7 +226,7 @@ export interface ShortcutGroup {
  */
 export function shortcutGroups(): ShortcutGroup[] {
   const byAction = new Map<Action, string[]>();
-  for (const b of BINDINGS) {
+  for (const b of bindings()) {
     const chords = byAction.get(b.action) ?? [];
     chords.push(chordLabel(b));
     byAction.set(b.action, chords);
@@ -203,7 +247,7 @@ export function matchChord(e: ChordEvent): Action | null {
   if (e.altKey || e.metaKey) return null;
 
   const key = e.key.toLowerCase();
-  const hit = BINDINGS.find(
+  const hit = bindings().find(
     (b) => b.key === key && b.ctrl === e.ctrlKey && b.shift === e.shiftKey,
   );
   return hit?.action ?? null;

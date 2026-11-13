@@ -93,6 +93,8 @@ export interface TabSummary {
   title: string;
   exited: boolean;
   attention: boolean;
+  /** A question or permission prompt waits for an answer. */
+  asking: boolean;
   /** Marked done in the Open view; back to waiting once the agent works again. */
   done: boolean;
   /** Sent when the agent next stops working. */
@@ -169,6 +171,28 @@ export interface Settings {
     codexRefreshSec: number;
     /** The small model that suggests session names (#195). */
     renameModel: 'haiku' | 'luna';
+    /** Agent chat text size in px; 13 is the size the chat was designed at. */
+    chatFontSize: number;
+    /** Agent chat font; '' uses the app's font. */
+    chatFontFamily: string;
+    /** A hex colour that replaces the theme's accent in the chrome; '' keeps the theme's. */
+    accent: string;
+    /** `mica` or `acrylic` show the desktop through the chrome (from the next launch); `solid` does not. */
+    backdrop: 'mica' | 'acrylic' | 'solid';
+    /** A distinct shape for each tab state, so it reads without colour. */
+    stateShapes: boolean;
+    notifyFinished: boolean;
+    notifyAsking: boolean;
+    toastCorner: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
+    /** Read terminal agents' screens for a permission prompt or question. */
+    blockedDetection: boolean;
+    checkUpdates: boolean;
+    /** What an Open view row shows besides its name. */
+    rowProject: boolean;
+    rowState: boolean;
+    rowContext: boolean;
+    /** Shortcut overrides by action: a chord such as `Ctrl+Shift+T`, or '' for none. */
+    keys: Record<string, string>;
   };
   terminal: TerminalSettings;
   /** `args` go on every launch; `chatArgs` on chats too, so they cannot change anything. */

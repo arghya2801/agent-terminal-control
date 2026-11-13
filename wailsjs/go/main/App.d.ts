@@ -38,6 +38,8 @@ export function GitChanges(arg1:string):Promise<any>;
 
 export function IndexScan(arg1:boolean):Promise<any>;
 
+export function InstallUpdate():Promise<void>;
+
 export function LimitsHistory():Promise<Array<Record<string, any>>>;
 
 export function ListThemes():Promise<Array<any>>;
