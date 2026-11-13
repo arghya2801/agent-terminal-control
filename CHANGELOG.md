@@ -6,6 +6,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-11-13
+
 ### Added
 - Palenight, SynthWave '84 and VS Code Light Modern themes (#269).
 
@@ -408,7 +410,8 @@ ATC now runs on a Go/Wails host instead of Rust/Tauri. The interface is the same
 
 First release.
 
-[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.3...HEAD
+[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.4...HEAD
+[0.7.4]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.2-beta...v0.7.3
 [0.7.2-beta]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.1...v0.7.2-beta
 [0.7.1]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.0...v0.7.1
