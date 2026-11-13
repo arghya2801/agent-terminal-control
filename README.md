@@ -187,7 +187,7 @@ results from that move.
   that cannot change anything: Claude with no tools or MCP servers, Codex in a read-only
   sandbox. Both start from the `+` in the sidebar's Scratch view, and are listed there
 - Search across scrollback with match counts
-- 45 themes for the whole app, among them ATC Dark, One Dark, Dracula, GitHub, Tokyo Night,
+- 48 themes for the whole app, among them ATC Dark, One Dark, Dracula, GitHub, Tokyo Night,
   Catppuccin, Rosé Pine, Gruvbox and Solarized in dark and light, plus your own
 - Whole-application zoom, persisted
 - Sessions with no recorded working directory are shown but not launchable
