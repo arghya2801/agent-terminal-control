@@ -29,6 +29,13 @@
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 27%, transparent);
     animation: ping 0.9s var(--ease-out) 2;
   }
+  /* A diamond, not a dot: it asks a question, so it reads apart from "finished" without colour. */
+  .blocked {
+    background: var(--accent);
+    border-radius: 1px;
+    transform: rotate(45deg);
+    animation: ping 0.9s var(--ease-out) 2;
+  }
   .working {
     background: var(--warn);
     animation: pulse 1.2s ease-in-out infinite;
@@ -46,8 +53,23 @@
       box-shadow: 0 0 0 7px transparent;
     }
   }
+  /* Settings > Appearance > State shapes: each state its own outline, for reading without colour. */
+  :global([data-shapes]) .working {
+    border-radius: 1px;
+  }
+  :global([data-shapes]) .interrupted {
+    border-radius: 0;
+    clip-path: polygon(50% 0, 100% 100%, 0 100%);
+    width: 8px;
+    height: 7px;
+  }
+  :global([data-shapes]) .attention {
+    width: 7px;
+    height: 7px;
+  }
   :global([data-still]) .working,
-  :global([data-still]) .attention {
+  :global([data-still]) .attention,
+  :global([data-still]) .blocked {
     animation: none;
   }
 </style>

@@ -30,7 +30,7 @@ func validateSettings(input, defaults Object, path string) error {
 		field := path + k
 		fail := func() error { return fmt.Errorf("invalid setting %s", field) }
 		switch k {
-		case "names", "sessionNames", "sessionAccounts":
+		case "names", "sessionNames", "sessionAccounts", "keys":
 			m, ok := v.(map[string]any)
 			if !ok {
 				return fail()

@@ -298,7 +298,7 @@
     display: grid;
     place-items: center;
     padding: 0;
-    font-size: 12px;
+    font-size: calc(12px * var(--chat-scale, 1));
     line-height: 1;
     color: var(--fg-bright);
     background: var(--bg-surface);
@@ -311,7 +311,7 @@
     color: var(--danger);
   }
   .problem {
-    font-size: 12px;
+    font-size: calc(12px * var(--chat-scale, 1));
     color: var(--danger);
   }
   .console.waiting:focus-within {
@@ -329,7 +329,7 @@
     max-height: 30vh;
     resize: none;
     font: inherit;
-    font-size: 14px;
+    font-size: calc(14px * var(--chat-scale, 1));
     line-height: 1.5;
     color: var(--fg-bright);
     background: transparent;
@@ -348,7 +348,7 @@
     align-items: center;
     gap: 6px;
     padding: 4px 8px 8px 8px;
-    font-size: 12px;
+    font-size: calc(12px * var(--chat-scale, 1));
     color: var(--fg-faint);
   }
   .grow {
@@ -442,7 +442,7 @@
     flex: none;
     margin-left: auto;
     padding-left: 8px;
-    font-size: 11px;
+    font-size: calc(11px * var(--chat-scale, 1));
     color: var(--fg-faint);
   }
   .menu button {
@@ -465,7 +465,7 @@
     gap: 4px;
     padding: 7px 12px;
     border-top: 1px solid var(--border);
-    font-size: 11.5px;
+    font-size: calc(11.5px * var(--chat-scale, 1));
     color: var(--fg-faint);
   }
   .note {

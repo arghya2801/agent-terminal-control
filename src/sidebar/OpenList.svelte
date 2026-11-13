@@ -35,6 +35,7 @@
   });
 
   const graph = $derived(appState.settings?.ui.outputGraph !== false);
+  const show = $derived({ project: appState.settings?.ui.rowProject !== false, state: appState.settings?.ui.rowState !== false, context: appState.settings?.ui.rowContext !== false });
 
   const projectName = (key: string | null) => (key ? appState.index.projects.find((p) => p.key === key)?.name ?? '' : '');
 
@@ -114,9 +115,9 @@
     <span class="icon">{#if tab.provider}<ProviderIcon provider={tab.provider} />{:else}<Icon name="terminal" size={12} />{/if}</span>
     <span class="title"><Highlight text={tab.title} {query} /></span>
     <span class="meta">
-      {#if projectName(tab.projectKey)}<span class="project"><Highlight text={projectName(tab.projectKey)} {query} /></span>{/if}
-      <time>{naming.has(tab.key) ? 'Naming…' : `${stateWord(tab.mark)} ${relativeTime(tab.since, now)}`}</time>
-      {#if fill !== undefined}<span class="ctx" class:full={fill >= 0.8} title="Context window {Math.round(fill * 100)}% full">{Math.round(fill * 100)}%</span>{/if}
+      {#if show.project && projectName(tab.projectKey)}<span class="project"><Highlight text={projectName(tab.projectKey)} {query} /></span>{/if}
+      {#if show.state || naming.has(tab.key)}<time>{naming.has(tab.key) ? 'Naming…' : `${stateWord(tab.mark)} ${relativeTime(tab.since, now)}`}</time>{/if}
+      {#if show.context && fill !== undefined}<span class="ctx" class:full={fill >= 0.8} title="Context window {Math.round(fill * 100)}% full">{Math.round(fill * 100)}%</span>{/if}
     </span>
     {#if !wait && graph}<svg class="spark" viewBox="0 0 60 10" preserveAspectRatio="none" aria-hidden="true"><path d={sparkPath((void now, outputHistory(tab.key)))} /></svg>{/if}
   </button>
@@ -239,7 +240,8 @@
     flex-shrink: 0;
     font-variant-numeric: tabular-nums;
   }
-  .attention time {
+  .attention time,
+  .blocked time {
     color: var(--accent);
   }
   .ctx.full {

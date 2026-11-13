@@ -1,3 +1,8 @@
+<script lang="ts" module>
+  /** The tab Settings last showed, while ATC runs. */
+  let lastTab = 's-general';
+</script>
+
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { sessionKey } from '../lib/agents';
@@ -5,8 +10,9 @@
   import Page from '../lib/Page.svelte';
   import SectionNav from '../lib/SectionNav.svelte';
   import AccountsSection from './AccountsSection.svelte';
+  import KeysSection from './KeysSection.svelte';
   import { appVersion, openSettingsFile, openUrl, shells } from '../lib/ipc';
-  import { appState, refresh, saveSettings, themeState } from '../lib/stores.svelte';
+  import { accountState, appState, refresh, saveSettings, themeState } from '../lib/stores.svelte';
   import { cssVariables } from '../lib/theme';
   import type { Account, Settings } from '../types';
 
@@ -20,6 +26,7 @@
     { id: 's-sidebar', label: 'Sidebar' },
     { id: 's-agents', label: 'Agents' },
     { id: 's-names', label: 'Names' },
+    { id: 's-keys', label: 'Keyboard' },
     { id: 's-advanced', label: 'Advanced' },
     { id: 's-about', label: 'About' },
   ];
@@ -79,6 +86,7 @@
         toastSeconds: clamp(draft.ui.toastSeconds, 1, 60, 6),
         limitsRefreshSec: clamp(draft.ui.limitsRefreshSec, 15, 3600, 300),
         codexRefreshSec: clamp(draft.ui.codexRefreshSec, 15, 3600, 300),
+        chatFontSize: clamp(draft.ui.chatFontSize, 9, 24, 13),
       },
       terminal: {
         ...draft.terminal,
@@ -162,11 +170,19 @@
   }
 
   /**
-   * The search box. A row shows when its label fuzzily matches, or when its label, hint and
-   * options hold every word typed; a section with no row left hides its heading. Rows are a
-   * grid's cells, two per row (three in Agents, under a header row of its own).
+   * One section shows at a time, the tab. A search looks through every section instead: a
+   * row shows when its label fuzzily matches, or when its label, hint and options hold every
+   * word typed, and a section with no row left hides its heading. Rows are a grid's cells,
+   * two per row (three in Agents, under a header row of its own).
    */
+  // Back from Get a token, the new account waits in the Accounts tab.
+  let tab = $state(accountState.draft ? 's-accounts' : lastTab);
   let query = $state('');
+  function pick(id: string) {
+    tab = lastTab = id;
+    query = '';
+    body?.closest('.page')?.scrollTo({ top: 0 });
+  }
   let search = $state<HTMLInputElement>();
   let body = $state<HTMLElement>();
   let matches = $state(true);
@@ -179,7 +195,13 @@
     let any = false;
     for (const h of body.querySelectorAll('h2')) {
       let found = false;
+      // Without a search, the other tabs' sections hide whole.
+      const off = !q && h.id !== tab;
       for (let el = h.nextElementSibling; el && el.tagName !== 'H2'; el = el.nextElementSibling) {
+        if (off) {
+          show(el, false);
+          continue;
+        }
         if (!el.matches('.grid, .agents')) {
           show(el, !q);
           found ||= !q;
@@ -234,7 +256,7 @@
   {:else}
     {#if query.trim() && !matches}<p class="muted none">No settings match “{query.trim()}”.</p>{/if}
     <div class="body" bind:this={body}>
-    <SectionNav sections={SECTIONS}>
+    <SectionNav sections={SECTIONS} current={query.trim() ? null : tab} onPick={pick}>
       <h2 id="s-general">General</h2>
       <div class="grid">
         <label for="rt">Restore tabs</label>
@@ -255,6 +277,11 @@
           <input id="nt" type="checkbox" bind:checked={draft.ui.notifications} />
           <span class="muted">When a background session finishes or needs you and ATC is not focused</span>
         </label>
+        <label for="nf">Notify when</label>
+        <div class="check">
+          <label class="check"><input id="nf" type="checkbox" bind:checked={draft.ui.notifyFinished} /> An agent finishes</label>
+          <label class="check"><input type="checkbox" bind:checked={draft.ui.notifyAsking} /> An agent asks a question or for permission</label>
+        </div>
       </div>
 
       <h2 id="s-accounts">Claude accounts</h2>
@@ -305,6 +332,33 @@
         </label>
         <label for="zm">Zoom</label>
         <input id="zm" type="number" min="0.5" max="3" step="0.1" bind:value={draft.ui.zoom} />
+        <label for="ac">Accent colour</label>
+        <div class="check">
+          <input id="ac" type="color" value={draft.ui.accent || swatches(draft.ui.theme)[1] || '#539bf5'} oninput={(e) => draft && (draft.ui.accent = e.currentTarget.value)} />
+          {#if draft.ui.accent}
+            <button class="btn" onclick={() => draft && (draft.ui.accent = '')}>Use the theme's</button>
+          {:else}
+            <span class="muted">The theme's. Buttons, links and highlights; terminals keep their own colours</span>
+          {/if}
+        </div>
+        <label for="bd">Backdrop</label>
+        <div>
+          <select id="bd" bind:value={draft.ui.backdrop}>
+            <option value="mica">Mica</option>
+            <option value="acrylic">Acrylic</option>
+            <option value="solid">Solid</option>
+          </select>
+          <span class="muted hint">Mica and Acrylic let the desktop show faintly through the sidebar. A change between them applies from the next launch</span>
+        </div>
+        <label for="ss">State shapes</label>
+        <label class="check">
+          <input id="ss" type="checkbox" bind:checked={draft.ui.stateShapes} />
+          <span class="muted">A shape for each tab state as well as a colour: square working, triangle stopped, diamond asking, ring idle</span>
+        </label>
+        <label for="cfs2">Chat text size</label>
+        <input id="cfs2" type="number" min="9" max="24" bind:value={draft.ui.chatFontSize} />
+        <label for="cff">Chat font</label>
+        <input id="cff" class="wide" placeholder="The app's font" bind:value={draft.ui.chatFontFamily} />
       </div>
 
       <h2 id="s-terminal">Terminal</h2>
@@ -349,6 +403,12 @@
           <input id="og" type="checkbox" bind:checked={draft.ui.outputGraph} />
           <span class="muted">Five minutes of output beside each row in the Open view</span>
         </label>
+        <label for="rp">Open view rows show</label>
+        <div class="check">
+          <label class="check"><input id="rp" type="checkbox" bind:checked={draft.ui.rowProject} /> Project</label>
+          <label class="check"><input type="checkbox" bind:checked={draft.ui.rowState} /> State and time</label>
+          <label class="check"><input type="checkbox" bind:checked={draft.ui.rowContext} /> Context used</label>
+        </div>
         <label for="ta">Task box</label>
         <div class="check">
           <select id="ta" aria-label="Task box agent" bind:value={draft.ui.taskAgent}>
@@ -442,6 +502,9 @@
         <p class="muted">None yet. Right-click a project or session in the sidebar and choose Rename.</p>
       {/if}
 
+      <h2 id="s-keys">Keyboard</h2>
+      <KeysSection bind:keys={draft.ui.keys} />
+
       <h2 id="s-advanced">Advanced</h2>
       <div class="grid">
         <label for="sh">Shell</label>
@@ -480,12 +543,28 @@
           <input id="cfs" type="checkbox" bind:checked={draft.ui.confirmSwitch} />
           <span class="muted">Warn before moving an agent tab between the chat and the terminal</span>
         </label>
+        <label for="dq">Detect questions</label>
+        <label class="check">
+          <input id="dq" type="checkbox" bind:checked={draft.ui.blockedDetection} />
+          <span class="muted">Read the screen of Claude or Codex in a terminal tab for a permission prompt or question, and mark the tab as asking</span>
+        </label>
+        <label for="cu">Check for updates</label>
+        <label class="check">
+          <input id="cu" type="checkbox" bind:checked={draft.ui.checkUpdates} />
+          <span class="muted">Ask GitHub for a newer release on launch. Check for updates in the ⋯ menu still works when off</span>
+        </label>
         <label for="tst">In-app notes</label>
         <div class="check">
           <input id="tst" type="checkbox" bind:checked={draft.ui.toasts} />
           <span class="muted">When a background tab finishes while ATC is focused, for</span>
           <input type="number" min="1" max="60" aria-label="Seconds a note stays" bind:value={draft.ui.toastSeconds} />
-          <span class="muted">seconds</span>
+          <span class="muted">seconds, in the</span>
+          <select aria-label="Corner for in-app notes" bind:value={draft.ui.toastCorner}>
+            <option value="bottom-right">bottom right</option>
+            <option value="bottom-left">bottom left</option>
+            <option value="top-right">top right</option>
+            <option value="top-left">top left</option>
+          </select>
         </div>
         <label for="lr">Claude limits every</label>
         <div class="check">

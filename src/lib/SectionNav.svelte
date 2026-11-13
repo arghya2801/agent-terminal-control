@@ -6,7 +6,19 @@
    * A long page with a list of its sections beside it: a click jumps to one, and the
    * list follows the scroll. Each section starts with an element carrying its `id`.
    */
-  let { sections, children }: { sections: { id: string; label: string }[]; children: Snippet } = $props();
+  let {
+    sections,
+    children,
+    current = null,
+    onPick,
+  }: {
+    sections: { id: string; label: string }[];
+    children: Snippet;
+    /** Tabs instead of a scrolling page: the page shows one section, `current`, and a
+     *  click hands the choice to `onPick`. null while no tab applies, as during a search. */
+    current?: string | null;
+    onPick?: (id: string) => void;
+  } = $props();
 
   /** Where a heading counts as reached, below the page's sticky header. */
   const LINE = 90;
@@ -19,6 +31,7 @@
   let jumping = false;
 
   function go(id: string) {
+    if (onPick) return onPick(id);
     const el = document.getElementById(id);
     if (!el) return;
     active = id;
@@ -28,7 +41,7 @@
 
   onMount(() => {
     const scroller = nav.closest<HTMLElement>('.page');
-    if (!scroller) return;
+    if (!scroller || onPick) return;
     const update = () => {
       if (jumping) return;
       const line = scroller.getBoundingClientRect().top + LINE;
@@ -75,7 +88,8 @@
 <div class="layout">
   <nav bind:this={nav} aria-label="Sections">
     {#each sections as s (s.id)}
-      <button class:on={active === s.id} aria-current={active === s.id ? 'location' : undefined} onclick={() => go(s.id)}>
+      {@const on = onPick ? current === s.id : active === s.id}
+      <button class:on aria-current={on ? (onPick ? 'page' : 'location') : undefined} onclick={() => go(s.id)}>
         {s.label}
       </button>
     {/each}

@@ -4,8 +4,9 @@
   import TaskBox from './TaskBox.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import Icon from '../lib/Icon.svelte';
-  import { onMount, tick } from 'svelte';
-  import { newerRelease, openUrl, type GitChanges } from '../lib/ipc';
+  import { tick } from 'svelte';
+  import ConfirmDialog from '../lib/ConfirmDialog.svelte';
+  import { installUpdate, newerRelease, openUrl, type GitChanges } from '../lib/ipc';
   import { pageZoom } from '../lib/desktop';
   import { activate, focusActiveTerminal, markDone, splitWith } from '../terminal/manager';
   import { isWaiting } from '../lib/triage';
@@ -82,15 +83,41 @@
   let refreshing = $state(false);
   let openRows = $state<OpenList>();
   /** A newer release on GitHub, checked once per launch (#172). */
-  let update = $state<{ version: string; url: string } | null>(null);
-  onMount(() => {
-    newerRelease().then((r) => (update = r), () => {});
+  let update = $state<{ version: string; url: string; installable: boolean } | null>(null);
+  /** The install prompt: closed, asking, or the step it is on. */
+  let installing = $state<'ask' | 'busy' | string | null>(null);
+  /** A check by hand that found nothing, said in the footer for a moment. */
+  let upToDate = $state(false);
+  // Once settings arrive, which is after this mounts.
+  let checked = false;
+  $effect(() => {
+    const ui = appState.settings?.ui;
+    if (!ui || checked) return;
+    checked = true;
+    if (ui.checkUpdates !== false) newerRelease().then((r) => (update = r), () => {});
   });
+
+  export async function checkForUpdates() {
+    update = await newerRelease().catch(() => null);
+    if (update) installing = 'ask';
+    else {
+      upToDate = true;
+      setTimeout(() => (upToDate = false), 4000);
+    }
+  }
+
+  async function install() {
+    if (installing === 'busy') return;
+    if (!update?.installable) return void openUrl(update!.url);
+    installing = 'busy';
+    // On success ATC quits while the installer starts.
+    await installUpdate().catch((e) => (installing = String(e)));
+  }
   let menu = $state<{ x: number; y: number; items: MenuItem[]; dropdown?: boolean } | null>(null);
 
   const view = $derived(sidebarView());
   const working = $derived(tabs.filter((t) => tabMark(t) === 'working').length);
-  const waiting = $derived(tabs.filter((t) => tabMark(t) === 'attention').length);
+  const waiting = $derived(tabs.filter((t) => ['attention', 'blocked'].includes(tabMark(t))).length);
   const scratchSessions = $derived(
     appState.index.projects.filter((p) => p.kind).reduce((n, p) => n + p.sessions.length, 0),
   );
@@ -422,10 +449,27 @@
       {appState.index.projects.filter((p) => !p.kind).length} projects, {appState.index.sessionCount - scratchSessions} sessions
     {/if}
     {#if update}
-      <button class="update" onclick={() => void openUrl(update!.url)} title="Open the release page to download it">{update.version} is out</button>
+      <button class="update" onclick={() => (installing = 'ask')} title="Install it">{update.version} is out</button>
+    {:else if upToDate}
+      <span>ATC is up to date</span>
     {/if}
   </footer>
 </div>
+
+{#if update && installing}
+  <ConfirmDialog danger={false} confirmLabel={update.installable ? 'Install' : 'Open release page'} onConfirm={() => void install()} onCancel={() => (installing = null)}>
+    {#if installing === 'busy'}
+      Downloading ATC {update.version}…
+    {:else if installing !== 'ask'}
+      Could not install: {installing}
+    {:else if update.installable}
+      Install <strong>ATC {update.version}</strong>? ATC downloads it, closes and runs the installer. Open terminals and agents end.
+    {:else}
+      <strong>ATC {update.version}</strong> is out. This build cannot update itself.
+    {/if}
+    <button class="update" onclick={() => void openUrl(update!.url)}>Release notes</button>
+  </ConfirmDialog>
+{/if}
 
 <style>
   .panel {

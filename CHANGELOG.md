@@ -6,6 +6,20 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Added
+- Claude and Codex in a terminal tab show when they ask a question or for permission, not only when they finish. The tab gets a diamond instead of a dot and reads "asking" in the Open view, where it sorts first under Waiting on you, and its notification says it is asking. ATC reads this from the bottom of the screen, with rules adapted from Herdr's.
+- Check for updates, in the ⋯ menu and the command palette. Install downloads the MSI, setup.exe or portable `atc.exe`, whichever this copy came from, closes ATC and runs it. The "is out" note in the sidebar opens the same prompt.
+- 40 more built-in themes, among them One Dark, Dracula, GitHub, Tokyo Night, Gruvbox, Solarized, Monokai, Kanagawa, Everforest, Ayu and Campbell, in dark and light (#269).
+- Change theme (Ctrl+Shift+Y, or the ⋯ menu and the command palette) lists every theme under Dark and Light. Arrow keys apply each one to the whole app as you go, Enter keeps it, and Esc puts the old one back.
+- Settings > Keyboard: change any shortcut by pressing the new one, clear it, reset it, or reset them all. A chord another action already has is flagged.
+- Settings > Appearance: an accent colour over the theme's, a Mica, Acrylic or Solid backdrop, shapes for tab states, and a text size and font for agent chats.
+- Settings > General > Notify when: turn notifications off for agents finishing or for agents asking, separately. In-app notes can sit in any corner.
+- Settings > Sidebar > Open view rows show: hide the project, the state and time, or the context use.
+- Settings > Advanced: turn off reading terminal agents' screens for questions, or the update check on launch.
+
+### Changed
+- Settings shows one section at a time, picked from the list at its left, instead of one long page. Search still looks through every section. Settings reopens on the section you last had open.
+
 ## [0.7.2-beta] - 2026-11-11
 
 ### Added

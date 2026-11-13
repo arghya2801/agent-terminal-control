@@ -8,6 +8,10 @@
     detail?: string;
     icon: IconName;
     chord?: string;
+    /** Swatches shown at the right, as the theme picker does. */
+    colours?: string[];
+    /** A heading the row sits under; rows keep the order their groups first appear in. */
+    group?: string;
     run: () => void;
   }
 </script>
@@ -18,8 +22,30 @@
   import Highlight from './Highlight.svelte';
   import { fuzzyScore } from './fuzzy';
 
-  /** `commands` is everything; `initial` is what an empty box shows, in order. */
-  let { commands, initial, onClose }: { commands: Command[]; initial: Command[]; onClose: () => void } = $props();
+  /**
+   * `commands` is everything; `initial` is what an empty box shows, in order, with `start`
+   * selected. `onHighlight` hears every row selected, for a live preview, and `onCancel`
+   * hears Esc or a click outside, so a preview can be undone.
+   */
+  let {
+    commands,
+    initial,
+    onClose,
+    start = 0,
+    placeholder = 'Run a command, or go to a tab, project or session',
+    label = 'Command palette',
+    onHighlight,
+    onCancel,
+  }: {
+    commands: Command[];
+    initial: Command[];
+    onClose: () => void;
+    start?: number;
+    placeholder?: string;
+    label?: string;
+    onHighlight?: (c: Command) => void;
+    onCancel?: () => void;
+  } = $props();
 
   const LIMIT = 60;
   let dialog: HTMLDialogElement;
@@ -35,15 +61,27 @@
         const score = Math.max(fuzzyScore(c.label, query) ?? -1, (fuzzyScore(c.detail ?? '', query) ?? -1) - 200);
         return score >= 0 ? [{ c, score }] : [];
       })
-      .sort((a, b) => b.score - a.score)
+      .sort((a, b) => groupOrder(a.c) - groupOrder(b.c) || b.score - a.score)
       .slice(0, LIMIT)
       .map((r) => r.c);
   });
+  const groups = $derived([...new Set(commands.map((c) => c.group))]);
+  const groupOrder = (c: Command) => groups.indexOf(c.group);
 
   $effect(() => {
-    void results;
-    index = 0;
+    index = query.trim() || !results.length ? 0 : Math.min(start, results.length - 1);
+    void tick().then(() => list?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' }));
   });
+
+  $effect(() => {
+    const c = results[index];
+    if (c && onHighlight) onHighlight(c);
+  });
+
+  function cancel() {
+    onCancel?.();
+    onClose();
+  }
 
   onMount(() => {
     dialog.showModal();
@@ -81,9 +119,10 @@
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
 <dialog
   bind:this={dialog}
-  aria-label="Command palette"
-  oncancel={(e) => { e.preventDefault(); onClose(); }}
-  onclick={(e) => { if (e.target === dialog) onClose(); }}
+  aria-label={label}
+  class:preview={!!onHighlight}
+  oncancel={(e) => { e.preventDefault(); cancel(); }}
+  onclick={(e) => { if (e.target === dialog) cancel(); }}
 >
   <div class="field">
     <Icon name="search" size={14} />
@@ -92,7 +131,7 @@
       autofocus
       bind:value={query}
       onkeydown={onKey}
-      placeholder="Run a command, or go to a tab, project or session"
+      {placeholder}
       spellcheck="false"
       role="combobox"
       aria-expanded="true"
@@ -102,6 +141,7 @@
   </div>
   <div class="list" id="palette-list" role="listbox" bind:this={list}>
     {#each results as c, i (c.id)}
+      {#if c.group && c.group !== results[i - 1]?.group}<div class="group" role="presentation">{c.group}</div>{/if}
       <div
         id="palette-{i}"
         class="row"
@@ -116,6 +156,7 @@
           <span class="label"><Highlight text={c.label} {query} /></span>
           {#if c.detail}<span class="detail">{c.detail}</span>{/if}
         </span>
+        {#if c.colours}<span class="swatches" aria-hidden="true">{#each c.colours as colour, j (j)}<span style:background={colour}></span>{/each}</span>{/if}
         {#if c.chord}<kbd>{c.chord}</kbd>{/if}
       </div>
     {:else}
@@ -142,6 +183,21 @@
   dialog::backdrop {
     background: color-mix(in srgb, var(--bg) 45%, transparent);
     animation: atc-fade var(--enter) var(--ease-out);
+  }
+  /* Nothing dims a live preview. */
+  dialog.preview::backdrop {
+    background: transparent;
+  }
+  .swatches {
+    display: flex;
+    flex-shrink: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .swatches span {
+    width: 12px;
+    height: 12px;
   }
   .field {
     display: flex;
@@ -215,6 +271,11 @@
     background: var(--bg-surface);
     color: var(--fg-dim);
     font: inherit;
+    font-size: 11px;
+  }
+  .group {
+    padding: 8px 10px 4px;
+    color: var(--fg-faint);
     font-size: 11px;
   }
   .empty {

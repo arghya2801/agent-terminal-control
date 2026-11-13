@@ -44,6 +44,9 @@ failed spawn. The other events are `index://updated`, `settings://updated` and
 | `agents.go` | The agent sidecar: starting it, routing its sessions, the CLI each one runs |
 | `sidecar/` | Node: `claude.ts` (Agent SDK), `codex.ts` (app-server), `protocol.ts` (the events) |
 | `limits.go` | Claude's plan-limit HTTP request and Codex's app-server limits |
+| `sessions.go` | Session preview, transcript search and Rename with Haiku or Luna |
+| `accounts.go` | Claude accounts: DPAPI storage and the env each launch gets |
+| `updates.go` | The release check and Install: download, run the installer, quit |
 | `internal/pty/pty_windows.go` | Shell choice, ConPTY, UTF-8 streaming, backpressure, process cleanup |
 | `internal/pty/conpty.go` | Loads the bundled `conpty.dll` beside the exe, else the one in Windows |
 | `internal/core/settings.go` | Defaults, paths, atomic saves, agent command lines and quoting |
@@ -59,8 +62,8 @@ uses them: Windows Terminal's newer ConPTY, fetched by `scripts/conpty.mjs` at b
 time. Otherwise it uses the copy built into Windows, which swallows OSC 10/11 colour
 queries, so Codex's prompt bar comes out the wrong colour.
 
-The shell is PowerShell 7 if installed, else Windows PowerShell. The `terminal.shell`
-setting prefers one of them, and `terminal.loadProfile` off adds `-NoProfile`; both reach
+The shell is Windows PowerShell 5.1 if installed, since it starts faster, else
+PowerShell 7. The `terminal.shell` setting prefers one of them, and `terminal.loadProfile` off adds `-NoProfile`; both reach
 Go in the spawn options (`pty.Options.Shell` and `NoProfile`). `ATC_SHELL_NO_PROFILE=1`
 does the same for the e2e tests. Child shells lose the launcher's agent markers and
 `NO_COLOR`, and get `TERM=xterm-256color`. Without that, oh-my-posh renders black.
@@ -113,8 +116,8 @@ message adds that skill as a `skill` input.
 On the page, `src/agent/agent.svelte.ts` keeps one session per tab and `apply.ts` turns
 events into state. The manager's agent tabs (`openAgentTab`) have `term: null`; App
 portals an `AgentView` into each one's pane, so split, mosaic and zoom apply as they do to
-terminals. The manager hears only state changes (`setAgentState`) and asks the store for
-Reply (`setAgentHooks`). `switchView` (Ctrl+`) closes an
+terminals. The manager hears only state changes (`setAgentState`) and hands queued and
+broadcast messages to the store (`setAgentHooks`). `switchView` (Ctrl+`) closes an
 agent tab and reopens its session the other way: in a terminal with `core.AgentCommand`,
 or as a chat. Only one of them can drive a session. `ui.agentView` picks the view for new
 tabs, and a saved tab keeps its own (`terminal` in `atc.tabs`).
@@ -154,8 +157,8 @@ view. A chat tab's key is `agent:<provider>:chat-N`, and saved tabs carry `chat:
 a restored chat keeps its arguments.
 
 The task box opens a tab with the agent command plus the task as one quoted argument,
-waits a frame so the PTY spawns at its real size, then refocuses the previous tab. Reply
-and broadcast use `sendText`, which writes the text, then Enter 50 ms later. In one
+waits a frame so the PTY spawns at its real size, then refocuses the previous tab. Queued
+messages and broadcast use `sendText`, which writes the text, then Enter 50 ms later. In one
 write, Claude Code reads the pair as a paste and keeps the newline in its prompt.
 
 ## Discovery and persistence
@@ -213,30 +216,54 @@ initialize and `account/rateLimits/read`, then stop it. One provider failing nev
 the other. The header's usage chip shows Claude's 5-hour session limit (`chipLimit` in
 `src/lib/plan.ts`) and the time until it resets.
 
+## Updates
+
+`updates.go`. `NewerRelease` asks GitHub for `releases/latest`, which skips prereleases,
+once per launch and again from Check for updates. `installKind` reads the install from
+where the exe lives: `%ProgramFiles%\ATC` is the MSI, `%LOCALAPPDATA%\ATC` is setup.exe,
+and any other `atc.exe` is portable. Anything else, such as `atc-dev.exe`, cannot update
+itself. `InstallUpdate` downloads that release's file, taking only links under this
+repository's `releases/download/`, then starts `msiexec /i` or the setup.exe and quits.
+A portable exe downloads beside itself as `atc.exe.new`, swaps names with the running
+exe, which Windows allows, and starts the new one. The old file stays as `atc.exe.old`
+until the next update replaces it.
+
 ## Frontend
 
 | Path | Does |
 |---|---|
 | `src/App.svelte` | Layout, the pane header (or `TabBar` with `ui.showTabBar`), every chord's action, launching and restoring tabs, toasts |
-| `src/terminal/manager.ts` | Every tab, terminal or agent, and every PTY: open, close, split panes, mosaic, WebGL budget, fitting, state marks, output history, `screenLines`, `sendText` |
+| `src/terminal/manager.ts` | Every tab, terminal or agent, and every PTY: open, close, split panes, mosaic, WebGL budget, fitting, state marks, output history, blocked detection, `screenText`, `sendText` |
 | `src/agent/` | Agent tabs: the session store, `apply` (events to state), the view, the composer and its command menu, request cards |
 | `src/sidebar/Sidebar.svelte` | The Sessions, Open and Scratch views, the filter, the notes pane |
-| `src/sidebar/OpenList.svelte` | The Open view: triage order, sections, output graph, Reply, broadcast |
+| `src/sidebar/OpenList.svelte` | The Open view: triage order, sections, output graph, Done, Queue, broadcast |
 | `src/sidebar/TaskBox.svelte` | The task box at the top of the Open view |
 | `src/lib/triage.ts` | `triageOrder`, `nextWaiting`, `triageGroup`, `stateWord` |
-| `src/lib/stores.svelte.ts` | `appState`: index, settings, notes; zoom, animation speed, refresh intervals |
-| `src/lib/keymap.ts` | Chords, the shortcut list, newline handling for Claude and Codex |
+| `src/lib/stores.svelte.ts` | `appState`: index, settings, notes; applying them (`applySettings` on a theme, zoom or terminal change, the cheap `applyUi` on every save, `previewTheme` for the theme picker); refresh intervals |
+| `src/lib/keymap.ts` | Chords, `ui.keys` overrides (each replaces all of its action's defaults), the shortcut list, newline handling for Claude and Codex |
+| `src/settings/KeysSection.svelte` | Settings > Keyboard: record, clear and reset shortcuts |
 | `src/lib/restore.ts` | Parsing saved tabs, which are untrusted |
-| `src/settings/SettingsPanel.svelte` | The settings page, saving a moment after each edit |
+| `src/settings/SettingsPanel.svelte` | The settings page: one section per tab, a search across all of them, saving a moment after each edit |
 | `src/usage/UsagePanel.svelte`, `src/tabs/UsageChip.svelte` | The usage page and the header chip |
 
-A tab's state comes from its terminal title. Claude prefixes `✳` when idle and spins
-`◐`/`◑` while working; Codex state comes from its session file. `tabMark` turns that into
-`working`, `idle`, `interrupted`, `attention` (finished in the background), `open` or
-`exited`, and the manager records when each tab entered its mark.
+A terminal tab's state comes from its title. Claude prefixes `✳` when idle and spins
+`◐`/`◑` while working; Codex state comes from its session file. Once a terminal agent's
+output settles for 250 ms, `watchBlocked` reads the rows on screen with `blockedScreen`
+(`src/lib/format.ts`), which looks for a permission prompt or a question. Its rules are
+cut down from Herdr's detection rules (herdrdev/herdr, `distribution/agent-detection`).
+A match sets `asking`, as a request card does in an agent tab. Claude's spinner outranks
+the screen; Codex's prompt shows while its session still says working, so the screen
+wins there. A turn that ends with a prompt on screen notifies as blocked, not finished.
 
-The Open view sorts with `triageOrder`: attention, interrupted, idle, working, open,
-exited, longest in state first.
+`tabMark` turns all this into `blocked`, `attention` (finished in the background),
+`working`, `idle`, `interrupted`, `open` or `exited`, and the manager records when each
+tab entered its mark. A queued message waits through `blocked`, so it never answers the
+prompt.
+
+The Open view sorts with `triageOrder`. Waiting on you (blocked, attention, interrupted
+and idle) comes first: blocked, then whichever started waiting most recently. Working,
+open and exited follow, each longest in its state first, and tabs marked done sit
+between shells and exited.
 
 The UI zooms with CSS `zoom` on the page, because Wails cannot change WebView2's zoom
 after startup. The terminal area undoes that zoom and scales its font, or xterm measures
@@ -368,7 +395,7 @@ before believing it. `scripts/sendkeys.ps1` sends real keys but takes focus. To 
 UI without taking focus, open the dev server's page (`http://localhost:34115`) in headless
 Edge with a remote-debugging port, and use the DevTools protocol to click, type and read.
 Import the manager module the app already loaded (its URL ends in `manager.ts?t=…`) to
-read terminal text with `screenLines`; WebGL canvases hide it from the DOM. Reloading that
+read terminal text with `screenText`; WebGL canvases hide it from the DOM. Reloading that
 page breaks its terminals, so start a new headless Edge instead.
 
 `npm test` runs Vitest and the Go tests, including native ConPTY tests; on a fresh

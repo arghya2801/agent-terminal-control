@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { claudeTitle, formatMatches, relativeTime, shortenPath, tabMark, usableTitle } from './format';
+import { blockedScreen, claudeTitle,formatMatches, relativeTime, shortenPath, tabMark, usableTitle } from './format';
 
 const NOW = 1_700_000_000_000;
 const MIN = 60_000;
@@ -103,8 +103,32 @@ describe('tabMark', () => {
   const t = (o: Partial<Parameters<typeof tabMark>[0]>) => tabMark({ exited: false, attention: false, activity: null, ...o });
   it('ranks exited, then attention, then the activity', () => {
     expect(t({ exited: true, attention: true, activity: 'working' })).toBe('exited');
+    expect(t({ asking: true, attention: true, activity: 'idle' })).toBe('blocked');
     expect(t({ attention: true, activity: 'working' })).toBe('attention');
     expect(t({ activity: 'interrupted' })).toBe('interrupted');
     expect(t({})).toBe('open');
+  });
+});
+
+describe('blockedScreen', () => {
+  const rule = '─'.repeat(40);
+  const idle = ['● Done. Tests pass.', '', rule, '❯ ', rule, '  ? for shortcuts'].join('\n');
+  const bash = ['● Running the tests.', '', rule, ' Bash command', '', '   npm test', '', ' Do you want to proceed?', ' ❯ 1. Yes', '   2. No, and tell Claude what to do differently (esc)', '', ' Esc to cancel · Tab to amend · ctrl+e to explain'].join('\n');
+  const question = [rule, ' ☐ Scope', '', ' Which files?', ' ❯ 1. All', '   2. Only src', '', ' Enter to select · ↑/↓ to navigate · Esc to cancel'].join('\n');
+
+  it('sees Claude asking for permission or an answer', () => {
+    expect(blockedScreen(bash, 'claude')).toBe(true);
+    expect(blockedScreen(question, 'claude')).toBe(true);
+  });
+
+  it('reads an empty prompt box as idle, even with an old prompt above it', () => {
+    expect(blockedScreen(idle, 'claude')).toBe(false);
+    expect(blockedScreen(`${bash}\n● Done.\n${idle}`, 'claude')).toBe(false);
+  });
+
+  it('sees Codex asking, from its title or below its last prompt', () => {
+    expect(blockedScreen('', 'codex', 'Action Required')).toBe(true);
+    expect(blockedScreen('› run the tests\n\nAllow command?\n  npm test', 'codex')).toBe(true);
+    expect(blockedScreen('Allow command?\n  npm test\n• Ran npm test\n› ', 'codex')).toBe(false);
   });
 });

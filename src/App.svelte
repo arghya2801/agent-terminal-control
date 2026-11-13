@@ -37,6 +37,7 @@
     initStores,
     nameSessions,
     naming,
+    previewTheme,
     refreshMs,
     rememberAccount,
     saveSettings,
@@ -44,7 +45,9 @@
     toggleSidebar,
     setSidebarView,
     sidebarView,
+    themeState,
   } from './lib/stores.svelte';
+  import { cssVariables, isLight } from './lib/theme';
   import {
     bindSessions,
     closeTab,
@@ -384,7 +387,8 @@
       account: t.account,
       title: displayTitle(t),
       exited: t.exited,
-      attention: t.attention || t.asking,
+      attention: t.attention,
+      asking: t.asking,
       done: t.done,
       queued: t.queued,
       cwd: t.cwd,
@@ -409,7 +413,7 @@
       boundSession: t.boundSession,
       existingSessions: t.existingSessions,
       startedAt: t.startedAt,
-      activity: t.attention ? 'attention' : (t.activity ?? 'open'),
+      activity: t.asking ? 'blocked' : t.attention ? 'attention' : (t.activity ?? 'open'),
       exited: t.exited,
     }));
     saveTabs(all);
@@ -609,7 +613,6 @@
     })),
   );
   const shownState = $derived.by(() => {
-    if (shown && tabMark(shown) === 'attention' && agents[shown.key]?.requests.length) return 'waiting on you';
     const state = shown ? stateWord(tabMark(shown)) : '';
     return state && `${state} ${relativeTime(shown!.since, now)}`;
   });
@@ -690,16 +693,34 @@
       { label: 'Settings', icon: 'settings', hint: chordFor('openSettings'), run: () => (page = 'settings') },
       { label: 'Keyboard shortcuts', icon: 'keyboard', hint: chordFor('showShortcuts'), run: () => (page = 'shortcuts') },
       { label: 'Command palette', icon: 'search', sep: true, hint: chordFor('palette'), run: () => (paletteOpen = true) },
+      { label: 'Change theme…', hint: chordFor('pickTheme'), run: () => (themePicker = true) },
+      { label: 'Check for updates', run: () => void sidebar?.checkForUpdates() },
       ...(currentZoom() !== 1 ? [{ label: `Reset zoom (${zoomLabel(currentZoom())})`, hint: chordFor('zoomReset'), run: () => void adjustZoom(0) }] : []),
     ]);
   }
 
   // --- command palette
   let paletteOpen = $state(false);
+  /** The theme picker: the palette over the themes, each applied as it is selected. */
+  let themePicker = $state(false);
+  function themeCommands(): Command[] {
+    const themes = [...themeState.themes].sort((a, b) => Number(isLight(a)) - Number(isLight(b)));
+    return themes.map((t) => ({
+      id: t.name,
+      label: t.name,
+      group: isLight(t) ? 'Light' : 'Dark',
+      icon: 'sparkle',
+      colours: [t.background, cssVariables(t)['--accent'], t.foreground],
+      run: () => {
+        const s = appState.settings;
+        if (s) void saveSettings({ ...s, ui: { ...s.ui, theme: t.name } });
+      },
+    }));
+  }
   const ACTION_ICONS: Partial<Record<Action, IconName>> = {
     newTab: 'plus', closeTab: 'close', renameTab: 'pencil', toggleSplit: 'split', toggleSidebar: 'sidebar',
     openSettings: 'settings', openUsage: 'usage', showShortcuts: 'keyboard', find: 'search', focusSearch: 'search',
-    askAgent: 'agent', openAgentHere: 'agent', openShellHere: 'terminal', toggleDebug: 'pulse',
+    askAgent: 'agent', openAgentHere: 'agent', openShellHere: 'terminal', toggleDebug: 'pulse', pickTheme: 'sparkle',
   };
 
   /** Built when the palette opens, from what is open and indexed at that moment. */
@@ -718,6 +739,7 @@
       { id: 'x:codex', label: 'Ask Codex', detail: 'In the scratch directory', icon: 'agent', run: () => askAgent('codex') },
       { id: 'x:chat-claude', label: 'Chat with Claude', detail: 'No tools or MCP servers: it cannot run commands or touch files', icon: 'agent', run: () => inScratch('claude', true) },
       { id: 'x:chat-codex', label: 'Chat with Codex', detail: 'Read-only sandbox: its commands cannot change files', icon: 'agent', run: () => inScratch('codex', true) },
+      { id: 'x:update', label: 'Check for updates', detail: 'Download and install a newer ATC', icon: 'chevron', run: () => void sidebar?.checkForUpdates() },
     ];
     const pages: Command[] = [
       { id: 'g:usage', label: 'Usage and spend', icon: 'usage', chord: chordFor('openUsage'), run: openUsage },
@@ -803,10 +825,13 @@
   }
 
   function attentionBody(provider: AgentProvider | null, reason: AttentionReason) {
-    return reason === 'finished' ? `${provider ? providerName(provider) : 'Agent'} finished and is waiting for you.` : 'Needs your attention.';
+    const name = provider ? providerName(provider) : 'Agent';
+    return reason === 'finished' ? `${name} finished and is waiting for you.` : reason === 'blocked' ? `${name} is asking for permission or an answer.` : 'Needs your attention.';
   }
 
   async function notifyAttention(key: TabKey, title: string, provider: AgentProvider | null, reason: AttentionReason) {
+    const ui = appState.settings?.ui;
+    if (reason === 'finished' ? ui?.notifyFinished === false : ui?.notifyAsking === false) return;
     if (document.hasFocus()) {
       if (appState.settings?.ui.toasts === false) return;
       const id = ++toastId;
@@ -916,6 +941,9 @@
         break;
       case 'palette':
         paletteOpen = true;
+        break;
+      case 'pickTheme':
+        themePicker = true;
         break;
       case 'toggleSplit':
         void toggleSplit();
@@ -1186,6 +1214,20 @@
       {@const cmds = paletteCommands()}
       <CommandPalette commands={cmds.all} initial={cmds.initial} onClose={() => (paletteOpen = false)} />
     {/if}
+    {#if themePicker}
+      {@const themes = themeCommands()}
+      {@const saved = appState.settings?.ui.theme ?? ''}
+      <CommandPalette
+        commands={themes}
+        initial={themes}
+        start={Math.max(0, themes.findIndex((t) => t.id.toLowerCase() === saved.toLowerCase()))}
+        label="Change theme"
+        placeholder="Find a theme. Arrows preview, Enter keeps, Esc puts the old one back"
+        onHighlight={(c) => previewTheme(c.id)}
+        onCancel={() => previewTheme(saved)}
+        onClose={() => (themePicker = false)}
+      />
+    {/if}
     {#if picker}
       <ProviderPicker
         title={picker.project ? `New agent in ${picker.project.name}` : 'Ask an agent'}
@@ -1218,7 +1260,7 @@
         Close <strong>{closing.title}</strong>? The {closing.what} running in it will be stopped.
       </ConfirmDialog>
     {/if}
-    <div class="corner" aria-live="polite">
+    <div class="corner {appState.settings?.ui.toastCorner ?? 'bottom-right'}" aria-live="polite">
       {#each toasts as t (t.id)}
         <div class="toast">
           <button class="toast-body" onclick={() => { activate(t.key); dismissToast(t.id); }} title="Go to this tab">
@@ -1471,7 +1513,8 @@
     content: attr(data-tile);
     font-size: calc(12px * var(--tile-scale));
   }
-  .panes :global([data-mark='attention'])::after {
+  .panes :global([data-mark='attention'])::after,
+  .panes :global([data-mark='blocked'])::after {
     background: var(--accent);
     color: var(--bg);
   }
@@ -1499,6 +1542,17 @@
     align-items: flex-end;
     gap: 8px;
     pointer-events: none;
+  }
+  .corner.top-right,
+  .corner.top-left {
+    top: 12px;
+    bottom: auto;
+  }
+  .corner.bottom-left,
+  .corner.top-left {
+    right: auto;
+    left: 12px;
+    align-items: flex-start;
   }
   .toast,
   .error {

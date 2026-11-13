@@ -50,7 +50,7 @@ export function usableTitle(title: string): string | null {
 export type Activity = 'working' | 'idle' | 'interrupted';
 
 /** A live tab's state: what the agent is doing, or just "open" before it says. */
-export type SessionMark = Activity | 'open' | 'attention';
+export type SessionMark = Activity | 'open' | 'attention' | 'blocked';
 export type TabMark = SessionMark | 'exited';
 
 /** One rule for every place a tab's state shows, so they never disagree (#148). */
@@ -59,6 +59,7 @@ export function markTitle(mark: TabMark, agent: string): string {
     working: `${agent} is working`,
     idle: `${agent} is waiting for you`,
     interrupted: `${agent} was interrupted`,
+    blocked: `${agent} is asking: a question or permission waits for your answer`,
     attention: 'Finished in the background: needs your attention',
     open: 'Open in a tab',
     exited: 'Exited',
@@ -79,8 +80,33 @@ export function changesText(c: { files: number; insertions: number; deletions: n
   ].filter(Boolean).join(', ') || 'No changes';
 }
 
-export function tabMark(t: { exited: boolean; attention: boolean; activity: Activity | null }): TabMark {
-  return t.exited ? 'exited' : t.attention ? 'attention' : (t.activity ?? 'open');
+export function tabMark(t: { exited: boolean; attention: boolean; asking?: boolean; activity: Activity | null }): TabMark {
+  return t.exited ? 'exited' : t.asking ? 'blocked' : t.attention ? 'attention' : (t.activity ?? 'open');
+}
+
+const isRule = (line: string) => /^\s*─+\s*$|^\s*─{3,}/.test(line);
+
+/**
+ * Whether an agent's TUI shows a permission prompt or a question, from the bottom of its
+ * screen. Adapted from Herdr's detection rules (herdrdev/herdr, distribution/agent-detection).
+ */
+export function blockedScreen(screen: string, agent: 'claude' | 'codex', title = ''): boolean {
+  const lines = screen.toLowerCase().split('\n');
+  if (agent === 'codex') {
+    // Text after Codex's last `›` prompt line, so an answered prompt above it does not count.
+    const prompt = lines.findLastIndex((l) => l.startsWith('›'));
+    const tail = lines.slice(prompt + 1).join('\n');
+    return title.includes('Action Required') || ['press enter to confirm or esc to cancel', 'enter to submit answer', 'enter to submit all', 'allow command?'].some((s) => tail.includes(s));
+  }
+  const all = lines.join('\n');
+  const rules = lines.flatMap((l, i) => (isRule(l) ? [i] : []));
+  const tail = lines.slice((rules.at(-1) ?? -1) + 1).join('\n');
+  if (tail.includes('esc to cancel') && (tail.includes('enter to confirm') || (tail.includes('enter to select') && tail.includes('to navigate')))) return true;
+  if (all.includes('esc to cancel') && (/mcp server .+ requests your input/.test(all) || all.includes('run a dynamic workflow?'))) return true;
+  // Claude's input box sits between the last two rules; a `❯` in it is the idle prompt.
+  const box = rules.length > 1 ? lines.slice(rules.at(-2)! + 1, rules.at(-1)).join('\n') : '';
+  if (/^\s*❯/m.test(box) && !/esc to cancel|enter to select|to navigate/.test(box)) return false;
+  return tail.includes('do you want to proceed?') && tail.includes('esc to cancel');
 }
 
 /**
