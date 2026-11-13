@@ -6,6 +6,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-11-13
+
 ### Added
 - Claude and Codex in a terminal tab show when they ask a question or for permission, not only when they finish. The tab gets a diamond instead of a dot and reads "asking" in the Open view, where it sorts first under Waiting on you, and its notification says it is asking. ATC reads this from the bottom of the screen, with rules adapted from Herdr's.
 - Check for updates, in the ⋯ menu and the command palette. Install downloads the MSI, setup.exe or portable `atc.exe`, whichever this copy came from, closes ATC and runs it. The "is out" note in the sidebar opens the same prompt.
@@ -398,7 +400,8 @@ ATC now runs on a Go/Wails host instead of Rust/Tauri. The interface is the same
 
 First release.
 
-[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.2-beta...HEAD
+[Unreleased]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.2-beta...v0.7.3
 [0.7.2-beta]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.1...v0.7.2-beta
 [0.7.1]: https://github.com/arghya2801/agent-terminal-control/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/arghya2801/agent-terminal-control/compare/v0.6.2...v0.7.0
