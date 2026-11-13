@@ -49,7 +49,8 @@ export function saveText(options: { defaultPath: string; filters: { name: string
 }
 export function isPermissionGranted(): Promise<boolean> { return App.NotificationPermission(); }
 export function requestPermission(): Promise<boolean> { return App.NotificationRequest(); }
-export function sendNotification(options: { title: string; body: string }): void { void App.NotificationSend(options.title, options.body).catch(console.warn); }
+/** `id` comes back as `notification://clicked` when the notification is clicked. */
+export function sendNotification(options: { title: string; body: string; id?: string }): void { void App.NotificationSend(options.title, options.body, options.id ?? '').catch(console.warn); }
 
 /** A full page reload replaces its shells; HMR within the same document keeps them. */
 export async function frontendReady(): Promise<void> {

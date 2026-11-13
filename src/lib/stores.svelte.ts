@@ -27,7 +27,7 @@ import {
 } from './expansion';
 import { normalizeZoom, stepZoom } from './zoom';
 import { applyTerminalSettings, applyTheme, setBlockedDetection, setTerminalZoom } from '../terminal/manager';
-import { setKeyOverrides } from './keymap';
+import { chordFor, setKeyOverrides, type Action } from './keymap';
 import { applyPalette, isLight, type Palette } from './theme';
 import { findTheme, loadThemes } from './themes';
 import type { Account, IndexSnapshot, SessionMeta, Settings } from '../types';
@@ -115,6 +115,12 @@ function applyUi(ui: Settings['ui']) {
   root.toggleAttribute('data-shapes', ui.stateShapes);
   setBlockedDetection(ui.blockedDetection !== false);
   setKeyOverrides(ui.keys ?? {});
+}
+
+/** A chord drawn in the page. Reading the saved shortcuts makes it redraw when they change. */
+export function chord(action: Action): string | undefined {
+  void appState.settings?.ui.keys;
+  return chordFor(action);
 }
 
 /** Show a theme without saving it, for the theme picker. The saved theme's name puts it back. */

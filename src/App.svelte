@@ -25,6 +25,7 @@
     requestPermission,
     sendNotification,
     pageZoom,
+    listen,
   } from './lib/desktop';
   import {
     accountFor,
@@ -32,6 +33,7 @@
     accountState,
     adjustZoom,
     appState,
+    chord,
     currentZoom,
     enterMs,
     initStores,
@@ -844,7 +846,7 @@
       let granted = await isPermissionGranted();
       if (!granted) granted = await requestPermission();
       if (!granted) return;
-      sendNotification({ title, body: attentionBody(provider, reason) });
+      sendNotification({ title, body: attentionBody(provider, reason), id: key });
     } catch (e) {
       console.warn('notification failed', e);
     }
@@ -971,6 +973,7 @@
     // xterm's interceptor so they never reach the shell.
     const offChord = onChord(runAction);
     const offAttention = onAttention((t, reason) => void notifyAttention(t.key, displayTitle(t), t.provider, reason));
+    const offClicked = listen<TabKey>('notification://clicked', (key) => getTab(key) && activate(key));
     mountTerminals(wrapper);
     const onPaneFocus = () => {
       if (page === 'usage') page = null;
@@ -1007,6 +1010,7 @@
       off();
       offChord();
       offAttention();
+      void offClicked.then((off) => off());
       wrapper.removeEventListener('focusin', onPaneFocus);
       clearInterval(clock);
       window.removeEventListener('keydown', onKey);
@@ -1073,7 +1077,7 @@
   <UsageChip active={page === 'usage'} onOpen={openUsage} onClose={closeUsage} />
   {#if shown?.provider && page !== 'usage'}
     {@const label = shown.terminal ? 'Open as chat' : 'Open in terminal'}
-    <button class="bar-btn" onclick={() => requestSwitch(shown.key)} title="{label} ({chordFor('toggleAgentView')})" aria-label={label}><Icon name={shown.terminal ? 'chat' : 'terminal'} size={14} /></button>
+    <button class="bar-btn" onclick={() => requestSwitch(shown.key)} title="{label} ({chord('toggleAgentView') ?? 'no shortcut'})" aria-label={label}><Icon name={shown.terminal ? 'chat' : 'terminal'} size={14} /></button>
   {/if}
   {@render actions?.()}
   <button class="bar-btn" onclick={moreMenu} title="Usage, settings and shortcuts" aria-label="More"><Icon name="more" /></button>
