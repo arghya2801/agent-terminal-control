@@ -1,5 +1,5 @@
 # Tests and lint for every pull request and every push to main.
-# Same runner and caches as release.yml, so a green PR means the release job's test gate passes too.
+# release.yml does not test again: it waits for this workflow to pass on the tagged commit.
 name: CI
 
 on:
