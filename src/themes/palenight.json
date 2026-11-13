@@ -1,0 +1,23 @@
+{
+  "name": "Palenight",
+  "background": "#292d3e",
+  "foreground": "#bfc7d5",
+  "cursorColor": "#7e57c2",
+  "selectionBackground": "#414764",
+  "black": "#676e95",
+  "red": "#ff5572",
+  "green": "#a9c77d",
+  "yellow": "#ffcb6b",
+  "blue": "#82aaff",
+  "purple": "#c792ea",
+  "cyan": "#89ddff",
+  "white": "#ffffff",
+  "brightBlack": "#676e95",
+  "brightRed": "#ff5572",
+  "brightGreen": "#c3e88d",
+  "brightYellow": "#ffcb6b",
+  "brightBlue": "#82aaff",
+  "brightPurple": "#c792ea",
+  "brightCyan": "#89ddff",
+  "brightWhite": "#ffffff"
+}

@@ -9,11 +9,10 @@
   import ProjectNode from './ProjectNode.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import Icon from '../lib/Icon.svelte';
-  import { chordFor } from '../lib/keymap';
   import { filterProjects } from '../lib/filter';
   import { groupSubfolders } from '../lib/group';
   import { isPinned, togglePinned } from '../lib/pinned';
-  import { accountState, appState, naming, refresh, renameModelName, saveSettings } from '../lib/stores.svelte';
+  import { accountState, appState, chord, naming, refresh, renameModelName, saveSettings } from '../lib/stores.svelte';
   import type { AgentProvider, Project, SessionMeta, TabKey } from '../types';
   import type { SessionMark } from '../lib/format';
 
@@ -321,9 +320,9 @@
       {/if}
     </div>
     <dl>
-      <dt>Ask an agent</dt><dd><kbd>{chordFor('askAgent')}</kbd></dd>
-      <dt>New shell</dt><dd><kbd>{chordFor('newTab')}</kbd></dd>
-      <dt>Command palette</dt><dd><kbd>{chordFor('palette')}</kbd></dd>
+      <dt>Ask an agent</dt><dd><kbd>{chord('askAgent') ?? 'None'}</kbd></dd>
+      <dt>New shell</dt><dd><kbd>{chord('newTab') ?? 'None'}</kbd></dd>
+      <dt>Command palette</dt><dd><kbd>{chord('palette') ?? 'None'}</kbd></dd>
     </dl>
   </div>
 {:else if shown.length === 0}

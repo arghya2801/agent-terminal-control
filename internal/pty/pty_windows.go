@@ -29,7 +29,8 @@ type Options struct {
 	Cols           int    `json:"cols"`
 	Rows           int    `json:"rows"`
 	InitialCommand string `json:"initialCommand"`
-	// Shell is "pwsh" or "powershell" to prefer that one; anything else prefers pwsh.
+	// Shell is "pwsh" to prefer PowerShell 7 or a path to use that one; anything else
+	// prefers Windows PowerShell, which starts faster.
 	Shell     string `json:"shell"`
 	NoProfile bool   `json:"noProfile"`
 	// Account is the Claude account the tab's CLI runs as; App turns it into Env.

@@ -58,7 +58,18 @@ func (a *App) startup(ctx context.Context) {
 		go a.watch()
 	}
 }
-func (a *App) ready(ctx context.Context) { _ = wr.InitializeNotifications(ctx) }
+func (a *App) ready(ctx context.Context) {
+	_ = wr.InitializeNotifications(ctx)
+	// A click on a notification brings ATC forward on the tab it came from.
+	wr.OnNotificationResponse(ctx, func(r wr.NotificationResult) {
+		if r.Error != nil || r.Response.ID == "" {
+			return
+		}
+		wr.WindowUnminimise(ctx)
+		wr.WindowShow(ctx)
+		a.emit("notification://clicked", r.Response.ID)
+	})
+}
 func (a *App) shutdown(ctx context.Context) {
 	a.cancel()
 	if a.watcher != nil {
@@ -548,8 +559,9 @@ func (a *App) NotificationPermission() (bool, error) { return wr.CheckNotificati
 
 func (a *App) NotificationRequest() (bool, error) { return wr.RequestNotificationAuthorization(a.ctx) }
 
-func (a *App) NotificationSend(title, body string) error {
-	return wr.SendNotification(a.ctx, wr.NotificationOptions{Title: title, Body: body})
+// NotificationSend shows a Windows notification; id comes back on a click, as the tab to open.
+func (a *App) NotificationSend(title, body, id string) error {
+	return wr.SendNotification(a.ctx, wr.NotificationOptions{ID: id, Title: title, Body: body})
 }
 
 // GitChanges is what `git diff HEAD` and untracked files say changed in dir, or null when

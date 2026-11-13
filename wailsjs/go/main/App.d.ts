@@ -54,7 +54,7 @@ export function NotificationPermission():Promise<boolean>;
 
 export function NotificationRequest():Promise<boolean>;
 
-export function NotificationSend(arg1:string,arg2:string):Promise<void>;
+export function NotificationSend(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function OpenInExplorer(arg1:string):Promise<void>;
 

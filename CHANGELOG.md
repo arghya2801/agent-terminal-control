@@ -6,6 +6,14 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Added
+- Palenight, SynthWave '84 and VS Code Light Modern themes (#269).
+
+### Fixed
+- Clicking a Windows notification brings ATC forward on the tab it is about.
+- Long commands and paths in a hover box wrap inside it instead of running past its edge (#267).
+- Shortcut hints in the header and the sidebar show a changed shortcut straight away.
+
 ## [0.7.3] - 2026-11-13
 
 ### Added

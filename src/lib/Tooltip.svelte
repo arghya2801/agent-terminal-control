@@ -126,6 +126,8 @@
     font-size: 12px;
     line-height: 1.4;
     white-space: pre-line;
+    /* A long command or path has no spaces to break at (#267). */
+    overflow-wrap: anywhere;
     pointer-events: none;
     animation: atc-fade var(--fast) var(--ease-out);
   }
