@@ -13,11 +13,6 @@ on:
 
 permissions:
   contents: write
-  # To read whether CI passed on the tagged commit.
-  actions: read
-
-env:
-  WAILS_VERSION: v2.16.0
 
 jobs:
   windows:
@@ -50,15 +45,11 @@ jobs:
       # main.go embeds dist/, so the frontend must exist before Go compiles.
       - run: npm run build
 
-      # Compiling the Wails CLI took about 20 s a release; it only changes with WAILS_VERSION.
-      - name: Cache the Wails CLI
-        id: wails
-        uses: actions/cache@v6
-        with:
-          path: ~/go/bin/wails.exe
-          key: wails-${{ env.WAILS_VERSION }}-${{ runner.os }}
-      - if: steps.wails.outputs.cache-hit != 'true'
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+      # A release that fails its own tests is not worth publishing.
+      - run: npm test
+      - run: npm run lint
+
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
       - run: choco install nsis wixtoolset -y --no-progress
       - run: npm run desktop:package
 
@@ -71,24 +62,6 @@ jobs:
             build/bin/*-setup.exe
             build/bin/*.msi
           if-no-files-found: error
-
-      # Tests and lint run in CI, not again here. A tag is pushed right after its merge, while
-      # CI on that commit is often still running, so this waits for it; a failed CI drafts nothing.
-      - name: Check CI passed on this commit
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          for i in $(seq 60); do
-            run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&event=push" --jq '.workflow_runs[0] | "\(.status) \(.conclusion)"')
-            case "$run" in
-              "completed success") exit 0 ;;
-              completed*) echo "CI on $GITHUB_SHA ended: $run"; exit 1 ;;
-            esac
-            sleep 20
-          done
-          echo "CI on $GITHUB_SHA did not finish in 20 minutes (last: ${run:-no run})"; exit 1
 
       - name: Draft release
         if: startsWith(github.ref, 'refs/tags/v')
