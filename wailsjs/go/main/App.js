@@ -70,6 +70,10 @@ export function IndexScan(arg1) {
   return window['go']['main']['App']['IndexScan'](arg1);
 }
 
+export function InstallUpdate() {
+  return window['go']['main']['App']['InstallUpdate']();
+}
+
 export function LimitsHistory() {
   return window['go']['main']['App']['LimitsHistory']();
 }

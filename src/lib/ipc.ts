@@ -67,7 +67,10 @@ export function notesSet(text: string): Promise<void> { return App.NotesSet(text
 export function openInExplorer(path: string): Promise<void> { return App.OpenInExplorer(path); }
 
 /** The latest release when it is newer than this build, or null. */
-export function newerRelease(): Promise<{ version: string; url: string } | null> { return App.NewerRelease(); }
+export function newerRelease(): Promise<{ version: string; url: string; installable: boolean } | null> { return App.NewerRelease(); }
+
+/** Download the latest release for this kind of install, start it, and quit. */
+export function installUpdate(): Promise<void> { return App.InstallUpdate(); }
 
 /** Open an http(s) link in the default browser. */
 export function appVersion(): Promise<string> { return App.Version(); }
