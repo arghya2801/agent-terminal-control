@@ -42,6 +42,15 @@ describe('chipLimit', () => {
     const codex = [{ key: 'codex:primary', label: 'Codex · 5h', percent: 12, resetsAt: null }];
     expect(chipLimit([], codex)).toBe(codex[0]);
   });
+
+  it("shows Codex's 5-hour window on a Codex tab, else Claude's session", () => {
+    const codex = [
+      { key: 'codex:secondary', label: 'Codex · 7 days', percent: 60, resetsAt: null, windowMinutes: 10080 },
+      { key: 'codex:primary', label: 'Codex · 5 hours', percent: 12, resetsAt: null, windowMinutes: 300 },
+    ];
+    expect(chipLimit(planLimits(real), codex, 'codex')).toBe(codex[1]);
+    expect(chipLimit(planLimits(real), [], 'codex')?.label).toBe('Current session');
+  });
 });
 
 describe('planLimits', () => {

@@ -1074,7 +1074,7 @@
   {#if currentZoom() !== 1}
     <button class="bar-btn zoom" onclick={() => adjustZoom(0)} title="Reset zoom (Ctrl+0)">{zoomLabel(currentZoom())}</button>
   {/if}
-  <UsageChip active={page === 'usage'} onOpen={openUsage} onClose={closeUsage} />
+  <UsageChip active={page === 'usage'} provider={shown?.provider} onOpen={openUsage} onClose={closeUsage} />
   {#if shown?.provider && page !== 'usage'}
     {@const label = shown.terminal ? 'Open as chat' : 'Open in terminal'}
     <button class="bar-btn" onclick={() => requestSwitch(shown.key)} title="{label} ({chord('toggleAgentView') ?? 'no shortcut'})" aria-label={label}><Icon name={shown.terminal ? 'chat' : 'terminal'} size={14} /></button>

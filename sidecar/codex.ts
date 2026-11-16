@@ -406,8 +406,9 @@ export class Codex {
       case 'item/autoApprovalReview/completed': {
         const a = p.action ?? {};
         const what = a.command ?? (a.program ? [a.program, ...(a.argv ?? [])].join(' ') : a.files?.join(', ') ?? a.target ?? (a.toolName ? `${a.server}.${a.toolName}` : a.reason ?? a.type));
-        const risk = p.review?.riskLevel ? ` (${p.review.riskLevel} risk)` : '';
-        this.live({ t: 'item', item: { id: `review:${p.reviewId}`, kind: 'notice', text: `Codex's reviewer ${p.review?.status ?? 'decided'}${risk}: ${firstLine(String(what))}` } });
+        const r = p.review ?? {};
+        const risk = r.riskLevel ? ` (${r.riskLevel} risk)` : '';
+        this.live({ t: 'item', item: { id: `review:${p.reviewId}`, kind: 'tool', tool: 'Reviewer', input: `${r.status ?? 'decided'}${risk}: ${firstLine(String(what))}`, body: clip(String(what)), output: r.rationale ?? '', done: true, error: r.status !== 'approved' } });
         return;
       }
       case 'turn/plan/updated':

@@ -35,12 +35,13 @@ function isObj(v: unknown): v is Record<string, unknown> {
 }
 
 /**
- * The one limit the usage chip shows: Claude's 5-hour session, else Claude's tightest
- * should the session window ever go missing, else Codex's tightest.
+ * The one limit the usage chip shows: the 5-hour window of the active tab's provider (Claude
+ * when it has none or no limits yet), else that provider's tightest, else the other's.
  */
-export function chipLimit(claude: PlanLimit[], codex: PlanLimit[]): PlanLimit | undefined {
-  const session = claude.find((l) => l.key.startsWith('session:') || l.key === 'five_hour');
-  return session ?? [...(claude.length ? claude : codex)].sort((a, b) => b.percent - a.percent)[0];
+export function chipLimit(claude: PlanLimit[], codex: PlanLimit[], provider?: string | null): PlanLimit | undefined {
+  const [mine, other] = provider === 'codex' && codex.length ? [codex, claude] : [claude, codex];
+  const session = mine.find((l) => windowMinutes(l) === 300);
+  return session ?? [...(mine.length ? mine : other)].sort((a, b) => b.percent - a.percent)[0];
 }
 
 export function planLimits(plan: Record<string, unknown>): PlanLimit[] {
