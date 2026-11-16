@@ -146,8 +146,7 @@ export type AgentOp =
   | { op: 'open'; id: string; provider: Provider; cwd: string; resume?: string; exe: string; args: string[]; env?: Record<string, string>; model?: string; effort?: string }
   | { op: 'catalog'; id: string; provider: Provider; cwd: string; exe: string; args: string[]; env?: Record<string, string> }
   | { op: 'effort'; id: string; effort: string | null }
-  /** `now`: Claude stops what it is doing and takes this message (force send). */
-  | { op: 'send'; id: string; text: string; images?: Image[]; now?: boolean }
+  | { op: 'send'; id: string; text: string; images?: Image[] }
   | { op: 'interrupt'; id: string }
   | { op: 'stopTask'; id: string; task: string }
   | { op: 'btw'; id: string; question: string }

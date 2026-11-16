@@ -172,20 +172,12 @@ export const queuedImages = (key: TabKey) => live.get(key)?.images.length ?? 0;
 /** The queue's text for a message of only images, which the queue shows. */
 const IMAGES = '(images)';
 export const interrupt = (key: TabKey) => op(key, { op: 'interrupt' });
-/** Force send (Ctrl+X Ctrl+S): the queued message and `text` go now. Claude stops what it is
- *  doing and takes them; Codex has no such message, so its turn stops and the queue sends. */
+/** Force send (Ctrl+X Ctrl+S): the turn stops and the queue, with `text` added, sends as it
+ *  ends. Claude's `priority: 'now'` ended the turn without marking the next one working. */
 export function sendNow(key: TabKey, text = '', images: string[] = []) {
-  const l = live.get(key);
-  if (!l || !agents[key]?.working) return send(key, text, images);
-  if (l.provider !== 'claude') return void (send(key, text, images), interrupt(key));
-  const queued = getTab(key)?.queued;
-  const all = [queued === IMAGES ? '' : (queued ?? ''), text].filter(Boolean).join('\n\n');
-  const pics = [...l.images, ...images];
-  queuePrompt(key, null);
-  l.images = [];
-  if (!all && !pics.length) return;
-  if (pics.length) l.sent.push(pics);
-  op(key, { op: 'send', text: all, images: pics.map(toImage), now: true });
+  if (!agents[key]?.working) return send(key, text, images);
+  send(key, text, images);
+  if (getTab(key)?.queued) interrupt(key);
 }
 export const stopTask = (key: TabKey, task: string) => op(key, { op: 'stopTask', task });
 export const askBtw = (key: TabKey, question: string) => op(key, { op: 'btw', question });

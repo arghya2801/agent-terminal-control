@@ -6,6 +6,10 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Fixed
+- Send now (Ctrl+X Ctrl+S) stops the turn and sends the message as it ends, for Claude and Codex. Claude used to look stopped while it answered (#279).
+- A message sent to Codex shows in the chat straight away, not after Codex's hooks run (#282).
+
 ## [0.7.4] - 2026-11-13
 
 ### Added
