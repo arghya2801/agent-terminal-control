@@ -76,6 +76,9 @@ export function installUpdate(): Promise<void> { return App.InstallUpdate(); }
 export function appVersion(): Promise<string> { return App.Version(); }
 export function openUrl(url: string): Promise<void> { return App.OpenURL(url); }
 
+/** The folder from `atc --open <dir>`, once; '' when there was none (#278). */
+export function takeOpen(): Promise<string> { return App.TakeOpen(); }
+
 /** The native folder picker; null when cancelled. */
 export function pickFolder(): Promise<string | null> { return App.FolderDialog(); }
 

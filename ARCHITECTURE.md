@@ -31,6 +31,12 @@ the Go methods. `src/lib/ipc.ts` wraps them with the app's types; `src/lib/deskt
 does events, PTY channels, notifications, save dialogs and zoom. A failed command
 rejects its promise with the Go error.
 
+One copy runs per exe path (Wails' `SingleInstanceLock`, keyed on a hash of the path), so
+`atc-dev` and the installed `atc.exe` run side by side. A second launch hands its arguments
+to the running copy and exits. `atc --open <dir>` opens a shell tab in `<dir>`: `main.go`
+makes the path absolute first, since the running copy has another working directory. A
+first launch keeps it until the page asks (`TakeOpen`); a running copy gets `open://dir`.
+
 A PTY channel subscribes before the spawn. Output arrives as `{t:"o", d}` and exit as
 `{t:"x", code}` on the channel's own topic, and the listener detaches on exit or on a
 failed spawn. The other events are `index://updated`, `settings://updated` and

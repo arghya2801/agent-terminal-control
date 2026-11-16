@@ -92,6 +92,8 @@ export function Shells():Promise<Array<string>>;
 
 export function SuggestSessionName(arg1:string):Promise<string>;
 
+export function TakeOpen():Promise<string>;
+
 export function UsageContext():Promise<Record<string, any>>;
 
 export function UsageCosts():Promise<Array<any>>;

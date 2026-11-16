@@ -51,6 +51,20 @@ func TestInvalidSettingsAreNeverRewrittenOnLoad(t *testing.T) {
 		t.Fatalf("invalid settings were rewritten: %s", b)
 	}
 }
+func TestOpenArgIsAbsolute(t *testing.T) {
+	wd, _ := os.Getwd()
+	for args, want := range map[string]string{
+		"--open repo":      filepath.Join(wd, "repo"),
+		`--open=C:\code\x`: `C:\code\x`,
+		"--open":           "",
+		"--other repo":     "",
+	} {
+		if got := openArg(strings.Fields(args)); got != want {
+			t.Errorf("openArg(%q) = %q, want %q", args, got, want)
+		}
+	}
+}
+
 func TestAppVersionComesFromWailsJSON(t *testing.T) {
 	b, _ := os.ReadFile("package.json")
 	var pkg struct{ Version string }

@@ -97,7 +97,7 @@
   import type { IconName } from './lib/Icon.svelte';
   import { relativeTime } from './lib/format';
   import { parseSavedTabs, type SavedTab } from './lib/restore';
-  import { agentCommand, appendLog, gitChanges, pickFolder, scratchDir, type GitChanges } from './lib/ipc';
+  import { agentCommand, appendLog, gitChanges, pickFolder, scratchDir, takeOpen, type GitChanges } from './lib/ipc';
   import { projectKey } from './lib/paths';
   import { resolveSessions, type TabRef } from './lib/sessions';
   import { zoomLabel } from './lib/zoom';
@@ -1018,6 +1018,8 @@
     const offChord = onChord(runAction);
     const offAttention = onAttention((t, reason) => void notifyAttention(t.key, displayTitle(t), t.provider, reason));
     const offClicked = listen<TabKey>('notification://clicked', (key) => getTab(key) && activate(key));
+    // `atc --open <dir>` while ATC runs (#278).
+    const offOpen = listen<string>('open://dir', (dir) => void newShellIn(folderProject(dir)));
     mountTerminals(wrapper);
     const onPaneFocus = () => {
       if (page === 'usage') page = null;
@@ -1032,7 +1034,9 @@
       await initStores();
       const restored = await restoreTabs();
       restoring = false;
-      if (!restored) await newTab();
+      const open = await takeOpen().catch(() => '');
+      if (open) await newShellIn(folderProject(open));
+      else if (!restored) await newTab();
       sync();
     })();
 
@@ -1055,6 +1059,7 @@
       offChord();
       offAttention();
       void offClicked.then((off) => off());
+      void offOpen.then((off) => off());
       wrapper.removeEventListener('focusin', onPaneFocus);
       clearInterval(clock);
       window.removeEventListener('keydown', onKey);

@@ -178,6 +178,10 @@ export function SuggestSessionName(arg1) {
   return window['go']['main']['App']['SuggestSessionName'](arg1);
 }
 
+export function TakeOpen() {
+  return window['go']['main']['App']['TakeOpen']();
+}
+
 export function UsageContext() {
   return window['go']['main']['App']['UsageContext']();
 }
