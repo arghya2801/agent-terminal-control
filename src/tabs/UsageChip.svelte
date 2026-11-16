@@ -6,12 +6,13 @@
   import { appState, refreshMs } from '../lib/stores.svelte';
 
   /**
-   * Claude's 5-hour session limit, in the pane header. Hovering shows every limit and
-   * today's spend without opening anything; a click opens the usage page.
+   * The active tab's provider's 5-hour limit, in the pane header. Hovering shows every
+   * limit and today's spend without opening anything; a click opens the usage page.
    */
-  let { active = false, onOpen, onClose }: {
+  let { active = false, provider, onOpen, onClose }: {
     /** The usage tab is in front, so the chip closes it instead. */
     active?: boolean;
+    provider?: string | null;
     onOpen: () => void;
     onClose: () => void;
   } = $props();
@@ -21,7 +22,10 @@
 
   const claude = $derived(planState.claude ? planLimits(planState.claude) : []);
   const codex = $derived(planState.codex ? codexLimits(planState.codex) : []);
-  const top = $derived(chipLimit(claude, codex));
+  const top = $derived(chipLimit(claude, codex, provider));
+  $effect(() => {
+    if (provider === 'codex' && !planState.codexMissing && Date.now() - planState.codexAt > refreshMs('codex')) void loadCodexLimits();
+  });
   // The reset countdown ticks between polls.
   let now = $state(Date.now());
   onMount(() => {

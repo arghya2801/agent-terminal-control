@@ -213,8 +213,9 @@ asks again whenever the index updates, which is whenever a transcript is written
 Claude's plan limits use the credentials in `CLAUDE_CONFIG_DIR`, else `~/.claude`, and
 never leave Go. Codex limits start the configured CLI as `codex app-server`, run
 initialize and `account/rateLimits/read`, then stop it. One provider failing never hides
-the other. The header's usage chip shows Claude's 5-hour session limit (`chipLimit` in
-`src/lib/plan.ts`) and the time until it resets.
+the other. The header's usage chip shows the 5-hour limit of the active tab's provider,
+Claude unless it is a Codex tab (`chipLimit` in `src/lib/plan.ts`), and the time until it
+resets. A Codex tab reads Codex's limits when they are older than its refresh interval.
 
 ## Updates
 
