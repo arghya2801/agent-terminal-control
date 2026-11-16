@@ -36,7 +36,7 @@
     onNewShell,
     onNewAgent,
     onNewChat,
-    onPickAgent,
+    onLaunch,
     onOpenFolder,
     onAsk,
     onNewTab,
@@ -63,8 +63,8 @@
     onNewAgent: (p: Project, provider: AgentProvider, chat?: boolean, account?: string) => void;
     /** A chat in the scratch directory that cannot change anything. */
     onNewChat: (provider: AgentProvider) => void;
-    /** Asks Claude or Codex, then starts it in the project (#146). */
-    onPickAgent: (p: Project) => void;
+    /** Claude, Codex or a shell in any project, searchable (#253). */
+    onLaunch: () => void;
     onOpenFolder: () => void;
     /** Starts Claude or Codex in the scratch directory. */
     onAsk: (provider: AgentProvider) => void;
@@ -345,8 +345,7 @@
           ] };
           return;
         }
-        const items = appState.index.projects.filter((p) => p.path && p.exists).map((p) => ({ label: p.name, icon: 'folder' as const, run: () => onPickAgent(p) }));
-        menu = { x: e.clientX, y: e.clientY, items: [{ label: 'New agent in…' }, ...items] };
+        onLaunch();
       }}
     >
       <OpenList bind:this={openRows} {tabs} {activeKey} {query} {contextFill} {changes} naming={namingTabs} onClose={onCloseTab} />
