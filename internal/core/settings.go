@@ -45,7 +45,7 @@ func Defaults() Object {
 			"usageResetTime": true, "showTabBar": false, "outputGraph": true, "taskAgent": "claude", "taskProject": "", "newTabIn": "home", "confirmClose": true, "agentView": "chat", "confirmSwitch": true,
 			"toasts": true, "toastSeconds": 6, "limitsRefreshSec": 300, "codexRefreshSec": 300, "renameModel": "haiku",
 			"chatFontSize": 13, "chatFontFamily": "", "accent": "", "backdrop": "mica", "stateShapes": false,
-			"notifyFinished": true, "notifyAsking": true, "toastCorner": "bottom-right",
+			"notifyFinished": true, "notifyAsking": true, "toastCorner": "bottom-right", "stopAtWeeklyReset": false,
 			"blockedDetection": true, "checkUpdates": true, "rowProject": true, "rowState": true, "rowContext": true, "keys": Object{}},
 		"terminal": Object{"fontFamily": "\"FiraCode Nerd Font Mono\", \"Cascadia Mono\", Consolas, monospace", "fontSize": 13, "scrollback": 10000,
 			"cursorStyle": "bar", "cursorBlink": true, "lineHeight": 1.0, "shell": "auto", "loadProfile": true, "gpuTabs": 4},

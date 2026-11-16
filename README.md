@@ -340,6 +340,7 @@ Every field is optional; missing ones take their default.
     "sidebarView": "open",              // "sessions", "open" or "scratch"
     "showTabBar": false,                // tabs across the top as well as in the sidebar
     "usageResetTime": true,             // when the 5-hour limit resets, beside the usage chip
+    "stopAtWeeklyReset": false,         // stop working agents just before the weekly limit resets
     "outputGraph": true,                // Open view output graph
     "agentView": "chat",                // agent tabs open as "chat" or "terminal"
     "confirmSwitch": true,              // warn before moving a tab between chat and terminal

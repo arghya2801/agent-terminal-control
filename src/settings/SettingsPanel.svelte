@@ -282,6 +282,11 @@
           <label class="check"><input id="nf" type="checkbox" bind:checked={draft.ui.notifyFinished} /> An agent finishes</label>
           <label class="check"><input type="checkbox" bind:checked={draft.ui.notifyAsking} /> An agent asks a question or for permission</label>
         </div>
+        <label for="sawr">Stop at weekly reset</label>
+        <label class="check">
+          <input id="sawr" type="checkbox" bind:checked={draft.ui.stopAtWeeklyReset} />
+          <span class="muted">Stop every working agent a few minutes before Claude's weekly limit resets</span>
+        </label>
       </div>
 
       <h2 id="s-accounts">Claude accounts</h2>

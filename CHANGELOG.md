@@ -9,6 +9,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ### Added
 - Hovering the line under a Claude or Codex reply shows that turn's tokens: input, cache reads and writes, and output, plus its cost for Claude (#286).
 - `atc --open <dir>` opens a shell tab in that folder. If ATC is already running, that window comes forward and opens the tab (#278).
+- Settings > General > Stop at weekly reset: every working Claude or Codex tab stops a few minutes before Claude's weekly limit resets, so a long run does not use next week's limit. Off by default (#280).
 
 ### Changed
 - Right-clicking the empty part of the Open view opens a searchable list of projects instead of a menu, the most recently used first. Each row has Claude, Codex and shell buttons, and Open a folder… starts one in any folder. Ctrl+Shift+S opens it from anywhere (#253).

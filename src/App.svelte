@@ -85,12 +85,14 @@
     unsplit,
     openAgentTab,
     setAgentTitle,
+    pressEsc,
     markDone,
     type AttentionReason,
     type Tab,
   } from './terminal/manager';
   import AgentView from './agent/AgentView.svelte';
-  import { agents, startAgent, whenClosed } from './agent/agent.svelte';
+  import { agents, interrupt, startAgent, whenClosed } from './agent/agent.svelte';
+  import { planLimits } from './lib/plan';
   import { actionList, chordFor, matchChord, type Action } from './lib/keymap';
   import CommandPalette, { type Command, type CommandAction } from './lib/CommandPalette.svelte';
   import ContextMenu, { type MenuItem } from './sidebar/ContextMenu.svelte';
@@ -1079,6 +1081,23 @@
       clearInterval(poll);
       document.removeEventListener('visibilitychange', stale);
     };
+  });
+
+  // Settings > Stop at weekly reset (#280): every working agent stops just before Claude's
+  // weekly limit resets, so a run meant to use up this week does not eat into the next.
+  // ponytail: 3 minutes early, because a hidden WebView runs timers up to a minute late.
+  $effect(() => {
+    if (!appState.settings?.ui.stopAtWeeklyReset || !planState.claude) return;
+    const weekly = planLimits(planState.claude).find((l) => /^(weekly_all|seven_day)(:|$)/.test(l.key));
+    const wait = (weekly?.resetsAt ? Date.parse(weekly.resetsAt) : NaN) - 3 * 60_000 - Date.now();
+    if (!(wait > 0)) return;
+    const timer = setTimeout(() => {
+      for (const t of tabs.filter((t) => t.provider && t.activity === 'working')) {
+        if (t.terminal) pressEsc(t.key);
+        else interrupt(t.key);
+      }
+    }, wait);
+    return () => clearTimeout(timer);
   });
 
   // The terminal shares the wrapper's geometry, so it re-measures whenever the panel
