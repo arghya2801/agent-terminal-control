@@ -65,7 +65,7 @@ func (a *App) ready(ctx context.Context) {
 		if r.Error != nil || r.Response.ID == "" {
 			return
 		}
-		wr.WindowUnminimise(ctx)
+		// Show restores only a minimised window; Unminimise also un-maximised it (#281).
 		wr.WindowShow(ctx)
 		a.emit("notification://clicked", r.Response.ID)
 	})
