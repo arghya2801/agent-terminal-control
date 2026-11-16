@@ -44,7 +44,7 @@ function run(op: AgentOp) {
   if (!s) return void (op.op !== 'close' && emit(op.id, { t: 'error', message: 'This session has ended. Resume it to keep going.' }));
   switch (op.op) {
     case 'send':
-      return s instanceof Claude ? s.send(op.text, op.images, op.now) : s.send(op.text, op.images);
+      return s.send(op.text, op.images);
     case 'interrupt':
       return s.interrupt();
     case 'btw':

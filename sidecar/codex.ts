@@ -253,6 +253,9 @@ export class Codex {
   private turn = '';
   /** Stop came before the turn started. */
   private stop = false;
+  /** The sent prompt's item, shown at once: Codex echoes it only after its hooks run. */
+  private echo = '';
+  private echoed = new Map<string, string>();
   private chosen: string | undefined;
   private effortChosen: string | null;
   private skills = new Map<string, Obj>();
@@ -375,6 +378,7 @@ export class Codex {
       case 'turn/completed':
         this.turn = '';
         this.stop = false;
+        this.echo = '';
         // Codex drops a turn's open approvals with it.
         for (const id of this.requests.keys()) this.live({ t: 'resolved', id });
         this.requests.clear();
@@ -388,7 +392,11 @@ export class Codex {
         const item = itemOf(p.item);
         // The page sent this message's images and still holds them; only their count comes back.
         const { images, ...rest } = item ?? {};
-        if (item) this.live({ t: 'item', item: item.kind === 'user' ? { ...rest, turn: p.turnId, ...(images?.length ? { sentImages: images.length } : {}) } as ChatItem : item });
+        if (item?.kind === 'user' && this.echo) {
+          this.echoed.set(item.id, this.echo);
+          this.echo = '';
+        }
+        if (item) this.live({ t: 'item', item: item.kind === 'user' ? { ...rest, id: this.echoed.get(item.id) ?? item.id, turn: p.turnId, ...(images?.length ? { sentImages: images.length } : {}) } as ChatItem : item });
         else this.seen(`item ${p.item?.type}`);
         if (item?.kind === 'tool' && item.done) this.live({ t: 'result', id: item.id, output: item.output ?? '', error: !!item.error, declined: item.declined });
         return;
@@ -477,6 +485,8 @@ export class Codex {
       ...skills.map((s) => ({ type: 'skill', name: s.name, path: s.path })),
     ];
     this.stop = false;
+    this.echo = `u${++this.n}`;
+    this.live({ t: 'item', item: { id: this.echo, kind: 'user', text, ...(images.length ? { sentImages: images.length } : {}) } });
     this.live({ t: 'working', on: true });
     // After wake(), which gives a new tab its thread.
     this.wake().then((s) => s.call('turn/start', {

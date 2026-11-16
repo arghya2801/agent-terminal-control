@@ -344,7 +344,7 @@ export class Claude {
     return { behavior: 'allow', updatedInput: input, ...(answer.always && suggestions ? { updatedPermissions: suggestions } : {}) };
   }
 
-  send(text: string, images: Image[] = [], now = false) {
+  send(text: string, images: Image[] = []) {
     // `/clear` starts the CLI on a fresh conversation; the view starts over with it.
     if (text.trim() === '/clear') this.live({ t: 'clear' });
     const uuid = randomUUID();
@@ -355,7 +355,7 @@ export class Claude {
     const content = images.length
       ? [...images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mediaType, data: i.data } })), ...(text ? [{ type: 'text', text }] : [])]
       : text;
-    this.inbox.push({ type: 'user', uuid, message: { role: 'user', content }, parent_tool_use_id: null, session_id: '', ...(now ? { priority: 'now' } : {}) } as SDKUserMessage);
+    this.inbox.push({ type: 'user', uuid, message: { role: 'user', content }, parent_tool_use_id: null, session_id: '' } as SDKUserMessage);
   }
 
   /** Files go back to how they were before prompt `to`, as Esc Esc does, then the session
