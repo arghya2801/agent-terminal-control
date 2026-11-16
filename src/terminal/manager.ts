@@ -359,6 +359,15 @@ export function setAgentState(key: TabKey, s: { activity?: Activity | null; sess
   notify();
 }
 
+/** An agent tab's name from its session as the index knows it (#284). A name the user gave
+ *  the tab still wins. */
+export function setAgentTitle(key: TabKey, title: string) {
+  const tab = tabs.get(key);
+  if (!tab || tab.term || tab.autoTitle === title) return;
+  tab.autoTitle = title;
+  notify();
+}
+
 /** Output an agent tab received, for the Open view's graph. Read on its tick, so no notify. */
 export function countOutput(key: TabKey, n: number) {
   const tab = tabs.get(key);

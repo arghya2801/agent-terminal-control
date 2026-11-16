@@ -84,6 +84,7 @@
     splitWith,
     unsplit,
     openAgentTab,
+    setAgentTitle,
     markDone,
     type AttentionReason,
     type Tab,
@@ -112,6 +113,14 @@
 
   /** Which sidebar session each tab is showing. See `resolveSessions` for how. */
   const tabToSession = $derived(resolveSessions(tabSessions, appState.index.projects));
+  // A chat tab takes its session's name once the index has one: Claude's title, a rename.
+  $effect(() => {
+    const labels = new Map(appState.index.projects.flatMap((p) => p.sessions.filter((s) => s.labelSource !== 'uuid').map((s) => [sessionKey(s), s.label] as const)));
+    for (const t of tabs) {
+      const label = t.provider && !t.terminal ? labels.get(tabToSession.get(t.key) ?? '') : undefined;
+      if (label) setAgentTitle(t.key, label);
+    }
+  });
 
   /**
    * An agent tab: Claude or Codex as ATC's chat over the sidecar, or with `terminal` (by
