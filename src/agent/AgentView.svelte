@@ -13,6 +13,7 @@
   import { families, keptEffort, versionOf } from './models';
   import { getActiveKey, queuePrompt } from '../terminal/manager';
   import { providerName } from '../lib/agents';
+  import { formatTokens } from '../lib/costs';
   import { accountLabel, accountState, appState } from '../lib/stores.svelte';
   import type { Answer, BackgroundTask, ChatItem, Model } from '../../sidecar/protocol';
   import type { AgentProvider, TabKey } from '../types';
@@ -140,6 +141,13 @@
     return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s`;
   };
   const cost = (usd?: number) => (usd ? `$${usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)}` : '');
+  /** A turn's tokens and cost, on hover over its last line (#286). */
+  const usage = (end: ChatItem | null) => {
+    const t = end?.tokens;
+    if (!t) return undefined;
+    const lines = [`Input ${formatTokens(t.input)}`, `Cache read ${formatTokens(t.cacheRead)}`, `Cache write ${formatTokens(t.cacheWrite)}`, `Output ${formatTokens(t.output)}`];
+    return [...lines, ...(end?.costUsd ? [`Cost ${cost(end.costUsd)}`] : [])].join('\n');
+  };
   // For screen readers: state changes only, not the streaming text.
   const announce = $derived(
     !s ? '' : s.exited ? `${name} stopped` : request ? `${name} is waiting on you` : s.working ? `${name} is working` : turns.length ? `${name} finished` : '',
@@ -370,7 +378,7 @@
                 </div>
               {/if}
               {#if !live && (turn.end || replyText)}
-                <div class="end" class:bare={!turn.end?.durationMs && !turn.end?.costUsd}>
+                <div class="end" class:bare={!turn.end?.durationMs && !turn.end?.costUsd} title={usage(turn.end)}>
                   {#if turn.end?.durationMs}<span>{interrupted(turn) ? 'Stopped after' : 'Worked for'} {clock(turn.end.durationMs)}</span>{/if}
                   {#if turn.end?.costUsd}<span>{cost(turn.end.costUsd)}</span>{/if}
                   {#if replyText}<button class="act" onclick={() => copy(replyText, `r${i}`)} title="Copy the reply as Markdown"><Icon name={copied === `r${i}` ? 'check' : 'copy'} size={13} /><span>{copied === `r${i}` ? 'Copied' : 'Copy'}</span></button>{/if}

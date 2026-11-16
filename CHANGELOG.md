@@ -6,6 +6,9 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Added
+- Hovering the line under a Claude or Codex reply shows that turn's tokens: input, cache reads and writes, and output, plus its cost for Claude (#286).
+
 ### Fixed
 - Send now (Ctrl+X Ctrl+S) stops the turn and sends the message as it ends, for Claude and Codex. Claude used to look stopped while it answered (#279).
 - A message sent to Codex shows in the chat straight away, not after Codex's hooks run (#282).
@@ -14,6 +17,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Clicking a notification keeps ATC maximised if it was (#281).
 - Selected text stays readable in themes whose selection colour is close to their text, such as Catppuccin, GitHub, Ayu and Solarized: it turns black or white when the theme's own text would not stand out (#277).
 - A Claude or Codex chat tab takes its session's name once there is one, such as Claude's generated title, instead of keeping the name it opened with (#284).
+- The cost under a Claude reply is that turn's, not the session's running total (#286).
 
 ## [0.7.4] - 2026-11-13
 
