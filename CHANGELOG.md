@@ -13,6 +13,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Codex's reviewer decisions show as a collapsible step with its rationale, like other tool calls (#285).
 - Clicking a notification keeps ATC maximised if it was (#281).
 - Selected text stays readable in themes whose selection colour is close to their text, such as Catppuccin, GitHub, Ayu and Solarized: it turns black or white when the theme's own text would not stand out (#277).
+- A Claude or Codex chat tab takes its session's name once there is one, such as Claude's generated title, instead of keeping the name it opened with (#284).
 
 ## [0.7.4] - 2026-11-13
 
