@@ -9,6 +9,9 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ### Added
 - Hovering the line under a Claude or Codex reply shows that turn's tokens: input, cache reads and writes, and output, plus its cost for Claude (#286).
 
+### Changed
+- Right-clicking the empty part of the Open view opens a searchable list of projects instead of a menu, the most recently used first. Each row has Claude, Codex and shell buttons, and Open a folder… starts one in any folder. Ctrl+Shift+S opens it from anywhere (#253).
+
 ### Fixed
 - Send now (Ctrl+X Ctrl+S) stops the turn and sends the message as it ends, for Claude and Codex. Claude used to look stopped while it answered (#279).
 - A message sent to Codex shows in the chat straight away, not after Codex's hooks run (#282).

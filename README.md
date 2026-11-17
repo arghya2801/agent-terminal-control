@@ -237,6 +237,7 @@ removes it, Reset brings back the default, and Reset all undoes every change.
 | `Ctrl+Shift+L` | Choose Claude or Codex in this tab's project |
 | `Ctrl+Shift+N` | Open a terminal in this tab's project |
 | `Ctrl+Shift+A` | Choose an agent in the shared scratch directory |
+| `Ctrl+Shift+S` | Claude, Codex or a shell in any project or folder |
 | `Ctrl+Shift+B` | Show or hide the sidebar |
 | `Ctrl+Shift+P` | Command palette: actions, tabs, projects and sessions |
 | `Ctrl+Shift+Y` | Change theme: arrows preview each one, Enter keeps it, Esc puts the old one back |

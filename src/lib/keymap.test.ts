@@ -33,6 +33,7 @@ describe('matchChord', () => {
     // Released with the task panel; the shell gets Ctrl+Shift+E back.
     expect(matchChord(ctrlShift('E'))).toBeNull();
     expect(matchChord(ctrlShift('A'))).toBe('askAgent');
+    expect(matchChord(ctrlShift('S'))).toBe('launcher');
     expect(matchChord(ctrlShift('Y'))).toBe('pickTheme');
     expect(matchChord(press(',', { ctrlKey: true }))).toBe('openSettings');
   });

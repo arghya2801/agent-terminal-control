@@ -92,7 +92,7 @@
   import AgentView from './agent/AgentView.svelte';
   import { agents, startAgent, whenClosed } from './agent/agent.svelte';
   import { actionList, chordFor, matchChord, type Action } from './lib/keymap';
-  import CommandPalette, { type Command } from './lib/CommandPalette.svelte';
+  import CommandPalette, { type Command, type CommandAction } from './lib/CommandPalette.svelte';
   import ContextMenu, { type MenuItem } from './sidebar/ContextMenu.svelte';
   import type { IconName } from './lib/Icon.svelte';
   import { relativeTime } from './lib/format';
@@ -518,12 +518,16 @@
     else inScratch(provider);
   }
 
+  /** A folder as a project: the indexed one, else a new one named after the folder. */
+  function folderProject(path: string): Project {
+    const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+    return appState.index.projects.find((p) => p.key === projectKey(path)) ?? { key: projectKey(path), path, name, pinned: false, exists: true, lastActiveMs: 0, sessions: [] };
+  }
+
   /** A folder that is not a project yet: pick it, then pick the agent to start there. */
   async function openFolder() {
     const path = await pickFolder().catch((e) => void (error = String(e)));
-    if (!path) return;
-    const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
-    picker = { project: { key: projectKey(path), path, name, pinned: false, exists: true, lastActiveMs: 0, sessions: [] } };
+    if (path) picker = { project: folderProject(path) };
   }
 
   // --- right-click: ATC's own menu, never the WebView's
@@ -712,6 +716,34 @@
 
   // --- command palette
   let paletteOpen = $state(false);
+  /** Right-click in the Open view (#253): a project per row, the most recently used first,
+   *  with Claude, Codex and a shell as buttons; or any folder, picked first. */
+  let launcher = $state(false);
+  function launchActions(project: () => Project | null | Promise<Project | null>): CommandAction[] {
+    const go = (open: (p: Project) => unknown) => async () => {
+      const p = await project();
+      if (p) void open(p);
+    };
+    return [
+      { label: 'Claude', glyph: '✳', colour: '#d97757', run: go((p) => newAgentIn(p, 'claude')) },
+      { label: 'Codex', icon: 'codex', colour: '#10a37f', run: go((p) => newAgentIn(p, 'codex')) },
+      { label: 'Shell', icon: 'terminal', colour: 'var(--accent)', run: go(newShellIn) },
+    ];
+  }
+  function launcherCommands(): Command[] {
+    const pick = async () => {
+      const path = await pickFolder().catch((e) => void (error = String(e)));
+      return path ? folderProject(path) : null;
+    };
+    const row = (id: string, label: string, detail: string, actions: CommandAction[]): Command => ({ id, label, detail, icon: 'folder', actions, run: actions[0].run });
+    return [
+      row('folder', 'Open a folder…', 'Pick any folder, then start there', launchActions(pick)),
+      ...appState.index.projects
+        .filter((p) => p.path && p.exists && !p.kind)
+        .sort((a, b) => b.lastActiveMs - a.lastActiveMs)
+        .map((p) => row(`p:${p.key}`, p.name, p.path ?? '', launchActions(() => p))),
+    ];
+  }
   /** The theme picker: the palette over the themes, each applied as it is selected. */
   let themePicker = $state(false);
   function themeCommands(): Command[] {
@@ -731,7 +763,7 @@
   const ACTION_ICONS: Partial<Record<Action, IconName>> = {
     newTab: 'plus', closeTab: 'close', renameTab: 'pencil', toggleSplit: 'split', toggleSidebar: 'sidebar',
     openSettings: 'settings', openUsage: 'usage', showShortcuts: 'keyboard', find: 'search', focusSearch: 'search',
-    askAgent: 'agent', openAgentHere: 'agent', openShellHere: 'terminal', toggleDebug: 'pulse', pickTheme: 'sparkle',
+    askAgent: 'agent', openAgentHere: 'agent', openShellHere: 'terminal', toggleDebug: 'pulse', pickTheme: 'sparkle', launcher: 'folder',
   };
 
   /** Built when the palette opens, from what is open and indexed at that moment. */
@@ -956,6 +988,9 @@
       case 'pickTheme':
         themePicker = true;
         break;
+      case 'launcher':
+        launcher = true;
+        break;
       case 'toggleSplit':
         void toggleSplit();
         break;
@@ -1003,7 +1038,7 @@
 
     // Covers focus being anywhere outside the terminal -- the sidebar, a button.
     const onKey = (e: KeyboardEvent) => {
-      if (picker || paletteOpen) return;
+      if (picker || paletteOpen || launcher) return;
       const action = matchChord(e);
       if (!action) return;
       // Behind a popup the app is inert; only its own chord, or the other popup's, acts.
@@ -1124,7 +1159,7 @@
         onNewShell={newShellIn}
         onNewAgent={newAgentIn}
         onNewChat={(provider) => inScratch(provider, true)}
-        onPickAgent={(p) => (picker = { project: p })}
+        onLaunch={() => (launcher = true)}
         onOpenFolder={openFolder}
         onAsk={askAgent}
         {tabs}
@@ -1226,6 +1261,10 @@
     {#if paletteOpen}
       {@const cmds = paletteCommands()}
       <CommandPalette commands={cmds.all} initial={cmds.initial} onClose={() => (paletteOpen = false)} />
+    {/if}
+    {#if launcher}
+      {@const all = launcherCommands()}
+      <CommandPalette commands={all} initial={all} label="New tab" placeholder="Find a project. Left and Right pick Claude, Codex or a shell" onClose={() => (launcher = false)} />
     {/if}
     {#if themePicker}
       {@const themes = themeCommands()}

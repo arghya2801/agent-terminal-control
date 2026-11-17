@@ -37,7 +37,8 @@ export type Action =
   | 'jumpWaiting'
   | 'toggleMosaic'
   | 'toggleAgentView'
-  | 'pickTheme';
+  | 'pickTheme'
+  | 'launcher';
 
 /** The subset of KeyboardEvent this needs, so tests require no DOM. */
 export interface ChordEvent {
@@ -89,6 +90,8 @@ const BINDINGS: Binding[] = [
   { key: 'p', ctrl: true, shift: true, action: 'palette' },
   { key: 'k', ctrl: true, shift: true, action: 'switchSidebarView' },
   { key: 'a', ctrl: true, shift: true, action: 'askAgent' },
+  // Start something in a project or folder (#253).
+  { key: 's', ctrl: true, shift: true, action: 'launcher' },
   // Ctrl+Comma is the settings chord in most editors; the shell and Claude Code ignore it.
   { key: ',', ctrl: true, shift: false, action: 'openSettings' },
   // `?` is what the key reports with Shift held on a US layout; `/` covers layouts where
@@ -125,6 +128,7 @@ const DESCRIPTIONS: Record<Action, { group: Group; label: string }> = {
   openAgentHere: { group: 'Launch', label: 'Open an agent in this tab’s project' },
   openShellHere: { group: 'Launch', label: 'Open a shell in this tab’s project' },
   askAgent: { group: 'Launch', label: 'Ask agent (scratch directory)' },
+  launcher: { group: 'Launch', label: 'Claude, Codex or a shell in any project or folder' },
   toggleMosaic: { group: 'View', label: 'Show every tab at once, or back to one' },
   toggleAgentView: { group: 'View', label: 'Switch an agent tab between chat and terminal' },
   toggleSidebar: { group: 'View', label: 'Show or hide the sidebar' },

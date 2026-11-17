@@ -12,6 +12,17 @@
     colours?: string[];
     /** A heading the row sits under; rows keep the order their groups first appear in. */
     group?: string;
+    /** Buttons at the right of the row; Left and Right pick one, Enter runs it. */
+    actions?: CommandAction[];
+    run: () => void;
+  }
+
+  export interface CommandAction {
+    label: string;
+    /** A character, or an icon when there is none. */
+    glyph?: string;
+    icon?: IconName;
+    colour: string;
     run: () => void;
   }
 </script>
@@ -52,6 +63,8 @@
   let list = $state<HTMLElement>();
   let query = $state('');
   let index = $state(0);
+  /** The selected row's chosen action. */
+  let act = $state(0);
 
   const results = $derived.by(() => {
     if (!query.trim()) return initial;
@@ -70,6 +83,7 @@
 
   $effect(() => {
     index = query.trim() || !results.length ? 0 : Math.min(start, results.length - 1);
+    act = 0;
     void tick().then(() => list?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' }));
   });
 
@@ -89,16 +103,17 @@
   });
 
   /** Closed first: that hands focus back to where it was, before the command moves it. */
-  function run(c: Command | undefined) {
+  function run(c: Command | undefined, a = c?.actions?.[act]) {
     if (!c) return;
     dialog.close();
     onClose();
-    c.run();
+    (a ?? c).run();
   }
 
   async function move(by: number) {
     if (!results.length) return;
     index = (index + by + results.length) % results.length;
+    act = 0;
     await tick();
     list?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
   }
@@ -109,6 +124,10 @@
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       void move(e.key === 'ArrowDown' ? 1 : -1);
+    } else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && results[index]?.actions) {
+      e.preventDefault();
+      const n = results[index].actions!.length;
+      act = (act + (e.key === 'ArrowRight' ? 1 : -1) + n) % n;
     } else if (e.key === 'Enter') {
       e.preventDefault();
       run(results[index]);
@@ -148,7 +167,7 @@
         role="option"
         tabindex="-1"
         aria-selected={i === index}
-        onmousemove={() => (index = i)}
+        onmousemove={() => index !== i && ((index = i), (act = 0))}
         onclick={() => run(c)}
       >
         <span class="ic"><Icon name={c.icon} size={14} /></span>
@@ -158,6 +177,17 @@
         </span>
         {#if c.colours}<span class="swatches" aria-hidden="true">{#each c.colours as colour, j (j)}<span style:background={colour}></span>{/each}</span>{/if}
         {#if c.chord}<kbd>{c.chord}</kbd>{/if}
+        {#each c.actions ?? [] as a, j (a.label)}
+          <button
+            class="act"
+            class:on={i === index && j === act}
+            style:--c={a.colour}
+            tabindex="-1"
+            title={a.label}
+            aria-label="{a.label} in {c.label}"
+            onclick={(e) => { e.stopPropagation(); run(c, a); }}
+          >{#if a.glyph}{a.glyph}{:else if a.icon}<Icon name={a.icon} size={13} />{/if}</button>
+        {/each}
       </div>
     {:else}
       <p class="empty">Nothing matches “{query.trim()}”.</p>
@@ -272,6 +302,26 @@
     color: var(--fg-dim);
     font: inherit;
     font-size: 11px;
+  }
+  .act {
+    display: grid;
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    place-items: center;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--c);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .act:hover,
+  .act.on {
+    border-color: color-mix(in srgb, var(--c) 60%, transparent);
+    background: color-mix(in srgb, var(--c) 18%, transparent);
   }
   .group {
     padding: 8px 10px 4px;
