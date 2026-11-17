@@ -146,6 +146,10 @@ export function PtyWrite(arg1, arg2) {
   return window['go']['main']['App']['PtyWrite'](arg1, arg2);
 }
 
+export function ReadTextFile(arg1) {
+  return window['go']['main']['App']['ReadTextFile'](arg1);
+}
+
 export function RenameSession(arg1, arg2) {
   return window['go']['main']['App']['RenameSession'](arg1, arg2);
 }
@@ -200,4 +204,8 @@ export function Version() {
 
 export function WarmClaude() {
   return window['go']['main']['App']['WarmClaude']();
+}
+
+export function WriteTextFile(arg1, arg2) {
+  return window['go']['main']['App']['WriteTextFile'](arg1, arg2);
 }

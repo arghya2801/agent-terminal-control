@@ -76,6 +76,8 @@ export function PtyStats(arg1:string):Promise<pty.Stats>;
 
 export function PtyWrite(arg1:string,arg2:string):Promise<void>;
 
+export function ReadTextFile(arg1:string):Promise<string>;
+
 export function RenameSession(arg1:string,arg2:string):Promise<void>;
 
 export function SaveTextFile(arg1:string,arg2:Array<main.FileFilter>,arg3:string):Promise<any>;
@@ -103,3 +105,5 @@ export function UsageCosts():Promise<Array<any>>;
 export function Version():Promise<string>;
 
 export function WarmClaude():Promise<void>;
+
+export function WriteTextFile(arg1:string,arg2:string):Promise<void>;

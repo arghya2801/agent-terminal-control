@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activity, blocks, cleanCommand, relativePaths, summarize, thoughtLine, toolVerb } from './work';
+import { activity, blocks, cleanCommand, relativePaths, restoreEol, summarize, thoughtLine, toolVerb } from './work';
 import type { ChatItem } from '../../sidecar/protocol';
 
 const tool = (id: string, name: string, input = '', extra: Partial<ChatItem> = {}): ChatItem => ({ id, kind: 'tool', tool: name, input, done: true, ...extra });
@@ -65,5 +65,16 @@ describe('cleanCommand', () => {
 
   it('names what a call did, or is doing', () => {
     expect([toolVerb('Bash'), toolVerb('Read', true), toolVerb('mcp__github__list_issues')]).toEqual(['Ran', 'Reading', 'github / list_issues']);
+  });
+});
+
+describe('restoreEol', () => {
+  it('keeps CRLF files CRLF and LF files LF', () => {
+    expect(restoreEol('a\r\nb', 'a\nc\nd')).toBe('a\r\nc\r\nd');
+    expect(restoreEol('a\nb', 'a\nc')).toBe('a\nc');
+  });
+  it('follows the majority ending of a mixed file and keeps a trailing newline', () => {
+    expect(restoreEol('a\r\nb\r\nc\n', 'a\nb\nc\nd\n')).toBe('a\r\nb\r\nc\r\nd\r\n');
+    expect(restoreEol('a\nb\nc\r\n', 'a\nb\n')).toBe('a\nb\n');
   });
 });
