@@ -394,6 +394,8 @@ Every field is optional; missing ones take their default.
 
 The `codex` block is under [Codex](#codex). Its `defaultEffort` runs from minimal to xhigh.
 
+To show thinking summaries, `claude.args` can carry `--thinking-display summarized` or `--thinking-display omitted`, e.g. `["--thinking-display", "summarized"]`. `showThinkingSummaries` in `~/.claude/settings.json` also applies.
+
 A malformed file is ignored rather than overwritten; the app keeps its current settings.
 
 Beside it:
