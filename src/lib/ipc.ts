@@ -66,6 +66,10 @@ export function notesSet(text: string): Promise<void> { return App.NotesSet(text
 
 export function openInExplorer(path: string): Promise<void> { return App.OpenInExplorer(path); }
 
+export function readTextFile(path: string): Promise<string> { return App.ReadTextFile(path); }
+
+export function writeTextFile(path: string, contents: string): Promise<void> { return App.WriteTextFile(path, contents); }
+
 /** The latest release when it is newer than this build, or null. */
 export function newerRelease(): Promise<{ version: string; url: string; installable: boolean } | null> { return App.NewerRelease(); }
 

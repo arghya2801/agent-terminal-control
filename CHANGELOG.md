@@ -6,6 +6,10 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Added
+- Edit and Write calls have an Edit file button that opens the file in a text box and saves it back, keeping CRLF when most of the file used it. Only existing UTF-8 files under 2 MB can be edited (#305).
+- HTML and SVG files from Edit and Write calls have a Preview button that shows the page in a sandboxed frame (#292).
+
 ## [0.7.5] - 2026-11-17
 
 ### Added

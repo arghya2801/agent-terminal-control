@@ -20,7 +20,8 @@
 <script lang="ts">
   import Icon from '../lib/Icon.svelte';
   import Tokens from './Tokens.svelte';
-  import { cleanCommand, relativePaths, toolVerb } from './work';
+  import { cleanCommand, relativePaths, restoreEol, toolVerb } from './work';
+  import { readTextFile, writeTextFile } from '../lib/ipc';
   import { clippedLines } from '../../sidecar/clip';
 
   /** `cwd`: paths under it show relative to it. */
@@ -55,6 +56,49 @@
   );
   const secs = (n: number) => (n < 60 ? `${Math.round(n)}s` : `${Math.floor(n / 60)}m ${String(Math.round(n % 60)).padStart(2, '0')}s`);
   const why = $derived(item.declined && first ? `You declined: “${first}”` : item.declined ? 'You declined this' : first);
+
+  const path = $derived(/^(Edit|MultiEdit|Write)$/.test(item.tool ?? '') && status === 'done' && !(item.input ?? '').includes(', ') ? (item.input ?? '').trim() : '');
+  const previewable = $derived(/\.(html?|svg)$/i.test(path));
+  let draft = $state<string | null>(null);
+  let original = '';
+  let preview = $state<string | null>(null);
+  let wide = $state(false);
+  let fileError = $state('');
+
+  async function load(): Promise<string | null> {
+    fileError = '';
+    try {
+      return await readTextFile(path);
+    } catch (e) {
+      fileError = String(e);
+      return null;
+    }
+  }
+  async function startEdit() {
+    const text = await load();
+    if (text === null) return;
+    original = text;
+    draft = text.replace(/\r\n/g, '\n');
+  }
+  async function save() {
+    try {
+      fileError = '';
+      if ((await readTextFile(path)) !== original) {
+        fileError = 'File changed on disk, reopen it';
+        return;
+      }
+      await writeTextFile(path, restoreEol(original, draft ?? ''));
+      draft = null;
+      preview = null;
+    } catch (e) {
+      fileError = String(e);
+    }
+  }
+  async function togglePreview() {
+    if (preview !== null) return (preview = null);
+    const text = await load();
+    if (text !== null) preview = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src 'unsafe-inline'">${text}`;
+  }
 </script>
 
 <div class="tool {status}" class:open class:declined={item.declined}>
@@ -81,6 +125,23 @@
         <pre class="body" class:cmd={command}>{#each lines as l}<span class:add={diff && l.startsWith('+')} class:del={diff && l.startsWith('-')}><Tokens text={l} {lang} /></span>{'\n'}{/each}</pre>
       {/if}
       {#if item.output}<pre class="output" class:error={item.error}>{item.output}</pre>{/if}
+      {#if path}
+        <div class="file">
+          {#if draft !== null}
+            <textarea bind:value={draft} spellcheck="false"></textarea>
+            <button class="btn primary" onclick={save}>Save</button>
+            <button class="btn" onclick={() => (draft = null)}>Cancel</button>
+          {:else}
+            <button class="btn" onclick={startEdit}>Edit file</button>
+            {#if previewable}<button class="btn" onclick={togglePreview}>{preview === null ? 'Preview' : 'Hide preview'}</button>{/if}
+          {/if}
+          {#if fileError}<span class="ferr">{fileError}</span>{/if}
+        </div>
+        {#if preview !== null}
+          <iframe title="Preview" sandbox="allow-scripts" srcdoc={preview} class:wide></iframe>
+          <button class="btn" onclick={() => (wide = !wide)}>{wide ? 'Shrink' : 'Expand'}</button>
+        {/if}
+      {/if}
     </div>
   {/if}
 </div>
@@ -221,6 +282,73 @@
   }
   .output.error {
     color: var(--danger);
+  }
+  .file {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-top: 1px solid var(--border);
+  }
+  .file textarea {
+    flex: 1 0 100%;
+    min-height: 16em;
+    max-height: 60vh;
+    resize: vertical;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--mono);
+    font-size: var(--mono-size);
+    white-space: pre;
+  }
+  .btn {
+    flex: none;
+    height: 32px;
+    padding: 0 14px;
+    font: inherit;
+    font-size: calc(13px * var(--chat-scale, 1));
+    font-weight: 500;
+    color: var(--fg);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--fg-bright);
+  }
+  .btn:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+    outline-offset: 1px;
+  }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+    font-weight: 600;
+  }
+  .btn.primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 85%, var(--fg-bright));
+    color: var(--on-accent);
+  }
+  .ferr {
+    color: var(--danger);
+  }
+  iframe {
+    display: block;
+    width: 100%;
+    height: 60vh;
+    border: 0;
+    border-top: 1px solid var(--border);
+    background: #fff;
+  }
+  iframe.wide {
+    height: 90vh;
   }
   .tail {
     margin: 0 0 4px 7px;

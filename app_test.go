@@ -398,3 +398,50 @@ func TestTheLogKeepsTwoDaysOfLines(t *testing.T) {
 		t.Fatal(lines)
 	}
 }
+
+func TestTextFileGuards(t *testing.T) {
+	a := NewApp(t.TempDir())
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a.txt")
+	os.WriteFile(file, []byte("one\r\ntwo"), 0600)
+	if got, e := a.ReadTextFile(file); e != nil || got != "one\r\ntwo" {
+		t.Fatalf("read = %q, %v", got, e)
+	}
+	if e := a.WriteTextFile(file, "three"); e != nil {
+		t.Fatal(e)
+	}
+	if b, _ := os.ReadFile(file); string(b) != "three" {
+		t.Fatalf("wrote %q", b)
+	}
+	bad := filepath.Join(dir, "bad.bin")
+	os.WriteFile(bad, []byte{0xff, 0xfe}, 0600)
+	big := filepath.Join(dir, "big.txt")
+	os.WriteFile(big, make([]byte, maxTextFile+1), 0600)
+	missing := filepath.Join(dir, "new.txt")
+	for name, path := range map[string]string{"relative": "a.txt", "dir": dir, "binary": bad, "large": big, "missing": missing} {
+		if _, e := a.ReadTextFile(path); e == nil {
+			t.Errorf("read allowed: %s", name)
+		}
+	}
+	if _, e := a.ReadTextFile(`\\host\share\a.txt`); e == nil {
+		t.Error("read allowed a UNC path")
+	}
+	link := filepath.Join(dir, "link.txt")
+	if os.Symlink(file, link) == nil {
+		if _, e := a.ReadTextFile(link); e == nil {
+			t.Error("read followed a symlink")
+		}
+		if e := a.WriteTextFile(link, "x"); e == nil {
+			t.Error("write followed a symlink")
+		}
+	}
+	if e := a.WriteTextFile(missing, "x"); e == nil {
+		t.Error("write created a file")
+	}
+	if _, e := os.Stat(missing); e == nil {
+		t.Error("file exists after write")
+	}
+	if e := a.WriteTextFile(file, "\xff"); e == nil {
+		t.Error("write allowed invalid UTF-8")
+	}
+}

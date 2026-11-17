@@ -146,6 +146,10 @@ export function PtyWrite(arg1, arg2) {
   return window['go']['main']['App']['PtyWrite'](arg1, arg2);
 }
 
+export function ReadTextFile(arg1) {
+  return window['go']['main']['App']['ReadTextFile'](arg1);
+}
+
 export function SaveTextFile(arg1, arg2, arg3) {
   return window['go']['main']['App']['SaveTextFile'](arg1, arg2, arg3);
 }
@@ -192,4 +196,8 @@ export function UsageCosts() {
 
 export function Version() {
   return window['go']['main']['App']['Version']();
+}
+
+export function WriteTextFile(arg1, arg2) {
+  return window['go']['main']['App']['WriteTextFile'](arg1, arg2);
 }

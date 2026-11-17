@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"atc/internal/core"
 	"atc/internal/pty"
@@ -555,6 +557,73 @@ func (a *App) OpenInExplorer(path string) error {
 		return fmt.Errorf("not a folder: %s", path)
 	}
 	return openTarget(path)
+}
+
+const maxTextFile = 2 << 20
+
+func editableFile(path string) error {
+	if !filepath.IsAbs(path) || strings.HasPrefix(path, `\\`) {
+		return fmt.Errorf("not a local absolute path: %s", path)
+	}
+	st, e := os.Lstat(path)
+	if e != nil {
+		return e
+	}
+	return checkTextFile(st, path)
+}
+
+func checkTextFile(st os.FileInfo, path string) error {
+	if !st.Mode().IsRegular() {
+		return fmt.Errorf("not a file: %s", path)
+	}
+	if st.Size() > maxTextFile {
+		return fmt.Errorf("file is over 2 MB: %s", path)
+	}
+	return nil
+}
+
+func (a *App) ReadTextFile(path string) (string, error) {
+	if e := editableFile(path); e != nil {
+		return "", e
+	}
+	f, e := os.Open(path)
+	if e != nil {
+		return "", e
+	}
+	defer f.Close()
+	st, e := f.Stat()
+	if e != nil {
+		return "", e
+	}
+	if e = checkTextFile(st, path); e != nil {
+		return "", e
+	}
+	b, e := io.ReadAll(io.LimitReader(f, maxTextFile+1))
+	if e != nil {
+		return "", e
+	}
+	if len(b) > maxTextFile || !utf8.Valid(b) {
+		return "", fmt.Errorf("not a UTF-8 text file under 2 MB: %s", path)
+	}
+	return string(b), nil
+}
+
+func (a *App) WriteTextFile(path, contents string) error {
+	if e := editableFile(path); e != nil {
+		return e
+	}
+	if len(contents) > maxTextFile || !utf8.ValidString(contents) {
+		return fmt.Errorf("contents are not UTF-8 text under 2 MB")
+	}
+	f, e := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0)
+	if e != nil {
+		return e
+	}
+	_, e = f.WriteString(contents)
+	if c := f.Close(); e == nil {
+		e = c
+	}
+	return e
 }
 
 func (a *App) OpenURL(url string) error {

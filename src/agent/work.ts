@@ -152,3 +152,10 @@ export function thoughtLine(markdown: string): string {
   const end = /[.?!](?=\s|$)/.exec(text);
   return (end ? text.slice(0, end.index + 1) : text).slice(0, 140);
 }
+
+/** A textarea gives LF; put back CRLF when most of the file's lines had it. */
+export function restoreEol(original: string, edited: string): string {
+  const crlf = original.match(/\r\n/g)?.length ?? 0;
+  const lf = (original.match(/\n/g)?.length ?? 0) - crlf;
+  return crlf > lf ? edited.replace(/\r?\n/g, '\r\n') : edited.replace(/\r\n/g, '\n');
+}

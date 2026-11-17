@@ -31,6 +31,13 @@ the Go methods. `src/lib/ipc.ts` wraps them with the app's types; `src/lib/deskt
 does events, PTY channels, notifications, save dialogs and zoom. A failed command
 rejects its promise with the Go error.
 
+`ReadTextFile` and `WriteTextFile` back the Edit file button on Edit and Write calls. Both
+take an absolute local path (no UNC) to an existing regular file, not a symlink, of at most
+2 MB; read needs valid UTF-8, write never creates a file and rewrites it in place so its
+mode and ACLs stay. The page re-reads before saving and refuses if the file changed. Preview
+runs the file in an iframe with `sandbox="allow-scripts"` (never `allow-same-origin`) and a
+CSP that blocks remote loads.
+
 One copy runs per exe path (Wails' `SingleInstanceLock`, keyed on a hash of the path), so
 `atc-dev` and the installed `atc.exe` run side by side. A second launch hands its arguments
 to the running copy and exits. `atc --open <dir>` opens a shell tab in `<dir>`: `main.go`
