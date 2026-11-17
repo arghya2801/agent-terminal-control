@@ -19,7 +19,7 @@ export function toolAction(tool = ''): Action {
 }
 
 /** Calls the user acts on or reads as conversation; never folded into a group. */
-const STANDALONE = /^(AskUserQuestion|ExitPlanMode|TodoWrite|Question)$/;
+const STANDALONE = /^(AskUserQuestion|ExitPlanMode|TodoWrite|Question|Compact)$/;
 
 /** What a call did, then what it is doing: "Ran npm test", "Running npm test". */
 const VERBS: Record<string, [string, string]> = {
@@ -37,6 +37,7 @@ const VERBS: Record<string, [string, string]> = {
   TodoWrite: ['Updated the task list', 'Updating the task list'],
   Skill: ['Used the skill', 'Using the skill'],
   ToolSearch: ['Loaded tools', 'Loading tools'],
+  Compact: ['Compacted', 'Compacting'],
 };
 const ACTION_VERBS: Partial<Record<Action, [string, string]>> = {
   read: ['Read', 'Reading'],

@@ -65,7 +65,7 @@ export function extraArgs(args: string[]): Record<string, string | null> {
 
 /** What a user record says, if a person said it: commands become `/name args`, and the
  *  context Claude wraps in tags is dropped. */
-function promptOf(text: string): AgentEvent | null {
+export function promptOf(text: string): AgentEvent | null {
   const command = /<command-name>(.*?)<\/command-name>/s.exec(text);
   if (command) {
     const args = /<command-args>(.*?)<\/command-args>/s.exec(text)?.[1] ?? '';
@@ -73,6 +73,7 @@ function promptOf(text: string): AgentEvent | null {
   }
   const stdout = /<local-command-stdout>(.*?)<\/local-command-stdout>/s.exec(text);
   if (stdout) return stdout[1].trim() ? { t: 'item', item: { id: '', kind: 'notice', text: clip(stdout[1].trim()) } } : null;
+  if (text.startsWith('This session is being continued from a previous conversation')) return { t: 'item', item: { id: '', kind: 'tool', tool: 'Compact', input: 'Summary of the earlier conversation', body: text, done: true } };
   if (text.startsWith('[Request interrupted')) return { t: 'item', item: { id: '', kind: 'notice', text: 'Interrupted' } };
   // A skill's body arrives as a user message; history leaves it out (#256).
   if (!text.trim() || text.trimStart().startsWith('<') || text.startsWith('Caveat:') || text.startsWith('Base directory for this skill:')) return null;
@@ -241,7 +242,10 @@ export class Claude {
         return;
       case 'stream_event': {
         const e = m.event as Block;
-        if (e.type === 'message_start') this.streaming.set(parent, e.message.id);
+        if (e.type === 'message_start') {
+          this.streaming.set(parent, e.message.id);
+          if (!parent) out({ t: 'working', on: true });
+        }
         else if (e.type === 'content_block_start') {
           const b = e.content_block;
           const id = `${this.streaming.get(parent)}:${e.index}`;
@@ -352,18 +356,18 @@ export class Claude {
     return { behavior: 'allow', updatedInput: input, ...(answer.always && suggestions ? { updatedPermissions: suggestions } : {}) };
   }
 
-  send(text: string, images: Image[] = []) {
+  send(text: string, images: Image[] = [], priority?: 'next') {
     // `/clear` starts the CLI on a fresh conversation; the view starts over with it.
     if (text.trim() === '/clear') this.live({ t: 'clear' });
     const uuid = randomUUID();
-    this.chain(uuid, null, true);
+    this.chain(uuid, null, !priority);
     this.live({ t: 'item', item: { id: uuid, kind: 'user', text, ...(images.length ? { sentImages: images.length } : {}) } });
     this.live({ t: 'working', on: true });
     this.wake();
     const content = images.length
       ? [...images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mediaType, data: i.data } })), ...(text ? [{ type: 'text', text }] : [])]
       : text;
-    this.inbox.push({ type: 'user', uuid, message: { role: 'user', content }, parent_tool_use_id: null, session_id: '' } as SDKUserMessage);
+    this.inbox.push({ type: 'user', uuid, message: { role: 'user', content }, parent_tool_use_id: null, session_id: '', ...(priority ? { priority } : {}) } as SDKUserMessage);
   }
 
   /** Files go back to how they were before prompt `to`, as Esc Esc does, then the session

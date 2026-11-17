@@ -326,8 +326,11 @@ Things that cost time once. Add to this list.
   A pane that goes blank after an edit needs a dev server restart, not debugging.
 
 **Agent sessions**
-- The SDK's streaming input drops a message sent while a turn runs. The store queues it on
-  the tab (`queuePrompt`) and the manager sends it when the tab goes idle.
+- The SDK's streaming input drops a message sent while a turn runs unless it carries a
+  `priority`. The store queues it on the tab (`queuePrompt`) and the manager sends it when
+  the tab goes idle. Send now (Ctrl+X Ctrl+S) sends Claude's queue with `priority: 'next'`,
+  so it lands at the next step without stopping the turn; `'now'` ended the turn without
+  marking the next one working. Codex stops the turn, and the queue sends as it ends.
 - With partial messages on, a streamed block's id is `<message id>:<index>`. The CLI then
   sends each finished block as its own assistant message, in order, so the k-th block of
   a message id is the stream with index k.
