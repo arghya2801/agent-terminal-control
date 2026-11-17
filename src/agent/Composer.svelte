@@ -4,7 +4,7 @@
   import { matchCommands, typedCommand, type Sigil } from './commands';
   import type { Command } from '../../sidecar/protocol';
 
-  let { text = $bindable(''), name, history, hints = true, sigils, commands, ready = true, working, waiting = false, disabled, onSend, onSendNow, onStop, onFiles, onInput, toolbar }: {
+  let { text = $bindable(''), name, history, hints = true, sigils, commands, ready = true, working, waiting = false, disabled, onSend, onSendNow, onStop, onFiles, onInput, onCycleMode, toolbar }: {
     /** What is in the box; a rewind puts its prompt back here. */
     text?: string;
     name: string;
@@ -30,6 +30,8 @@
     onFiles?: () => void;
     /** Any typing, so a dormant session can start its CLI before the message is sent. */
     onInput?: () => void;
+    /** Shift+Tab: the next permission mode. */
+    onCycleMode?: () => void;
     /** Model, mode and status, along the bottom of the box. */
     toolbar?: Snippet;
   } = $props();
@@ -160,6 +162,11 @@
         dismissed = true;
         return;
       }
+    }
+    if (e.key === 'Tab' && e.shiftKey && onCycleMode) {
+      e.preventDefault();
+      onCycleMode();
+      return;
     }
     // Up from the first line, Down from the last, so moving inside a long prompt still works.
     const firstLine = !text.slice(0, box?.selectionStart ?? 0).includes('\n');

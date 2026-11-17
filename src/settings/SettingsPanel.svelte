@@ -330,6 +330,11 @@
           <input id="urt" type="checkbox" bind:checked={draft.ui.usageResetTime} />
           <span class="muted">Show when the 5-hour limit resets, beside the usage chip</span>
         </label>
+        <label for="htc">Tool calls</label>
+        <label class="check">
+          <input id="htc" type="checkbox" bind:checked={draft.ui.hideToolCalls} />
+          <span class="muted">Hide tool calls in chat and show only the agent's text</span>
+        </label>
         <label for="stb">Tab bar</label>
         <label class="check">
           <input id="stb" type="checkbox" bind:checked={draft.ui.showTabBar} />

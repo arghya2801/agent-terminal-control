@@ -9,12 +9,12 @@
   import ProviderIcon from '../lib/ProviderIcon.svelte';
   import ConfirmDialog from '../lib/ConfirmDialog.svelte';
   import { agents, answer, queuedImages, catalog, interrupt, askBtw, sendNow, stopTask, switchAccount, knownCommands, listFiles, resume, rewind, send, wake, setEffort, setMode, setModel, switchProvider } from './agent.svelte';
-  import { activity, blocks, summarize, thoughtLine, type Block } from './work';
+  import { activity, blocks, STANDALONE, summarize, thoughtLine, type Block } from './work';
   import { families, keptEffort, versionOf } from './models';
   import { getActiveKey, queuePrompt } from '../terminal/manager';
   import { providerName } from '../lib/agents';
   import { formatTokens } from '../lib/costs';
-  import { accountLabel, accountState, appState } from '../lib/stores.svelte';
+  import { accountLabel, accountState, appState, saveSettings } from '../lib/stores.svelte';
   import type { Answer, BackgroundTask, ChatItem, Model } from '../../sidecar/protocol';
   import type { AgentProvider, TabKey } from '../types';
 
@@ -226,6 +226,16 @@
     refocus = false;
     queueMicrotask(() => ((dock?.querySelector('.card') ?? dock?.querySelector('textarea')) as HTMLElement | null)?.focus());
   });
+  function cycleMode() {
+    if (!s?.modes.length || !s.mode) return;
+    setMode(tabKey, s.modes[(s.modes.indexOf(s.mode) + 1) % s.modes.length]);
+  }
+  const hideTools = $derived(!!appState.settings?.ui.hideToolCalls);
+  const hidden = (x: ChatItem) => hideTools && (!!x.parent || (x.kind === 'tool' && !STANDALONE.test(x.tool ?? '')));
+  const shown = (steps: ChatItem[]) => steps.filter((x) => !hidden(x));
+  function toggleTools() {
+    if (appState.settings) saveSettings({ ...appState.settings, ui: { ...appState.settings.ui, hideToolCalls: !hideTools } });
+  }
   let rewinding = $state<ChatItem | null>(null);
   // Codex commands such as /undo start no turn, so there is nothing to go back to.
   const canRewind = (p: ChatItem) => !!s && !s.working && !s.exited && (provider === 'claude' || !!p.turn);
@@ -293,7 +303,7 @@
         <div class="empty">
           <span class="mark"><ProviderIcon {provider} /></span>
           <p class="lead">Ask {name} anything</p>
-          <p>Type <kbd>/</kbd> for {provider === 'codex' ? 'commands, ' : 'commands and skills, '}{#if provider === 'codex'}<kbd>$</kbd> for skills, {/if}<kbd>@</kbd> for files. <kbd>Enter</kbd> sends, <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line. <kbd>Alt</kbd>+<kbd>↑</kbd> and <kbd>↓</kbd> jump between your messages.</p>
+          <p>Type <kbd>/</kbd> for {provider === 'codex' ? 'commands, ' : 'commands and skills, '}{#if provider === 'codex'}<kbd>$</kbd> for skills, {/if}<kbd>@</kbd> for files. <kbd>Enter</kbd> sends, <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line. <kbd>Alt</kbd>+<kbd>↑</kbd> and <kbd>↓</kbd> jump between your messages.{#if (s?.modes.length ?? 0) > 1} <kbd>Shift</kbd>+<kbd>Tab</kbd> changes the permission mode.{/if}</p>
         </div>
       {:else if !s?.ready && !s?.dormant && !s?.exited && !turns.length}
         <div class="empty"><p class="lead">Starting {name}</p></div>
@@ -321,7 +331,7 @@
             </div>
           {/if}
           {#if turn.steps.length || turn.end || live}
-            {@const all = blocks(turn.steps)}
+            {@const all = blocks(shown(turn.steps))}
             <div class="work">
               {#each all as b, bi (b.kind === 'group' ? `g:${b.id}` : b.item.id)}
                 {#if b.kind === 'group'}
@@ -369,11 +379,11 @@
               {#if live && !request}
                 {@const last = turn.steps.at(-1)}
                 {@const lastBlock = all.at(-1)}
-                {@const rowShown = lastBlock?.kind === 'step' || (!!lastBlock && (opened[lastBlock.id] ?? true))}
+                {@const rowShown = !(last && hidden(last)) && (lastBlock?.kind === 'step' || (!!lastBlock && (opened[lastBlock.id] ?? true)))}
                 <div class="step live">
                   <span class="icon"><span class="spinner"></span></span>
                   <!-- A running call's own row already says what it runs, unless its group is folded. -->
-                  {#if !(last?.kind === 'tool' && !last.done && rowShown)}<span class="shimmer">{activity(turn.steps, cwd)}</span>{/if}
+                  {#if !(last?.kind === 'tool' && !last.done && rowShown)}<span class="shimmer">{last && hidden(last) ? 'Working' : activity(turn.steps, cwd)}</span>{/if}
                   <span class="secs">{clock(now - (s?.since ?? now))}</span>
                 </div>
               {/if}
@@ -478,6 +488,7 @@
       sigils={provider === 'claude' ? ['/', '@'] : ['/', '$', '@']}
       {commands}
       ready={!!s?.ready || knownCommands(provider, cwd ?? '').length > 0}
+      onCycleMode={(s?.modes.length ?? 0) > 1 && s?.mode ? cycleMode : undefined}
       onFiles={() => listFiles(tabKey)}
       onInput={() => wake(tabKey)}
       working={!!s?.working}
@@ -519,6 +530,8 @@
           </ChipMenu>
         {/if}
         {#if status}<span class="status" class:waiting={!!request}>{status}</span>{/if}
+        <button class="tbtn txt" onclick={() => send(tabKey, '/compact')} disabled={!s || s.exited || s.working} title="Summarize the conversation so far to free up context (/compact)">Compact</button>
+        <button class="tbtn" class:on={hideTools} onclick={toggleTools} aria-pressed={hideTools} title={hideTools ? 'Show tool calls' : 'Hide tool calls'} aria-label="Hide tool calls"><Icon name="tool" size={14} /></button>
         <button class="tbtn" onclick={onTerminal} title="Open in terminal: resume this session in {name}'s own TUI" aria-label="Open in terminal"><Icon name="terminal" size={14} /></button>
       {/snippet}
     </Composer>
@@ -935,6 +948,10 @@
     /* A short window keeps some conversation: the request card gives way and scrolls. */
     max-height: 80vh;
   }
+  .dock:has(:global(.card.full)) {
+    max-width: none;
+    max-height: 100%;
+  }
   /* Text scrolling under the dock fades out instead of being cut off. */
   .dock::before {
     content: '';
@@ -1225,7 +1242,20 @@
     color: var(--fg-dim);
     cursor: pointer;
   }
-  .tbtn:hover {
+  .tbtn.txt {
+    width: auto;
+    padding: 0 8px;
+    font: inherit;
+    font-size: calc(12px * var(--chat-scale, 1));
+  }
+  .tbtn.on {
+    color: var(--accent);
+  }
+  .tbtn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .tbtn:hover:not(:disabled) {
     background: var(--bg-hover);
     color: var(--fg-bright);
   }

@@ -13,6 +13,7 @@
     if (autofocus) card?.focus();
   });
 
+  let full = $state(false);
   let reason = $state('');
   let chosen = $state<Record<string, string[]>>({});
   let other = $state<Record<string, string>>({});
@@ -69,10 +70,11 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions (keys for the options and buttons inside) -->
-<section class="card {request.kind}" role="group" aria-label={title} tabindex="-1" bind:this={card} onkeydown={onKey}>
+<section class="card {request.kind}" class:full role="group" aria-label={title} tabindex="-1" bind:this={card} onkeydown={onKey}>
   <header>
     <span class="badge"><Icon name={icon} size={14} /></span>
     <h3>{title}</h3>
+    {#if request.kind === 'plan'}<button class="btn expand" onclick={() => (full = !full)}>{full ? 'Collapse' : 'Expand'}</button>{/if}
   </header>
 
   {#if request.kind === 'question'}
@@ -137,6 +139,15 @@
     /* Shrinks with the dock in a short window; the body scrolls. */
     min-height: 0;
     flex-shrink: 1;
+  }
+  .card.full {
+    flex: 1;
+    max-height: none;
+  }
+  .expand {
+    margin-left: auto;
+    height: 26px;
+    padding: 0 10px;
   }
   .hint {
     font-size: calc(12px * var(--chat-scale, 1));
@@ -208,7 +219,9 @@
     color: var(--fg-faint);
   }
   .well.plan {
-    max-height: 20em;
+    max-height: none;
+    flex: 1;
+    min-height: 0;
     font-family: inherit;
     font-size: inherit;
     white-space: normal;
