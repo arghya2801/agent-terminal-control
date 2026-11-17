@@ -6,6 +6,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-11-17
+
 ### Added
 - Hovering the line under a Claude or Codex reply shows that turn's tokens: input, cache reads and writes, and output, plus its cost for Claude (#286).
 - `atc --open <dir>` opens a shell tab in that folder. If ATC is already running, that window comes forward and opens the tab (#278).
