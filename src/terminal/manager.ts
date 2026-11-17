@@ -937,6 +937,12 @@ export function sendText(key: TabKey, text: string) {
   notify();
 }
 
+/** Esc in a terminal tab: Claude Code and Codex stop their turn. */
+export function pressEsc(key: TabKey) {
+  const tab = tabs.get(key);
+  if (tab?.ptyId && !tab.exited) void ptyWrite(tab.ptyId, '\x1b');
+}
+
 /** Sets or, with null, cancels the message sent when the tab's agent next stops working. */
 export function queuePrompt(key: TabKey, text: string | null) {
   const tab = tabs.get(key);

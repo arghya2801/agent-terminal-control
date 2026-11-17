@@ -150,6 +150,8 @@ export interface Settings {
     animationSpeed: number;
     /** When the 5-hour limit resets, beside the usage chip. */
     usageResetTime: boolean;
+    /** Stop every working agent just before Claude's weekly limit resets (#280). */
+    stopAtWeeklyReset: boolean;
     /** Tabs across the top as well as in the sidebar's Open view. */
     showTabBar: boolean;
     outputGraph: boolean;
