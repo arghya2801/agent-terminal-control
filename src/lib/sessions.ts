@@ -2,6 +2,20 @@ import { samePath } from './paths';
 import { qualifiedSession, sessionKey } from './agents';
 import type { AgentProvider, Project, SessionMeta, TabKey } from '../types';
 
+const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}...` : s);
+
+/** The first message of a fresh session that carries on from `s` (#294): where its transcript is, what was last asked and said. */
+export function handoffPrompt(s: Pick<SessionMeta, 'provider' | 'id' | 'file'>, turns: { role: string; text: string }[]): string {
+  const prompts = turns.filter((t) => t.role === 'user').slice(-3);
+  const reply = turns.findLast((t) => t.role === 'assistant');
+  return [
+    `Carry on from an earlier ${s.provider} session. Its id is ${s.id} and its transcript is ${s.file}; read it only if you need more than this.`,
+    prompts.length && `Last prompts:\n${prompts.map((t) => `- ${clip(t.text, 400)}`).join('\n')}`,
+    reply && `Last reply:\n${clip(reply.text, 800)}`,
+    'Wait for my next instruction.',
+  ].filter(Boolean).join('\n\n');
+}
+
 export interface TabRef {
   key: TabKey;
   provider?: AgentProvider | null;

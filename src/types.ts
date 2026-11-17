@@ -154,6 +154,8 @@ export interface Settings {
     stopAtWeeklyReset: boolean;
     /** Chat shows only what the agent says, not its tool calls (#291). */
     hideToolCalls: boolean;
+    /** Send Claude a greeting when the 5-hour limit resets, so the next window starts (#310). */
+    warmAtReset: boolean;
     /** Tabs across the top as well as in the sidebar's Open view. */
     showTabBar: boolean;
     outputGraph: boolean;

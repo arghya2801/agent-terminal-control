@@ -16,6 +16,7 @@ import {
   settingsSet,
   notesGet,
   notesSet,
+  renameSession,
   suggestSessionName,
 } from './ipc';
 import {
@@ -223,6 +224,10 @@ export async function nameSessions(sessions: SessionMeta[], onNamed: (key: strin
       const name = await suggestSessionName(s.file);
       if (!appState.settings) break;
       const sessionNames = { ...appState.settings.projects.sessionNames, [key]: name };
+      if (s.provider === 'claude') {
+        await renameSession(s.file, name);
+        delete sessionNames[key];
+      }
       await saveSettings({ ...appState.settings, projects: { ...appState.settings.projects, sessionNames } });
       onNamed(key, name);
     } catch (e) {

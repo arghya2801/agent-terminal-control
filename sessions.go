@@ -111,7 +111,7 @@ func lineTurns(v core.Object) []Turn {
 	}
 	out := []Turn{}
 	add := func(role, t string, tools []string) {
-		if t = strings.TrimSpace(t); t != "" && !(role == "user" && strings.HasPrefix(t, "<")) {
+		if t = strings.TrimSpace(t); t != "" && !(role == "user" && (strings.HasPrefix(t, "<") || strings.HasPrefix(t, "# AGENTS.md instructions"))) {
 			out = append(out, Turn{role, t})
 		}
 		if len(tools) > 0 {
@@ -334,14 +334,7 @@ func (a *App) SuggestSessionName(file string) (string, error) {
 		text, _ := os.ReadFile(out)
 		answer = string(text)
 	} else {
-		cmd, e = agentCmd(ctx, core.Str(core.Obj(s["claude"])["command"]), "-p", "--no-session-persistence", "--model", "haiku", "--tools=", "--strict-mcp-config")
-		if e == nil {
-			cmd.Env = append(os.Environ(), envList(a.accountEnv(a.defaultAccount()))...)
-			var out bytes.Buffer
-			cmd.Stdout = &out
-			e = run(cmd, b.String())
-			answer = out.String()
-		}
+		answer, e = a.haiku(ctx, b.String())
 	}
 	if e != nil {
 		return "", e
@@ -356,6 +349,70 @@ func (a *App) SuggestSessionName(file string) (string, error) {
 		return "", fmt.Errorf("the model gave no name")
 	}
 	return clip(name, 60), nil
+}
+
+// haiku sends prompt to Claude Haiku through `claude -p`, with no tools and no saved session.
+func (a *App) haiku(ctx context.Context, prompt string) (string, error) {
+	cmd, e := agentCmd(ctx, core.Str(core.Obj(a.getSettings()["claude"])["command"]), "-p", "--no-session-persistence", "--model", "haiku", "--tools=", "--strict-mcp-config")
+	if e != nil {
+		return "", e
+	}
+	cmd.Env = append(os.Environ(), envList(a.accountEnv(a.defaultAccount()))...)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	e = run(cmd, prompt)
+	return out.String(), e
+}
+
+// WarmClaude sends Haiku a greeting so the 5-hour limit window starts (#310).
+func (a *App) WarmClaude() error {
+	if acc, ok := a.account(a.defaultAccount()); ok && acc.Kind != "oauth" {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	_, e := a.haiku(ctx, "hello")
+	return e
+}
+
+// RenameSession gives a Claude session a title, the way /rename does: a custom-title line
+// appended to its transcript (#295).
+func (a *App) RenameSession(file, name string) error {
+	s := a.getSettings()
+	if e := transcript(s, file); e != nil {
+		return e
+	}
+	claude, _ := core.Roots(s)
+	if rel, e := filepath.Rel(claude, file); e != nil || strings.HasPrefix(rel, "..") {
+		return fmt.Errorf("only Claude sessions can be renamed here")
+	}
+	if name = strings.TrimSpace(name); name == "" {
+		return fmt.Errorf("the name is empty")
+	}
+	line, _ := json.Marshal(map[string]string{"type": "custom-title", "customTitle": name, "sessionId": strings.TrimSuffix(filepath.Base(file), ".jsonl")})
+	st, e := os.Stat(file)
+	if e != nil {
+		return e
+	}
+	f, e := os.OpenFile(file, os.O_APPEND|os.O_RDWR, 0)
+	if e != nil {
+		return e
+	}
+	defer f.Close()
+	out := append(line, '\n')
+	if last := make([]byte, 1); st.Size() > 0 {
+		if _, e = f.ReadAt(last, st.Size()-1); e != nil {
+			return e
+		}
+		if last[0] != '\n' {
+			out = append([]byte{'\n'}, out...)
+		}
+	}
+	if _, e = f.Write(out); e != nil {
+		return e
+	}
+	// Recency stays what the agent last wrote, so a rename does not move the session.
+	return os.Chtimes(file, time.Now(), st.ModTime())
 }
 
 // run starts cmd in the temp directory, away from any project's instructions, feeds it

@@ -125,6 +125,12 @@ export function searchTranscripts(query: string): Promise<{ session: string; rol
 /** A short name for a session from the model chosen in settings. */
 export function suggestSessionName(file: string): Promise<string> { return App.SuggestSessionName(file); }
 
+/** Titles a Claude session as /rename does, in its transcript (#295). */
+export function renameSession(file: string, name: string): Promise<void> { return App.RenameSession(file, name); }
+
+/** Sends Claude a greeting so the 5-hour limit window starts (#310). */
+export function warmClaude(): Promise<void> { return App.WarmClaude(); }
+
 /** Every plan-limit reading of the last 8 days, oldest first, as each endpoint returned it. */
 export function limitsHistory(): Promise<{ t: number; provider: 'claude' | 'codex'; body: Record<string, unknown> }[]> { return App.LimitsHistory() as never; }
 

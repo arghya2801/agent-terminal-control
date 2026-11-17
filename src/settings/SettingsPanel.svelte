@@ -287,6 +287,11 @@
           <input id="sawr" type="checkbox" bind:checked={draft.ui.stopAtWeeklyReset} />
           <span class="muted">Stop every working agent a few minutes before Claude's weekly limit resets</span>
         </label>
+        <label for="war">Start the next window</label>
+        <label class="check">
+          <input id="war" type="checkbox" bind:checked={draft.ui.warmAtReset} />
+          <span class="muted">Send Claude a greeting just after the 5-hour limit resets, so the next window is already running</span>
+        </label>
       </div>
 
       <h2 id="s-accounts">Claude accounts</h2>

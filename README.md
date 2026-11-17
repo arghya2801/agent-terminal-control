@@ -149,7 +149,7 @@ results from that move.
   it asks a question or for permission
 - Right-click a project: open Claude (or Claude as another account), Codex or a shell,
   rename, open in Explorer, copy path, pin or unpin, archive old sessions
-- Right-click a session: preview, rename, rename with Haiku or Luna, archive, copy session
+- Right-click a session: preview, new session from this one, rename, rename with Haiku or Luna, archive, copy session
   id, copy resume command, open in Explorer
 - Full keyboard use: Tab (or Down from the filter) enters the list, arrows move and
   expand, Enter opens, `Shift+F10` or the Menu key opens the context menu, Esc returns to
@@ -345,6 +345,7 @@ Every field is optional; missing ones take their default.
     "usageResetTime": true,             // when the 5-hour limit resets, beside the usage chip
     "stopAtWeeklyReset": false,         // stop working agents just before the weekly limit resets
     "hideToolCalls": false,             // chat hides tool calls and shows only the agent's text
+    "warmAtReset": false,               // send Claude a greeting after the 5-hour limit resets
     "outputGraph": true,                // Open view output graph
     "agentView": "chat",                // agent tabs open as "chat" or "terminal"
     "confirmSwitch": true,              // warn before moving a tab between chat and terminal

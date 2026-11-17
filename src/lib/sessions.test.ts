@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveSessions, type TabRef } from './sessions';
+import { handoffPrompt, resolveSessions, type TabRef } from './sessions';
 import type { Project, SessionMeta, TabKey } from '../types';
 
 const T0 = 1_000_000;
@@ -238,5 +238,27 @@ describe('a /resume inside a tab (#75)', () => {
       session('b', { mtimeMs: T0 + 60, label: 'wanted' }),
     ])];
     expect(resolveSessions([named], projects).get(tab.key)).toBe('claude:b');
+  });
+});
+
+describe('handoffPrompt', () => {
+  it('names the session and file, the last 3 prompts and the last reply, clipped', () => {
+    const turns = [
+      { role: 'user', text: 'one' }, { role: 'user', text: 'two' }, { role: 'assistant', text: 'old reply' },
+      { role: 'user', text: 'three' }, { role: 'user', text: 'x'.repeat(500) },
+      { role: 'assistant', text: 'y'.repeat(900) }, { role: 'tool', text: 'Bash' },
+    ];
+    const p = handoffPrompt(session('abc'), turns);
+    expect(p).toContain('abc');
+    expect(p).toContain('abc.jsonl');
+    expect(p).not.toContain('- one');
+    expect(p).toContain('- two');
+    expect(p).toContain(`- ${'x'.repeat(400)}...`);
+    expect(p).toContain(`${'y'.repeat(800)}...`);
+    expect(p).not.toContain('old reply');
+  });
+
+  it('copes with a session that has no turns', () => {
+    expect(handoffPrompt(session('abc'), [])).not.toContain('Last');
   });
 });

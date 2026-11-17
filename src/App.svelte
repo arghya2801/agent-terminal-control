@@ -92,16 +92,16 @@
   } from './terminal/manager';
   import AgentView from './agent/AgentView.svelte';
   import { agents, interrupt, startAgent, whenClosed } from './agent/agent.svelte';
-  import { planLimits } from './lib/plan';
+  import { planLimits, sessionLimit } from './lib/plan';
   import { actionList, chordFor, matchChord, type Action } from './lib/keymap';
   import CommandPalette, { type Command, type CommandAction } from './lib/CommandPalette.svelte';
   import ContextMenu, { type MenuItem } from './sidebar/ContextMenu.svelte';
   import type { IconName } from './lib/Icon.svelte';
   import { relativeTime } from './lib/format';
   import { parseSavedTabs, type SavedTab } from './lib/restore';
-  import { agentCommand, appendLog, gitChanges, pickFolder, scratchDir, takeOpen, type GitChanges } from './lib/ipc';
+  import { agentCommand, appendLog, gitChanges, pickFolder, scratchDir, sessionPreview, takeOpen, warmClaude, type GitChanges } from './lib/ipc';
   import { projectKey } from './lib/paths';
-  import { resolveSessions, type TabRef } from './lib/sessions';
+  import { handoffPrompt, resolveSessions, type TabRef } from './lib/sessions';
   import { zoomLabel } from './lib/zoom';
   import type { Account, AgentProvider, Project, SessionMeta, TabKey, TabSummary } from './types';
   import { markTitle, tabMark, type SessionMark } from './lib/format';
@@ -501,6 +501,18 @@
     openAgent(key, p.name, p.path, p.key, provider, { chat, account });
   }
 
+  /** A new tab in the session's directory that starts from a short handoff of it, not its whole history (#294). */
+  function freshFrom(p: Project, s: SessionMeta) {
+    const cwd = s.cwd ?? p.path;
+    if (!cwd) return;
+    counter += 1;
+    const key: TabKey = `agent:${s.provider}:${counter}`;
+    void guard(async () => {
+      const task = handoffPrompt(s, await sessionPreview(s.file));
+      await openAgent(key, p.name, cwd, p.key, s.provider, { task, account: accountFor(sessionKey(s)) });
+    });
+  }
+
   /** Ask an agent, or with `chat` chat with one, in the scratch directory. */
   function inScratch(provider: AgentProvider, chat = false) {
     void guard(async () => {
@@ -740,6 +752,7 @@
     const row = (id: string, label: string, detail: string, actions: CommandAction[]): Command => ({ id, label, detail, icon: 'folder', actions, run: actions[0].run });
     return [
       row('folder', 'Open a folder…', 'Pick any folder, then start there', launchActions(pick)),
+      row('scratch', 'Scratch', 'The scratch directory, for questions and chats', launchActions(async () => folderProject(await scratchDir()))),
       ...appState.index.projects
         .filter((p) => p.path && p.exists && !p.kind)
         .sort((a, b) => b.lastActiveMs - a.lastActiveMs)
@@ -1100,6 +1113,38 @@
     return () => clearTimeout(timer);
   });
 
+  // Settings > Start the next window (#310): a greeting to Haiku a minute after the 5-hour
+  // limit resets starts the next window. The reset time is kept across readings that lack it,
+  // and a reset is warmed once; a later reading arms the next one.
+  let warmReset = 0;
+  let warmDone = 0;
+  let warmAccount: string | undefined;
+  $effect(() => {
+    const account = appState.settings?.claude.account ?? '';
+    if (!appState.settings?.ui.warmAtReset) return;
+    if (warmAccount !== undefined && account !== warmAccount) {
+      warmReset = warmDone = 0;
+      planState.claude = null;
+      void loadClaudeLimits();
+    }
+    warmAccount = account;
+    const reset = planState.claude ? sessionLimit(planLimits(planState.claude))?.resetsAt : null;
+    const t = Date.parse(reset ?? '');
+    if (t > warmDone + 10 * 60_000 && t > Date.now() - 10 * 60_000) warmReset = t;
+    if (warmReset <= warmDone) return;
+    const timer = setTimeout(async () => {
+      warmDone = warmReset;
+      try {
+        await warmClaude();
+      } catch (e) {
+        error = String(e);
+      }
+      for (let i = 0; i < 20 && planState.claudeLoading; i++) await new Promise((r) => setTimeout(r, 500));
+      await loadClaudeLimits();
+    }, Math.max(0, warmReset + 60_000 - Date.now()));
+    return () => clearTimeout(timer);
+  });
+
   // The terminal shares the wrapper's geometry, so it re-measures whenever the panel
   // changes; otherwise ConPTY keeps the old column count. Waiting any longer than
   // refit's own debounce leaves the terminal clipped at its old width, then jumping.
@@ -1191,6 +1236,7 @@
         onCloseTab={requestClose}
         onRenameTab={startRename}
         onNameSessions={nameSessionsAndTabs}
+        onFreshFrom={freshFrom}
         onNameTabs={nameTabs}
         {namingTabs}
         onDispatch={dispatch}

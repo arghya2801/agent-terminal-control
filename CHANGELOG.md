@@ -11,6 +11,10 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Shift+Tab in the chat box cycles the permission mode (#313).
 - The plan in an approval card has no height cap of its own. The card keeps its height limit until you press Expand, which gives it the full pane (#314).
 - A toolbar button and Settings > Appearance > Tool calls hide tool calls in chat and show only the agent's text, plus questions, plans and the task list. Off by default (#291).
+- Renaming a Claude session, by hand or with Haiku, writes the title into its transcript, so Claude Code and the desktop app show it, as they do a `/rename`. A title set with `/rename` now shows in the sidebar. Clearing a Claude session's name only removes ATC's own saved name, not a title in the transcript (#295).
+- Sessions idle for over an hour show their age in amber: the prompt cache has expired, so resuming re-reads the whole session. Right-click > New session from this one starts a session with a short handoff instead (#294).
+- Settings > General > Start the next window: a minute after Claude's 5-hour limit resets, ATC sends Haiku a greeting so the next window is already running. Off by default (#310).
+- The new-tab list (right-click the Open view) has a Scratch row to start Claude, Codex or a shell in the scratch directory (#312).
 
 ### Fixed
 - Send now (Ctrl+X Ctrl+S) on a Claude tab sends the message at Claude's next step without stopping the turn, so a running tool is not interrupted (#288).

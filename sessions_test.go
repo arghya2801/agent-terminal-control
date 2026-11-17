@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"atc/internal/core"
 )
@@ -51,5 +52,46 @@ func TestTranscriptsPreviewAndSearch(t *testing.T) {
 	}
 	if len(hits) != 2 || got["claude:c1"] != "Fix the Login redirect" || got["codex:t9"] != "why does login fail" {
 		t.Fatal(hits)
+	}
+}
+
+func TestRenameSessionAppendsATitleToClaudeTranscriptsOnly(t *testing.T) {
+	a := NewApp(t.TempDir())
+	a.load()
+	claude, codex := t.TempDir(), t.TempDir()
+	core.Obj(a.settings["projects"])["claudeProjectsDir"] = claude
+	core.Obj(a.settings["codex"])["homeDir"] = codex
+	os.MkdirAll(filepath.Join(claude, "p"), 0700)
+	os.MkdirAll(filepath.Join(codex, "sessions"), 0700)
+	cl := filepath.Join(claude, "p", "c1.jsonl")
+	cx := filepath.Join(codex, "sessions", "x.jsonl")
+	os.WriteFile(cl, []byte(`{"type":"user","cwd":"D:/p","message":{"content":"hello there"}}`), 0600)
+	os.WriteFile(cx, []byte("{}\n"), 0600)
+
+	old := time.Now().Add(-48 * time.Hour).Truncate(time.Second)
+	os.Chtimes(cl, old, old)
+	if e := a.RenameSession(cl, " My title "); e != nil {
+		t.Fatal(e)
+	}
+	b, _ := os.ReadFile(cl)
+	if !strings.HasSuffix(string(b), "\n{\"customTitle\":\"My title\",\"sessionId\":\"c1\",\"type\":\"custom-title\"}\n") {
+		t.Fatal(string(b))
+	}
+	if st, _ := os.Stat(cl); !st.ModTime().Equal(old) {
+		t.Fatal("the rename moved the session's mtime", st.ModTime())
+	}
+	if e := a.RenameSession(cl, "Second"); e != nil {
+		t.Fatal(e)
+	}
+	if b, _ = os.ReadFile(cl); strings.Contains(string(b), "\n\n") {
+		t.Fatal("blank line before the second title", string(b))
+	}
+	for _, bad := range []string{cx, filepath.Join(a.config, "settings.json")} {
+		if a.RenameSession(bad, "x") == nil {
+			t.Fatal("renamed", bad)
+		}
+	}
+	if a.RenameSession(cl, "  ") == nil {
+		t.Fatal("accepted an empty title")
 	}
 }

@@ -165,7 +165,7 @@ func ClaudeSession(path string, st os.FileInfo) Object {
 	s["label"] = string(r)
 	for _, k := range []string{"agentName", "aiTitle", "slug", "firstMessage"} {
 		label := Tidy(Str(h[k]), true)
-		if len([]rune(label)) >= 3 {
+		if len([]rune(label)) >= 3 || k == "agentName" && label != "" {
 			s["label"] = label
 			s["labelSource"] = k
 			break
@@ -188,12 +188,16 @@ func tailAgentName(f *os.File, size int64) string {
 		lines = lines[1:]
 	}
 	for i := len(lines) - 1; i >= 0; i-- {
-		if !strings.Contains(lines[i], `"agent-name"`) {
+		if !strings.Contains(lines[i], `"agent-name"`) && !strings.Contains(lines[i], `"custom-title"`) {
 			continue
 		}
 		var v Object
-		if json.Unmarshal([]byte(lines[i]), &v) == nil && Str(v["type"]) == "agent-name" && strings.TrimSpace(Str(v["agentName"])) != "" {
-			return Str(v["agentName"])
+		if json.Unmarshal([]byte(lines[i]), &v) != nil {
+			continue
+		}
+		key := map[string]string{"agent-name": "agentName", "custom-title": "customTitle"}[Str(v["type"])]
+		if key != "" && strings.TrimSpace(Str(v[key])) != "" {
+			return Str(v[key])
 		}
 	}
 	return ""
@@ -327,7 +331,7 @@ func (idx *Index) Scan(settings Object, force bool) Object {
 				Version int
 				Files   map[string]*cachedSession
 			}
-			if json.Unmarshal(b, &disk) == nil && disk.Version == 1 && disk.Files != nil {
+			if json.Unmarshal(b, &disk) == nil && disk.Version == 2 && disk.Files != nil {
 				idx.cache = disk.Files
 			}
 		}
@@ -368,7 +372,7 @@ func (idx *Index) Scan(settings Object, force bool) Object {
 				idx.Hits++
 				entry.Meta["mtimeMs"], entry.Meta["size"] = st.ModTime().UnixMilli(), size
 				if f, e := os.Open(path); e == nil {
-					if n := Tidy(tailAgentName(f, size), true); len([]rune(n)) >= 3 {
+					if n := Tidy(tailAgentName(f, size), true); n != "" {
 						entry.Meta["label"], entry.Meta["labelSource"] = n, "agentName"
 					}
 					f.Close()
@@ -416,7 +420,7 @@ func (idx *Index) Scan(settings Object, force bool) Object {
 		_ = Save(idx.CachePath, struct {
 			Version int
 			Files   map[string]*cachedSession
-		}{1, idx.cache})
+		}{2, idx.cache})
 	}
 	sort.Slice(sessions, func(i, j int) bool { return newerFirst(sessions[i], sessions[j]) })
 	unique := []Object{}
