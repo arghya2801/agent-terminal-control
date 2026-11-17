@@ -16,6 +16,7 @@ Go + Wails v2 host (`app.go`, `agents.go`, `internal/`), Node sidecar (`sidecar/
 
 - Keep it small. 5 lines beats 50. No comments that repeat the code, no features nobody asked for.
 - One branch and PR per group of issues. Small conventional commits. Merge, delete branch, close issues with `Fixes #N`.
+- Close each issue with a comment saying how it was fixed and linking the PR.
 - Stacked PRs: merge the base without `--delete-branch`, retarget the next PR, then delete.
 - Add a CHANGELOG.md line for every user-visible change.
 - Test in the dev app, not only with unit tests.
