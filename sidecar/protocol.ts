@@ -155,7 +155,7 @@ export type AgentOp =
   | { op: 'open'; id: string; provider: Provider; cwd: string; resume?: string; exe: string; args: string[]; env?: Record<string, string>; model?: string; effort?: string }
   | { op: 'catalog'; id: string; provider: Provider; cwd: string; exe: string; args: string[]; env?: Record<string, string> }
   | { op: 'effort'; id: string; effort: string | null }
-  | { op: 'send'; id: string; text: string; images?: Image[] }
+  | { op: 'send'; id: string; text: string; images?: Image[]; priority?: 'next' }
   | { op: 'interrupt'; id: string }
   | { op: 'stopTask'; id: string; task: string }
   | { op: 'btw'; id: string; question: string }

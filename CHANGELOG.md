@@ -6,6 +6,10 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Fixed
+- Send now (Ctrl+X Ctrl+S) on a Claude tab sends the message at Claude's next step without stopping the turn, so a running tool is not interrupted (#288).
+- After /compact or an automatic compaction, the summary shows as a collapsed Compact step instead of a long message from you (#307).
+
 ## [0.7.5] - 2026-11-17
 
 ### Added

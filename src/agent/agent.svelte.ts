@@ -147,8 +147,8 @@ const op = (key: TabKey, o: Record<string, unknown>) => {
   if (id) void agentSend(id, o).catch((e) => receive(key, { t: 'error', message: String(e?.message ?? e) }));
 };
 
-/** A message sent while the agent works waits for the turn to end: the SDK's streaming input
- *  drops one sent mid-turn. The manager's queue sends it when the tab goes idle. */
+/** A message sent while the agent works waits for the turn to end, in the manager's queue,
+ *  which sends it when the tab goes idle. Send now skips the wait. */
 /** `images` are data URLs; the one copy the page keeps is the one it shows. */
 export function send(key: TabKey, text: string, images: string[] = []) {
   const l = live.get(key);
@@ -172,12 +172,27 @@ export const queuedImages = (key: TabKey) => live.get(key)?.images.length ?? 0;
 /** The queue's text for a message of only images, which the queue shows. */
 const IMAGES = '(images)';
 export const interrupt = (key: TabKey) => op(key, { op: 'interrupt' });
-/** Force send (Ctrl+X Ctrl+S): the turn stops and the queue, with `text` added, sends as it
- *  ends. Claude's `priority: 'now'` ended the turn without marking the next one working. */
+/** Force send (Ctrl+X Ctrl+S). Claude gets the queue, with `text` added, at its next step
+ *  without stopping the turn (`priority: 'next'`; `'now'` ended the turn without marking the
+ *  next one working). Codex stops the turn and the queue sends as it ends. */
 export function sendNow(key: TabKey, text = '', images: string[] = []) {
-  if (!agents[key]?.working) return send(key, text, images);
-  send(key, text, images);
-  if (getTab(key)?.queued) interrupt(key);
+  const l = live.get(key);
+  if (!agents[key]?.working || l?.provider !== 'claude' || !l.id) {
+    if (!agents[key]?.working) return send(key, text, images);
+    send(key, text, images);
+    if (getTab(key)?.queued) interrupt(key);
+    return;
+  }
+  const had = getTab(key)?.queued;
+  const held = had ? l.images.splice(0) : [];
+  const all = [...held, ...images];
+  const body = [had === IMAGES ? '' : had, text].filter((t) => t?.trim()).join('\n\n');
+  if (!body && !all.length) return;
+  queuePrompt(key, null);
+  if (agents[key]) agents[key].fresh = false;
+  if (getTab(key)?.done) markDone(key, false);
+  if (all.length) l.sent.push(all);
+  op(key, { op: 'send', text: body, images: all.map(toImage), priority: 'next' });
 }
 export const stopTask = (key: TabKey, task: string) => op(key, { op: 'stopTask', task });
 export const askBtw = (key: TabKey, question: string) => op(key, { op: 'btw', question });

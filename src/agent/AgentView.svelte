@@ -466,7 +466,7 @@
       {@const pics = queuedImages(tabKey)}
       <p class="aside queued">
         <span title={queued}>Sends when {name} finishes: {queued}{pics ? ` (+${pics} image${pics > 1 ? 's' : ''})` : ''}</span>
-        <button class="link" onclick={() => sendNow(tabKey)} title="Ctrl+X Ctrl+S: stop the turn; this sends as it ends">Send now</button>
+        <button class="link" onclick={() => sendNow(tabKey)} title={provider === 'claude' ? 'Ctrl+X Ctrl+S: sent at the next step, without stopping the turn' : 'Ctrl+X Ctrl+S: stop the turn; this sends as it ends'}>Send now</button>
         <button class="link" onclick={() => queuePrompt(tabKey, null)}>Cancel</button>
       </p>
     {/if}
