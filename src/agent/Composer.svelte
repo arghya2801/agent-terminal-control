@@ -492,6 +492,7 @@
   }
   .menu button.on {
     background: var(--selection);
+    color: var(--on-selection);
   }
   .cmd {
     font-family: var(--mono);

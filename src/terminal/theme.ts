@@ -1,5 +1,5 @@
 import type { ITheme } from '@xterm/xterm';
-import { ANSI, parsePalette, type Palette } from '../lib/theme';
+import { ANSI, onSelection, parsePalette, type Palette } from '../lib/theme';
 import atcDark from '../themes/atc-dark.json';
 
 /**
@@ -24,6 +24,8 @@ export function xtermTheme(p: Palette): ITheme {
     cursor: p.cursor,
     cursorAccent: p.background,
     selectionBackground: p.selection,
+    // Only when the foreground is unreadable on it, so selected output keeps its colours.
+    ...(onSelection(p) !== p.foreground ? { selectionForeground: onSelection(p) } : {}),
   };
 }
 

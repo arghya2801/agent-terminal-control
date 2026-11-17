@@ -119,6 +119,7 @@ export function cssVariables(p: Palette): Record<string, string> {
     '--ok': p.brightGreen,
     '--info': p.brightMagenta,
     '--selection': p.selection,
+    '--on-selection': onSelection(p),
   };
 }
 
@@ -132,12 +133,18 @@ export function isLight(p: Palette): boolean {
 
 /** Text over the accent fill: the background when it passes 4.5:1, else white or black.
  *  A light palette's `brightWhite` can be a grey that fails on blue. */
-function onAccent(p: Palette): string {
+const onAccent = (p: Palette) => readableOn(p.brightBlue, p.background);
+
+/** Selected text: the foreground when it passes 4.5:1 on the selection, else white or
+ *  black. Many themes pick a selection close to their foreground (#277). */
+export const onSelection = (p: Palette) => readableOn(p.selection, p.foreground);
+
+function readableOn(fill: string, preferred: string): string {
   const ratio = (c: string) => {
-    const [a, b] = [luminance(c), luminance(p.brightBlue)].sort((x, y) => y - x);
+    const [a, b] = [luminance(c), luminance(fill)].sort((x, y) => y - x);
     return (a + 0.05) / (b + 0.05);
   };
-  if (ratio(p.background) >= 4.5) return p.background;
+  if (ratio(preferred) >= 4.5) return preferred;
   return ratio('#ffffff') >= ratio('#000000') ? '#ffffff' : '#000000';
 }
 

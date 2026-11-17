@@ -78,6 +78,14 @@ describe('cssVariables', () => {
     const latte = parsePalette({ background: '#eff1f5', foreground: '#4c4f69', brightBlue: '#1e66f5', brightWhite: '#bcc0cc' }, 'latte')!;
     expect(cssVariables(latte)['--on-accent']).toBe('#ffffff');
   });
+
+  it('keeps selected text readable when the selection is close to the foreground', () => {
+    const atc = builtinThemes.find((t) => t.name === DEFAULT_THEME)!;
+    expect(cssVariables(atc)['--on-selection']).toBe(atc.foreground);
+    // Catppuccin Frappé selects in a pale pink under its pale foreground.
+    const frappe = parsePalette({ background: '#303446', foreground: '#c6d0f5', selectionBackground: '#f2d5cf' }, 'frappe')!;
+    expect(cssVariables(frappe)['--on-selection']).toBe('#000000');
+  });
 });
 
 describe('isLight', () => {
