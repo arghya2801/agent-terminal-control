@@ -105,6 +105,8 @@ export class Claude {
   /** The permission mode now, and the one an approved plan returns to. */
   private current = 'default';
   private beforePlan = 'default';
+  /** The CLI's cost so far: its results carry the running total, not the turn's. */
+  private spent = 0;
 
   constructor(id: string, o: Launch & { resume?: string; model?: string; effort?: string }) {
     this.id = id;
@@ -116,8 +118,9 @@ export class Claude {
   /** A query on a fresh inbox. A rewind opens a new one at `at` and keeps the mode. */
   private open(resume?: string, at?: string, mode?: string) {
     this.inbox = new Inbox<SDKUserMessage>();
-    // Background tasks belong to the CLI process; a new one starts with none.
+    // Background tasks and the running cost belong to the CLI process; a new one starts with none.
     this.bg.clear();
+    this.spent = 0;
     this.live({ t: 'background', tasks: [] });
     return query({
       prompt: this.inbox,
@@ -297,7 +300,12 @@ export class Claude {
       }
       case 'result':
         out({ t: 'working', on: false });
-        if (m.num_turns) out({ t: 'item', item: { id: m.uuid, kind: 'turn', durationMs: m.duration_ms, costUsd: m.total_cost_usd } });
+        if (m.num_turns) {
+          const u = m.usage;
+          const tokens = { input: u.input_tokens, cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0, output: u.output_tokens };
+          out({ t: 'item', item: { id: m.uuid, kind: 'turn', durationMs: m.duration_ms, costUsd: m.total_cost_usd - this.spent, tokens } });
+        }
+        this.spent = m.total_cost_usd;
         if (m.subtype !== 'success') out({ t: 'item', item: { id: `${m.uuid}:e`, kind: 'notice', text: m.errors.join('\n') || m.subtype } });
         return;
       case 'tool_progress':

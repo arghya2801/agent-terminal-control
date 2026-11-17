@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { clip, emit, firstLine, log, textOf } from './events.ts';
-import type { AgentEvent, AgentRequest, Answer, ChatItem, Image, Model } from './protocol.ts';
+import type { AgentEvent, AgentRequest, Answer, ChatItem, Image, Model, Tokens } from './protocol.ts';
 
 type Out = (ev: AgentEvent) => void;
 type Obj = Record<string, any>;
@@ -256,6 +256,8 @@ export class Codex {
   /** The sent prompt's item, shown at once: Codex echoes it only after its hooks run. */
   private echo = '';
   private echoed = new Map<string, string>();
+  /** The turn's tokens: each usage update's `last` is one model request. */
+  private used: Tokens = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
   private chosen: string | undefined;
   private effortChosen: string | null;
   private skills = new Map<string, Obj>();
@@ -372,6 +374,7 @@ export class Codex {
       case 'turn/started':
         this.turn = p.turn.id;
         if (!this.turns.includes(p.turn.id)) this.turns.push(p.turn.id);
+        this.used = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
         this.live({ t: 'working', on: true });
         if (this.stop) this.interrupt();
         return;
@@ -385,8 +388,15 @@ export class Codex {
         this.live({ t: 'working', on: false });
         if (p.turn.status === 'interrupted') this.live({ t: 'item', item: { id: `int:${p.turn.id}`, kind: 'notice', text: 'Interrupted' } });
         if (p.turn.status === 'failed') this.live({ t: 'item', item: { id: `err:${p.turn.id}`, kind: 'notice', text: p.turn.error?.message ?? 'The turn failed' } });
-        this.live({ t: 'item', item: { id: `turn:${p.turn.id}`, kind: 'turn', durationMs: p.turn.durationMs ?? undefined } });
+        this.live({ t: 'item', item: { id: `turn:${p.turn.id}`, kind: 'turn', durationMs: p.turn.durationMs ?? undefined, ...(this.used.input + this.used.output ? { tokens: this.used } : {}) } });
         return;
+      case 'thread/tokenUsage/updated': {
+        const l = p.tokenUsage?.last;
+        if (!l || p.turnId !== this.turn) return;
+        // Codex counts cached input inside its input.
+        this.used = { input: this.used.input + l.inputTokens - l.cachedInputTokens, cacheRead: this.used.cacheRead + l.cachedInputTokens, cacheWrite: this.used.cacheWrite + (l.cacheWriteInputTokens ?? 0), output: this.used.output + l.outputTokens };
+        return;
+      }
       case 'item/started':
       case 'item/completed': {
         const item = itemOf(p.item);

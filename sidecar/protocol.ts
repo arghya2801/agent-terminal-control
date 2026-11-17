@@ -22,7 +22,9 @@ export interface ChatItem {
   /** The Task call a subagent's item belongs to. */
   parent?: string | null;
   durationMs?: number;
+  /** A turn's cost and tokens, that turn's alone. Codex reports no cost. */
   costUsd?: number;
+  tokens?: Tokens;
   /** Codex: the turn a user message started, to rewind to. */
   turn?: string;
   /** The user said no to this call. */
@@ -32,6 +34,13 @@ export interface ChatItem {
   sentImages?: number;
   /** Images sent with a user message, as data URLs. */
   images?: string[];
+}
+
+export interface Tokens {
+  input: number;
+  cacheRead: number;
+  cacheWrite: number;
+  output: number;
 }
 
 /** An image to send: its media type and base64 data. */
