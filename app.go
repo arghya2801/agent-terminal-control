@@ -18,6 +18,7 @@ import (
 	"atc/internal/core"
 	"atc/internal/pty"
 	"github.com/fsnotify/fsnotify"
+	"github.com/wailsapp/wails/v2/pkg/options"
 	wr "github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/sys/windows"
 )
@@ -42,6 +43,43 @@ type App struct {
 	lastSettings string
 	agents       sidecar
 	searches     atomic.Uint64 // the latest transcript search; older ones stop scanning
+	open         string        // the folder from --open, until the page takes it
+}
+
+// TakeOpen returns the folder ATC was started with `--open`, once (#278).
+func (a *App) TakeOpen() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	dir := a.open
+	a.open = ""
+	return dir
+}
+
+// secondLaunch runs when ATC starts while this copy runs: this one comes forward and opens
+// the folder the other was given, which then exits.
+func (a *App) secondLaunch(d options.SecondInstanceData) {
+	wr.WindowShow(a.ctx)
+	if dir := openArg(d.Args); dir != "" {
+		a.emit("open://dir", dir)
+	}
+}
+
+// openArg is the folder after `--open`, made absolute: a second launch hands its arguments
+// to the first copy, which runs in another directory.
+func openArg(args []string) string {
+	for i, arg := range args {
+		dir, ok := strings.CutPrefix(arg, "--open=")
+		if !ok && arg == "--open" && i+1 < len(args) {
+			dir, ok = args[i+1], true
+		}
+		if ok && dir != "" {
+			if abs, err := filepath.Abs(dir); err == nil {
+				return abs
+			}
+			return dir
+		}
+	}
+	return ""
 }
 
 func NewApp(config string) *App {
