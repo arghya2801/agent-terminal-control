@@ -1,6 +1,6 @@
 <script lang="ts">
   import { sessionKey } from '../lib/agents';
-  import { agentCommand, openInExplorer, searchTranscripts } from '../lib/ipc';
+  import { agentCommand, openInExplorer, renameSession, searchTranscripts } from '../lib/ipc';
   import ConfirmDialog from '../lib/ConfirmDialog.svelte';
   import SessionPreview from './SessionPreview.svelte';
   import { formatUsd, sessionStats } from '../lib/costs';
@@ -29,6 +29,7 @@
     onNewShell,
     onNewAgent,
     onNameSessions,
+    onFreshFrom,
     onOpenFolder,
     onAsk,
   }: {
@@ -48,6 +49,8 @@
     onNewShell: (p: Project) => void;
     onNewAgent: (p: Project, provider: AgentProvider, chat?: boolean, account?: string) => void;
     onNameSessions: (sessions: SessionMeta[]) => void;
+    /** A new session that starts from a short handoff of this one (#294). */
+    onFreshFrom: (p: Project, s: SessionMeta) => void;
   } = $props();
 
   /** `p:<project key>` or `s:<session id>` while its name is being edited. */
@@ -140,6 +143,21 @@
     await refresh();
   }
 
+  /** Claude sessions are titled in their transcript; a stale name in settings would hide it. */
+  async function renameSessionTo(s: SessionMeta, name: string) {
+    if (s.provider === 'claude' && name) {
+      try {
+        await renameSession(s.file, name);
+      } catch (e) {
+        appState.error = String(e);
+        renaming = null;
+        return;
+      }
+      name = '';
+    }
+    await saveName('sessionNames', sessionKey(s), name);
+  }
+
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
 
   async function copy(text: string) {
@@ -211,6 +229,7 @@
       y: e.clientY,
       items: [
         { label: 'Preview', icon: 'search', run: () => showPreview(p, s, row) },
+        { label: 'New session from this one', icon: 'agent', disabled: !dir, run: () => onFreshFrom(p, s) },
         { label: 'Rename…', icon: 'pencil', sep: true, run: () => (renaming = `s:${key}`) },
         {
           label: naming.has(key) ? 'Naming…' : `Rename with ${renameModelName()}`,
@@ -272,7 +291,7 @@
     {archived}
     onPreview={(p, s, row) => showPreview(p, s, row)}
     onRenameProject={(p, name) => p.path && void saveName('names', p.path, name)}
-    onRenameSession={(s, name) => void saveName('sessionNames', sessionKey(s), name)}
+    onRenameSession={(s, name) => void renameSessionTo(s, name)}
     onRenameCancel={() => (renaming = null)}
     {onOpenProject}
     {onOpenSession}

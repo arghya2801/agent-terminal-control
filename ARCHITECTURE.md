@@ -374,7 +374,10 @@ Things that cost time once. Add to this list.
 - `core.Resolve` strips the `\\?\` prefix that symlink resolution adds. PowerShell and
   ConPTY handle it badly, and it never string-matches a transcript's `cwd`.
 - A parser change does nothing visible until the cache goes. Bump the `Version` the index
-  cache writes in `internal/core/index.go`.
+  cache writes in `internal/core/index.go` (2 since `custom-title`).
+- Claude's `/rename` writes a `custom-title` line, and `App.RenameSession` writes the same
+  line. The tail read takes the newest of it and `agent-name`, with no minimum length.
+  `RenameSession` restores the file's mtime, since recency means the agent's last write.
 
 **Tooling**
 - Bash heredocs and Python here-strings eat backslashes, and backticks in a `git commit

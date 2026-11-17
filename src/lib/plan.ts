@@ -40,9 +40,11 @@ function isObj(v: unknown): v is Record<string, unknown> {
  */
 export function chipLimit(claude: PlanLimit[], codex: PlanLimit[], provider?: string | null): PlanLimit | undefined {
   const [mine, other] = provider === 'codex' && codex.length ? [codex, claude] : [claude, codex];
-  const session = mine.find((l) => windowMinutes(l) === 300);
-  return session ?? [...(mine.length ? mine : other)].sort((a, b) => b.percent - a.percent)[0];
+  return sessionLimit(mine) ?? [...(mine.length ? mine : other)].sort((a, b) => b.percent - a.percent)[0];
 }
+
+/** The 5-hour window, if there is one. */
+export const sessionLimit = (limits: PlanLimit[]) => limits.find((l) => windowMinutes(l) === 300);
 
 export function planLimits(plan: Record<string, unknown>): PlanLimit[] {
   if (Array.isArray(plan.limits)) {

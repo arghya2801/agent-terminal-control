@@ -165,6 +165,20 @@ func TestTheLatestAgentNameWinsEvenFarPastTheHeadBudget(t *testing.T) {
 	os.WriteFile(p, []byte(body), 0600)
 	wantLabel(t, readSession(t, p), "renamed-later", "agentName")
 }
+func TestACustomTitleLabelsAndTheNewestOfNameAndTitleWins(t *testing.T) {
+	title := func(name string) string {
+		return fmt.Sprintf(`{"type":"custom-title","customTitle":%q,"sessionId":"x"}`, name)
+	}
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	os.WriteFile(p, []byte(`{"type":"user","cwd":"D:/p","message":{"content":"hi there"}}`+"\n"+title("typed-title")+"\n"), 0600)
+	wantLabel(t, readSession(t, p), "typed-title", "agentName")
+	os.WriteFile(p, []byte(`{"type":"user","cwd":"D:/p","message":{"content":"hi there"}}`+"\n"+title("UI")+"\n"), 0600)
+	wantLabel(t, readSession(t, p), "UI", "agentName")
+	os.WriteFile(p, []byte(agentName("old-name")+"\n"+title("first-title")+"\n"+title("later-title")+"\n"), 0600)
+	wantLabel(t, readSession(t, p), "later-title", "agentName")
+	os.WriteFile(p, []byte(title("old-title")+"\n"+agentName("newer-name")+"\n"), 0600)
+	wantLabel(t, readSession(t, p), "newer-name", "agentName")
+}
 func TestAnAgentNameInTheHeadIsUsedWhenTheTailHasNone(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "s.jsonl")
 	os.WriteFile(p, []byte(agentName("early-name")+"\n"+strings.Repeat(fillerLine(), 100)), 0600)

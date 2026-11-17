@@ -152,6 +152,8 @@ export interface Settings {
     usageResetTime: boolean;
     /** Stop every working agent just before Claude's weekly limit resets (#280). */
     stopAtWeeklyReset: boolean;
+    /** Send Claude a greeting when the 5-hour limit resets, so the next window starts (#310). */
+    warmAtReset: boolean;
     /** Tabs across the top as well as in the sidebar's Open view. */
     showTabBar: boolean;
     outputGraph: boolean;

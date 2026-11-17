@@ -43,6 +43,7 @@
     onCloseTab,
     onRenameTab,
     onNameSessions,
+    onFreshFrom,
     onNameTabs,
     namingTabs,
     onDispatch,
@@ -73,6 +74,7 @@
     onRenameTab: (key: TabKey) => void;
     /** Rename with Haiku or Luna. */
     onNameSessions: (sessions: SessionMeta[]) => void;
+    onFreshFrom: (p: Project, s: SessionMeta) => void;
     onNameTabs: (keys: TabKey[]) => void;
     /** Tabs whose session the rename model is naming now. */
     namingTabs: Set<TabKey>;
@@ -410,6 +412,7 @@
       {onNewShell}
       {onNewAgent}
       {onNameSessions}
+      {onFreshFrom}
     />
   </div>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
@@ -436,6 +439,7 @@
       {onNewShell}
       {onNewAgent}
       {onNameSessions}
+      {onFreshFrom}
     />
   </div>
 

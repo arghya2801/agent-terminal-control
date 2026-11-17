@@ -47,6 +47,7 @@
   // would be a path reconstructed from the lossy directory name.
   const launchable = $derived(projectPath !== null);
   const age = $derived(relativeTime(session.mtimeMs));
+  const cold = $derived(!mark && Date.now() - session.mtimeMs > 3_600_000);
   // Only ever non-empty while subfolder grouping is on: without it a session's directory
   // is its project's. Two sessions adopted from different subfolders can share a name, so
   // the row has to say which one it is.
@@ -84,7 +85,7 @@
         <Highlight text={session.gitBranch} {query} />
       </span>
     {/if}
-    <span class="age">{naming.has(sessionKey(session)) ? 'Naming…' : mark ? 'open' : age}</span>
+    <span class="age" class:cold title={cold ? 'Idle for over an hour: the prompt cache has expired, so resuming re-reads the whole session. A new session from this one (right-click) starts cheaper.' : undefined}>{naming.has(sessionKey(session)) ? 'Naming…' : mark ? 'open' : age}</span>
   </span>
 </button>
 {/if}
@@ -166,5 +167,8 @@
   }
   .age {
     color: var(--fg-faint);
+  }
+  .age.cold {
+    color: var(--warn);
   }
 </style>

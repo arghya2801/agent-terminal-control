@@ -6,6 +6,12 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Added
+- Renaming a Claude session, by hand or with Haiku, writes the title into its transcript, so Claude Code and the desktop app show it, as they do a `/rename`. A title set with `/rename` now shows in the sidebar. Clearing a Claude session's name only removes ATC's own saved name, not a title in the transcript (#295).
+- Sessions idle for over an hour show their age in amber: the prompt cache has expired, so resuming re-reads the whole session. Right-click > New session from this one starts a session with a short handoff instead (#294).
+- Settings > General > Start the next window: a minute after Claude's 5-hour limit resets, ATC sends Haiku a greeting so the next window is already running. Off by default (#310).
+- The new-tab list (right-click the Open view) has a Scratch row to start Claude, Codex or a shell in the scratch directory (#312).
+
 ## [0.7.5] - 2026-11-17
 
 ### Added
