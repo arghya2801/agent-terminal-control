@@ -19,7 +19,7 @@ export function toolAction(tool = ''): Action {
 }
 
 /** Calls the user acts on or reads as conversation; never folded into a group. */
-const STANDALONE = /^(AskUserQuestion|ExitPlanMode|TodoWrite|Question)$/;
+export const STANDALONE = /^(AskUserQuestion|ExitPlanMode|TodoWrite|Question)$/;
 
 /** What a call did, then what it is doing: "Ran npm test", "Running npm test". */
 const VERBS: Record<string, [string, string]> = {

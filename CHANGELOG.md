@@ -6,6 +6,12 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Added
+- A Compact button in the chat toolbar runs `/compact` (#306).
+- Shift+Tab in the chat box cycles the permission mode (#313).
+- The plan in an approval card has no height cap of its own. The card keeps its height limit until you press Expand, which gives it the full pane (#314).
+- A toolbar button and Settings > Appearance > Tool calls hide tool calls in chat and show only the agent's text, plus questions, plans and the task list. Off by default (#291).
+
 ## [0.7.5] - 2026-11-17
 
 ### Added

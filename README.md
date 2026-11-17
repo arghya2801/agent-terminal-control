@@ -122,7 +122,10 @@ results from that move.
   conversation back to before it, and in Claude tabs the files too
 - Claude's task list, and the shell commands and subagents running in the background,
   show above the message box
-- Alt+Up and Alt+Down jump between the messages you sent
+- Alt+Up and Alt+Down jump between the messages you sent. Shift+Tab in the box cycles the
+  permission mode
+- The footer's Compact button runs `/compact`, and its wrench button hides tool calls so the
+  chat shows only the agent's text (also under Settings > Appearance)
 - The account chip runs a Claude tab as another account; see [Claude accounts](#claude-accounts)
 - Ctrl+` or Ctrl+Shift+M (or the terminal button) closes the chat and resumes the session
   in `claude` or `codex`. In a terminal tab, the same keys or the chat button in the
@@ -341,6 +344,7 @@ Every field is optional; missing ones take their default.
     "showTabBar": false,                // tabs across the top as well as in the sidebar
     "usageResetTime": true,             // when the 5-hour limit resets, beside the usage chip
     "stopAtWeeklyReset": false,         // stop working agents just before the weekly limit resets
+    "hideToolCalls": false,             // chat hides tool calls and shows only the agent's text
     "outputGraph": true,                // Open view output graph
     "agentView": "chat",                // agent tabs open as "chat" or "terminal"
     "confirmSwitch": true,              // warn before moving a tab between chat and terminal
