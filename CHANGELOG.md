@@ -6,6 +6,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.7.6] - 2026-11-17
+
 ### Added
 - A Compact button in the chat toolbar runs `/compact` (#306).
 - Shift+Tab in the chat box cycles the permission mode (#313).
