@@ -82,6 +82,10 @@ export function ListThemes() {
   return window['go']['main']['App']['ListThemes']();
 }
 
+export function ModelInputPrices(arg1) {
+  return window['go']['main']['App']['ModelInputPrices'](arg1);
+}
+
 export function NewerRelease() {
   return window['go']['main']['App']['NewerRelease']();
 }

@@ -90,6 +90,13 @@ func (a *App) launch(provider, cwd string, chat bool, account string) (core.Obje
 		for k, v := range a.accountEnv(account) {
 			env[k] = v
 		}
+		cost := core.Obj(s["cost"])
+		if acc, ok := a.account(account); ok && acc.Kind == "apiKey" && cost["longCache"] != false {
+			env["ENABLE_PROMPT_CACHING_1H"] = "1"
+		}
+		if m := core.Str(cost["subagentModel"]); m != "" && m != "inherit" {
+			env["CLAUDE_CODE_SUBAGENT_MODEL"] = m
+		}
 	}
 	if !core.IsDir(cwd) {
 		cwd = core.Home()

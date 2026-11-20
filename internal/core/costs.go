@@ -111,6 +111,18 @@ func priceFor(p Object, provider, model string) Object {
 	}
 	return nil
 }
+
+// InputPrices is each priced Claude model's input price in USD per million tokens.
+func InputPrices(config string, models []string) Object {
+	rates := prices(config)
+	out := Object{}
+	for _, m := range models {
+		if p := priceFor(rates, "claude", m); p != nil {
+			out[m] = Num(p["input"])
+		}
+	}
+	return out
+}
 func addNumber(m Object, k string, n int64) { m[k] = number(m[k]) + n }
 func (c *Costs) Rows(settings Object, config string) []any {
 	c.mu.Lock()
@@ -148,7 +160,8 @@ func (c *Costs) Context(settings Object, config string) Object {
 		if used > window {
 			window = 1_000_000
 		}
-		out["claude:"+f.id] = Object{"used": used, "window": window}
+		first := Obj(Obj(f.records[0]["message"])["usage"])
+		out["claude:"+f.id] = Object{"used": used, "window": window, "first": number(first["input_tokens"]) + number(first["cache_read_input_tokens"]) + number(first["cache_creation_input_tokens"])}
 	}
 	for _, path := range paths["codex"] {
 		f := c.files[path]

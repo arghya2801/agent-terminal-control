@@ -6,6 +6,14 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Added
+- The chat's model menu says what a model or effort switch re-reads while the prompt cache is warm, and that it is free once the cache has expired. Above a context size it offers "Switch in a new session" (#290).
+- API-key accounts ask for the 1-hour prompt cache (#309).
+- A Compact hint when a long session is about to lose its prompt cache (#309).
+- A subagent model setting for Claude (#309).
+- The chat toolbar shows each session's baseline, the tokens of its first request, and flags a large one (#309).
+- Settings > Cost holds the options for all of these (#290, #309).
+
 ## [0.7.6] - 2026-11-17
 
 ### Added

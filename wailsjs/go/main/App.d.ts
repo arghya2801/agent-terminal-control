@@ -44,6 +44,8 @@ export function LimitsHistory():Promise<Array<Record<string, any>>>;
 
 export function ListThemes():Promise<Array<any>>;
 
+export function ModelInputPrices(arg1:Array<string>):Promise<Record<string, any>>;
+
 export function NewerRelease():Promise<any>;
 
 export function NotesGet():Promise<string>;

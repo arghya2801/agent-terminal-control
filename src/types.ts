@@ -204,6 +204,22 @@ export interface Settings {
   /** `args` go on every launch; `chatArgs` on chats too, so they cannot change anything. */
   codex: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; homeDir: string | null; defaultEffort: string };
   claude: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; scratchDir: string | null; atcLabel: boolean; account: string; defaultEffort: string };
+  cost: CostSettings;
+}
+
+export interface CostSettings {
+  /** Say what changing model or effort costs in the model menu (#290). */
+  switchHint: boolean;
+  /** Context tokens above which the model menu offers a new session; 0 never does. */
+  newSessionAbove: number;
+  /** API-key accounts ask for the 1-hour cache (#309). */
+  longCache: boolean;
+  compactHint: boolean;
+  compactAbove: number;
+  /** Subagents' model: 'inherit' or an alias. */
+  subagentModel: string;
+  showBaseline: boolean;
+  baselineAbove: number;
 }
 
 

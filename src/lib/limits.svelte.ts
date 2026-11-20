@@ -26,7 +26,7 @@ export const planState = $state({
   claudeHistory: [] as { t: number; limits: PlanLimit[] }[],
   codexHistory: [] as { t: number; limits: PlanLimit[] }[],
   /** How full each session's context window is, by `provider:sessionId`. */
-  context: {} as Record<string, { used: number; window: number }>,
+  context: {} as Record<string, { used: number; window: number; first?: number }>,
 });
 
 export async function loadClaudeLimits() {

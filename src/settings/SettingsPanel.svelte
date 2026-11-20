@@ -25,6 +25,7 @@
     { id: 's-terminal', label: 'Terminal' },
     { id: 's-sidebar', label: 'Sidebar' },
     { id: 's-agents', label: 'Agents' },
+    { id: 's-cost', label: 'Cost' },
     { id: 's-names', label: 'Names' },
     { id: 's-keys', label: 'Keyboard' },
     { id: 's-advanced', label: 'Advanced' },
@@ -487,6 +488,53 @@
         />
       </div>
       <p class="muted hint">Empty fields use the default. A new projects directory is watched after a restart.</p>
+
+      <h2 id="s-cost">Cost</h2>
+      <div class="grid">
+        <label for="csh">Switch cost hint</label>
+        <label class="check">
+          <input id="csh" type="checkbox" bind:checked={draft.cost.switchHint} />
+          <span class="muted">Claude's model menu says what changing model or effort re-reads while the prompt cache is warm</span>
+        </label>
+        <label for="cns">New session above</label>
+        <div class="check">
+          <input id="cns" type="number" min="0" step="10000" bind:value={draft.cost.newSessionAbove} />
+          <span class="muted">context tokens: the model menu offers to switch in a new session. 0 never offers</span>
+        </div>
+        <label for="clc">1-hour cache on API keys</label>
+        <label class="check">
+          <input id="clc" type="checkbox" bind:checked={draft.cost.longCache} />
+          <span class="muted">Sets <code>ENABLE_PROMPT_CACHING_1H</code> for API-key accounts. From the next session</span>
+        </label>
+        <label for="cch">Compact hint</label>
+        <label class="check">
+          <input id="cch" type="checkbox" bind:checked={draft.cost.compactHint} />
+          <span class="muted">Suggest Compact when a session has been idle until its cache is about to expire</span>
+        </label>
+        <label for="cca">Compact hint above</label>
+        <div class="check">
+          <input id="cca" type="number" min="0" step="10000" bind:value={draft.cost.compactAbove} />
+          <span class="muted">context tokens</span>
+        </div>
+        <label for="csm">Subagent model</label>
+        <div class="check">
+          <select id="csm" bind:value={draft.cost.subagentModel}>
+            <option value="inherit">Inherit the session's model</option>
+            {#each ['haiku', 'sonnet', 'opus'] as m (m)}<option value={m}>{m}</option>{/each}
+          </select>
+          <span class="muted">Claude's subagents. Sets <code>CLAUDE_CODE_SUBAGENT_MODEL</code> from the next session; agents that name a model keep it</span>
+        </div>
+        <label for="csb">Show baseline</label>
+        <label class="check">
+          <input id="csb" type="checkbox" bind:checked={draft.cost.showBaseline} />
+          <span class="muted">The first request's tokens (system prompt, CLAUDE.md, skills, MCP tools) in the chat toolbar</span>
+        </label>
+        <label for="cba">Flag baseline above</label>
+        <div class="check">
+          <input id="cba" type="number" min="0" step="5000" bind:value={draft.cost.baselineAbove} />
+          <span class="muted">tokens. 0 never flags</span>
+        </div>
+      </div>
 
       <h2 id="s-names">Names</h2>
       <div class="grid">
