@@ -49,12 +49,14 @@ func Defaults() Object {
 			"hideToolCalls":    false,
 			"warmAtReset":      false,
 			"blockedDetection": true, "checkUpdates": true, "rowProject": true, "rowState": true, "rowContext": true, "keys": Object{}},
+		"prices": Object{"litellm": true},
 		"terminal": Object{"fontFamily": "\"FiraCode Nerd Font Mono\", \"Cascadia Mono\", Consolas, monospace", "fontSize": 13, "scrollback": 10000,
 			"cursorStyle": "bar", "cursorBlink": true, "lineHeight": 1.0, "shell": "auto", "loadProfile": true, "gpuTabs": 4},
 		"cost": Object{"switchHint": true, "newSessionAbove": 100000, "longCache": true, "compactHint": true, "compactAbove": 150000, "subagentModel": "inherit", "showBaseline": true, "baselineAbove": 40000},
 		// chatArgs start a chat. Claude gets no built-in tools and no MCP servers; `--tools=`
 		// rather than `--tools ""`, which Windows PowerShell drops. Codex has no switch for
 		// its tools or MCP servers, so it gets a read-only sandbox for commands.
+		"config": Object{"extraFiles": []any{}},
 		"claude": Object{"command": "claude", "args": []any{}, "chatArgs": []any{"--tools=", "--strict-mcp-config"}, "resumeArgs": []any{"--resume", "{session}"}, "scratchDir": nil, "atcLabel": true, "account": "", "defaultEffort": "medium"},
 		"codex":  Object{"command": "codex", "args": []any{}, "chatArgs": []any{"--sandbox", "read-only"}, "resumeArgs": []any{"resume", "{session}"}, "homeDir": nil, "defaultEffort": "medium"},
 	}

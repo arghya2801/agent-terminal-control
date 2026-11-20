@@ -13,6 +13,13 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - A subagent model setting for Claude (#309).
 - The chat toolbar shows each session's baseline, the tokens of its first request, and flags a large one (#309).
 - Settings > Cost holds the options for all of these (#290, #309).
+- A Config section in Settings edits Claude Code and Codex config files (settings, CLAUDE.md, AGENTS.md, and the project's) in the app, with syntax highlighting; `config.extraFiles` adds more. JSON is checked before it saves. The Edit file box in chat is highlighted too (#293).
+- Links to a local file or folder (`C:\...`, `file://`) in chat and the notes pad open with the default app. Programs are refused (#315).
+- Prices for new models come from LiteLLM's public price list, fetched on launch, so a new model prices without a release. Settings > Advanced > Automatic prices turns it off (#316).
+
+### Fixed
+- A small failure, such as a bad link or a clipboard error, shows as a dismissable line above the session list instead of replacing it. Only a failed index load hides the list (#315).
+- GPT 6.2 Astra and Sol, Fable 5.2 and Sonnet 5.5 have their own prices (#316).
 
 ## [0.7.6] - 2026-11-17
 

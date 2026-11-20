@@ -160,3 +160,16 @@ export function restoreEol(original: string, edited: string): string {
   const lf = (original.match(/\n/g)?.length ?? 0) - crlf;
   return crlf > lf ? edited.replace(/\r?\n/g, '\r\n') : edited.replace(/\r\n/g, '\n');
 }
+
+export const langOf = (path: string) => /\.(\w+)$/.exec(path)?.[1]?.toLowerCase() ?? null;
+
+/** The parse error for JSON that would not load, else ''. Blank is allowed: a new file. */
+export function jsonError(text: string): string {
+  if (!text.trim()) return '';
+  try {
+    JSON.parse(text);
+    return '';
+  } catch (e) {
+    return String(e instanceof Error ? e.message : e);
+  }
+}

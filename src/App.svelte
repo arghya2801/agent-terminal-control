@@ -1411,7 +1411,7 @@
 
   <!-- Popups, outside everything they make inert. -->
   {#if page === 'settings'}
-    <SettingsPanel onClose={() => (page = null)} onSignIn={signIn} />
+    <SettingsPanel onClose={() => (page = null)} onSignIn={signIn} project={activeProject()?.path ?? ''} />
   {:else if page === 'shortcuts'}
     <ShortcutsPanel onClose={() => (page = null)} />
   {/if}

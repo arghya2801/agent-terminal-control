@@ -23,6 +23,24 @@ export namespace core {
 
 export namespace main {
 	
+	export class ConfigFile {
+	    label: string;
+	    path: string;
+	    exists: boolean;
+	    global: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new ConfigFile(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.path = source["path"];
+	        this.exists = source["exists"];
+	        this.global = source["global"];
+	    }
+	}
 	export class FileFilter {
 	    name: string;
 	    extensions: string[];

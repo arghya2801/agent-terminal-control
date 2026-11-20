@@ -10,13 +10,14 @@
   import Page from '../lib/Page.svelte';
   import SectionNav from '../lib/SectionNav.svelte';
   import AccountsSection from './AccountsSection.svelte';
+  import ConfigSection from './ConfigSection.svelte';
   import KeysSection from './KeysSection.svelte';
   import { appVersion, openSettingsFile, openUrl, shells } from '../lib/ipc';
   import { accountState, appState, refresh, saveSettings, themeState } from '../lib/stores.svelte';
   import { cssVariables } from '../lib/theme';
   import type { Account, Settings } from '../types';
 
-  let { onClose, onSignIn }: { onClose: () => void; onSignIn: (a: Account) => void } = $props();
+  let { onClose, onSignIn, project = '' }: { onClose: () => void; onSignIn: (a: Account) => void; project?: string } = $props();
 
   const SECTIONS = [
     { id: 's-general', label: 'General' },
@@ -26,6 +27,7 @@
     { id: 's-sidebar', label: 'Sidebar' },
     { id: 's-agents', label: 'Agents' },
     { id: 's-cost', label: 'Cost' },
+    { id: 's-config', label: 'Config' },
     { id: 's-names', label: 'Names' },
     { id: 's-keys', label: 'Keyboard' },
     { id: 's-advanced', label: 'Advanced' },
@@ -536,6 +538,9 @@
         </div>
       </div>
 
+      <h2 id="s-config">Config</h2>
+      <ConfigSection bind:extra={draft.config.extraFiles} {project} />
+
       <h2 id="s-names">Names</h2>
       <div class="grid">
         <label for="rm">Suggest names with</label>
@@ -615,6 +620,11 @@
         <label class="check">
           <input id="cu" type="checkbox" bind:checked={draft.ui.checkUpdates} />
           <span class="muted">Ask GitHub for a newer release on launch. Check for updates in the ⋯ menu still works when off</span>
+        </label>
+        <label for="pl">Automatic prices</label>
+        <label class="check">
+          <input id="pl" type="checkbox" bind:checked={draft.prices.litellm} />
+          <span class="muted">Price new models from LiteLLM's public price list, fetched on launch. Off uses only the built-in table</span>
         </label>
         <label for="tst">In-app notes</label>
         <div class="check">
