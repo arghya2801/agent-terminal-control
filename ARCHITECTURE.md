@@ -424,4 +424,4 @@ builds a test binary in `build/e2e` and drives a real WebView2 window over WebDr
 throwaway fixtures. It needs a desktop, and two of its tests (clipboard, Save dialog) take
 focus. It saves screenshots and memory samples in `benchmarks/`. CI runs `npm test` and
 `npm run lint` on pull requests from `develop` to `main` and on pushes to `main`; other
-branches skip it. Releases build from `v*` tags.
+branches skip it. Releases build from `v*` tags, then merge the tagged commit into `develop`.

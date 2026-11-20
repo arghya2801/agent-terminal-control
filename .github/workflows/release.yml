@@ -1,4 +1,5 @@
-# Builds the Windows artefacts for a version tag and attaches them to a draft release.
+# Builds the Windows artefacts for a version tag and attaches them to a draft release,
+# then merges the tagged commit into develop.
 #
 # Push a tag (`git tag v0.4.0 && git push origin v0.4.0`), then edit and publish the draft
 # this leaves behind. The binaries are unsigned: no certificate is available, so
@@ -99,3 +100,19 @@ jobs:
             build/bin/atc.exe
             build/bin/*-setup.exe
             build/bin/*.msi
+
+  # Brings the version bump back to develop, so the next develop-to-main PR starts even.
+  sync-develop:
+    needs: windows
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: develop
+          fetch-depth: 0
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --ff-only "$GITHUB_SHA" || git merge --no-edit -m "merge: $GITHUB_REF_NAME into develop" "$GITHUB_SHA"
+          git push origin develop
