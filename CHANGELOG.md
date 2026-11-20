@@ -6,6 +6,20 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Added
+- Pressing `/` outside a text box or terminal puts the cursor in the agent tab's chat box. Settings > General > Slash focuses chat turns it off (#289).
+- The permission mode chip shows Shift+Tab beside it and in its tooltip. Settings > General > Mode key hint hides it (#289).
+- Claude's permission cards have an Always allow in project button, which saves the rule to the project's `.claude/settings.local.json`. Settings > General > Always allow in project hides it (#289).
+- The `/` menu lists recently used commands first and matches letters in order, so `cmpt` finds `/compact`. Settings > General > Recent commands first turns the ordering off (#289).
+- After a new chat tab's first turn, its session gets a name from Haiku or Luna, set through Claude's or Codex's own rename. Sessions you named are left alone. Settings > Names > Name new sessions turns it off (#289).
+- Settings > Sidebar > Density: Compact makes sidebar rows shorter (#289).
+- A Claude Agent call shows its subagent's steps and replies under it, folded, with the subagent's model, tokens and run time. Codex subagent calls show as steps with their prompt, model and status. Settings > General > Subagent steps turns off the subagent's replies (#289).
+
+### Changed
+- The sidebar starts on Open. Settings > Sidebar > Start on picks Sessions instead (#289).
+- The Scratch view is gone: scratch sessions and chats show at the top of Sessions, unless Settings > Sidebar > Scratch and chats is off. The New chat button at the top of the sidebar starts one, as Ctrl+Shift+A does; right-click it for no-tool chats. Ctrl+Shift+K switches between Sessions and Open (#289).
+- Settings search matches words of descriptions fuzzily too (#289).
+
 ## [0.7.6] - 2026-11-17
 
 ### Added

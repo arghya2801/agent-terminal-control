@@ -171,4 +171,8 @@
   .age.cold {
     color: var(--warn);
   }
+  :global([data-compact]) .session {
+    padding-top: 1px;
+    padding-bottom: 1px;
+  }
 </style>

@@ -14,6 +14,7 @@
   import {
     anyProjectExpanded,
     appState,
+    chord,
     refresh,
     renameModelName,
     setSidebarView,
@@ -39,6 +40,7 @@
     onLaunch,
     onOpenFolder,
     onAsk,
+    onPickAgent,
     onNewTab,
     onCloseTab,
     onRenameTab,
@@ -69,6 +71,8 @@
     onOpenFolder: () => void;
     /** Starts Claude or Codex in the scratch directory. */
     onAsk: (provider: AgentProvider) => void;
+    /** Picks an agent to ask in the scratch directory, as Ctrl+Shift+A does. */
+    onPickAgent: () => void;
     onNewTab: () => void;
     onCloseTab: (key: TabKey) => void;
     onRenameTab: (key: TabKey) => void;
@@ -127,10 +131,9 @@
   let query = $state('');
   let openList = $state<HTMLElement>();
   let sessionList = $state<HTMLElement>();
-  let scratchList = $state<HTMLElement>();
   /** Row last focused in each list, where Tab back into it lands. */
   let lastRow: HTMLElement | null = null;
-  const visibleList = () => (view === 'open' ? openList : view === 'scratch' ? scratchList : sessionList);
+  const visibleList = () => (view === 'open' ? openList : sessionList);
   /** The filter box shows on request, and stays while it holds a filter. */
   let searching = $state(false);
   /** Shows and focuses the filter, adding `text` to it: the search icon, the chord, or typing on a row. */
@@ -241,16 +244,23 @@
       >
         Open <span class="n">{tabs.length}</span>
       </button>
-      <button
-        role="tab"
-        aria-selected={view === 'scratch'}
-        onclick={() => void setSidebarView('scratch')}
-        title="Chats and scratch sessions (Ctrl+Shift+K)"
-      >
-        Scratch <span class="n">{scratchSessions}</span>
-      </button>
     </div>
     <div class="actions">
+      <button
+        class="icon"
+        onclick={onPickAgent}
+        oncontextmenu={(e) => {
+          e.preventDefault();
+          menu = { x: e.clientX, y: e.clientY, items: [
+            { label: 'Ask Claude', icon: 'agent', run: () => onAsk('claude') },
+            { label: 'Ask Codex', icon: 'agent', run: () => onAsk('codex') },
+            { label: 'Chat with Claude, no tools', icon: 'agent', sep: true, run: () => onNewChat('claude') },
+            { label: 'Chat with Codex, read-only sandbox', icon: 'agent', run: () => onNewChat('codex') },
+          ] };
+        }}
+        title="New chat in the scratch directory; right-click for more{chord('askAgent') ? ` (${chord('askAgent')})` : ''}"
+        aria-label="New chat"
+      ><Icon name="agent" size={14} /></button>
       <button
         class="icon"
         class:on={searching || query}
@@ -260,21 +270,6 @@
       ><Icon name="search" size={14} /></button>
       {#if view === 'open'}
         <button class="icon" onclick={onNewTab} title="New tab (Ctrl+Shift+T)" aria-label="New tab"><Icon name="plus" size={14} /></button>
-      {:else if view === 'scratch'}
-        <button
-          class="icon"
-          onclick={(e) => {
-            const r = e.currentTarget.getBoundingClientRect();
-            menu = { x: r.right, y: r.bottom + 4, dropdown: true, items: [
-              { label: 'Ask Claude', icon: 'agent', run: () => onAsk('claude') },
-              { label: 'Ask Codex', icon: 'agent', run: () => onAsk('codex') },
-              { label: 'Chat with Claude, no tools', icon: 'agent', sep: true, run: () => onNewChat('claude') },
-              { label: 'Chat with Codex, read-only sandbox', icon: 'agent', run: () => onNewChat('codex') },
-            ] };
-          }}
-          title="Ask an agent, or chat with one that cannot change anything"
-          aria-label="New in scratch"
-        ><Icon name="plus" size={14} /></button>
       {:else}
       <button
         class="icon"
@@ -302,9 +297,9 @@
       <input
         id="sidebar-search"
         type="search"
-        placeholder={view === 'open' ? 'Filter open tabs' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
+        placeholder={view === 'open' ? 'Filter open tabs' : 'Filter projects and sessions'}
         title="Filter by project, path, session name or branch"
-        aria-label={view === 'open' ? 'Filter open tabs' : view === 'scratch' ? 'Filter chats' : 'Filter projects and sessions'}
+        aria-label={view === 'open' ? 'Filter open tabs' : 'Filter projects and sessions'}
         spellcheck="false"
         autocomplete="off"
         bind:value={query}
@@ -399,6 +394,22 @@
     onfocusin={(e) => (lastRow = (e.target as HTMLElement).closest('[data-row]'))}
     onkeydown={(e) => sessionList && listKeys(e, sessionList, leave)}
   >
+    {#if appState.settings?.ui.showScratchGroup !== false && !appState.loading && !appState.error}
+      <SessionList
+        scratch
+        {query}
+        {activeKey}
+        {activeSessionId}
+        {openProjectKeys}
+        {sessionMarks}
+        {onOpenProject}
+        {onOpenSession}
+        {onNewShell}
+        {onNewAgent}
+        {onNameSessions}
+        {onFreshFrom}
+      />
+    {/if}
     <SessionList
       {query}
       {onOpenFolder}
@@ -415,39 +426,10 @@
       {onFreshFrom}
     />
   </div>
-  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-  <div
-    class="list"
-    hidden={view !== 'scratch'}
-    tabindex="0"
-    role="group"
-    aria-label="Chats and scratch sessions"
-    bind:this={scratchList}
-    onfocus={(e) => scratchList && enterList(e, scratchList, lastRow)}
-    onfocusin={(e) => (lastRow = (e.target as HTMLElement).closest('[data-row]'))}
-    onkeydown={(e) => scratchList && listKeys(e, scratchList, leave)}
-  >
-    <SessionList
-      scratch
-      {query}
-      {activeKey}
-      {activeSessionId}
-      {openProjectKeys}
-      {sessionMarks}
-      {onOpenProject}
-      {onOpenSession}
-      {onNewShell}
-      {onNewAgent}
-      {onNameSessions}
-      {onFreshFrom}
-    />
-  </div>
 
   <footer>
     {#if view === 'open'}
       {[`${tabs.length} open`, working && `${working} working`, waiting && `${waiting} waiting on you`].filter(Boolean).join(', ')}
-    {:else if view === 'scratch'}
-      {scratchSessions} sessions
     {:else}
       {appState.index.projects.filter((p) => !p.kind).length} projects, {appState.index.sessionCount - scratchSessions} sessions
     {/if}

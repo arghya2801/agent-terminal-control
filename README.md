@@ -188,7 +188,7 @@ results from that move.
   not focused, and a note in the corner while it is
 - Ask either agent outside any project, in a shared scratch directory, or chat with one
   that cannot change anything: Claude with no tools or MCP servers, Codex in a read-only
-  sandbox. Both start from the `+` in the sidebar's Scratch view, and are listed there
+  sandbox. Both start from the sidebar's New chat button, and are listed at the top of Sessions
 - Search across scrollback with match counts
 - 48 themes for the whole app, among them ATC Dark, One Dark, Dracula, GitHub, Tokyo Night,
   Catppuccin, Rosé Pine, Gruvbox and Solarized in dark and light, plus your own
