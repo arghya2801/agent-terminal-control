@@ -28,11 +28,11 @@ export namespace main {
 	    path: string;
 	    exists: boolean;
 	    global: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ConfigFile(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.label = source["label"];
