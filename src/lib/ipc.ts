@@ -109,7 +109,8 @@ export function openSettingsFile(): Promise<void> { return App.OpenSettingsFile(
 export function usageCosts(): Promise<CostRow[]> { return App.UsageCosts(); }
 
 /** Each session's context window on its latest request, by `provider:sessionId`. */
-export function usageContext(): Promise<Record<string, { used: number; window: number }>> { return App.UsageContext(); }
+export function usageContext(): Promise<Record<string, { used: number; window: number; first?: number }>> { return App.UsageContext(); }
+export function modelInputPrices(models: string[]): Promise<Record<string, number>> { return App.ModelInputPrices(models); }
 
 /** Theme files in the config directory's `themes/` folder, unvalidated. */
 export function listThemes(): Promise<{ stem: string; palette: unknown }[]> { return App.ListThemes(); }

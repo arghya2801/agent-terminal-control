@@ -81,8 +81,14 @@ func TestContextIsTheLatestRequestAgainstTheModelWindow(t *testing.T) {
 	Obj(s["projects"])["claudeProjectsDir"] = root
 	Obj(s["codex"])["homeDir"] = home
 	got := Clone((&Costs{}).Context(s, home))
-	want := Object{"claude:s": Object{"used": float64(2000), "window": float64(200000)}, "codex:t1": Object{"used": float64(64600), "window": float64(258400)}}
+	want := Object{"claude:s": Object{"used": float64(2000), "window": float64(200000), "first": float64(1510)}, "codex:t1": Object{"used": float64(64600), "window": float64(258400)}}
 	if !reflect.DeepEqual(got, Clone(want)) {
+		t.Fatal(got)
+	}
+}
+func TestInputPricesSkipUnpricedModels(t *testing.T) {
+	got := InputPrices(Object{}, t.TempDir(), []string{"claude-sonnet-4-6", "gpt-x"})
+	if len(got) != 1 || got["claude-sonnet-4-6"] != 3.0 {
 		t.Fatal(got)
 	}
 }

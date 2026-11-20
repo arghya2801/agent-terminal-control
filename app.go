@@ -416,6 +416,9 @@ func (a *App) IndexScan(force bool) any { return a.index.Scan(a.getSettings(), f
 func (a *App) UsageCosts() []any { return a.costs.Rows(a.getSettings(), a.config) }
 
 func (a *App) UsageContext() core.Object { return a.costs.Context(a.getSettings(), a.config) }
+func (a *App) ModelInputPrices(models []string) core.Object {
+	return core.InputPrices(a.getSettings(), a.config, models)
+}
 
 func (a *App) Version() string { return appVersion }
 

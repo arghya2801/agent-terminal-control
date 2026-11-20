@@ -13,13 +13,24 @@
   import { families, keptEffort, versionOf } from './models';
   import { getActiveKey, queuePrompt } from '../terminal/manager';
   import { providerName } from '../lib/agents';
-  import { formatTokens } from '../lib/costs';
+  import { cacheTtl, formatTokens, switchNote } from '../lib/costs';
+  import { modelInputPrices } from '../lib/ipc';
   import { accountLabel, accountState, appState, saveSettings } from '../lib/stores.svelte';
   import type { Answer, BackgroundTask, ChatItem, Model } from '../../sidecar/protocol';
   import type { AgentProvider, TabKey } from '../types';
 
-  /** `queued`: a message waiting for the turn to end (the tab's queue, shared with the Open view). */
-  let { tabKey, provider, cwd, queued, onTerminal }: { tabKey: TabKey; provider: AgentProvider; cwd: string | null; queued: string | null; onTerminal: () => void } = $props();
+  /** `queued`: a message waiting for the turn to end (the tab's queue, shared with the Open view).
+   *  `ctx` and `lastMs`: the session's context size and when its transcript last changed. */
+  let { tabKey, provider, cwd, queued, ctx, lastMs, onTerminal, onNewSession }: {
+    tabKey: TabKey;
+    provider: AgentProvider;
+    cwd: string | null;
+    queued: string | null;
+    ctx?: { used: number; window: number; first?: number };
+    lastMs?: number;
+    onTerminal: () => void;
+    onNewSession?: (model: string) => void;
+  } = $props();
 
   const name = $derived(providerName(provider));
   const s = $derived(agents[tabKey]);
@@ -56,9 +67,38 @@
     if (!s?.fresh || !s.ready) return;
     catalog(p).then((m) => (others = m), () => (others = []));
   });
+  const costs = $derived(appState.settings?.cost);
+  const apiKey = $derived(accountState.list.find((a) => a.id === s?.account)?.kind === 'apiKey');
+  let minute = $state(Date.now());
+  $effect(() => {
+    const t = setInterval(() => (minute = Date.now()), 30_000);
+    return () => clearInterval(t);
+  });
+  const idle = $derived(!lastMs || s?.working ? 0 : Math.max(0, minute - lastMs));
+  let prices = $state<Record<string, number>>({});
+  $effect(() => {
+    const ids = provider === 'claude' ? [...new Set((s?.models ?? []).map((m) => m.resolved ?? m.id))] : [];
+    if (ids.length) modelInputPrices(ids).then((p) => (prices = p), () => {});
+  });
+  /** What switching to `m` costs, said on its row (#290). */
+  const switchHint = (m: Model | undefined) =>
+    provider === 'claude' && costs?.switchHint && ctx && lastMs && s && !s.fresh && m ? switchNote(ctx.used, prices[m.resolved ?? m.id], idle, apiKey, costs.longCache) : '';
+  const bigContext = $derived(!!onNewSession && !!costs?.newSessionAbove && !!s && !s.fresh && (ctx?.used ?? 0) > costs.newSessionAbove);
+  let inNew = $state(false);
+  const compactHint = $derived.by(() => {
+    if (provider !== 'claude' || !costs?.compactHint || !ctx || !lastMs || !s || s.working || s.exited || ctx.used < costs.compactAbove) return null;
+    const ttl = cacheTtl(apiKey, costs.longCache);
+    return idle >= (ttl * 5) / 6 && idle < ttl ? Math.ceil((ttl - idle) / 60_000) : null;
+  });
+  let compactDismissed = $state(0);
+  const baselineHigh = $derived(!!ctx?.first && !!costs?.baselineAbove && ctx.first > costs.baselineAbove);
   function pick(value: string) {
     const at = value.indexOf(':');
     const [p, id] = [value.slice(0, at) as AgentProvider, value.slice(at + 1)];
+    if (inNew && p === provider && onNewSession) {
+      inNew = false;
+      return onNewSession(id);
+    }
     if (p !== provider) return switchProvider(tabKey, p, id);
     setModel(tabKey, id);
     // An effort the new model does not take would fail its next request.
@@ -76,7 +116,8 @@
         label: f.name,
         description: f.latest.description,
         badge: f.version,
-        sub: f.older.map((o) => ({ value: `${p}:${o.id}`, label: o.label, description: o.description, badge: versionOf(p, o) })),
+        note: p === provider && f.latest.id !== model ? switchHint(f.latest) : undefined,
+        sub: f.older.map((o) => ({ value: `${p}:${o.id}`, label: o.label, description: o.description, badge: versionOf(p, o), note: p === provider && o.id !== model ? switchHint(o) : undefined })),
       })),
     }));
   });
@@ -283,7 +324,11 @@
           <button class:on={s.effort === e} onclick={() => setEffort(tabKey, e)}>{effortName(e)}</button>
         {/each}
       </div>
+      {#if switchHint(current)}<p class="locked">{switchHint(current)}</p>{/if}
     </div>
+  {/if}
+  {#if bigContext}
+    <label class="locked"><input type="checkbox" bind:checked={inNew} /> Switch in a new session: picking a model starts a new session from a short handoff of this one</label>
   {/if}
   {#if s && !s.fresh}<p class="locked">This conversation stays on {name}. A new tab can use {providerName(other)}.</p>{/if}
 {/snippet}
@@ -472,6 +517,13 @@
         <button class="resume" onclick={() => resume(tabKey)}>Resume</button>
       </p>
     {/if}
+    {#if compactHint !== null && compactDismissed !== lastMs}
+      <p class="aside">
+        <span>Idle for a while: the prompt cache expires in about {compactHint} min. Compact now if you plan to continue.</span>
+        <button class="link" onclick={() => send(tabKey, '/compact')}>Compact</button>
+        <button class="link" onclick={() => (compactDismissed = lastMs ?? 0)}>Dismiss</button>
+      </p>
+    {/if}
     {#if queued}
       {@const pics = queuedImages(tabKey)}
       <p class="aside queued">
@@ -529,6 +581,7 @@
             {#snippet label()}<span>{accountLabel(s?.account ?? '')}</span>{/snippet}
           </ChipMenu>
         {/if}
+        {#if costs?.showBaseline && ctx?.first}<span class="base" class:high={baselineHigh} title="Tokens sent on this session's first request: system prompt, CLAUDE.md, skills and MCP tools{baselineHigh ? '. Above ' + formatTokens(costs.baselineAbove) + ': trim skills, MCP servers or CLAUDE.md to cut the costs of every turn' : ''}">Base {formatTokens(ctx.first)}</span>{/if}
         {#if status}<span class="status" class:waiting={!!request}>{status}</span>{/if}
         <button class="tbtn txt" onclick={() => send(tabKey, '/compact')} disabled={!s || s.exited || s.working} title="Summarize the conversation so far to free up context (/compact)">Compact</button>
         <button class="tbtn" class:on={hideTools} onclick={toggleTools} aria-pressed={hideTools} title={hideTools ? 'Show tool calls' : 'Hide tool calls'} aria-label="Hide tool calls"><Icon name="tool" size={14} /></button>
@@ -1224,6 +1277,14 @@
   }
   .status {
     margin-left: 4px;
+  }
+  .base {
+    margin-left: 4px;
+    font-size: calc(11px * var(--chat-scale, 1));
+    color: var(--fg-faint);
+  }
+  .base.high {
+    color: var(--warn);
   }
   .status.working {
     color: var(--fg-dim);

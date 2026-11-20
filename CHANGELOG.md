@@ -7,6 +7,12 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ## [Unreleased]
 
 ### Added
+- The chat's model menu says what a model or effort switch re-reads while the prompt cache is warm, and that it is free once the cache has expired. Above a context size it offers "Switch in a new session" (#290).
+- API-key accounts ask for the 1-hour prompt cache (#309).
+- A Compact hint when a long session is about to lose its prompt cache (#309).
+- A subagent model setting for Claude (#309).
+- The chat toolbar shows each session's baseline, the tokens of its first request, and flags a large one (#309).
+- Settings > Cost holds the options for all of these (#290, #309).
 - A Config section in Settings edits Claude Code and Codex config files (settings, CLAUDE.md, AGENTS.md, and the project's) in the app, with syntax highlighting; `config.extraFiles` adds more. JSON is checked before it saves. The Edit file box in chat is highlighted too (#293).
 - Links to a local file or folder (`C:\...`, `file://`) in chat and the notes pad open with the default app. Programs are refused (#315).
 - Prices for new models come from LiteLLM's public price list, fetched on launch, so a new model prices without a release. Settings > Advanced > Automatic prices turns it off (#316).

@@ -5,6 +5,8 @@
     description?: string;
     /** Faint text at the row's end, such as a version. */
     badge?: string;
+    /** A line under the description, such as what picking the row costs. */
+    note?: string;
     /** Alternatives behind the row's arrow, such as a family's older versions. */
     sub?: MenuItem[];
   }
@@ -96,7 +98,7 @@
 </script>
 
 {#snippet entry(it: MenuItem, badge?: string)}
-  <span class="text"><span class="name">{it.label}</span>{#if it.description}<span class="desc">{it.description}</span>{/if}</span>
+  <span class="text"><span class="name">{it.label}</span>{#if it.description}<span class="desc">{it.description}</span>{/if}{#if it.note}<span class="desc note">{it.note}</span>{/if}</span>
   {#if badge}<span class="badge">{badge}</span>{/if}
   <span class="check" class:on={holds(it)} aria-hidden="true">✓</span>
 {/snippet}
@@ -286,6 +288,9 @@
     flex: none;
     font-size: calc(12.5px * var(--chat-scale, 1));
     color: var(--fg-bright);
+  }
+  .desc.note {
+    color: var(--warn);
   }
   .desc {
     min-width: 0;
