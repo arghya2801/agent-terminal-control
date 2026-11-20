@@ -44,6 +44,7 @@ func (a *App) AgentOpen(provider, cwd, session string, chat bool, model, effort,
 		return "", e
 	}
 	op["op"], op["resume"], op["model"], op["effort"] = "open", session, model, effort
+	op["subagents"] = core.Obj(a.getSettings()["agent"])["showSubagents"] != false
 	return a.agents.send(a, op, channel)
 }
 
@@ -127,7 +128,7 @@ func (s *sidecar) send(a *App, op core.Object, channel string) (string, error) {
 // effort.
 func (a *App) AgentSend(id string, op core.Object) error {
 	switch core.Str(op["op"]) {
-	case "send", "interrupt", "stopTask", "btw", "answer", "mode", "model", "effort", "rewind", "files", "wake":
+	case "send", "interrupt", "stopTask", "btw", "answer", "mode", "model", "effort", "rewind", "files", "wake", "rename":
 	default:
 		return fmt.Errorf("unknown agent operation: %v", op["op"])
 	}

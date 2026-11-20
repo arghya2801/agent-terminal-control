@@ -249,7 +249,7 @@ until the next update replaces it.
 | `src/App.svelte` | Layout, the pane header (or `TabBar` with `ui.showTabBar`), every chord's action, launching and restoring tabs, toasts |
 | `src/terminal/manager.ts` | Every tab, terminal or agent, and every PTY: open, close, split panes, mosaic, WebGL budget, fitting, state marks, output history, blocked detection, `screenText`, `sendText` |
 | `src/agent/` | Agent tabs: the session store, `apply` (events to state), the view, the composer and its command menu, request cards |
-| `src/sidebar/Sidebar.svelte` | The Sessions, Open and Scratch views, the filter, the notes pane |
+| `src/sidebar/Sidebar.svelte` | The Sessions and Open views, the filter, the notes pane |
 | `src/sidebar/OpenList.svelte` | The Open view: triage order, sections, output graph, Done, Queue, broadcast |
 | `src/sidebar/TaskBox.svelte` | The task box at the top of the Open view |
 | `src/lib/triage.ts` | `triageOrder`, `nextWaiting`, `triageGroup`, `stateWord` |

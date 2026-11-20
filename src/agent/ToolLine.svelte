@@ -24,9 +24,12 @@
   import FileEditor from '../lib/FileEditor.svelte';
   import { readTextFile } from '../lib/ipc';
   import { clippedLines } from '../../sidecar/clip';
+  import { formatTokens } from '../lib/costs';
+  import Markdown from './Markdown.svelte';
+  import ToolLine from './ToolLine.svelte';
 
-  /** `cwd`: paths under it show relative to it. */
-  let { item, live, cwd = null }: { item: ChatItem; live: boolean; cwd?: string | null } = $props();
+  /** `cwd`: paths under it show relative to it. `children`: a subagent call's own steps. */
+  let { item, live, cwd = null, children = [] }: { item: ChatItem; live: boolean; cwd?: string | null; children?: ChatItem[] } = $props();
   let open = $state(false);
   const command = $derived(toolAction(item.tool) === 'command');
   const input = $derived(command ? cleanCommand(item.input ?? '', cwd) : relativePaths(item.input ?? '', cwd));
@@ -91,6 +94,9 @@
     {#if status === 'failed'}<span class="badge" class:declined={item.declined}>{item.declined ? 'Declined' : 'Failed'}</span>{/if}
     <span class="meta">
       {#if counts}<span class="add">+{counts.add}</span><span class="del">−{counts.del}</span>{/if}
+      {#if item.agentModel}<span>{item.agentModel}</span>{/if}
+      {#if item.agentTokens}<span>{formatTokens(item.agentTokens)} tokens</span>{/if}
+      {#if item.agentMs && status !== 'running'}<span>{secs(item.agentMs / 1000)}</span>{/if}
       <!-- Finished calls keep their time only when it was long enough to matter. -->
       {#if status !== 'running' && outLines >= 20}<span>{outLines.toLocaleString()} lines</span>{/if}
       {#if item.seconds && (status === 'running' || item.seconds >= 5)}<span>{secs(item.seconds)}</span>{/if}
@@ -98,6 +104,14 @@
     </span>
   </svelte:element>
   {#if tail && !open}<pre class="tail">{tail}</pre>{/if}
+  {#if children.length}
+    <details class="steps">
+      <summary>{children.filter((c) => c.kind === 'tool').length} subagent steps</summary>
+      {#each children as c (c.id)}
+        {#if c.kind === 'tool'}<ToolLine item={c} {live} {cwd} />{:else if c.kind === 'assistant' && c.text}<div class="said"><Markdown text={c.text} /></div>{/if}
+      {/each}
+    </details>
+  {/if}
   {#if status === 'failed' && !open && why}<p class="why">{why}</p>{/if}
   {#if open}
     <div class="detail">
@@ -327,6 +341,19 @@
     white-space: pre;
     color: var(--fg-dim);
     font-size: calc(var(--mono-size) - 1px);
+  }
+  .steps {
+    margin: 0 0 4px 7px;
+    padding-left: 16px;
+    border-left: 1px solid var(--border);
+  }
+  .steps summary {
+    cursor: pointer;
+    color: var(--fg-faint);
+    font-size: calc(12px * var(--chat-scale, 1));
+  }
+  .said {
+    color: var(--fg-dim);
   }
   .why {
     margin: 0 0 4px 24px;

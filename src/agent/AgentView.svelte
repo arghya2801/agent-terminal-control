@@ -376,7 +376,8 @@
             </div>
           {/if}
           {#if turn.steps.length || turn.end || live}
-            {@const all = blocks(shown(turn.steps))}
+            {@const all = blocks(shown(turn.steps.filter((x) => !x.parent)))}
+            {@const kids = (id: string) => turn.steps.filter((x) => x.parent === id)}
             <div class="work">
               {#each all as b, bi (b.kind === 'group' ? `g:${b.id}` : b.item.id)}
                 {#if b.kind === 'group'}
@@ -393,14 +394,14 @@
                     </button>
                     {#if open}
                       <div class="calls">
-                        {#each b.items as it (it.id)}<ToolLine item={it} {live} {cwd} />{/each}
+                        {#each b.items as it (it.id)}<ToolLine item={it} {live} {cwd} children={kids(it.id)} />{/each}
                       </div>
                     {/if}
                   </div>
                 {:else}
                   {@const it = b.item}
                   {#if it.kind === 'tool'}
-                    <div class="step tool" class:sub={!!it.parent}><ToolLine item={it} {live} {cwd} /></div>
+                    <div class="step tool" class:sub={!!it.parent}><ToolLine item={it} {live} {cwd} children={kids(it.id)} /></div>
                   {:else if it.kind === 'assistant'}
                     {#if it.text}<div class="step text" class:sub={!!it.parent} class:final={fin.has(it.id)}><Markdown text={it.text} /></div>{/if}
                   {:else if it.kind === 'thinking'}
@@ -566,9 +567,10 @@
           </ChipMenu>
         {/if}
         {#if s?.modes.length && s.mode}
-          <ChipMenu title={provider === 'codex' ? 'Sandbox and approvals, from the next message' : 'Permission mode'} sections={[{ items: s.modes.map((m) => ({ value: m, label: MODES[m] ?? m, description: MODE_HELP[m] })) }]} value={s.mode ?? 'default'} onPick={(m) => setMode(tabKey, m)} width={340}>
+          <ChipMenu title="{provider === 'codex' ? 'Sandbox and approvals, from the next message' : 'Permission mode'}{s.modes.length > 1 ? ' (Shift+Tab)' : ''}" sections={[{ items: s.modes.map((m) => ({ value: m, label: MODES[m] ?? m, description: MODE_HELP[m] })) }]} value={s.mode ?? 'default'} onPick={(m) => setMode(tabKey, m)} width={340}>
             {#snippet label()}<span class:plan={s?.mode === 'plan'}>{MODES[s?.mode ?? 'default'] ?? s?.mode}</span>{/snippet}
           </ChipMenu>
+          {#if s.modes.length > 1 && appState.settings?.ui.showModeKeyHint !== false}<span class="faint keyhint">Shift+Tab</span>{/if}
         {/if}
         {#if provider === 'claude' && accountState.list.length}
           <ChipMenu
@@ -1231,6 +1233,9 @@
   /* Toolbar, inside the composer. */
   .faint {
     color: var(--fg-faint);
+  }
+  .keyhint {
+    font-size: 11px;
   }
   .plan {
     color: var(--info);

@@ -3,12 +3,13 @@
  * and closes with the tab. Its state is everything the sidecar has said, run through
  * `apply`; the manager hears only what the tab list shows.
  */
-import { agentCatalog, agentClose, agentOpen, agentSend, Channel } from '../lib/ipc';
+import { agentCatalog, agentClose, agentOpen, agentSend, Channel, suggestSessionName } from '../lib/ipc';
+import { sessionKey } from '../lib/agents';
 import { countOutput, getTab, markDone, onClosed, queuePrompt, setAgentHooks, setAgentState } from '../terminal/manager';
 import { apply, emptyState, withSentImages, type AgentState } from './apply';
 import type { AgentEvent, Answer, ChatItem, Command, Image, Model } from '../../sidecar/protocol';
-import type { AgentProvider, TabKey } from '../types';
-import { accountFor, appState } from '../lib/stores.svelte';
+import type { AgentProvider, SessionMeta, TabKey } from '../types';
+import { accountFor, appState, refresh } from '../lib/stores.svelte';
 
 /** Each tab's session. `fresh`: nothing sent and nothing resumed, so the tab can still
  *  move to the other provider. `account`: the Claude account it runs as (#252). */
@@ -27,6 +28,8 @@ interface Live {
   images: string[];
   /** Images of sent messages, for their echoes, which carry only a count. */
   sent: string[][];
+  /** A new session, titled by the rename model once its first turn ends. */
+  unnamed: boolean;
 }
 const live = new Map<TabKey, Live>();
 
@@ -61,7 +64,7 @@ export async function startAgent(key: TabKey, provider: AgentProvider, cwd: stri
   if (provider === 'claude') o = { ...o, account: o.account ?? accountFor(o.session ? `claude:${o.session}` : null) };
   agents[key] = { ...emptyState(), fresh: !o.session && !o.task, account: o.account ?? '' };
   const channel = new Channel<AgentEvent>();
-  const l: Live = { id: null, provider, cwd, chat: !!o.chat, channel, queued: o.task ? [{ text: o.task, images: [] }] : [], images: [], sent: [] };
+  const l: Live = { id: null, provider, cwd, chat: !!o.chat, channel, queued: o.task ? [{ text: o.task, images: [] }] : [], images: [], sent: [], unnamed: !o.session };
   live.set(key, l);
   channel.onmessage = (ev) => receive(key, ev);
   try {
@@ -128,6 +131,10 @@ function receive(key: TabKey, ev: AgentEvent) {
       break;
     case 'working':
       setAgentState(key, { activity: ev.on ? 'working' : 'idle' });
+      if (!ev.on && l.unnamed && s.sessionId) {
+        l.unnamed = false;
+        if (appState.settings?.ui.autoName !== false) void autoName(key, `${l.provider}:${s.sessionId}`);
+      }
       break;
     case 'request':
       setAgentState(key, { waiting: true });
@@ -146,6 +153,20 @@ const op = (key: TabKey, o: Record<string, unknown>) => {
   const id = live.get(key)?.id;
   if (id) void agentSend(id, o).catch((e) => receive(key, { t: 'error', message: String(e?.message ?? e) }));
 };
+
+/** Titles a new session through its agent's own rename, unless someone has named it. */
+async function autoName(key: TabKey, session: string) {
+  const named = (s?: SessionMeta) => !s || s.labelSource === 'custom' || s.labelSource === 'agentName' || !!getTab(key)?.customTitle || !!appState.settings?.projects.sessionNames[session];
+  await refresh();
+  const meta = appState.index.projects.flatMap((p) => p.sessions).find((s) => sessionKey(s) === session);
+  if (named(meta)) return;
+  try {
+    const title = await suggestSessionName(meta!.file);
+    if (!named(meta)) op(key, { op: 'rename', title });
+  } catch (e) {
+    console.warn('auto-name:', e);
+  }
+}
 
 /** A message sent while the agent works waits for the turn to end, in the manager's queue,
  *  which sends it when the tab goes idle. Send now skips the wait. */

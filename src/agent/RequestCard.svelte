@@ -3,6 +3,7 @@
   import Icon from '../lib/Icon.svelte';
   import Markdown from './Markdown.svelte';
   import { toolAction } from './work';
+  import { appState } from '../lib/stores.svelte';
   import type { AgentRequest, Answer } from '../../sidecar/protocol';
 
   /** `autofocus`: take focus on arrival, so number keys and Tab start in the card. */
@@ -117,6 +118,7 @@
       {:else}
         <button class="btn deny" onclick={deny}>Deny</button>
         {#if request.always}<button class="btn" onclick={() => onAnswer({ allow: true, always: true })} title="Allow this and the same kind of call for the rest of the session">Allow for session</button>{/if}
+        {#if request.project && appState.settings?.agent?.alwaysAllowProject !== false}<button class="btn" onclick={() => onAnswer({ allow: true, project: true })} title="Allow this and the same kind of call from now on, saved in this project's .claude/settings.local.json">Always allow in project</button>{/if}
         <button class="btn primary" onclick={() => onAnswer({ allow: true })}>Allow</button>
       {/if}
     </div>

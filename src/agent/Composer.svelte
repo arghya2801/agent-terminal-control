@@ -1,7 +1,8 @@
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';
   import Icon from '../lib/Icon.svelte';
-  import { matchCommands, typedCommand, type Sigil } from './commands';
+  import { markUsed, matchCommands, typedCommand, type Sigil } from './commands';
+  import { appState } from '../lib/stores.svelte';
   import type { Command } from '../../sidecar/protocol';
 
   let { text = $bindable(''), name, history, hints = true, sigils, commands, ready = true, working, waiting = false, disabled, onSend, onSendNow, onStop, onFiles, onInput, onCycleMode, toolbar }: {
@@ -48,7 +49,16 @@
   $effect(() => {
     if (atFiles) untrack(() => onFiles?.());
   });
-  const menu = $derived(typed && !dismissed ? matchCommands(commands, typed.query, typed.sigil) : []);
+  const RECENT = $derived(`atc.recentCommands.${name}`);
+  let recent = $state<string[]>([]);
+  $effect(() => {
+    try {
+      recent = JSON.parse(localStorage.getItem(RECENT) ?? '[]');
+    } catch {
+      recent = [];
+    }
+  });
+  const menu = $derived(typed && !dismissed ? matchCommands(commands, typed.query, typed.sigil, 8, appState.settings?.ui.slashRecentFirst === false ? [] : recent) : []);
   const label = (c: Command) => c.name;
   $effect(() => {
     void menu.length;
@@ -67,6 +77,13 @@
 
   function send(now = false) {
     if ((!now && !text.trim() && !images.length) || disabled) return;
+    const first = text.trim().split(/\s/)[0];
+    if (!first.startsWith('@') && commands.some((c) => c.name === first)) {
+      recent = markUsed(recent, first);
+      try {
+        localStorage.setItem(RECENT, JSON.stringify(recent));
+      } catch {}
+    }
     (now && onSendNow ? onSendNow : onSend)(text.trim(), images.map((i) => i.url));
     text = '';
     images = [];

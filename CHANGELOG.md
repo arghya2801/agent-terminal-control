@@ -7,6 +7,13 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ## [Unreleased]
 
 ### Added
+- Pressing `/` outside a text box or terminal puts the cursor in the agent tab's chat box. Settings > General > Slash focuses chat turns it off (#289).
+- The permission mode chip shows Shift+Tab beside it and in its tooltip. Settings > General > Mode key hint hides it (#289).
+- Claude's permission cards have an Always allow in project button, which saves the rule to the project's `.claude/settings.local.json`. Settings > General > Always allow in project hides it (#289).
+- The `/` menu lists recently used commands first and matches letters in order, so `cmpt` finds `/compact`. Settings > General > Recent commands first turns the ordering off (#289).
+- After a new chat tab's first turn, its session gets a name from Haiku or Luna, set through Claude's or Codex's own rename. Sessions you named are left alone. Settings > Names > Name new sessions turns it off (#289).
+- Settings > Sidebar > Density: Compact makes sidebar rows shorter (#289).
+- A Claude Agent call shows its subagent's steps and replies under it, folded, with the subagent's model, tokens and run time. Codex subagent calls show as steps with their prompt, model and status. Settings > General > Subagent steps turns off the subagent's replies (#289).
 - The chat's model menu says what a model or effort switch re-reads while the prompt cache is warm, and that it is free once the cache has expired. Above a context size it offers "Switch in a new session" (#290).
 - API-key accounts ask for the 1-hour prompt cache (#309).
 - A Compact hint when a long session is about to lose its prompt cache (#309).
@@ -16,6 +23,11 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - A Config section in Settings edits Claude Code and Codex config files (settings, CLAUDE.md, AGENTS.md, and the project's) in the app, with syntax highlighting; `config.extraFiles` adds more. JSON is checked before it saves. The Edit file box in chat is highlighted too (#293).
 - Links to a local file or folder (`C:\...`, `file://`) in chat and the notes pad open with the default app. Programs are refused (#315).
 - Prices for new models come from LiteLLM's public price list, fetched on launch, so a new model prices without a release. Settings > Advanced > Automatic prices turns it off (#316).
+
+### Changed
+- The sidebar starts on Open. Settings > Sidebar > Start on picks Sessions instead (#289).
+- The Scratch view is gone: scratch sessions and chats show at the top of Sessions, unless Settings > Sidebar > Scratch and chats is off. The New chat button at the top of the sidebar starts one, as Ctrl+Shift+A does; right-click it for no-tool chats. Ctrl+Shift+K switches between Sessions and Open (#289).
+- Settings search matches words of descriptions fuzzily too (#289).
 
 ### Fixed
 - A small failure, such as a bad link or a clipboard error, shows as a dismissable line above the session list instead of replacing it. Only a failed index load hides the list (#315).

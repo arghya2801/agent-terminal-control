@@ -288,4 +288,8 @@
   .more:hover {
     color: var(--accent);
   }
+  :global([data-compact]) .disclosure {
+    padding-top: 3px;
+    padding-bottom: 3px;
+  }
 </style>

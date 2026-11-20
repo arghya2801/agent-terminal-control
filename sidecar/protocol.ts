@@ -21,6 +21,10 @@ export interface ChatItem {
   seconds?: number;
   /** The Task call a subagent's item belongs to. */
   parent?: string | null;
+  /** A subagent call's model, tokens so far and run time. */
+  agentModel?: string;
+  agentTokens?: number;
+  agentMs?: number;
   durationMs?: number;
   /** A turn's cost and tokens, that turn's alone. Codex reports no cost. */
   costUsd?: number;
@@ -105,11 +109,15 @@ export interface AgentRequest {
   questions?: Question[];
   /** "Always allow" is on offer. */
   always?: boolean;
+  /** "Always allow in project" is on offer. */
+  project?: boolean;
 }
 
 export interface Answer {
   allow: boolean;
   always?: boolean;
+  /** Save the rule to the project's .claude/settings.local.json. */
+  project?: boolean;
   /** Why not, for the agent to read. */
   message?: string;
   /** Question id -> chosen labels. */
@@ -152,7 +160,7 @@ export type AgentEvent =
   | { t: 'exit'; message?: string };
 
 export type AgentOp =
-  | { op: 'open'; id: string; provider: Provider; cwd: string; resume?: string; exe: string; args: string[]; env?: Record<string, string>; model?: string; effort?: string }
+  | { op: 'open'; id: string; provider: Provider; cwd: string; resume?: string; exe: string; args: string[]; env?: Record<string, string>; model?: string; effort?: string; subagents?: boolean }
   | { op: 'catalog'; id: string; provider: Provider; cwd: string; exe: string; args: string[]; env?: Record<string, string> }
   | { op: 'effort'; id: string; effort: string | null }
   | { op: 'send'; id: string; text: string; images?: Image[]; priority?: 'next' }
@@ -162,6 +170,8 @@ export type AgentOp =
   | { op: 'answer'; id: string; request: string; answer: Answer }
   | { op: 'mode'; id: string; mode: string }
   | { op: 'model'; id: string; model: string }
+  /** Title the session through the agent's own rename. */
+  | { op: 'rename'; id: string; title: string }
   /** Go back to before a prompt: Claude's item id, or Codex's turn id. */
   | { op: 'rewind'; id: string; to: string }
   | { op: 'files'; id: string }

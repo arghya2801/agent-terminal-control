@@ -1000,7 +1000,7 @@
         break;
       case 'switchSidebarView':
         if (!sidebarOpen()) void toggleSidebar();
-        void setSidebarView(({ sessions: 'open', open: 'scratch', scratch: 'sessions' } as const)[sidebarView()]);
+        void setSidebarView(sidebarView() === 'open' ? 'sessions' : 'open');
         break;
       case 'askAgent':
         picker = { project: null };
@@ -1066,6 +1066,13 @@
     // Covers focus being anywhere outside the terminal -- the sidebar, a button.
     const onKey = (e: KeyboardEvent) => {
       if (picker || paletteOpen || launcher) return;
+      const t = activeKey ? getTab(activeKey) : null;
+      if (e.key === '/' && !e.ctrlKey && !e.altKey && !e.metaKey && !popup && appState.settings?.ui.slashFocus !== false
+        && t?.provider && !t.term && !(e.target as HTMLElement).closest?.('input, textarea, select, [contenteditable], .xterm')) {
+        e.preventDefault();
+        focusActiveTerminal();
+        return;
+      }
       const action = matchChord(e);
       if (!action) return;
       // Behind a popup the app is inert; only its own chord, or the other popup's, acts.
@@ -1239,6 +1246,7 @@
         onLaunch={() => (launcher = true)}
         onOpenFolder={openFolder}
         onAsk={askAgent}
+        onPickAgent={() => (picker = { project: null })}
         {tabs}
         onNewTab={newTab}
         onCloseTab={requestClose}

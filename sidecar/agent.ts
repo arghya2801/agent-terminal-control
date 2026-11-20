@@ -59,6 +59,8 @@ function run(op: AgentOp) {
       return s.model(op.model);
     case 'effort':
       return s.effort(op.effort);
+    case 'rename':
+      return s.rename(op.title);
     case 'rewind':
       return void s.rewind(op.to);
     case 'wake':

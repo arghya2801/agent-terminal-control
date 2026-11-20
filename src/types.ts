@@ -80,7 +80,7 @@ export interface Project {
   exists: boolean;
   lastActiveMs: number;
   sessions: SessionMeta[];
-  /** The scratch or chats directory, listed in the Scratch view rather than with projects. */
+  /** The scratch or chats directory, pinned atop Sessions rather than with projects. */
   kind?: 'scratch' | 'chats';
 }
 
@@ -199,7 +199,18 @@ export interface Settings {
     rowContext: boolean;
     /** Shortcut overrides by action: a chord such as `Ctrl+Shift+T`, or '' for none. */
     keys: Record<string, string>;
+    /** `/` outside any input focuses the chat box (#289). */
+    slashFocus: boolean;
+    showModeKeyHint: boolean;
+    slashRecentFirst: boolean;
+    /** The sidebar view on launch. */
+    defaultSidebarView: 'open' | 'sessions';
+    showScratchGroup: boolean;
+    /** Title a new session with the rename model after its first turn. */
+    autoName: boolean;
+    sidebarDensity: 'compact' | 'comfortable';
   };
+  agent: { alwaysAllowProject: boolean; showSubagents: boolean };
   terminal: TerminalSettings;
   /** `extraFiles`: more files for Settings to edit, by absolute path. */
   config: { extraFiles: string[] };

@@ -90,6 +90,10 @@ function itemOf(it: Obj): ChatItem | null {
       return { id: it.id, kind: 'tool', tool: 'WebSearch', input: it.query, done: true };
     case 'contextCompaction':
       return { id: it.id, kind: 'notice', text: 'Conversation compacted' };
+    case 'collabAgentToolCall': {
+      const states = Object.values(it.agentsStates ?? {}) as Obj[];
+      return { id: it.id, kind: 'tool', tool: 'Agent', input: firstLine(it.prompt ?? it.tool ?? ''), body: clip(it.prompt ?? ''), output: states.map((s) => [s.status, s.message].filter(Boolean).join(': ')).join('\n'), done, error: it.status === 'failed', agentModel: [it.model, it.reasoningEffort].filter(Boolean).join(' ') || undefined };
+    }
   }
   return null;
 }
@@ -577,6 +581,10 @@ export class Codex {
   effort(effort: string | null) {
     this.effortChosen = effort;
     this.live({ t: 'effort', effort });
+  }
+
+  rename(title: string) {
+    if (this.thread) void this.call('thread/name/set', { threadId: this.thread, name: title }).catch((e) => this.live({ t: 'error', message: `Can't rename: ${e?.message ?? e}` }));
   }
 
   model(model: string) {
