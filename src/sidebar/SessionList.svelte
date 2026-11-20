@@ -303,6 +303,9 @@
 {#if notice}
   <button class="hint err notice" onclick={() => (notice = null)} title="Dismiss">{notice}</button>
 {/if}
+{#if appState.error}
+  <button class="hint err notice" onclick={() => (appState.error = null)} title="Dismiss">{appState.error}</button>
+{/if}
 {#if appState.loading}
   <!-- Shaped like the rows that replace it: a project, then a few sessions. -->
   <div class="skeleton" aria-busy="true" aria-label="Scanning sessions">
@@ -313,8 +316,8 @@
       {/each}
     {/each}
   </div>
-{:else if appState.error}
-  <div class="hint err">{appState.error}</div>
+{:else if appState.loadError}
+  <div class="hint err">{appState.loadError}</div>
 {:else if scratch}
   {#each SECTIONS as section (section.kind)}
     {@const project = shown.find((p) => p.kind === section.kind)}

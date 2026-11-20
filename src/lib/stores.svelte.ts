@@ -47,6 +47,9 @@ export const appState = $state({
   /** notes.md, the Open view's notes pad (#132). */
   notes: '',
   loading: true,
+  /** A failed index load: the only error that hides the session list. */
+  loadError: null as string | null,
+  /** Any other failure; shown as a dismissable line above the list. */
   error: null as string | null,
   /** Bumped on every applied snapshot, so the debug overlay can show whether the
    *  watcher is causing a re-render storm. */
@@ -176,9 +179,9 @@ export async function initStores() {
     appState.notes = await notesGet();
     await loadAccounts();
     applySnapshot(await indexSnapshot());
-    appState.error = null;
+    appState.loadError = null;
   } catch (e) {
-    appState.error = String(e);
+    appState.loadError = String(e);
   } finally {
     appState.loading = false;
   }
@@ -201,9 +204,9 @@ export async function initStores() {
 export async function refresh(force = false) {
   try {
     applySnapshot(await indexRefresh(force));
-    appState.error = null;
+    appState.loadError = null;
   } catch (e) {
-    appState.error = String(e);
+    appState.loadError = String(e);
   }
 }
 

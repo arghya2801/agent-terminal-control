@@ -445,3 +445,13 @@ func TestTextFileGuards(t *testing.T) {
 		t.Error("write allowed invalid UTF-8")
 	}
 }
+func TestOpenPathRefusesBadTargets(t *testing.T) {
+	a := &App{}
+	exe := filepath.Join(t.TempDir(), "x.exe")
+	os.WriteFile(exe, nil, 0600)
+	for _, p := range []string{"relative.md", `\\server\share\a.md`, filepath.Join(t.TempDir(), "missing.md"), exe} {
+		if a.OpenPath(p) == nil {
+			t.Errorf("OpenPath(%q) did not fail", p)
+		}
+	}
+}
