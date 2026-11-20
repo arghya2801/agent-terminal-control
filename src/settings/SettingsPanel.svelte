@@ -573,6 +573,11 @@
           <input id="cu" type="checkbox" bind:checked={draft.ui.checkUpdates} />
           <span class="muted">Ask GitHub for a newer release on launch. Check for updates in the ⋯ menu still works when off</span>
         </label>
+        <label for="pl">Automatic prices</label>
+        <label class="check">
+          <input id="pl" type="checkbox" bind:checked={draft.prices.litellm} />
+          <span class="muted">Price new models from LiteLLM's public price list, fetched on launch. Off uses only the built-in table</span>
+        </label>
         <label for="tst">In-app notes</label>
         <div class="check">
           <input id="tst" type="checkbox" bind:checked={draft.ui.toasts} />

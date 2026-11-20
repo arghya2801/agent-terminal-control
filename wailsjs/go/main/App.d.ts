@@ -64,6 +64,8 @@ export function OpenInExplorer(arg1:string):Promise<void>;
 
 export function OpenSettingsFile():Promise<void>;
 
+export function OpenPath(arg1:string):Promise<void>;
+
 export function OpenURL(arg1:string):Promise<void>;
 
 export function PtyAck(arg1:string,arg2:number):Promise<void>;

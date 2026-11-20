@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -88,8 +89,92 @@ func prices(config string) Object {
 	}
 	return p
 }
+
+const litellmURL = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
+
+// RefreshLitellm caches LiteLLM's OpenAI and Anthropic prices, so a new model prices the day LiteLLM lists it.
+func RefreshLitellm(config string) {
+	c := http.Client{Timeout: 30 * time.Second}
+	res, e := c.Get(litellmURL)
+	if e != nil {
+		return
+	}
+	defer res.Body.Close()
+	var all map[string]Object
+	if res.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(res.Body, 32<<20)).Decode(&all) != nil {
+		return
+	}
+	keep := Object{}
+	for id, m := range all {
+		if provider := Str(m["litellm_provider"]); provider == "openai" || provider == "anthropic" {
+			row := Object{"litellm_provider": provider}
+			for _, k := range []string{"input_cost_per_token", "output_cost_per_token", "cache_read_input_token_cost", "cache_creation_input_token_cost", "max_input_tokens"} {
+				if v, ok := m[k]; ok {
+					row[k] = v
+				}
+			}
+			keep[id] = row
+		}
+	}
+	if len(keep) > 0 {
+		_ = Save(filepath.Join(config, "prices-litellm.json"), keep)
+	}
+}
+
+// pricesWith adds the cached LiteLLM table when prices.litellm is on.
+func pricesWith(settings Object, config string) Object {
+	p := prices(config)
+	if on, _ := Obj(settings["prices"])["litellm"].(bool); on {
+		var l Object
+		if b, e := os.ReadFile(filepath.Join(config, "prices-litellm.json")); e == nil && json.Unmarshal(b, &l) == nil {
+			p["litellm"] = l
+		}
+	}
+	return p
+}
+
+var modelDate = regexp.MustCompile(`-\d{8}$`)
+
+func normalizeModel(model string) string {
+	return modelDate.ReplaceAllString(strings.TrimSuffix(strings.ToLower(model), "[1m]"), "")
+}
+
+// litellmRow converts LiteLLM's USD per token to a row in USD per million tokens.
+func litellmRow(m Object, provider string) Object {
+	if m["input_cost_per_token"] == nil || m["output_cost_per_token"] == nil {
+		return nil
+	}
+	r := Object{"input": Num(m["input_cost_per_token"]) * 1e6, "output": Num(m["output_cost_per_token"]) * 1e6}
+	set := func(k, from string) {
+		if m[from] != nil {
+			r[k] = Num(m[from]) * 1e6
+		}
+	}
+	if provider == "claude" {
+		set("cacheRead", "cache_read_input_token_cost")
+		if m["max_input_tokens"] != nil {
+			r["context"] = number(m["max_input_tokens"])
+		}
+	} else {
+		set("cached", "cache_read_input_token_cost")
+	}
+	set("cacheWrite", "cache_creation_input_token_cost")
+	return r
+}
+
+// priceFor looks up our exact row, then LiteLLM's exact key, then our family rows.
 func priceFor(p Object, provider, model string) Object {
-	model = strings.ToLower(model)
+	model = normalizeModel(model)
+	for _, v := range Arr(p[provider]) {
+		r := Obj(v)
+		if provider == "claude" && strings.TrimPrefix(model, "claude-") == strings.ToLower(Str(r["match"])) || provider == "codex" && model == strings.ToLower(Str(r["model"])) {
+			return r
+		}
+	}
+	// ponytail: ignores LiteLLM's above-272K tier, so a long-context Astra request prices low.
+	if r := litellmRow(Obj(Obj(p["litellm"])[model]), provider); r != nil {
+		return r
+	}
 	for _, v := range Arr(p[provider]) {
 		r := Obj(v)
 		if provider == "claude" {
@@ -116,7 +201,7 @@ func (c *Costs) Rows(settings Object, config string) []any {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	paths := c.scan(settings)
-	rates := prices(config)
+	rates := pricesWith(settings, config)
 	out := c.claudeRows(paths["claude"], rates)
 	out = append(out, c.codexRows(paths["codex"], rates)...)
 	return c.remember(config, out)
@@ -128,7 +213,7 @@ func (c *Costs) Context(settings Object, config string) Object {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	paths := c.scan(settings)
-	rates := prices(config)
+	rates := pricesWith(settings, config)
 	out := Object{}
 	for _, path := range paths["claude"] {
 		f := c.files[path]

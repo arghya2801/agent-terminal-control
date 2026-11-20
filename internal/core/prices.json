@@ -1,5 +1,6 @@
 {
   "claude": [
+    { "match": "fable-5-2", "input": 8.0, "output": 40.0, "cacheRead": 0.2, "context": 1000000 },
     { "match": "fable-5-1", "input": 10.0, "output": 50.0, "cacheRead": 0.25, "context": 1000000 },
     { "match": "fable", "input": 10.0, "output": 50.0, "context": 1000000 },
     { "match": "mythos", "input": 10.0, "output": 50.0, "context": 1000000 },
@@ -10,6 +11,7 @@
     { "match": "opus-4-6", "input": 5.0, "output": 25.0, "context": 1000000 },
     { "match": "opus-4-5", "input": 5.0, "output": 25.0 },
     { "match": "opus-4", "input": 15.0, "output": 75.0 },
+    { "match": "sonnet-5-5", "input": 2.0, "output": 10.0, "cacheRead": 0.1, "context": 1000000 },
     { "match": "sonnet-5", "input": 2.0, "output": 10.0, "context": 1000000 },
     { "match": "sonnet-4-6", "input": 3.0, "output": 15.0, "context": 1000000 },
     { "match": "sonnet-4", "input": 3.0, "output": 15.0 },
@@ -20,6 +22,8 @@
     { "match": "haiku-3", "input": 0.25, "output": 1.25 }
   ],
   "codex": [
+    { "model": "gpt-6.2-astra", "input": 8.0, "cached": 0.4, "cacheWrite": 10.0, "output": 40.0 },
+    { "model": "gpt-6.2-sol", "input": 2.0, "cached": 0.1, "cacheWrite": 2.5, "output": 10.0 },
     { "model": "gpt-6.1-sol", "input": 2.0, "cached": 0.1, "cacheWrite": 2.5, "output": 10.0 },
     { "model": "gpt-6-astra", "input": 10.0, "cached": 1.0, "cacheWrite": 12.5, "output": 50.0 },
     { "model": "gpt-6-sol", "input": 2.0, "cached": 0.2, "cacheWrite": 2.5, "output": 10.0 },
