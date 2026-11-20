@@ -1,8 +1,10 @@
 package core
 
 import (
+	"crypto/sha256"
 	_ "embed"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -19,15 +21,27 @@ var defaultPrices []byte
 
 type usageFile struct {
 	size, stamp, offset    int64
-	records                []Object
+	claude                 []claudeUsage
+	codex                  []record
+	meta                   bool
 	id, parent, cwd, model string
+}
+
+// claudeUsage is the part of an assistant line that costs and context read.
+type claudeUsage struct {
+	hour, cwd, session, key, model                      string
+	input, output, cacheRead, created, write5m, write1h int64
+	fast                                                bool
 }
 type Costs struct {
 	mu    sync.Mutex
 	files map[string]*usageFile
-	// Every row last written to usage-history.json, and its bytes.
+	// Every row last written to usage-history.json, and a hash of its bytes.
 	ledger []Object
-	saved  []byte
+	sum    [32]byte
+	// The price table and the price files' sizes and times it was read at.
+	priceKey string
+	rates    Object
 }
 type tokens struct{ input, output, cached, write, reasoning, total int64 }
 
@@ -45,10 +59,15 @@ func (a tokens) sub(b tokens) tokens {
 func (a tokens) add(b tokens) tokens {
 	return tokens{a.input + b.input, a.output + b.output, a.cached + b.cached, a.write + b.write, a.reasoning + b.reasoning, a.total + b.total}
 }
-func newRow(provider, hour, id, cwd, model string) Object {
+func newRow(provider, hour, id, cwd, model string, cwds map[string]string) Object {
 	key := ""
 	if cwd != "" {
-		cwd = Resolve(cwd)
+		r, ok := cwds[cwd]
+		if !ok {
+			r = Resolve(cwd)
+			cwds[cwd] = r
+		}
+		cwd = r
 		key = PathKey(cwd)
 	}
 	return Object{"provider": provider, "hour": hour, "sessionId": id, "projectKey": key, "projectPath": Nullable(cwd), "model": model, "input": int64(0), "output": int64(0), "cacheWrite": int64(0), "cacheRead": int64(0), "reasoning": int64(0), "totalTokens": int64(0), "costUsd": nil, "unpriced": false}
@@ -133,6 +152,23 @@ func pricesWith(settings Object, config string) Object {
 	return p
 }
 
+// pricesCached is pricesWith, read again only when a price file or the setting changes.
+func (c *Costs) pricesCached(settings Object, config string) Object {
+	on, _ := Obj(settings["prices"])["litellm"].(bool)
+	key := fmt.Sprint(config, on)
+	for _, n := range []string{"prices-latest.json", "pricing.json", "prices-litellm.json"} {
+		if st, e := os.Stat(filepath.Join(config, n)); e == nil {
+			key += fmt.Sprint("|", st.Size(), st.ModTime().UnixNano())
+		} else {
+			key += "|-"
+		}
+	}
+	if key != c.priceKey || c.rates == nil {
+		c.priceKey, c.rates = key, pricesWith(settings, config)
+	}
+	return c.rates
+}
+
 var modelDate = regexp.MustCompile(`-\d{8}$`)
 
 func normalizeModel(model string) string {
@@ -213,7 +249,7 @@ func (c *Costs) Rows(settings Object, config string) []any {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	paths := c.scan(settings)
-	rates := pricesWith(settings, config)
+	rates := c.pricesCached(settings, config)
 	out := c.claudeRows(paths["claude"], rates)
 	out = append(out, c.codexRows(paths["codex"], rates)...)
 	return c.remember(config, out)
@@ -225,38 +261,40 @@ func (c *Costs) Context(settings Object, config string) Object {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	paths := c.scan(settings)
-	rates := pricesWith(settings, config)
+	rates := c.pricesCached(settings, config)
+	priced := map[string]Object{}
 	out := Object{}
 	for _, path := range paths["claude"] {
 		f := c.files[path]
 		// Subagent transcripts carry the parent's sessionId; their context is their own.
-		if f == nil || len(f.records) == 0 || filepath.Base(filepath.Dir(path)) == "subagents" {
+		if f == nil || len(f.claude) == 0 || filepath.Base(filepath.Dir(path)) == "subagents" {
 			continue
 		}
-		v := f.records[len(f.records)-1]
-		m := Obj(v["message"])
-		u := Obj(m["usage"])
-		used := number(u["input_tokens"]) + number(u["cache_read_input_tokens"]) + number(u["cache_creation_input_tokens"])
+		last, first := f.claude[len(f.claude)-1], f.claude[0]
+		used := last.input + last.cacheRead + last.created
 		window := int64(200_000)
-		if p := priceFor(rates, "claude", Str(m["model"])); p != nil && number(p["context"]) > 0 {
+		p, ok := priced[last.model]
+		if !ok {
+			p = priceFor(rates, "claude", last.model)
+			priced[last.model] = p
+		}
+		if p != nil && number(p["context"]) > 0 {
 			window = number(p["context"])
 		}
 		// ponytail: a model with an unlisted 1M window shows as over 200K; list it in prices.json.
 		if used > window {
 			window = 1_000_000
 		}
-		first := Obj(Obj(f.records[0]["message"])["usage"])
-		out["claude:"+f.id] = Object{"used": used, "window": window, "first": number(first["input_tokens"]) + number(first["cache_read_input_tokens"]) + number(first["cache_creation_input_tokens"])}
+		out["claude:"+f.id] = Object{"used": used, "window": window, "first": first.input + first.cacheRead + first.created}
 	}
 	for _, path := range paths["codex"] {
 		f := c.files[path]
 		if f == nil {
 			continue
 		}
-		for i := len(f.records) - 1; i >= 0; i-- {
-			info := Obj(Obj(f.records[i]["payload"])["info"])
-			if w := number(info["model_context_window"]); w > 0 {
-				out["codex:"+f.id] = Object{"used": number(Obj(info["last_token_usage"])["input_tokens"]), "window": w}
+		for i := len(f.codex) - 1; i >= 0; i-- {
+			if r := f.codex[i]; r.window > 0 {
+				out["codex:"+f.id] = Object{"used": r.lastInput, "window": r.window}
 				break
 			}
 		}
@@ -291,7 +329,20 @@ func (c *Costs) scan(settings Object) map[string][]string {
 				if provider == "claude" {
 					if v["type"] == "assistant" && Obj(v["message"])["usage"] != nil {
 						m := Obj(v["message"])
-						f.records = append(f.records, Object{"type": v["type"], "timestamp": v["timestamp"], "cwd": v["cwd"], "sessionId": v["sessionId"], "requestId": v["requestId"], "message": Object{"id": m["id"], "model": m["model"], "usage": m["usage"]}})
+						u := Obj(m["usage"])
+						r := claudeUsage{cwd: Str(v["cwd"]), session: Str(v["sessionId"]), key: Str(m["id"]) + ":" + Str(v["requestId"]), model: Str(m["model"]),
+							input: number(u["input_tokens"]), output: number(u["output_tokens"]), cacheRead: number(u["cache_read_input_tokens"]), created: number(u["cache_creation_input_tokens"]), fast: u["speed"] == "fast"}
+						if s := Str(v["timestamp"]); len(s) >= 13 {
+							r.hour = s[:13]
+						}
+						if r.session == "" {
+							r.session = f.id
+						}
+						r.write5m = r.created
+						if cc, ok := u["cache_creation"]; ok {
+							r.write5m, r.write1h = number(Obj(cc)["ephemeral_5m_input_tokens"]), number(Obj(cc)["ephemeral_1h_input_tokens"])
+						}
+						f.claude = append(f.claude, r)
 					}
 					return
 				}
@@ -300,7 +351,8 @@ func (c *Costs) scan(settings Object) map[string][]string {
 				if a, ok := v["payload"]; ok {
 					p = Obj(a)
 				}
-				if kind == "session_meta" || f.offset == 0 && Str(p["id"]) != "" && Str(p["timestamp"]) != "" && p["role"] == nil {
+				if kind == "session_meta" || f.offset == 0 && !f.meta && Str(p["id"]) != "" && Str(p["timestamp"]) != "" && p["role"] == nil {
+					f.meta = true
 					f.id = Str(p["id"])
 					f.cwd = Str(p["cwd"])
 					f.parent = Str(p["parent_thread_id"])
@@ -319,8 +371,36 @@ func (c *Costs) scan(settings Object) map[string][]string {
 					usageKind = Str(p["type"])
 				}
 				if usageKind == "token_usage" || usageKind == "token_usage_record" || usageKind == "token_count" {
-					r := Object{"timestamp": v["timestamp"], "payload": p, "kind": usageKind, "model": f.model}
-					f.records = append(f.records, r)
+					r := record{thread: Str(p["thread_id"]), response: Str(p["response_id"]), model: Str(p["model"]), file: f}
+					if r.model == "" {
+						r.model = f.model
+					}
+					if r.model == "" {
+						r.model = "unknown"
+					}
+					if t, e := time.Parse(time.RFC3339Nano, Str(v["timestamp"])); e == nil {
+						r.stamp, r.hour = t.UnixMilli(), t.UTC().Format("2006-01-02T15")
+					}
+					info := Obj(p["info"])
+					if usageKind == "token_count" {
+						if obj, ok := info["total_token_usage"].(map[string]any); ok {
+							t := readTokens(obj)
+							r.total = &t
+						}
+					} else {
+						if obj, ok := p["thread_token_usage"].(map[string]any); ok {
+							t := readTokens(obj)
+							r.total = &t
+						}
+						if obj, ok := p["usage"].(map[string]any); ok {
+							t := readTokens(obj)
+							r.usage = &t
+						}
+					}
+					r.window, r.lastInput = number(info["model_context_window"]), number(Obj(info["last_token_usage"])["input_tokens"])
+					if r.total != nil || r.usage != nil || r.window > 0 {
+						f.codex = append(f.codex, r)
+					}
 				}
 			}
 			f.offset = ReadRecords(path, f.offset, consume)
@@ -332,6 +412,7 @@ func (c *Costs) scan(settings Object) map[string][]string {
 					var v Object
 					if json.Unmarshal(tail, &v) == nil && v != nil {
 						consume(v)
+						f.offset += int64(len(tail))
 					}
 				}
 			}
@@ -365,78 +446,61 @@ func (c *Costs) remember(config string, fresh []any) []any {
 			fresh = append(fresh, r)
 		}
 	}
-	if b, e := json.Marshal(fresh); e == nil && string(b) != string(c.saved) {
-		c.saved = b
+	if b, e := json.Marshal(fresh); e == nil && sha256.Sum256(b) != c.sum {
+		c.sum = sha256.Sum256(b)
 		_ = WriteFile(path, b)
-		c.ledger = nil
-		_ = json.Unmarshal(b, &c.ledger)
+		c.ledger = make([]Object, len(fresh))
+		for i, r := range fresh {
+			c.ledger[i] = Obj(r)
+		}
 	}
 	return fresh
 }
 func (c *Costs) claudeRows(paths []string, rates Object) []any {
-	dedup := map[string]Object{}
+	seen := map[string]bool{}
+	priced := map[string]Object{}
+	cwds := map[string]string{}
+	rows := map[string]Object{}
 	for _, path := range paths {
 		f := c.files[path]
 		if f == nil {
 			continue
 		}
-		for _, v := range f.records {
-			m := Obj(v["message"])
-			if m["model"] == "<synthetic>" {
+		for _, u := range f.claude {
+			if u.model == "<synthetic>" || u.hour == "" || seen[u.key] {
 				continue
 			}
-			stamp := Str(v["timestamp"])
-			if len(stamp) < 13 {
-				continue
+			seen[u.key] = true
+			k := u.hour + "\x00" + PathKey(u.cwd) + "\x00" + u.model + "\x00" + u.session
+			r := rows[k]
+			if r == nil {
+				r = newRow("claude", u.hour, u.session, u.cwd, u.model, cwds)
+				rows[k] = r
 			}
-			id := Str(m["id"]) + ":" + Str(v["requestId"])
-			if _, exists := dedup[id]; exists {
-				continue
+			i, o, cr, w5, w1 := u.input, u.output, u.cacheRead, u.write5m, u.write1h
+			addNumber(r, "input", i)
+			addNumber(r, "output", o)
+			addNumber(r, "cacheRead", cr)
+			addNumber(r, "cacheWrite", w5+w1)
+			addNumber(r, "totalTokens", i+o+cr+w5+w1)
+			p, ok := priced[u.model]
+			if !ok {
+				p = priceFor(rates, "claude", u.model)
+				priced[u.model] = p
 			}
-			record := Obj(Clone(v))
-			if Str(record["sessionId"]) == "" {
-				record["sessionId"] = f.id
+			if p != nil {
+				cacheRead := Num(p["input"]) * 0.1
+				if _, ok := p["cacheRead"]; ok {
+					cacheRead = Num(p["cacheRead"])
+				}
+				cost := (float64(i)*Num(p["input"]) + float64(o)*Num(p["output"]) + float64(w5)*Num(p["input"])*1.25 + float64(w1)*Num(p["input"])*2 + float64(cr)*cacheRead) / 1e6
+				if u.fast {
+					cost *= 2
+				}
+				r["costUsd"] = Num(r["costUsd"]) + cost
+			} else {
+				r["unpriced"] = true
 			}
-			dedup[id] = record
-		}
-	}
-	rows := map[string]Object{}
-	for _, v := range dedup {
-		m := Obj(v["message"])
-		u := Obj(m["usage"])
-		model := Str(m["model"])
-		id := Str(v["sessionId"])
-		hour := Str(v["timestamp"])[:13]
-		cwd := Str(v["cwd"])
-		k := hour + "\x00" + PathKey(cwd) + "\x00" + model + "\x00" + id
-		r := rows[k]
-		if r == nil {
-			r = newRow("claude", hour, id, cwd, model)
-			rows[k] = r
-		}
-		i, o, cr := number(u["input_tokens"]), number(u["output_tokens"]), number(u["cache_read_input_tokens"])
-		w5, w1 := number(u["cache_creation_input_tokens"]), int64(0)
-		if cc, ok := u["cache_creation"]; ok {
-			w5 = number(Obj(cc)["ephemeral_5m_input_tokens"])
-			w1 = number(Obj(cc)["ephemeral_1h_input_tokens"])
-		}
-		addNumber(r, "input", i)
-		addNumber(r, "output", o)
-		addNumber(r, "cacheRead", cr)
-		addNumber(r, "cacheWrite", w5+w1)
-		addNumber(r, "totalTokens", i+o+cr+w5+w1)
-		if p := priceFor(rates, "claude", model); p != nil {
-			cacheRead := Num(p["input"]) * 0.1
-			if _, ok := p["cacheRead"]; ok {
-				cacheRead = Num(p["cacheRead"])
-			}
-			cost := (float64(i)*Num(p["input"]) + float64(o)*Num(p["output"]) + float64(w5)*Num(p["input"])*1.25 + float64(w1)*Num(p["input"])*2 + float64(cr)*cacheRead) / 1e6
-			if u["speed"] == "fast" {
-				cost *= 2
-			}
-			r["costUsd"] = Num(r["costUsd"]) + cost
-		} else {
-			r["unpriced"] = true
 		}
 	}
 	return sortedRows(rows)
@@ -446,6 +510,7 @@ type record struct {
 	stamp                         int64
 	hour, thread, response, model string
 	total, usage                  *tokens
+	window, lastInput             int64
 	file                          *usageFile
 }
 
@@ -464,40 +529,14 @@ func (c *Costs) codexRows(paths []string, rates Object) []any {
 		if f.parent != "" {
 			parents[f.id] = f.parent
 		}
-		for _, v := range f.records {
-			p := Obj(v["payload"])
-			t, e := time.Parse(time.RFC3339Nano, Str(v["timestamp"]))
-			if e != nil {
+		for _, r := range f.codex {
+			if r.hour == "" || r.total == nil && r.usage == nil {
 				continue
 			}
-			r := record{stamp: t.UnixMilli(), hour: t.UTC().Format("2006-01-02T15"), thread: Str(p["thread_id"]), response: Str(p["response_id"]), model: Str(p["model"]), file: f}
 			if r.thread == "" {
 				r.thread = f.id
 			}
-			if r.model == "" {
-				r.model = Str(v["model"])
-			}
-			if r.model == "" {
-				r.model = "unknown"
-			}
-			if v["kind"] == "token_count" {
-				if obj, ok := Obj(p["info"])["total_token_usage"].(map[string]any); ok {
-					t := readTokens(obj)
-					r.total = &t
-				}
-			} else {
-				if obj, ok := p["thread_token_usage"].(map[string]any); ok {
-					t := readTokens(obj)
-					r.total = &t
-				}
-				if obj, ok := p["usage"].(map[string]any); ok {
-					t := readTokens(obj)
-					r.usage = &t
-				}
-			}
-			if r.total != nil || r.usage != nil {
-				records = append(records, r)
-			}
+			records = append(records, r)
 		}
 	}
 	sort.SliceStable(records, func(i, j int) bool { return records[i].stamp < records[j].stamp })
@@ -514,6 +553,7 @@ func (c *Costs) codexRows(paths []string, rates Object) []any {
 	started := map[string]bool{}
 	watermarks := map[string]tokens{}
 	rows := map[string]Object{}
+	cwds := map[string]string{}
 	for _, r := range records {
 		if start, ok := since[r.thread]; r.response == "" && ok && r.stamp >= start {
 			continue
@@ -571,7 +611,7 @@ func (c *Costs) codexRows(paths []string, rates Object) []any {
 		key := r.hour + "\x00" + owner + "\x00" + r.model
 		row := rows[key]
 		if row == nil {
-			row = newRow("codex", r.hour, owner, f.cwd, r.model)
+			row = newRow("codex", r.hour, owner, f.cwd, r.model, cwds)
 			rows[key] = row
 		}
 		addNumber(row, "input", max(0, usage.input-usage.cached-usage.write))
