@@ -6,6 +6,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.7.7] - 2026-11-20
+
 ### Added
 - Pressing `/` outside a text box or terminal puts the cursor in the agent tab's chat box. Settings > General > Slash focuses chat turns it off (#289).
 - The permission mode chip shows Alt+M beside it and in its tooltip. Settings > General > Mode key hint hides it (#289).
