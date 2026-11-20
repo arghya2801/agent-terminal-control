@@ -567,10 +567,10 @@
           </ChipMenu>
         {/if}
         {#if s?.modes.length && s.mode}
-          <ChipMenu title="{provider === 'codex' ? 'Sandbox and approvals, from the next message' : 'Permission mode'}{s.modes.length > 1 ? ' (Shift+Tab)' : ''}" sections={[{ items: s.modes.map((m) => ({ value: m, label: MODES[m] ?? m, description: MODE_HELP[m] })) }]} value={s.mode ?? 'default'} onPick={(m) => setMode(tabKey, m)} width={340}>
+          <ChipMenu title="{provider === 'codex' ? 'Sandbox and approvals, from the next message' : 'Permission mode'}{s.modes.length > 1 ? ' (Alt+M)' : ''}" sections={[{ items: s.modes.map((m) => ({ value: m, label: MODES[m] ?? m, description: MODE_HELP[m] })) }]} value={s.mode ?? 'default'} onPick={(m) => setMode(tabKey, m)} width={340}>
             {#snippet label()}<span class:plan={s?.mode === 'plan'}>{MODES[s?.mode ?? 'default'] ?? s?.mode}</span>{/snippet}
           </ChipMenu>
-          {#if s.modes.length > 1 && appState.settings?.ui.showModeKeyHint !== false}<span class="faint keyhint">Shift+Tab</span>{/if}
+          {#if s.modes.length > 1 && appState.settings?.ui.showModeKeyHint !== false}<span class="faint keyhint">Alt+M</span>{/if}
         {/if}
         {#if provider === 'claude' && accountState.list.length}
           <ChipMenu

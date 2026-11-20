@@ -31,7 +31,7 @@
     onFiles?: () => void;
     /** Any typing, so a dormant session can start its CLI before the message is sent. */
     onInput?: () => void;
-    /** Shift+Tab: the next permission mode. */
+    /** Alt+M: the next permission mode. */
     onCycleMode?: () => void;
     /** Model, mode and status, along the bottom of the box. */
     toolbar?: Snippet;
@@ -180,7 +180,7 @@
         return;
       }
     }
-    if (e.key === 'Tab' && e.shiftKey && onCycleMode) {
+    if (e.key.toLowerCase() === 'm' && e.altKey && !e.ctrlKey && !e.shiftKey && !e.metaKey && onCycleMode) {
       e.preventDefault();
       onCycleMode();
       return;

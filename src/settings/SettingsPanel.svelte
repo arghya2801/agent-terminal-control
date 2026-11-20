@@ -309,7 +309,7 @@
         <label for="mkh">Mode key hint</label>
         <label class="check">
           <input id="mkh" type="checkbox" bind:checked={draft.ui.showModeKeyHint} />
-          <span class="muted">Show Shift+Tab beside the permission mode chip</span>
+          <span class="muted">Show Alt+M beside the permission mode chip</span>
         </label>
         <label for="aap">Always allow in project</label>
         <label class="check">

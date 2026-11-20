@@ -245,6 +245,39 @@ export function shortcutGroups(): ShortcutGroup[] {
   });
 }
 
+/** Keys handled inside a component rather than claimed globally, so they can't be rebound. */
+export const FIXED_SHORTCUTS: { group: string; rows: { label: string; chords: string[] }[] }[] = [
+  {
+    group: 'Chat box',
+    rows: [
+      { label: 'Send, or queue while the agent works', chords: ['Enter'] },
+      { label: 'New line', chords: ['Shift+Enter'] },
+      { label: 'Stop the turn', chords: ['Esc'] },
+      { label: 'Send now, at the next step', chords: ['Ctrl+X Ctrl+S'] },
+      { label: 'Cycle the permission mode', chords: ['Alt+M'] },
+      { label: 'Previous or next message you sent', chords: ['Up', 'Down'] },
+      { label: 'Scroll to the previous or next prompt', chords: ['Alt+Up', 'Alt+Down'] },
+      { label: 'Pick from the / menu', chords: ['Tab', 'Enter'] },
+      { label: 'Focus the chat box from anywhere in the tab', chords: ['/'] },
+    ],
+  },
+  {
+    group: 'Sidebar',
+    rows: [
+      { label: 'Preview a session', chords: ['Space'] },
+      { label: 'Open the context menu', chords: ['Shift+F10'] },
+    ],
+  },
+  {
+    group: 'Terminal',
+    rows: [
+      { label: 'Copy the selection', chords: ['Ctrl+C', 'Ctrl+Shift+C'] },
+      { label: 'Paste', chords: ['Ctrl+V'] },
+      { label: 'New line in Claude Code or Codex', chords: ['Shift+Enter'] },
+    ],
+  },
+];
+
 export function matchChord(e: ChordEvent): Action | null {
   if (e.type !== undefined && e.type !== 'keydown') return null;
   // Alt and Meta are never part of a binding, so holding either means "not ours".

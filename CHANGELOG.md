@@ -8,7 +8,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ### Added
 - Pressing `/` outside a text box or terminal puts the cursor in the agent tab's chat box. Settings > General > Slash focuses chat turns it off (#289).
-- The permission mode chip shows Shift+Tab beside it and in its tooltip. Settings > General > Mode key hint hides it (#289).
+- The permission mode chip shows Alt+M beside it and in its tooltip. Settings > General > Mode key hint hides it (#289).
 - Claude's permission cards have an Always allow in project button, which saves the rule to the project's `.claude/settings.local.json`. Settings > General > Always allow in project hides it (#289).
 - The `/` menu lists recently used commands first and matches letters in order, so `cmpt` finds `/compact`. Settings > General > Recent commands first turns the ordering off (#289).
 - After a new chat tab's first turn, its session gets a name from Haiku or Luna, set through Claude's or Codex's own rename. Sessions you named are left alone. Settings > Names > Name new sessions turns it off (#289).
@@ -28,6 +28,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - The sidebar starts on Open. Settings > Sidebar > Start on picks Sessions instead (#289).
 - The Scratch view is gone: scratch sessions and chats show at the top of Sessions, unless Settings > Sidebar > Scratch and chats is off. The New chat button at the top of the sidebar starts one, as Ctrl+Shift+A does; right-click it for no-tool chats. Ctrl+Shift+K switches between Sessions and Open (#289).
 - Settings search matches words of descriptions fuzzily too (#289).
+- Alt+M in the chat box cycles the permission mode, replacing Shift+Tab, which also fired on Ctrl+Shift+Tab (#313).
+- The keyboard shortcuts page (Ctrl+Shift+?) also lists the keys of the chat box, sidebar and terminal (#289).
 
 ### Fixed
 - A small failure, such as a bad link or a clipboard error, shows as a dismissable line above the session list instead of replacing it. Only a failed index load hides the list (#315).

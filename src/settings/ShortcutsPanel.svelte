@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import Page from '../lib/Page.svelte';
   import Highlight from '../lib/Highlight.svelte';
-  import { shortcutGroups } from '../lib/keymap';
+  import { FIXED_SHORTCUTS, shortcutGroups } from '../lib/keymap';
 
   let { onClose }: { onClose: () => void } = $props();
 
@@ -13,14 +13,16 @@
   let input: HTMLInputElement;
 
   /** Matches the action's name or any of its chords, so "split" and "ctrl+shift+b" both work. */
-  const shown = $derived.by(() => {
+  function filter<G extends { rows: { label: string; chords: string[] }[] }>(list: G[]): G[] {
     const q = query.trim().toLowerCase();
-    if (!q) return groups;
-    return groups.flatMap((g) => {
+    if (!q) return list;
+    return list.flatMap((g) => {
       const rows = g.rows.filter((r) => r.label.toLowerCase().includes(q) || r.chords.some((c) => c.toLowerCase().includes(q)));
       return rows.length ? [{ ...g, rows }] : [];
     });
-  });
+  }
+  const shown = $derived(filter(groups));
+  const fixed = $derived(filter(FIXED_SHORTCUTS));
 
   // After Page has taken focus from the terminal.
   onMount(() => setTimeout(() => input.focus()));
@@ -57,9 +59,32 @@
         {/each}
       </tbody>
     </table>
-  {:else}
-    <p class="muted">No shortcut matches “{query.trim()}”.</p>
   {/each}
+
+  {#if fixed.length}
+    <p class="muted">These work inside the chat box, sidebar and terminal, and can't be rebound.</p>
+  {/if}
+  {#each fixed as g (g.group)}
+    <h2>{g.group}</h2>
+    <table>
+      <tbody>
+        {#each g.rows as row (row.label)}
+          <tr>
+            <th scope="row"><Highlight text={row.label} {query} /></th>
+            <td>
+              {#each row.chords as chord, i (chord)}
+                {#if i > 0}<span class="or">or</span>{/if}<kbd>{chord}</kbd>
+              {/each}
+            </td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  {/each}
+
+  {#if !shown.length && !fixed.length}
+    <p class="muted">No shortcut matches “{query.trim()}”.</p>
+  {/if}
 </Page>
 
 <style>
