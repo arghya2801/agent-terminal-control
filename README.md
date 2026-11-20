@@ -465,6 +465,8 @@ never decodes it from the directory name, which is lossy.
   Rust/Tauri to Go/Wails in 0.4.0
 - [docs/CODEX-VALIDATION.md](docs/CODEX-VALIDATION.md): the check of the Codex
   integration in September 2026
+- [docs/REVIEW-2026-11.md](docs/REVIEW-2026-11.md): the bug, CPU and memory review of
+  November 2026, and what is still open
 
 ## Development
 
