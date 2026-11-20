@@ -1,9 +1,11 @@
-# Tests and lint for every pull request and every push to main.
-# release.yml does not test again: it waits for this workflow to pass on the tagged commit.
+# Tests and lint for pull requests from develop to main, and every push to main.
+# Other branches skip CI. release.yml does not test again: it waits for this workflow
+# to pass on the tagged commit, so the push to main must keep running it.
 name: CI
 
 on:
   pull_request:
+    branches: [main]
   push:
     branches: [main]
 
@@ -13,6 +15,7 @@ concurrency:
 
 jobs:
   windows:
+    if: github.event_name == 'push' || github.head_ref == 'develop'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7

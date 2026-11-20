@@ -34,10 +34,10 @@
     onAsk,
   }: {
     query: string;
-    /** For the first-run card; the Scratch view has its own empty text. */
+    /** For the first-run card; the scratch group has its own empty text. */
     onOpenFolder?: () => void;
     onAsk?: (provider: AgentProvider) => void;
-    /** The Scratch view: only the scratch and chats directories, as fixed sections (#135). */
+    /** Only the scratch and chats directories, as fixed sections pinned atop Sessions (#135). */
     scratch?: boolean;
     activeKey: TabKey | null;
     activeSessionId: string | null;
@@ -269,7 +269,7 @@
   );
   const shown = $derived(filterProjects(grouped, query));
   const SECTIONS = [
-    { kind: 'chats', empty: 'No chats yet. Press + to start one.' },
+    { kind: 'chats', empty: 'No chats yet. Right-click New chat at the top to start one.' },
     { kind: 'scratch', empty: 'Nothing here yet. Ctrl+Shift+A asks an agent in the scratch directory.' },
   ] as const;
   // While searching every match is shown: a hit hidden behind "show more" is no hit.
@@ -303,6 +303,9 @@
 {#if notice}
   <button class="hint err notice" onclick={() => (notice = null)} title="Dismiss">{notice}</button>
 {/if}
+{#if appState.error}
+  <button class="hint err notice" onclick={() => (appState.error = null)} title="Dismiss">{appState.error}</button>
+{/if}
 {#if appState.loading}
   <!-- Shaped like the rows that replace it: a project, then a few sessions. -->
   <div class="skeleton" aria-busy="true" aria-label="Scanning sessions">
@@ -313,17 +316,17 @@
       {/each}
     {/each}
   </div>
-{:else if appState.error}
-  <div class="hint err">{appState.error}</div>
+{:else if appState.loadError}
+  <div class="hint err">{appState.loadError}</div>
 {:else if scratch}
   {#each SECTIONS as section (section.kind)}
     {@const project = shown.find((p) => p.kind === section.kind)}
     {#if project}
       {@render node(project, true)}
-    {:else}
+    {:else if !searching}
       <div class="hint section">
         <strong>{section.kind === 'chats' ? 'Chats' : 'Scratch'}</strong>
-        {searching && mine.some((p) => p.kind === section.kind) ? `Nothing matches “${query.trim()}”.` : section.empty}
+        {section.empty}
       </div>
     {/if}
   {/each}

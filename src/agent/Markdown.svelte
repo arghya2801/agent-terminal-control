@@ -6,7 +6,7 @@
   import { gfmFromMarkdown } from 'mdast-util-gfm';
   import type { Nodes } from 'mdast';
   import { onDestroy, untrack } from 'svelte';
-  import { openUrl } from '../lib/ipc';
+  import { openLink } from '../lib/ipc';
   import { appState } from '../lib/stores.svelte';
   import Tokens from './Tokens.svelte';
 
@@ -38,7 +38,7 @@
 
   function open(e: MouseEvent, url: string) {
     e.preventDefault();
-    void openUrl(url).catch((err) => (appState.error = String(err)));
+    void openLink(url).catch((err) => (appState.error = String(err)));
   }
 </script>
 

@@ -122,7 +122,7 @@ results from that move.
   conversation back to before it, and in Claude tabs the files too
 - Claude's task list, and the shell commands and subagents running in the background,
   show above the message box
-- Alt+Up and Alt+Down jump between the messages you sent. Shift+Tab in the box cycles the
+- Alt+Up and Alt+Down jump between the messages you sent. Alt+M in the box cycles the
   permission mode
 - The footer's Compact button runs `/compact`, and its wrench button hides tool calls so the
   chat shows only the agent's text (also under Settings > Appearance)
@@ -188,7 +188,7 @@ results from that move.
   not focused, and a note in the corner while it is
 - Ask either agent outside any project, in a shared scratch directory, or chat with one
   that cannot change anything: Claude with no tools or MCP servers, Codex in a read-only
-  sandbox. Both start from the `+` in the sidebar's Scratch view, and are listed there
+  sandbox. Both start from the sidebar's New chat button, and are listed at the top of Sessions
 - Search across scrollback with match counts
 - 48 themes for the whole app, among them ATC Dark, One Dark, Dracula, GitHub, Tokyo Night,
   Catppuccin, Rosé Pine, Gruvbox and Solarized in dark and light, plus your own
@@ -477,7 +477,8 @@ npm run play     # run against fixtures, leaving real data alone
 npm run test:e2e # build the app and drive it through WebDriver
 ```
 
-CI runs `test` and `lint` on every pull request. Releases are built by
+CI runs `test` and `lint` on pull requests from `develop` to `main` and on pushes to
+`main`. Releases are built by
 `.github/workflows/release.yml` from a `v*` tag, which leaves a draft release to publish.
 
 `npm run test:e2e` downloads the msedgedriver matching WebView2, builds a test-only

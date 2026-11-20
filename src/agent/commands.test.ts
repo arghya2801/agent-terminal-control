@@ -36,4 +36,10 @@ describe('matchCommands', () => {
     expect(matchCommands(commands, '').length).toBe(4);
     expect(matchCommands(commands, 'cave', '$').map((c) => c.name)).toEqual(['$caveman']);
   });
+
+  it('matches letters in order, and puts recently used commands first', () => {
+    expect(matchCommands(commands, 'cmpt').map((c) => c.name)).toEqual(['/compact']);
+    expect(matchCommands(commands, 'rev', '/', 8, ['/ponytail:ponytail-review']).map((c) => c.name)).toEqual(['/ponytail:ponytail-review', '/review']);
+    expect(matchCommands(commands, '', '/', 8, ['/cost'])[0].name).toBe('/cost');
+  });
 });

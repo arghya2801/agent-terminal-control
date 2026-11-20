@@ -10,13 +10,14 @@
   import Page from '../lib/Page.svelte';
   import SectionNav from '../lib/SectionNav.svelte';
   import AccountsSection from './AccountsSection.svelte';
+  import ConfigSection from './ConfigSection.svelte';
   import KeysSection from './KeysSection.svelte';
   import { appVersion, openSettingsFile, openUrl, shells } from '../lib/ipc';
   import { accountState, appState, refresh, saveSettings, themeState } from '../lib/stores.svelte';
   import { cssVariables } from '../lib/theme';
   import type { Account, Settings } from '../types';
 
-  let { onClose, onSignIn }: { onClose: () => void; onSignIn: (a: Account) => void } = $props();
+  let { onClose, onSignIn, project = '' }: { onClose: () => void; onSignIn: (a: Account) => void; project?: string } = $props();
 
   const SECTIONS = [
     { id: 's-general', label: 'General' },
@@ -25,6 +26,8 @@
     { id: 's-terminal', label: 'Terminal' },
     { id: 's-sidebar', label: 'Sidebar' },
     { id: 's-agents', label: 'Agents' },
+    { id: 's-cost', label: 'Cost' },
+    { id: 's-config', label: 'Config' },
     { id: 's-names', label: 'Names' },
     { id: 's-keys', label: 'Keyboard' },
     { id: 's-advanced', label: 'Advanced' },
@@ -171,8 +174,8 @@
 
   /**
    * One section shows at a time, the tab. A search looks through every section instead: a
-   * row shows when its label fuzzily matches, or when its label, hint and options hold every
-   * word typed, and a section with no row left hides its heading. Rows are a grid's cells,
+   * row shows when its label fuzzily matches, or when every word typed is in, or fuzzily
+   * matches a word of, its label, hint and options. A section with no row left hides its heading. Rows are a grid's cells,
    * two per row (three in Agents, under a header row of its own).
    */
   // Back from Get a token, the new account waits in the Accounts tab.
@@ -214,7 +217,8 @@
         for (let i = first; i < cells.length; i += cols) {
           const row = cells.slice(i, i + cols);
           const text = `${h.textContent} ${row.map((r) => r.textContent).join(' ')}`.toLowerCase();
-          const hit = !q || fuzzyScore(row[0].textContent ?? '', q) !== null || words.every((w) => text.includes(w));
+          const tokens = text.split(/[^\p{L}\p{N}]+/u);
+          const hit = !q || fuzzyScore(row[0].textContent ?? '', q) !== null || words.every((w) => text.includes(w) || tokens.some((t) => fuzzyScore(t, w) !== null));
           for (const cell of row) show(cell, hit);
           if (hit) rows++;
         }
@@ -291,6 +295,31 @@
         <label class="check">
           <input id="war" type="checkbox" bind:checked={draft.ui.warmAtReset} />
           <span class="muted">Send Claude a greeting just after the 5-hour limit resets, so the next window is already running</span>
+        </label>
+        <label for="slf">Slash focuses chat</label>
+        <label class="check">
+          <input id="slf" type="checkbox" bind:checked={draft.ui.slashFocus} />
+          <span class="muted">Pressing / outside a text box or terminal puts the cursor in the agent tab's chat box</span>
+        </label>
+        <label for="srf">Recent commands first</label>
+        <label class="check">
+          <input id="srf" type="checkbox" bind:checked={draft.ui.slashRecentFirst} />
+          <span class="muted">The / menu lists the commands you used last at the top</span>
+        </label>
+        <label for="mkh">Mode key hint</label>
+        <label class="check">
+          <input id="mkh" type="checkbox" bind:checked={draft.ui.showModeKeyHint} />
+          <span class="muted">Show Alt+M beside the permission mode chip</span>
+        </label>
+        <label for="aap">Always allow in project</label>
+        <label class="check">
+          <input id="aap" type="checkbox" bind:checked={draft.agent.alwaysAllowProject} />
+          <span class="muted">Claude's permission cards offer a button that saves the rule to the project's .claude/settings.local.json</span>
+        </label>
+        <label for="ssa">Subagent steps</label>
+        <label class="check">
+          <input id="ssa" type="checkbox" bind:checked={draft.agent.showSubagents} />
+          <span class="muted">A Claude subagent's own steps show under its Agent call. From the next session</span>
         </label>
       </div>
 
@@ -403,6 +432,21 @@
         <input id="spp" type="number" min="1" max="500" bind:value={draft.ui.sessionsPerProject} />
         <label for="sw">Width (px)</label>
         <input id="sw" type="number" min="160" max="800" step="10" bind:value={draft.ui.sidebarWidth} />
+        <label for="dsv">Start on</label>
+        <select id="dsv" bind:value={draft.ui.defaultSidebarView}>
+          <option value="open">Open tabs</option>
+          <option value="sessions">Sessions</option>
+        </select>
+        <label for="den">Density</label>
+        <select id="den" bind:value={draft.ui.sidebarDensity}>
+          <option value="comfortable">Comfortable</option>
+          <option value="compact">Compact</option>
+        </select>
+        <label for="ssg">Scratch and chats</label>
+        <label class="check">
+          <input id="ssg" type="checkbox" bind:checked={draft.ui.showScratchGroup} />
+          <span class="muted">Show scratch sessions and chats at the top of Sessions</span>
+        </label>
         <label for="gs">Group subfolders</label>
         <label class="check">
           <input id="gs" type="checkbox" bind:checked={draft.ui.groupSubfolders} />
@@ -488,6 +532,56 @@
       </div>
       <p class="muted hint">Empty fields use the default. A new projects directory is watched after a restart.</p>
 
+      <h2 id="s-cost">Cost</h2>
+      <div class="grid">
+        <label for="csh">Switch cost hint</label>
+        <label class="check">
+          <input id="csh" type="checkbox" bind:checked={draft.cost.switchHint} />
+          <span class="muted">Claude's model menu says what changing model or effort re-reads while the prompt cache is warm</span>
+        </label>
+        <label for="cns">New session above</label>
+        <div class="check">
+          <input id="cns" type="number" min="0" step="10000" bind:value={draft.cost.newSessionAbove} />
+          <span class="muted">context tokens: the model menu offers to switch in a new session. 0 never offers</span>
+        </div>
+        <label for="clc">1-hour cache on API keys</label>
+        <label class="check">
+          <input id="clc" type="checkbox" bind:checked={draft.cost.longCache} />
+          <span class="muted">Sets <code>ENABLE_PROMPT_CACHING_1H</code> for API-key accounts. From the next session</span>
+        </label>
+        <label for="cch">Compact hint</label>
+        <label class="check">
+          <input id="cch" type="checkbox" bind:checked={draft.cost.compactHint} />
+          <span class="muted">Suggest Compact when a session has been idle until its cache is about to expire</span>
+        </label>
+        <label for="cca">Compact hint above</label>
+        <div class="check">
+          <input id="cca" type="number" min="0" step="10000" bind:value={draft.cost.compactAbove} />
+          <span class="muted">context tokens</span>
+        </div>
+        <label for="csm">Subagent model</label>
+        <div class="check">
+          <select id="csm" bind:value={draft.cost.subagentModel}>
+            <option value="inherit">Inherit the session's model</option>
+            {#each ['haiku', 'sonnet', 'opus'] as m (m)}<option value={m}>{m}</option>{/each}
+          </select>
+          <span class="muted">Claude's subagents. Sets <code>CLAUDE_CODE_SUBAGENT_MODEL</code> from the next session; agents that name a model keep it</span>
+        </div>
+        <label for="csb">Show baseline</label>
+        <label class="check">
+          <input id="csb" type="checkbox" bind:checked={draft.cost.showBaseline} />
+          <span class="muted">The first request's tokens (system prompt, CLAUDE.md, skills, MCP tools) in the chat toolbar</span>
+        </label>
+        <label for="cba">Flag baseline above</label>
+        <div class="check">
+          <input id="cba" type="number" min="0" step="5000" bind:value={draft.cost.baselineAbove} />
+          <span class="muted">tokens. 0 never flags</span>
+        </div>
+      </div>
+
+      <h2 id="s-config">Config</h2>
+      <ConfigSection bind:extra={draft.config.extraFiles} {project} />
+
       <h2 id="s-names">Names</h2>
       <div class="grid">
         <label for="rm">Suggest names with</label>
@@ -498,6 +592,11 @@
           </select>
           <span class="muted">Right-click a session and choose Rename with Haiku or Luna. Runs through the installed CLI.</span>
         </div>
+        <label for="anm">Name new sessions</label>
+        <label class="check">
+          <input id="anm" type="checkbox" bind:checked={draft.ui.autoName} />
+          <span class="muted">After a new chat tab's first turn, name its session with the model above, unless it already has a name</span>
+        </label>
       </div>
       {#each Object.keys(draft.projects.names) as path (path)}
         <div class="rename-row">
@@ -567,6 +666,11 @@
         <label class="check">
           <input id="cu" type="checkbox" bind:checked={draft.ui.checkUpdates} />
           <span class="muted">Ask GitHub for a newer release on launch. Check for updates in the ⋯ menu still works when off</span>
+        </label>
+        <label for="pl">Automatic prices</label>
+        <label class="check">
+          <input id="pl" type="checkbox" bind:checked={draft.prices.litellm} />
+          <span class="muted">Price new models from LiteLLM's public price list, fetched on launch. Off uses only the built-in table</span>
         </label>
         <label for="tst">In-app notes</label>
         <div class="check">

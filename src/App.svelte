@@ -129,7 +129,7 @@
    * default the setting) the CLI's own TUI in a terminal. `session` resumes one; `task` is
    * the first message.
    */
-  async function openAgent(key: TabKey, title: string, cwd: string, projectKey: string | null, provider: AgentProvider, o: { session?: string | null; chat?: boolean; task?: string; terminal?: boolean; account?: string } = {}) {
+  async function openAgent(key: TabKey, title: string, cwd: string, projectKey: string | null, provider: AgentProvider, o: { session?: string | null; chat?: boolean; task?: string; terminal?: boolean; account?: string; model?: string } = {}) {
     if (o.chat) chatTabs.add(key);
     const account = provider === 'claude' ? (o.account ?? accountFor(o.session ? `claude:${o.session}` : null)) : '';
     if (o.terminal ?? appState.settings?.ui.agentView === 'terminal') {
@@ -502,15 +502,22 @@
   }
 
   /** A new tab in the session's directory that starts from a short handoff of it, not its whole history (#294). */
-  function freshFrom(p: Project, s: SessionMeta) {
+  function freshFrom(p: Project, s: SessionMeta, model?: string) {
     const cwd = s.cwd ?? p.path;
     if (!cwd) return;
     counter += 1;
     const key: TabKey = `agent:${s.provider}:${counter}`;
     void guard(async () => {
       const task = handoffPrompt(s, await sessionPreview(s.file));
-      await openAgent(key, p.name, cwd, p.key, s.provider, { task, account: accountFor(sessionKey(s)) });
+      await openAgent(key, p.name, cwd, p.key, s.provider, { task, model, account: accountFor(sessionKey(s)) });
     });
+  }
+  function newSessionOn(tab: TabKey, model: string) {
+    const id = tabToSession.get(tab);
+    for (const p of appState.index.projects) {
+      const s = p.sessions.find((x) => sessionKey(x) === id);
+      if (s) return freshFrom(p, s, model);
+    }
   }
 
   /** Ask an agent, or with `chat` chat with one, in the scratch directory. */
@@ -634,6 +641,7 @@
       void gitChanges(t.cwd).then((c) => (changes = { ...changes, [t.key]: c }), () => {});
     }
   });
+  const sessionMtimes = $derived(new Map(appState.index.projects.flatMap((p) => p.sessions.map((x) => [sessionKey(x), x.mtimeMs] as const))));
   /** How full each agent tab's context window is, 0..1. */
   const contextFill = $derived(
     new Map(tabs.flatMap((t) => {
@@ -992,7 +1000,7 @@
         break;
       case 'switchSidebarView':
         if (!sidebarOpen()) void toggleSidebar();
-        void setSidebarView(({ sessions: 'open', open: 'scratch', scratch: 'sessions' } as const)[sidebarView()]);
+        void setSidebarView(sidebarView() === 'open' ? 'sessions' : 'open');
         break;
       case 'askAgent':
         picker = { project: null };
@@ -1058,6 +1066,13 @@
     // Covers focus being anywhere outside the terminal -- the sidebar, a button.
     const onKey = (e: KeyboardEvent) => {
       if (picker || paletteOpen || launcher) return;
+      const t = activeKey ? getTab(activeKey) : null;
+      if (e.key === '/' && !e.ctrlKey && !e.altKey && !e.metaKey && !popup && appState.settings?.ui.slashFocus !== false
+        && t?.provider && !t.term && !(e.target as HTMLElement).closest?.('input, textarea, select, [contenteditable], .xterm')) {
+        e.preventDefault();
+        focusActiveTerminal();
+        return;
+      }
       const action = matchChord(e);
       if (!action) return;
       // Behind a popup the app is inert; only its own chord, or the other popup's, acts.
@@ -1231,6 +1246,7 @@
         onLaunch={() => (launcher = true)}
         onOpenFolder={openFolder}
         onAsk={askAgent}
+        onPickAgent={() => (picker = { project: null })}
         {tabs}
         onNewTab={newTab}
         onCloseTab={requestClose}
@@ -1298,7 +1314,7 @@
       {@const tab = t.provider ? getTab(t.key) : undefined}
       {#if tab && !tab.term && t.provider}
         <div use:portal={tab.container}>
-          <AgentView tabKey={t.key} provider={t.provider} cwd={t.cwd} queued={t.queued} onTerminal={() => requestSwitch(t.key)} />
+          <AgentView tabKey={t.key} provider={t.provider} cwd={t.cwd} queued={t.queued} ctx={planState.context[tabToSession.get(t.key) ?? '']} lastMs={sessionMtimes.get(tabToSession.get(t.key) ?? '')} onTerminal={() => requestSwitch(t.key)} onNewSession={(m) => newSessionOn(t.key, m)} />
         </div>
       {/if}
     {/each}
@@ -1403,7 +1419,7 @@
 
   <!-- Popups, outside everything they make inert. -->
   {#if page === 'settings'}
-    <SettingsPanel onClose={() => (page = null)} onSignIn={signIn} />
+    <SettingsPanel onClose={() => (page = null)} onSignIn={signIn} project={activeProject()?.path ?? ''} />
   {:else if page === 'shortcuts'}
     <ShortcutsPanel onClose={() => (page = null)} />
   {/if}

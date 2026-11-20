@@ -44,6 +44,7 @@ func (a *App) AgentOpen(provider, cwd, session string, chat bool, model, effort,
 		return "", e
 	}
 	op["op"], op["resume"], op["model"], op["effort"] = "open", session, model, effort
+	op["subagents"] = core.Obj(a.getSettings()["agent"])["showSubagents"] != false
 	return a.agents.send(a, op, channel)
 }
 
@@ -90,6 +91,13 @@ func (a *App) launch(provider, cwd string, chat bool, account string) (core.Obje
 		for k, v := range a.accountEnv(account) {
 			env[k] = v
 		}
+		cost := core.Obj(s["cost"])
+		if acc, ok := a.account(account); ok && acc.Kind == "apiKey" && cost["longCache"] != false {
+			env["ENABLE_PROMPT_CACHING_1H"] = "1"
+		}
+		if m := core.Str(cost["subagentModel"]); m != "" && m != "inherit" {
+			env["CLAUDE_CODE_SUBAGENT_MODEL"] = m
+		}
 	}
 	if !core.IsDir(cwd) {
 		cwd = core.Home()
@@ -120,7 +128,7 @@ func (s *sidecar) send(a *App, op core.Object, channel string) (string, error) {
 // effort.
 func (a *App) AgentSend(id string, op core.Object) error {
 	switch core.Str(op["op"]) {
-	case "send", "interrupt", "stopTask", "btw", "answer", "mode", "model", "effort", "rewind", "files", "wake":
+	case "send", "interrupt", "stopTask", "btw", "answer", "mode", "model", "effort", "rewind", "files", "wake", "rename":
 	default:
 		return fmt.Errorf("unknown agent operation: %v", op["op"])
 	}

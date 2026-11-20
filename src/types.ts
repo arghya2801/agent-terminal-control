@@ -80,7 +80,7 @@ export interface Project {
   exists: boolean;
   lastActiveMs: number;
   sessions: SessionMeta[];
-  /** The scratch or chats directory, listed in the Scratch view rather than with projects. */
+  /** The scratch or chats directory, pinned atop Sessions rather than with projects. */
   kind?: 'scratch' | 'chats';
 }
 
@@ -199,13 +199,50 @@ export interface Settings {
     rowContext: boolean;
     /** Shortcut overrides by action: a chord such as `Ctrl+Shift+T`, or '' for none. */
     keys: Record<string, string>;
+    /** `/` outside any input focuses the chat box (#289). */
+    slashFocus: boolean;
+    showModeKeyHint: boolean;
+    slashRecentFirst: boolean;
+    /** The sidebar view on launch. */
+    defaultSidebarView: 'open' | 'sessions';
+    showScratchGroup: boolean;
+    /** Title a new session with the rename model after its first turn. */
+    autoName: boolean;
+    sidebarDensity: 'compact' | 'comfortable';
   };
+  agent: { alwaysAllowProject: boolean; showSubagents: boolean };
   terminal: TerminalSettings;
+  /** `extraFiles`: more files for Settings to edit, by absolute path. */
+  config: { extraFiles: string[] };
   /** `args` go on every launch; `chatArgs` on chats too, so they cannot change anything. */
+  prices: { litellm: boolean };
   codex: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; homeDir: string | null; defaultEffort: string };
   claude: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; scratchDir: string | null; atcLabel: boolean; account: string; defaultEffort: string };
+  cost: CostSettings;
 }
 
+export interface CostSettings {
+  /** Say what changing model or effort costs in the model menu (#290). */
+  switchHint: boolean;
+  /** Context tokens above which the model menu offers a new session; 0 never does. */
+  newSessionAbove: number;
+  /** API-key accounts ask for the 1-hour cache (#309). */
+  longCache: boolean;
+  compactHint: boolean;
+  compactAbove: number;
+  /** Subagents' model: 'inherit' or an alias. */
+  subagentModel: string;
+  showBaseline: boolean;
+  baselineAbove: number;
+}
+
+
+export interface ConfigFile {
+  label: string;
+  path: string;
+  exists: boolean;
+  global: boolean;
+}
 
 export interface TerminalSettings {
   fontFamily: string;

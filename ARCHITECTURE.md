@@ -249,7 +249,7 @@ until the next update replaces it.
 | `src/App.svelte` | Layout, the pane header (or `TabBar` with `ui.showTabBar`), every chord's action, launching and restoring tabs, toasts |
 | `src/terminal/manager.ts` | Every tab, terminal or agent, and every PTY: open, close, split panes, mosaic, WebGL budget, fitting, state marks, output history, blocked detection, `screenText`, `sendText` |
 | `src/agent/` | Agent tabs: the session store, `apply` (events to state), the view, the composer and its command menu, request cards |
-| `src/sidebar/Sidebar.svelte` | The Sessions, Open and Scratch views, the filter, the notes pane |
+| `src/sidebar/Sidebar.svelte` | The Sessions and Open views, the filter, the notes pane |
 | `src/sidebar/OpenList.svelte` | The Open view: triage order, sections, output graph, Done, Queue, broadcast |
 | `src/sidebar/TaskBox.svelte` | The task box at the top of the Open view |
 | `src/lib/triage.ts` | `triageOrder`, `nextWaiting`, `triageGroup`, `stateWord` |
@@ -423,4 +423,5 @@ checkout run `npm run build` first, since `main.go` embeds `dist/`. `npm run tes
 builds a test binary in `build/e2e` and drives a real WebView2 window over WebDriver with
 throwaway fixtures. It needs a desktop, and two of its tests (clipboard, Save dialog) take
 focus. It saves screenshots and memory samples in `benchmarks/`. CI runs `npm test` and
-`npm run lint` on every pull request, and builds releases from `v*` tags.
+`npm run lint` on pull requests from `develop` to `main` and on pushes to `main`; other
+branches skip it. Releases build from `v*` tags.

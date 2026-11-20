@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { relative } from 'node:path';
-import { getSessionMessages, query, type ModelInfo, type PermissionResult, type PermissionUpdate, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { getSessionMessages, query, renameSession, type ModelInfo, type PermissionResult, type PermissionUpdate, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { clip, emit, Inbox, log, summarize, textOf } from './events.ts';
 import type { AgentEvent, AgentRequest, Answer, BackgroundTask, Image, Model, Step } from './protocol.ts';
 
@@ -84,7 +84,7 @@ export function promptOf(text: string): AgentEvent | null {
  *  and session files as in a terminal, without the TUI. */
 export class Claude {
   private id: string;
-  private o: Launch & { resume?: string; model?: string; effort?: string };
+  private o: Launch & { resume?: string; model?: string; effort?: string; subagents?: boolean };
   private inbox!: Inbox<SDKUserMessage>;
   private q?: Query;
   private session = '';
@@ -109,7 +109,7 @@ export class Claude {
   /** The CLI's cost so far: its results carry the running total, not the turn's. */
   private spent = 0;
 
-  constructor(id: string, o: Launch & { resume?: string; model?: string; effort?: string }) {
+  constructor(id: string, o: Launch & { resume?: string; model?: string; effort?: string; subagents?: boolean }) {
     this.id = id;
     this.o = { ...o };
     this.session = o.resume ?? '';
@@ -134,6 +134,7 @@ export class Claude {
         effort: (this.o.effort || undefined) as never,
         systemPrompt: { type: 'preset', preset: 'claude_code' },
         includePartialMessages: true,
+        forwardSubagentText: !!this.o.subagents,
         enableFileCheckpointing: true,
         // The CLI leaves its task list out of SDK sessions; this puts it back.
         allowedTools: ['TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet'],
@@ -239,6 +240,9 @@ export class Claude {
           Object.assign(this.bg.get(m.task_id)!, { tool: m.last_tool_name, tools: m.usage.tool_uses, summary: m.summary });
           out({ t: 'background', tasks: [...this.bg.values()] });
         }
+        if ((m.subtype === 'task_progress' || m.subtype === 'task_notification') && m.tool_use_id && m.usage) {
+          out({ t: 'item', item: { id: m.tool_use_id, kind: 'tool', agentTokens: m.usage.total_tokens, agentMs: m.usage.duration_ms } });
+        }
         return;
       case 'stream_event': {
         const e = m.event as Block;
@@ -272,6 +276,7 @@ export class Claude {
           }
         }
         if (m.error) out({ t: 'item', item: { id: m.uuid, kind: 'notice', text: `API error: ${m.error}` } });
+        if (parent && m.message.model) out({ t: 'item', item: { id: parent, kind: 'tool', agentModel: m.message.model } });
         this.chain(m.uuid, parent);
         return;
       }
@@ -335,6 +340,7 @@ export class Claude {
         ? { questions: asked.map((q) => ({ id: q.question, question: q.question, header: q.header, multi: !!q.multiSelect, options: q.options ?? [] })) }
         : {}),
       always: !!suggestions?.length,
+      project: !!suggestions?.length,
     };
     this.live({ t: 'request', request });
     const answer = await new Promise<Answer>((resolve) => {
@@ -353,7 +359,8 @@ export class Claude {
     }
     // An approved plan ends plan mode, back to the mode before it; the CLI says nothing.
     if (kind === 'plan') this.live({ t: 'mode', mode: this.beforePlan });
-    return { behavior: 'allow', updatedInput: input, ...(answer.always && suggestions ? { updatedPermissions: suggestions } : {}) };
+    const rules = answer.project ? suggestions?.map((s) => ({ ...s, destination: 'localSettings' as const })) : answer.always ? suggestions : undefined;
+    return { behavior: 'allow', updatedInput: input, ...(rules ? { updatedPermissions: rules } : {}) };
   }
 
   send(text: string, images: Image[] = [], priority?: 'next') {
@@ -450,6 +457,10 @@ export class Claude {
       ?.applyFlagSettings({ effortLevel: effort as never })
       .then(() => ((this.o.effort = effort ?? undefined), this.live({ t: 'effort', effort })))
       .catch((e) => this.live({ t: 'error', message: `Can't set effort to ${effort}: ${e?.message ?? e}` }));
+  }
+
+  rename(title: string) {
+    if (this.session) void renameSession(this.session, title, { dir: this.o.cwd }).catch((e) => this.live({ t: 'error', message: `Can't rename: ${e?.message ?? e}` }));
   }
 
   model(model: string) {

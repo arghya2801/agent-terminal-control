@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   cacheHitRate,
+  switchNote,
   chartData,
   dailyTotals,
   streaks,
@@ -364,5 +365,14 @@ describe('sessionStats', () => {
 describe('modelLabel', () => {
   it('shortens Claude model ids and leaves others alone', () => {
     expect(['claude-opus-5', 'claude-haiku-4-5-20251001', 'gpt-5.1-codex'].map(modelLabel)).toEqual(['Opus 5', 'Haiku 4.5', 'gpt-5.1-codex']);
+  });
+});
+
+describe('switchNote', () => {
+  it('prices the re-read at the cache-write rate, and is free once the cache expired', () => {
+    expect(switchNote(180_000, 2, 60_000, false, true)).toBe('Re-reads 180.0K tokens, about $0.72');
+    expect(switchNote(180_000, 2, 60_000, true, false)).toBe('Re-reads 180.0K tokens, about $0.45');
+    expect(switchNote(180_000, 2, 3_600_000, false, true)).toBe('Cache expired: switching is free');
+    expect(switchNote(180_000, 2, 400_000, true, false)).toBe('Cache expired: switching is free');
   });
 });

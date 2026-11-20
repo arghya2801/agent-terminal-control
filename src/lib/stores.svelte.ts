@@ -47,6 +47,9 @@ export const appState = $state({
   /** notes.md, the Open view's notes pad (#132). */
   notes: '',
   loading: true,
+  /** A failed index load: the only error that hides the session list. */
+  loadError: null as string | null,
+  /** Any other failure; shown as a dismissable line above the list. */
   error: null as string | null,
   /** Bumped on every applied snapshot, so the debug overlay can show whether the
    *  watcher is causing a re-render storm. */
@@ -114,6 +117,7 @@ function applyUi(ui: Settings['ui']) {
   const root = document.documentElement;
   root.toggleAttribute('data-solid', ui.backdrop === 'solid');
   root.toggleAttribute('data-shapes', ui.stateShapes);
+  root.toggleAttribute('data-compact', ui.sidebarDensity === 'compact');
   setBlockedDetection(ui.blockedDetection !== false);
   setKeyOverrides(ui.keys ?? {});
 }
@@ -172,13 +176,14 @@ export async function initStores() {
     // Before settings are applied: the theme named there has to be findable.
     themeState.themes = await loadThemes();
     appState.settings = await settingsGet();
+    appState.settings.ui.sidebarView = appState.settings.ui.defaultSidebarView === 'sessions' ? 'sessions' : 'open';
     applySettings(appState.settings);
     appState.notes = await notesGet();
     await loadAccounts();
     applySnapshot(await indexSnapshot());
-    appState.error = null;
+    appState.loadError = null;
   } catch (e) {
-    appState.error = String(e);
+    appState.loadError = String(e);
   } finally {
     appState.loading = false;
   }
@@ -201,9 +206,9 @@ export async function initStores() {
 export async function refresh(force = false) {
   try {
     applySnapshot(await indexRefresh(force));
-    appState.error = null;
+    appState.loadError = null;
   } catch (e) {
-    appState.error = String(e);
+    appState.loadError = String(e);
   }
 }
 
@@ -305,11 +310,10 @@ function saveSettingsDebounced(next: Settings) {
   }, SETTINGS_SAVE_DEBOUNCE_MS);
 }
 
-export type SidebarView = 'sessions' | 'open' | 'scratch';
+export type SidebarView = 'sessions' | 'open';
 
 export function sidebarView(): SidebarView {
-  const v = appState.settings?.ui.sidebarView;
-  return v === 'sessions' ? 'sessions' : v === 'scratch' ? 'scratch' : 'open';
+  return appState.settings?.ui.sidebarView === 'sessions' ? 'sessions' : 'open';
 }
 
 export function setSidebarView(view: SidebarView) {

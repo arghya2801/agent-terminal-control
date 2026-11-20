@@ -6,7 +6,7 @@
   import { history } from '@milkdown/plugin-history';
   import { listener, listenerCtx } from '@milkdown/plugin-listener';
   import { replaceAll } from '@milkdown/utils';
-  import { openUrl } from '../lib/ipc';
+  import { openLink } from '../lib/ipc';
   import { appState, saveNotes } from '../lib/stores.svelte';
   import { focusActiveTerminal } from '../terminal/manager';
 
@@ -70,7 +70,7 @@
     const link = target.closest('a');
     if (link && e.ctrlKey) {
       e.preventDefault();
-      void openUrl(link.href).catch((err) => (appState.error = String(err)));
+      void openLink(link.href).catch((err) => (appState.error = String(err)));
     }
   }
 </script>
