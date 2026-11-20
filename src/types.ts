@@ -201,12 +201,21 @@ export interface Settings {
     keys: Record<string, string>;
   };
   terminal: TerminalSettings;
+  /** `extraFiles`: more files for Settings to edit, by absolute path. */
+  config: { extraFiles: string[] };
   /** `args` go on every launch; `chatArgs` on chats too, so they cannot change anything. */
   prices: { litellm: boolean };
   codex: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; homeDir: string | null; defaultEffort: string };
   claude: { command: string; args: string[]; chatArgs: string[]; resumeArgs: string[]; scratchDir: string | null; atcLabel: boolean; account: string; defaultEffort: string };
 }
 
+
+export interface ConfigFile {
+  label: string;
+  path: string;
+  exists: boolean;
+  global: boolean;
+}
 
 export interface TerminalSettings {
   fontFamily: string;

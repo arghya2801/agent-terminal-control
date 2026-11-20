@@ -7,7 +7,7 @@ import * as App from '../../wailsjs/go/main/App';
 import { core, pty } from '../../wailsjs/go/models';
 import { Channel } from './desktop';
 import { localPath } from './links';
-import type { Account, AgentProvider, CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot } from '../types';
+import type { Account, AgentProvider, ConfigFile, CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot } from '../types';
 import type { AgentEvent } from '../../sidecar/protocol';
 
 export { Channel };
@@ -66,6 +66,10 @@ export function notesGet(): Promise<string> { return App.NotesGet(); }
 export function notesSet(text: string): Promise<void> { return App.NotesSet(text); }
 
 export function openInExplorer(path: string): Promise<void> { return App.OpenInExplorer(path); }
+
+export function configFiles(project: string): Promise<ConfigFile[]> { return App.ConfigFiles(project); }
+
+export function createConfigFile(path: string): Promise<void> { return App.CreateConfigFile(path); }
 
 export function readTextFile(path: string): Promise<string> { return App.ReadTextFile(path); }
 

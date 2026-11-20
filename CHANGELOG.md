@@ -7,6 +7,7 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ## [Unreleased]
 
 ### Added
+- A Config section in Settings edits Claude Code and Codex config files (settings, CLAUDE.md, AGENTS.md, and the project's) in the app, with syntax highlighting; `config.extraFiles` adds more. JSON is checked before it saves. The Edit file box in chat is highlighted too (#293).
 - Links to a local file or folder (`C:\...`, `file://`) in chat and the notes pad open with the default app. Programs are refused (#315).
 - Prices for new models come from LiteLLM's public price list, fetched on launch, so a new model prices without a release. Settings > Advanced > Automatic prices turns it off (#316).
 
