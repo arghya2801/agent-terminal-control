@@ -115,11 +115,12 @@
 
   /** Which sidebar session each tab is showing. See `resolveSessions` for how. */
   const tabToSession = $derived(resolveSessions(tabSessions, appState.index.projects));
+  const allSessions = $derived(appState.index.projects.flatMap((p) => p.sessions));
+  const sessionLabels = $derived(new Map(allSessions.filter((s) => s.labelSource !== 'uuid').map((s) => [sessionKey(s), s.label] as const)));
   // A chat tab takes its session's name once the index has one: Claude's title, a rename.
   $effect(() => {
-    const labels = new Map(appState.index.projects.flatMap((p) => p.sessions.filter((s) => s.labelSource !== 'uuid').map((s) => [sessionKey(s), s.label] as const)));
     for (const t of tabs) {
-      const label = t.provider && !t.terminal ? labels.get(tabToSession.get(t.key) ?? '') : undefined;
+      const label = t.provider && !t.terminal ? sessionLabels.get(tabToSession.get(t.key) ?? '') : undefined;
       if (label) setAgentTitle(t.key, label);
     }
   });
@@ -621,24 +622,34 @@
   const shownSession = $derived(shown ? (tabToSession.get(shown.key) ?? null) : null);
   const shownWhere = $derived.by(() => {
     if (!shown) return [];
-    const branch = appState.index.projects.flatMap((p) => p.sessions).find((s) => sessionKey(s) === shownSession)?.gitBranch;
+    const branch = allSessions.find((s) => sessionKey(s) === shownSession)?.gitBranch;
     return [appState.index.projects.find((p) => p.key === shown.projectKey)?.name, branch].filter((x): x is string => !!x);
   });
   // The index updates whenever a transcript is written, which is when context changes.
+  const hasAgentTab = $derived(tabs.some((t) => t.provider));
   $effect(() => {
     void appState.index;
-    if (tabs.some((t) => t.provider)) void untrack(loadContext);
+    if (hasAgentTab) void untrack(loadContext);
   });
   // What each tab's agent has changed, read when it stops working rather than on a timer (#162).
   let changes = $state<Record<TabKey, GitChanges | null>>({});
   const lastMark = new Map<TabKey, string>();
+  // Per tab, so a slow reply cannot overwrite a newer one.
+  const changeSeq = new Map<TabKey, number>();
   $effect(() => {
+    const open = new Set<string>(tabs.map((t) => t.key));
+    for (const k of lastMark.keys()) if (!open.has(k)) (lastMark.delete(k), changeSeq.delete(k));
+    untrack(() => {
+      if (Object.keys(changes).some((k) => !open.has(k))) changes = Object.fromEntries(Object.entries(changes).filter(([k]) => open.has(k)));
+    });
     for (const t of tabs) {
       const mark = tabMark(t);
       const was = lastMark.get(t.key);
       lastMark.set(t.key, mark);
       if (!t.cwd || mark === 'working' || mark === was) continue;
-      void gitChanges(t.cwd).then((c) => (changes = { ...changes, [t.key]: c }), () => {});
+      const seq = (changeSeq.get(t.key) ?? 0) + 1;
+      changeSeq.set(t.key, seq);
+      void gitChanges(t.cwd).then((c) => void (changeSeq.get(t.key) === seq && (changes = { ...changes, [t.key]: c })), () => {});
     }
   });
   const sessionMtimes = $derived(new Map(appState.index.projects.flatMap((p) => p.sessions.map((x) => [sessionKey(x), x.mtimeMs] as const))));
@@ -849,7 +860,7 @@
     openAgent(`session:${sessionKey(s)}`, s.label, cwd, p.key, s.provider, { session: s.id });
   }
 
-  $effect(() => { bindSessions(tabToSession, appState.index.projects.flatMap(p => p.sessions)); });
+  $effect(() => { bindSessions(tabToSession, allSessions); });
 
   /**
    * Every close goes through here, button or chord. A tab at a bare prompt closes at
@@ -1345,7 +1356,7 @@
       <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenu.items} dropdown={contextMenu.dropdown} onClose={() => (contextMenu = null)} />
     {/if}
     {#if paletteOpen}
-      {@const cmds = paletteCommands()}
+      {@const cmds = untrack(paletteCommands)}
       <CommandPalette commands={cmds.all} initial={cmds.initial} onClose={() => (paletteOpen = false)} />
     {/if}
     {#if launcher}

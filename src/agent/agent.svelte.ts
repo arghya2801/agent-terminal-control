@@ -73,7 +73,8 @@ export async function startAgent(key: TabKey, provider: AgentProvider, cwd: stri
     if (live.get(key) !== l) return void agentClose(id).catch(() => {});
     l.id = id;
   } catch (e) {
-    receive(key, { t: 'exit', message: String(e instanceof Error ? e.message : e) });
+    // A switch or resume may have started another session on this tab since.
+    if (live.get(key) === l) receive(key, { t: 'exit', message: String(e instanceof Error ? e.message : e) });
   }
 }
 
@@ -149,9 +150,15 @@ function receive(key: TabKey, ev: AgentEvent) {
   }
 }
 
-const op = (key: TabKey, o: Record<string, unknown>) => {
-  const id = live.get(key)?.id;
-  if (id) void agentSend(id, o).catch((e) => receive(key, { t: 'error', message: String(e?.message ?? e) }));
+/** `sent`: the images pushed for this send, dropped if it fails so no later echo takes them. */
+const op = (key: TabKey, o: Record<string, unknown>, sent?: string[]) => {
+  const l = live.get(key);
+  if (!l?.id) return;
+  void agentSend(l.id, o).catch((e) => {
+    if (live.get(key) !== l) return;
+    if (sent) l.sent = l.sent.filter((x) => x !== sent);
+    receive(key, { t: 'error', message: String(e?.message ?? e) });
+  });
 };
 
 /** Titles a new session through its agent's own rename, unless someone has named it. */
@@ -184,7 +191,7 @@ export function send(key: TabKey, text: string, images: string[] = []) {
     queuePrompt(key, had ? `${had}\n\n${text}` : text || IMAGES);
   } else {
     if (images.length) l.sent.push(images);
-    op(key, { op: 'send', text, images: images.map(toImage) });
+    op(key, { op: 'send', text, images: images.map(toImage) }, images);
   }
 }
 const toImage = (url: string): Image => ({ mediaType: url.slice(5, url.indexOf(';')), data: url.slice(url.indexOf(',') + 1) });
@@ -213,7 +220,7 @@ export function sendNow(key: TabKey, text = '', images: string[] = []) {
   if (agents[key]) agents[key].fresh = false;
   if (getTab(key)?.done) markDone(key, false);
   if (all.length) l.sent.push(all);
-  op(key, { op: 'send', text: body, images: all.map(toImage), priority: 'next' });
+  op(key, { op: 'send', text: body, images: all.map(toImage), priority: 'next' }, all);
 }
 export const stopTask = (key: TabKey, task: string) => op(key, { op: 'stopTask', task });
 export const askBtw = (key: TabKey, question: string) => op(key, { op: 'btw', question });

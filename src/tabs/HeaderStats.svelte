@@ -24,12 +24,19 @@
     const clock = setInterval(() => (now = Date.now()), 5_000);
     return () => clearInterval(clock);
   });
-  // A session's cost only moves while its agent works: load on showing it and when it
-  // stops, and poll only in between.
+  // A session's cost only moves while its agent works: load when it stops, on showing it
+  // if the last load is a minute old, and poll only in between.
   // ponytail: each load ships all cost rows over IPC; ask Go for one session's totals if that gets slow.
+  const last = { key: null as string | null, working: false, at: 0 };
   $effect(() => {
     if (!sessionKey) return;
-    void loadCosts();
+    const stopped = last.key === sessionKey && last.working && !working;
+    if (stopped || Date.now() - last.at > 60_000) {
+      last.at = Date.now();
+      void loadCosts();
+    }
+    last.key = sessionKey;
+    last.working = working;
     if (!working) return;
     const poll = setInterval(loadCosts, 60_000);
     return () => clearInterval(poll);

@@ -78,7 +78,9 @@
   let prices = $state<Record<string, number>>({});
   $effect(() => {
     const ids = provider === 'claude' ? [...new Set((s?.models ?? []).map((m) => m.resolved ?? m.id))] : [];
-    if (ids.length) modelInputPrices(ids).then((p) => (prices = p), () => {});
+    let stale = false;
+    if (ids.length) modelInputPrices(ids).then((p) => void (stale || (prices = p)), () => {});
+    return () => (stale = true);
   });
   /** What switching to `m` costs, said on its row (#290). */
   const switchHint = (m: Model | undefined) =>
@@ -136,6 +138,9 @@
 
   /** A prompt, then everything the agent did for it, then how the turn ended. */
   interface Turn { prompt: ChatItem | null; steps: ChatItem[]; end: ChatItem | null }
+  /** Earlier turns keep their objects while unchanged, so only the last one re-renders. */
+  let prevTurns: Turn[] = [];
+  const sameTurn = (a: Turn, b: Turn) => a.prompt === b.prompt && a.end === b.end && a.steps.length === b.steps.length && a.steps.every((x, i) => x === b.steps[i]);
   const turns = $derived.by(() => {
     const out: Turn[] = [];
     for (const it of s?.items ?? []) {
@@ -148,8 +153,20 @@
       if (it.kind === 'turn') t.end = it;
       else t.steps.push(it);
     }
-    return out;
+    for (let i = 0; i < out.length - 1; i++) if (prevTurns[i] && sameTurn(prevTurns[i], out[i])) out[i] = prevTurns[i];
+    return (prevTurns = out);
   });
+  /** A turn's tool calls' own steps, by the call's id. */
+  function childrenOf(steps: ChatItem[]): Map<string, ChatItem[]> {
+    const m = new Map<string, ChatItem[]>();
+    for (const x of steps) {
+      if (!x.parent) continue;
+      const list = m.get(x.parent);
+      if (list) list.push(x);
+      else m.set(x.parent, [x]);
+    }
+    return m;
+  }
   const history = $derived(turns.flatMap((t) => (t.prompt?.text ? [t.prompt.text] : [])));
   const interrupted = (t: Turn) => t.steps.some((x) => x.kind === 'notice' && x.text === 'Interrupted');
   /** The turn's conclusion: top-level text after its last tool call, once the turn finished
@@ -377,7 +394,7 @@
           {/if}
           {#if turn.steps.length || turn.end || live}
             {@const all = blocks(shown(turn.steps.filter((x) => !x.parent)))}
-            {@const kids = (id: string) => turn.steps.filter((x) => x.parent === id)}
+            {@const kids = childrenOf(turn.steps)}
             <div class="work">
               {#each all as b, bi (b.kind === 'group' ? `g:${b.id}` : b.item.id)}
                 {#if b.kind === 'group'}
@@ -394,14 +411,14 @@
                     </button>
                     {#if open}
                       <div class="calls">
-                        {#each b.items as it (it.id)}<ToolLine item={it} {live} {cwd} children={kids(it.id)} />{/each}
+                        {#each b.items as it (it.id)}<ToolLine item={it} {live} {cwd} children={kids.get(it.id) ?? []} />{/each}
                       </div>
                     {/if}
                   </div>
                 {:else}
                   {@const it = b.item}
                   {#if it.kind === 'tool'}
-                    <div class="step tool" class:sub={!!it.parent}><ToolLine item={it} {live} {cwd} children={kids(it.id)} /></div>
+                    <div class="step tool" class:sub={!!it.parent}><ToolLine item={it} {live} {cwd} children={kids.get(it.id) ?? []} /></div>
                   {:else if it.kind === 'assistant'}
                     {#if it.text}<div class="step text" class:sub={!!it.parent} class:final={fin.has(it.id)}><Markdown text={it.text} /></div>{/if}
                   {:else if it.kind === 'thinking'}
@@ -542,7 +559,7 @@
       {commands}
       ready={!!s?.ready || knownCommands(provider, cwd ?? '').length > 0}
       onCycleMode={(s?.modes.length ?? 0) > 1 && s?.mode ? cycleMode : undefined}
-      onFiles={() => listFiles(tabKey)}
+      onFiles={() => s?.files.length || listFiles(tabKey)}
       onInput={() => wake(tabKey)}
       working={!!s?.working}
       waiting={!!request}

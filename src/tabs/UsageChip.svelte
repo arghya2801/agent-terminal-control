@@ -38,6 +38,7 @@
   let peek = $state(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let spendAt = 0;
+  onMount(() => () => clearTimeout(timer));
 
   function enter() {
     clearTimeout(timer);
