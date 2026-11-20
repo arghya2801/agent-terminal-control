@@ -626,6 +626,54 @@ func (a *App) WriteTextFile(path, contents string) error {
 	return e
 }
 
+type ConfigFile struct {
+	Label  string `json:"label"`
+	Path   string `json:"path"`
+	Exists bool   `json:"exists"`
+	Global bool   `json:"global"`
+}
+
+func (a *App) ConfigFiles(project string) []ConfigFile {
+	claude := os.Getenv("CLAUDE_CONFIG_DIR")
+	if claude == "" {
+		claude = filepath.Join(core.Home(), ".claude")
+	}
+	_, codex := core.Roots(a.getSettings())
+	var out []ConfigFile
+	add := func(label, path string, global bool) {
+		_, e := os.Stat(path)
+		if global || e == nil {
+			out = append(out, ConfigFile{label, path, e == nil, global})
+		}
+	}
+	add("Claude settings", filepath.Join(claude, "settings.json"), true)
+	add("Claude instructions", filepath.Join(claude, "CLAUDE.md"), true)
+	add("Codex config", filepath.Join(codex, "config.toml"), true)
+	add("Codex instructions", filepath.Join(codex, "AGENTS.md"), true)
+	if filepath.IsAbs(project) {
+		add("Project settings", filepath.Join(project, ".claude", "settings.json"), false)
+		add("Project local settings", filepath.Join(project, ".claude", "settings.local.json"), false)
+		add("Project instructions", filepath.Join(project, "CLAUDE.md"), false)
+	}
+	return out
+}
+
+func (a *App) CreateConfigFile(path string) error {
+	for _, c := range a.ConfigFiles("") {
+		if c.Path == path {
+			if e := os.MkdirAll(filepath.Dir(path), 0700); e != nil {
+				return e
+			}
+			f, e := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+			if e != nil {
+				return e
+			}
+			return f.Close()
+		}
+	}
+	return fmt.Errorf("not a config file: %s", path)
+}
+
 func (a *App) OpenURL(url string) error {
 	if !validURL(url) {
 		return fmt.Errorf("not a web link: %s", url)

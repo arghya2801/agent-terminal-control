@@ -20,8 +20,9 @@
 <script lang="ts">
   import Icon from '../lib/Icon.svelte';
   import Tokens from './Tokens.svelte';
-  import { cleanCommand, relativePaths, restoreEol, toolVerb } from './work';
-  import { readTextFile, writeTextFile } from '../lib/ipc';
+  import { cleanCommand, relativePaths, toolVerb } from './work';
+  import FileEditor from '../lib/FileEditor.svelte';
+  import { readTextFile } from '../lib/ipc';
   import { clippedLines } from '../../sidecar/clip';
 
   /** `cwd`: paths under it show relative to it. */
@@ -59,8 +60,7 @@
 
   const path = $derived(/^(Edit|MultiEdit|Write)$/.test(item.tool ?? '') && status === 'done' && !(item.input ?? '').includes(', ') ? (item.input ?? '').trim() : '');
   const previewable = $derived(/\.(html?|svg)$/i.test(path));
-  let draft = $state<string | null>(null);
-  let original = '';
+  let editing = $state(false);
   let preview = $state<string | null>(null);
   let wide = $state(false);
   let fileError = $state('');
@@ -72,26 +72,6 @@
     } catch (e) {
       fileError = String(e);
       return null;
-    }
-  }
-  async function startEdit() {
-    const text = await load();
-    if (text === null) return;
-    original = text;
-    draft = text.replace(/\r\n/g, '\n');
-  }
-  async function save() {
-    try {
-      fileError = '';
-      if ((await readTextFile(path)) !== original) {
-        fileError = 'File changed on disk, reopen it';
-        return;
-      }
-      await writeTextFile(path, restoreEol(original, draft ?? ''));
-      draft = null;
-      preview = null;
-    } catch (e) {
-      fileError = String(e);
     }
   }
   async function togglePreview() {
@@ -126,17 +106,15 @@
       {/if}
       {#if item.output}<pre class="output" class:error={item.error}>{item.output}</pre>{/if}
       {#if path}
-        <div class="file">
-          {#if draft !== null}
-            <textarea bind:value={draft} spellcheck="false"></textarea>
-            <button class="btn primary" onclick={save}>Save</button>
-            <button class="btn" onclick={() => (draft = null)}>Cancel</button>
-          {:else}
-            <button class="btn" onclick={startEdit}>Edit file</button>
+        {#if editing}
+          <div class="editing"><FileEditor {path} onClose={() => ((editing = false), (preview = null))} /></div>
+        {:else}
+          <div class="file">
+            <button class="btn" onclick={() => (editing = true)}>Edit file</button>
             {#if previewable}<button class="btn" onclick={togglePreview}>{preview === null ? 'Preview' : 'Hide preview'}</button>{/if}
-          {/if}
-          {#if fileError}<span class="ferr">{fileError}</span>{/if}
-        </div>
+            {#if fileError}<span class="ferr">{fileError}</span>{/if}
+          </div>
+        {/if}
         {#if preview !== null}
           <iframe title="Preview" sandbox="allow-scripts" srcdoc={preview} class:wide></iframe>
           <button class="btn" onclick={() => (wide = !wide)}>{wide ? 'Shrink' : 'Expand'}</button>
@@ -291,19 +269,8 @@
     padding: 8px 14px;
     border-top: 1px solid var(--border);
   }
-  .file textarea {
-    flex: 1 0 100%;
-    min-height: 16em;
-    max-height: 60vh;
-    resize: vertical;
-    padding: 8px 10px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--bg);
-    color: var(--fg);
-    font-family: var(--mono);
-    font-size: var(--mono-size);
-    white-space: pre;
+  .editing {
+    border-top: 1px solid var(--border);
   }
   .btn {
     flex: none;
