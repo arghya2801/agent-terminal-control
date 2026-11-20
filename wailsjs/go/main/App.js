@@ -82,6 +82,10 @@ export function ListThemes() {
   return window['go']['main']['App']['ListThemes']();
 }
 
+export function ModelInputPrices(arg1) {
+  return window['go']['main']['App']['ModelInputPrices'](arg1);
+}
+
 export function NewerRelease() {
   return window['go']['main']['App']['NewerRelease']();
 }
@@ -106,12 +110,24 @@ export function NotificationSend(arg1, arg2, arg3) {
   return window['go']['main']['App']['NotificationSend'](arg1, arg2, arg3);
 }
 
+export function ConfigFiles(arg1) {
+  return window['go']['main']['App']['ConfigFiles'](arg1);
+}
+
+export function CreateConfigFile(arg1) {
+  return window['go']['main']['App']['CreateConfigFile'](arg1);
+}
+
 export function OpenInExplorer(arg1) {
   return window['go']['main']['App']['OpenInExplorer'](arg1);
 }
 
 export function OpenSettingsFile() {
   return window['go']['main']['App']['OpenSettingsFile']();
+}
+
+export function OpenPath(arg1) {
+  return window['go']['main']['App']['OpenPath'](arg1);
 }
 
 export function OpenURL(arg1) {

@@ -207,6 +207,17 @@ export function formatTokens(n: number): string {
   return String(n);
 }
 
+/** How long the prompt cache lives: an hour, but 5 minutes on an API key without the 1-hour cache. */
+export const cacheTtl = (apiKey: boolean, longCache: boolean) => (apiKey && !longCache ? 300_000 : 3_600_000);
+
+/** What a model, effort or fast-mode switch re-reads, as a note; the switch is free once the cache has expired. */
+export function switchNote(tokens: number, inputPerMTok: number | undefined, idleMs: number, apiKey: boolean, longCache: boolean): string {
+  if (idleMs >= cacheTtl(apiKey, longCache)) return 'Cache expired: switching is free';
+  if (inputPerMTok === undefined || tokens <= 0) return '';
+  const usd = (tokens * inputPerMTok * (apiKey && !longCache ? 1.25 : 2)) / 1e6;
+  return `Re-reads ${formatTokens(tokens)} tokens, about $${usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)}`;
+}
+
 /** A cost, or Unavailable. Rows with unknown prices count as nothing; the page says so. */
 export function monetary(s: { cost: number; unavailable?: boolean }): string {
   return s.unavailable ? 'Unavailable' : formatUsd(s.cost);

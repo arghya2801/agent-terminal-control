@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activity, blocks, cleanCommand, relativePaths, restoreEol, summarize, thoughtLine, toolVerb } from './work';
+import { activity, blocks, cleanCommand, relativePaths, jsonError, restoreEol, summarize, thoughtLine, toolVerb } from './work';
 import type { ChatItem } from '../../sidecar/protocol';
 
 const tool = (id: string, name: string, input = '', extra: Partial<ChatItem> = {}): ChatItem => ({ id, kind: 'tool', tool: name, input, done: true, ...extra });
@@ -76,5 +76,13 @@ describe('restoreEol', () => {
   it('follows the majority ending of a mixed file and keeps a trailing newline', () => {
     expect(restoreEol('a\r\nb\r\nc\n', 'a\nb\nc\nd\n')).toBe('a\r\nb\r\nc\r\nd\r\n');
     expect(restoreEol('a\nb\nc\r\n', 'a\nb\n')).toBe('a\nb\n');
+  });
+});
+
+describe('jsonError', () => {
+  it('passes blank and valid JSON, reports the rest', () => {
+    expect(jsonError('')).toBe('');
+    expect(jsonError('{"a":1}')).toBe('');
+    expect(jsonError('{"a":')).not.toBe('');
   });
 });

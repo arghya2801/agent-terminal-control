@@ -399,6 +399,26 @@ func TestTheLogKeepsTwoDaysOfLines(t *testing.T) {
 	}
 }
 
+func TestConfigFiles(t *testing.T) {
+	claude, proj := t.TempDir(), t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", claude)
+	a := NewApp(t.TempDir())
+	os.WriteFile(filepath.Join(proj, "CLAUDE.md"), nil, 0600)
+	got := a.ConfigFiles(proj)
+	if len(got) != 5 || got[0].Path != filepath.Join(claude, "settings.json") || got[0].Exists || got[4].Path != filepath.Join(proj, "CLAUDE.md") || !got[4].Exists {
+		t.Fatal(got)
+	}
+	if e := a.CreateConfigFile(got[0].Path); e != nil {
+		t.Fatal(e)
+	}
+	if e := a.CreateConfigFile(got[0].Path); e == nil {
+		t.Error("create overwrote")
+	}
+	if e := a.CreateConfigFile(filepath.Join(proj, "x.txt")); e == nil {
+		t.Error("created a non-config file")
+	}
+}
+
 func TestTextFileGuards(t *testing.T) {
 	a := NewApp(t.TempDir())
 	dir := t.TempDir()
@@ -443,5 +463,15 @@ func TestTextFileGuards(t *testing.T) {
 	}
 	if e := a.WriteTextFile(file, "\xff"); e == nil {
 		t.Error("write allowed invalid UTF-8")
+	}
+}
+func TestOpenPathRefusesBadTargets(t *testing.T) {
+	a := &App{}
+	exe := filepath.Join(t.TempDir(), "x.exe")
+	os.WriteFile(exe, nil, 0600)
+	for _, p := range []string{"relative.md", `\\server\share\a.md`, filepath.Join(t.TempDir(), "missing.md"), exe} {
+		if a.OpenPath(p) == nil {
+			t.Errorf("OpenPath(%q) did not fail", p)
+		}
 	}
 }

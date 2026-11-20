@@ -81,8 +81,14 @@ func TestContextIsTheLatestRequestAgainstTheModelWindow(t *testing.T) {
 	Obj(s["projects"])["claudeProjectsDir"] = root
 	Obj(s["codex"])["homeDir"] = home
 	got := Clone((&Costs{}).Context(s, home))
-	want := Object{"claude:s": Object{"used": float64(2000), "window": float64(200000)}, "codex:t1": Object{"used": float64(64600), "window": float64(258400)}}
+	want := Object{"claude:s": Object{"used": float64(2000), "window": float64(200000), "first": float64(1510)}, "codex:t1": Object{"used": float64(64600), "window": float64(258400)}}
 	if !reflect.DeepEqual(got, Clone(want)) {
+		t.Fatal(got)
+	}
+}
+func TestInputPricesSkipUnpricedModels(t *testing.T) {
+	got := InputPrices(Object{}, t.TempDir(), []string{"claude-sonnet-4-6", "gpt-x"})
+	if len(got) != 1 || got["claude-sonnet-4-6"] != 3.0 {
 		t.Fatal(got)
 	}
 }
@@ -406,4 +412,42 @@ func TestAuditLocalUsageTotals(t *testing.T) {
 		cost += Num(r["costUsd"])
 	}
 	t.Logf("Deduplicated local Codex usage: %d tokens, $%.2f baseline API estimate", tokens, cost)
+}
+func TestLitellmLookupOrderAndNormalization(t *testing.T) {
+	p := prices(t.TempDir())
+	p["litellm"] = Object{
+		"gpt-7":           Object{"input_cost_per_token": 3e-6, "output_cost_per_token": 12e-6, "cache_read_input_token_cost": 3e-7},
+		"gpt-6.2-sol":     Object{"input_cost_per_token": 99e-6, "output_cost_per_token": 99e-6},
+		"claude-opus-9":   Object{"input_cost_per_token": 4e-6, "output_cost_per_token": 20e-6, "cache_read_input_token_cost": 4e-7, "max_input_tokens": float64(1000000)},
+		"claude-opus-5-5": Object{"input_cost_per_token": 99e-6, "output_cost_per_token": 99e-6},
+	}
+	near := func(a, b float64) bool { return a-b < 1e-9 && b-a < 1e-9 }
+	if r := priceFor(p, "codex", "gpt-7"); r == nil || !near(Num(r["input"]), 3) || !near(Num(r["cached"]), 0.3) {
+		t.Error("litellm codex row", r)
+	}
+	if r := priceFor(p, "codex", "gpt-6.2-sol"); Num(r["input"]) != 2 {
+		t.Error("our exact row lost to litellm", r)
+	}
+	if r := priceFor(p, "claude", "claude-opus-9[1m]"); r == nil || !near(Num(r["output"]), 20) || !near(Num(r["cacheRead"]), 0.4) || number(r["context"]) != 1000000 {
+		t.Error("litellm claude row", r)
+	}
+	if r := priceFor(p, "claude", "claude-opus-5-5-20251101"); Num(r["input"]) != 4 {
+		t.Error("our exact row lost to litellm", r)
+	}
+	if r := priceFor(p, "claude", "claude-opus-5-9"); Num(r["input"]) != 5 {
+		t.Error("family fallback", r)
+	}
+	if r := priceFor(p, "claude", "claude-fable-5-2"); Num(r["input"]) != 8 {
+		t.Error("fable-5-2", r)
+	}
+}
+func TestPricesWithHonoursSetting(t *testing.T) {
+	dir := t.TempDir()
+	Save(filepath.Join(dir, "prices-litellm.json"), Object{"gpt-7": Object{"input_cost_per_token": 3e-6, "output_cost_per_token": 12e-6}})
+	if priceFor(pricesWith(Object{"prices": Object{"litellm": true}}, dir), "codex", "gpt-7") == nil {
+		t.Error("on")
+	}
+	if priceFor(pricesWith(Object{"prices": Object{"litellm": false}}, dir), "codex", "gpt-7") != nil {
+		t.Error("off")
+	}
 }

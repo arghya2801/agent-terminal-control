@@ -92,6 +92,9 @@ func (a *App) startup(ctx context.Context) {
 	a.load()
 	_ = os.MkdirAll(a.config, 0700)
 	go core.RefreshPrices(a.config)
+	if on, _ := core.Obj(a.getSettings()["prices"])["litellm"].(bool); on {
+		go core.RefreshLitellm(a.config)
+	}
 	a.watcher, _ = fsnotify.NewWatcher()
 	if a.watcher != nil {
 		a.arm()
@@ -413,6 +416,9 @@ func (a *App) IndexScan(force bool) any { return a.index.Scan(a.getSettings(), f
 func (a *App) UsageCosts() []any { return a.costs.Rows(a.getSettings(), a.config) }
 
 func (a *App) UsageContext() core.Object { return a.costs.Context(a.getSettings(), a.config) }
+func (a *App) ModelInputPrices(models []string) core.Object {
+	return core.InputPrices(a.getSettings(), a.config, models)
+}
 
 func (a *App) Version() string { return appVersion }
 
@@ -549,6 +555,19 @@ func (a *App) OpenSettingsFile() error {
 	return openTarget(path)
 }
 
+// OpenPath opens a file or folder from a link with its default app, if it exists.
+func (a *App) OpenPath(path string) error {
+	if !filepath.IsAbs(path) || strings.HasPrefix(path, `\\`) {
+		return fmt.Errorf("not a local absolute path: %s", path)
+	}
+	if st, e := os.Stat(path); e != nil {
+		return e
+	} else if !st.IsDir() && strings.Contains(";.exe;.com;.bat;.cmd;.msi;.ps1;.vbs;.vbe;.js;.jse;.wsf;.hta;.scr;.lnk;.cpl;.reg;.jar;", ";"+strings.ToLower(filepath.Ext(path))+";") {
+		return fmt.Errorf("will not run a program from a link: %s", path)
+	}
+	return openTarget(path)
+}
+
 func (a *App) OpenInExplorer(path string) error {
 	// ShellExecute "open" on a file runs it; folders are all the sidebar opens.
 	if st, e := os.Stat(path); e != nil {
@@ -624,6 +643,54 @@ func (a *App) WriteTextFile(path, contents string) error {
 		e = c
 	}
 	return e
+}
+
+type ConfigFile struct {
+	Label  string `json:"label"`
+	Path   string `json:"path"`
+	Exists bool   `json:"exists"`
+	Global bool   `json:"global"`
+}
+
+func (a *App) ConfigFiles(project string) []ConfigFile {
+	claude := os.Getenv("CLAUDE_CONFIG_DIR")
+	if claude == "" {
+		claude = filepath.Join(core.Home(), ".claude")
+	}
+	_, codex := core.Roots(a.getSettings())
+	var out []ConfigFile
+	add := func(label, path string, global bool) {
+		_, e := os.Stat(path)
+		if global || e == nil {
+			out = append(out, ConfigFile{label, path, e == nil, global})
+		}
+	}
+	add("Claude settings", filepath.Join(claude, "settings.json"), true)
+	add("Claude instructions", filepath.Join(claude, "CLAUDE.md"), true)
+	add("Codex config", filepath.Join(codex, "config.toml"), true)
+	add("Codex instructions", filepath.Join(codex, "AGENTS.md"), true)
+	if filepath.IsAbs(project) {
+		add("Project settings", filepath.Join(project, ".claude", "settings.json"), false)
+		add("Project local settings", filepath.Join(project, ".claude", "settings.local.json"), false)
+		add("Project instructions", filepath.Join(project, "CLAUDE.md"), false)
+	}
+	return out
+}
+
+func (a *App) CreateConfigFile(path string) error {
+	for _, c := range a.ConfigFiles("") {
+		if c.Path == path {
+			if e := os.MkdirAll(filepath.Dir(path), 0700); e != nil {
+				return e
+			}
+			f, e := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+			if e != nil {
+				return e
+			}
+			return f.Close()
+		}
+	}
+	return fmt.Errorf("not a config file: %s", path)
 }
 
 func (a *App) OpenURL(url string) error {

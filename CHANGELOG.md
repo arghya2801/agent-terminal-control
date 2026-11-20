@@ -14,11 +14,24 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - After a new chat tab's first turn, its session gets a name from Haiku or Luna, set through Claude's or Codex's own rename. Sessions you named are left alone. Settings > Names > Name new sessions turns it off (#289).
 - Settings > Sidebar > Density: Compact makes sidebar rows shorter (#289).
 - A Claude Agent call shows its subagent's steps and replies under it, folded, with the subagent's model, tokens and run time. Codex subagent calls show as steps with their prompt, model and status. Settings > General > Subagent steps turns off the subagent's replies (#289).
+- The chat's model menu says what a model or effort switch re-reads while the prompt cache is warm, and that it is free once the cache has expired. Above a context size it offers "Switch in a new session" (#290).
+- API-key accounts ask for the 1-hour prompt cache (#309).
+- A Compact hint when a long session is about to lose its prompt cache (#309).
+- A subagent model setting for Claude (#309).
+- The chat toolbar shows each session's baseline, the tokens of its first request, and flags a large one (#309).
+- Settings > Cost holds the options for all of these (#290, #309).
+- A Config section in Settings edits Claude Code and Codex config files (settings, CLAUDE.md, AGENTS.md, and the project's) in the app, with syntax highlighting; `config.extraFiles` adds more. JSON is checked before it saves. The Edit file box in chat is highlighted too (#293).
+- Links to a local file or folder (`C:\...`, `file://`) in chat and the notes pad open with the default app. Programs are refused (#315).
+- Prices for new models come from LiteLLM's public price list, fetched on launch, so a new model prices without a release. Settings > Advanced > Automatic prices turns it off (#316).
 
 ### Changed
 - The sidebar starts on Open. Settings > Sidebar > Start on picks Sessions instead (#289).
 - The Scratch view is gone: scratch sessions and chats show at the top of Sessions, unless Settings > Sidebar > Scratch and chats is off. The New chat button at the top of the sidebar starts one, as Ctrl+Shift+A does; right-click it for no-tool chats. Ctrl+Shift+K switches between Sessions and Open (#289).
 - Settings search matches words of descriptions fuzzily too (#289).
+
+### Fixed
+- A small failure, such as a bad link or a clipboard error, shows as a dismissable line above the session list instead of replacing it. Only a failed index load hides the list (#315).
+- GPT 6.2 Astra and Sol, Fable 5.2 and Sonnet 5.5 have their own prices (#316).
 
 ## [0.7.6] - 2026-11-17
 

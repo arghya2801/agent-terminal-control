@@ -6,7 +6,8 @@
 import * as App from '../../wailsjs/go/main/App';
 import { core, pty } from '../../wailsjs/go/models';
 import { Channel } from './desktop';
-import type { Account, AgentProvider, CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot } from '../types';
+import { localPath } from './links';
+import type { Account, AgentProvider, ConfigFile, CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot } from '../types';
 import type { AgentEvent } from '../../sidecar/protocol';
 
 export { Channel };
@@ -66,6 +67,10 @@ export function notesSet(text: string): Promise<void> { return App.NotesSet(text
 
 export function openInExplorer(path: string): Promise<void> { return App.OpenInExplorer(path); }
 
+export function configFiles(project: string): Promise<ConfigFile[]> { return App.ConfigFiles(project); }
+
+export function createConfigFile(path: string): Promise<void> { return App.CreateConfigFile(path); }
+
 export function readTextFile(path: string): Promise<string> { return App.ReadTextFile(path); }
 
 export function writeTextFile(path: string, contents: string): Promise<void> { return App.WriteTextFile(path, contents); }
@@ -79,6 +84,12 @@ export function installUpdate(): Promise<void> { return App.InstallUpdate(); }
 /** Open an http(s) link in the default browser. */
 export function appVersion(): Promise<string> { return App.Version(); }
 export function openUrl(url: string): Promise<void> { return App.OpenURL(url); }
+export function openPath(path: string): Promise<void> { return App.OpenPath(path); }
+/** A link from rendered text: a local path opens with its default app, anything else in the browser. */
+export function openLink(url: string): Promise<void> {
+  const path = localPath(url);
+  return path ? openPath(path) : openUrl(url);
+}
 
 /** The folder from `atc --open <dir>`, once; '' when there was none (#278). */
 export function takeOpen(): Promise<string> { return App.TakeOpen(); }
@@ -98,7 +109,8 @@ export function openSettingsFile(): Promise<void> { return App.OpenSettingsFile(
 export function usageCosts(): Promise<CostRow[]> { return App.UsageCosts(); }
 
 /** Each session's context window on its latest request, by `provider:sessionId`. */
-export function usageContext(): Promise<Record<string, { used: number; window: number }>> { return App.UsageContext(); }
+export function usageContext(): Promise<Record<string, { used: number; window: number; first?: number }>> { return App.UsageContext(); }
+export function modelInputPrices(models: string[]): Promise<Record<string, number>> { return App.ModelInputPrices(models); }
 
 /** Theme files in the config directory's `themes/` folder, unvalidated. */
 export function listThemes(): Promise<{ stem: string; palette: unknown }[]> { return App.ListThemes(); }

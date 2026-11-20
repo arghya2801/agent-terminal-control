@@ -44,6 +44,8 @@ export function LimitsHistory():Promise<Array<Record<string, any>>>;
 
 export function ListThemes():Promise<Array<any>>;
 
+export function ModelInputPrices(arg1:Array<string>):Promise<Record<string, any>>;
+
 export function NewerRelease():Promise<any>;
 
 export function NotesGet():Promise<string>;
@@ -56,9 +58,15 @@ export function NotificationRequest():Promise<boolean>;
 
 export function NotificationSend(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function ConfigFiles(arg1:string):Promise<Array<main.ConfigFile>>;
+
+export function CreateConfigFile(arg1:string):Promise<void>;
+
 export function OpenInExplorer(arg1:string):Promise<void>;
 
 export function OpenSettingsFile():Promise<void>;
+
+export function OpenPath(arg1:string):Promise<void>;
 
 export function OpenURL(arg1:string):Promise<void>;
 
