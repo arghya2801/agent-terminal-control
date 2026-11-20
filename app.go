@@ -29,6 +29,8 @@ type App struct {
 	pageID       string
 	diskMu       sync.Mutex
 	watchMu      sync.Mutex
+	claudeRoot   string // claudeRoot and codexRoot are set by arm, under watchMu
+	codexRoot    string
 	ctx          context.Context
 	config       string
 	mu           sync.Mutex
@@ -133,6 +135,9 @@ func (a *App) killAll() {
 		delete(a.ptys, id)
 	}
 	a.mu.Unlock()
+	killWait(sessions)
+}
+func killWait(sessions []*pty.Session) {
 	for _, p := range sessions {
 		p.Kill()
 	}
@@ -181,13 +186,15 @@ func (a *App) arm() {
 	}
 	a.watchMu.Lock()
 	defer a.watchMu.Unlock()
-	s := a.getSettings()
-	c, x := core.Roots(s)
+	c, x := core.Roots(a.getSettings())
+	a.claudeRoot, a.codexRoot = c, x
 	desired := map[string]bool{}
+	// Claude sessions are <root>/<project>/<session>.jsonl, so watching one level down is enough.
 	for _, target := range []struct {
 		path      string
 		recursive bool
-	}{{a.config, false}, {c, true}, {x, false}, {filepath.Join(x, "sessions"), true}} {
+		shallow   bool
+	}{{a.config, false, false}, {c, true, true}, {x, false, false}, {filepath.Join(x, "sessions"), true, false}} {
 		root := target.path
 		if !core.IsDir(root) {
 			for !core.IsDir(root) {
@@ -205,6 +212,9 @@ func (a *App) arm() {
 			_ = filepath.WalkDir(root, func(p string, d os.DirEntry, e error) error {
 				if e == nil && d.IsDir() {
 					desired[p] = true
+					if target.shallow && p != root {
+						return filepath.SkipDir
+					}
 				}
 				return nil
 			})
@@ -241,10 +251,15 @@ func (a *App) watch() {
 			if !ok {
 				return
 			}
+			a.watchMu.Lock()
+			c, x := a.claudeRoot, a.codexRoot
+			a.watchMu.Unlock()
 			if e.Has(fsnotify.Create) && core.IsDir(e.Name) {
-				a.arm()
+				if rest, ok := strings.CutPrefix(core.PathKey(e.Name), core.PathKey(c)+`\`); !ok || !strings.Contains(rest, `\`) {
+					a.arm()
+				}
 			}
-			if c, x := core.Roots(a.getSettings()); !refreshNeeded(e, a.config, c, x) {
+			if !refreshNeeded(e, a.config, c, x) {
 				continue
 			}
 			if timer == nil {
@@ -355,13 +370,7 @@ func (a *App) FrontendReady(pageID string) {
 	if replaced {
 		a.agents.stop()
 	}
-	for _, p := range old {
-		p.Kill()
-		select {
-		case <-p.Done():
-		case <-time.After(2 * time.Second):
-		}
-	}
+	killWait(old)
 }
 
 func (a *App) SettingsGet() core.Object { return a.getSettings() }
@@ -443,7 +452,7 @@ func (a *App) AppendLog(line string) error {
 		}
 	}
 	keep = append(keep, now.Format(layout)+" "+strings.ReplaceAll(line, "\n", " "))
-	return os.WriteFile(path, []byte(strings.Join(keep, "\n")+"\n"), 0o600)
+	return core.WriteFile(path, []byte(strings.Join(keep, "\n")+"\n"))
 }
 
 func (a *App) AgentCommand(provider, sessionID string, chat bool) (string, error) {
@@ -460,13 +469,23 @@ func (a *App) PtySpawn(opts pty.Options, channel string) (string, error) {
 	}
 	opts.Env = a.accountEnv(opts.Account)
 	id := pty.ID()
+	a.mu.Lock()
+	page := a.pageID
+	a.mu.Unlock()
 	p, e := pty.Spawn(opts, func(event pty.Event) { a.emit(channel, event) })
 	if e != nil {
 		return "", e
 	}
 	a.mu.Lock()
-	a.ptys[id] = p
+	stale := a.pageID != page
+	if !stale {
+		a.ptys[id] = p
+	}
 	a.mu.Unlock()
+	if stale {
+		p.Kill()
+		return "", fmt.Errorf("page reloaded during spawn")
+	}
 	return id, nil
 }
 

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"atc/internal/core"
+	"github.com/fsnotify/fsnotify"
 )
 
 func TestTasksMoveIntoNotesOnceAndStayOnDisk(t *testing.T) {
@@ -396,6 +397,24 @@ func TestTheLogKeepsTwoDaysOfLines(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
 	if len(lines) != 2 || !strings.HasSuffix(lines[0], " kept") || !strings.HasSuffix(lines[1], " new line") {
 		t.Fatal(lines)
+	}
+}
+
+func TestArmWatchesClaudeProjectsButNotDeeper(t *testing.T) {
+	claude, codex := t.TempDir(), t.TempDir()
+	os.MkdirAll(filepath.Join(claude, `proj\session\subagents`), 0o700)
+	os.MkdirAll(filepath.Join(codex, `sessions\2026\01`), 0o700)
+	a := NewApp(t.TempDir())
+	a.settings = core.Object{"projects": map[string]any{"claudeProjectsDir": claude}, "codex": map[string]any{"homeDir": codex}}
+	a.watcher, _ = fsnotify.NewWatcher()
+	defer a.watcher.Close()
+	a.arm()
+	watched := map[string]bool{}
+	for _, p := range a.watcher.WatchList() {
+		watched[p] = true
+	}
+	if !watched[filepath.Join(claude, "proj")] || watched[filepath.Join(claude, `proj\session`)] || !watched[filepath.Join(codex, `sessions\2026\01`)] {
+		t.Fatal(a.watcher.WatchList())
 	}
 }
 
