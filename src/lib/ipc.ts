@@ -6,6 +6,7 @@
 import * as App from '../../wailsjs/go/main/App';
 import { core, pty } from '../../wailsjs/go/models';
 import { Channel } from './desktop';
+import { localPath } from './links';
 import type { Account, AgentProvider, CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot } from '../types';
 import type { AgentEvent } from '../../sidecar/protocol';
 
@@ -79,6 +80,12 @@ export function installUpdate(): Promise<void> { return App.InstallUpdate(); }
 /** Open an http(s) link in the default browser. */
 export function appVersion(): Promise<string> { return App.Version(); }
 export function openUrl(url: string): Promise<void> { return App.OpenURL(url); }
+export function openPath(path: string): Promise<void> { return App.OpenPath(path); }
+/** A link from rendered text: a local path opens with its default app, anything else in the browser. */
+export function openLink(url: string): Promise<void> {
+  const path = localPath(url);
+  return path ? openPath(path) : openUrl(url);
+}
 
 /** The folder from `atc --open <dir>`, once; '' when there was none (#278). */
 export function takeOpen(): Promise<string> { return App.TakeOpen(); }

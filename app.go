@@ -92,6 +92,9 @@ func (a *App) startup(ctx context.Context) {
 	a.load()
 	_ = os.MkdirAll(a.config, 0700)
 	go core.RefreshPrices(a.config)
+	if on, _ := core.Obj(a.getSettings()["prices"])["litellm"].(bool); on {
+		go core.RefreshLitellm(a.config)
+	}
 	a.watcher, _ = fsnotify.NewWatcher()
 	if a.watcher != nil {
 		a.arm()
@@ -545,6 +548,19 @@ func (a *App) OpenSettingsFile() error {
 		if e = core.Save(path, a.getSettings()); e != nil {
 			return e
 		}
+	}
+	return openTarget(path)
+}
+
+// OpenPath opens a file or folder from a link with its default app, if it exists.
+func (a *App) OpenPath(path string) error {
+	if !filepath.IsAbs(path) || strings.HasPrefix(path, `\\`) {
+		return fmt.Errorf("not a local absolute path: %s", path)
+	}
+	if st, e := os.Stat(path); e != nil {
+		return e
+	} else if !st.IsDir() && strings.Contains(";.exe;.com;.bat;.cmd;.msi;.ps1;.vbs;.vbe;.js;.jse;.wsf;.hta;.scr;.lnk;.cpl;.reg;.jar;", ";"+strings.ToLower(filepath.Ext(path))+";") {
+		return fmt.Errorf("will not run a program from a link: %s", path)
 	}
 	return openTarget(path)
 }

@@ -49,6 +49,7 @@ func Defaults() Object {
 			"hideToolCalls":    false,
 			"warmAtReset":      false,
 			"blockedDetection": true, "checkUpdates": true, "rowProject": true, "rowState": true, "rowContext": true, "keys": Object{}},
+		"prices": Object{"litellm": true},
 		"terminal": Object{"fontFamily": "\"FiraCode Nerd Font Mono\", \"Cascadia Mono\", Consolas, monospace", "fontSize": 13, "scrollback": 10000,
 			"cursorStyle": "bar", "cursorBlink": true, "lineHeight": 1.0, "shell": "auto", "loadProfile": true, "gpuTabs": 4},
 		// chatArgs start a chat. Claude gets no built-in tools and no MCP servers; `--tools=`
