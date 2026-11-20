@@ -122,7 +122,7 @@ results from that move.
   conversation back to before it, and in Claude tabs the files too
 - Claude's task list, and the shell commands and subagents running in the background,
   show above the message box
-- Alt+Up and Alt+Down jump between the messages you sent. Shift+Tab in the box cycles the
+- Alt+Up and Alt+Down jump between the messages you sent. Alt+M in the box cycles the
   permission mode
 - The footer's Compact button runs `/compact`, and its wrench button hides tool calls so the
   chat shows only the agent's text (also under Settings > Appearance)
@@ -477,7 +477,8 @@ npm run play     # run against fixtures, leaving real data alone
 npm run test:e2e # build the app and drive it through WebDriver
 ```
 
-CI runs `test` and `lint` on every pull request. Releases are built by
+CI runs `test` and `lint` on pull requests from `develop` to `main` and on pushes to
+`main`. Releases are built by
 `.github/workflows/release.yml` from a `v*` tag, which leaves a draft release to publish.
 
 `npm run test:e2e` downloads the msedgedriver matching WebView2, builds a test-only
