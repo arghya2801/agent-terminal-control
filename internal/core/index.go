@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -297,7 +298,7 @@ func number(v any) int64 {
 
 type cachedSession struct {
 	Size, Stamp int64
-	Meta        Object
+	Meta        Object `json:",omitempty"` // Claude only; a Codex session's is Codex.Meta
 	Codex       *codexReader
 }
 type Index struct {
@@ -310,14 +311,23 @@ type Index struct {
 // ProjectionKey identifies what the sidebar renders. Timestamps are left out: the watcher
 // fires continuously while a session is written, and re-rendering on each write is waste.
 func ProjectionKey(snap Object) string {
-	projection := Obj(Clone(snap))
-	for _, p := range Arr(projection["projects"]) {
-		delete(Obj(p), "lastActiveMs")
-		for _, s := range Arr(Obj(p)["sessions"]) {
-			delete(Obj(s), "mtimeMs")
-			delete(Obj(s), "size")
+	projection := Object{}
+	maps.Copy(projection, snap)
+	projects := []any{}
+	for _, v := range Arr(snap["projects"]) {
+		p := maps.Clone(Obj(v))
+		delete(p, "lastActiveMs")
+		sessions := []any{}
+		for _, s := range Arr(p["sessions"]) {
+			s := maps.Clone(Obj(s))
+			delete(s, "mtimeMs")
+			delete(s, "size")
+			sessions = append(sessions, s)
 		}
+		p["sessions"] = sessions
+		projects = append(projects, p)
 	}
+	projection["projects"] = projects
 	b, _ := json.Marshal(projection)
 	return string(b)
 }
@@ -331,7 +341,7 @@ func (idx *Index) Scan(settings Object, force bool) Object {
 				Version int
 				Files   map[string]*cachedSession
 			}
-			if json.Unmarshal(b, &disk) == nil && disk.Version == 2 && disk.Files != nil {
+			if json.Unmarshal(b, &disk) == nil && disk.Version == 3 && disk.Files != nil {
 				idx.cache = disk.Files
 			}
 		}
@@ -383,9 +393,11 @@ func (idx *Index) Scan(settings Object, force bool) Object {
 			default:
 				// New, shrunk, rewritten in place, or (Claude) a head that never yielded a label.
 				// A grown Codex file keeps its reader and resumes from the last offset.
+				// Not dirty when it only resumes, for the same reason as the Claude case above.
 				if entry == nil || size <= entry.Size || provider == "claude" {
 					entry = &cachedSession{}
 					idx.cache[path] = entry
+					dirty = true
 				}
 				if provider == "claude" {
 					entry.Meta = ClaudeSession(path, st)
@@ -394,15 +406,17 @@ func (idx *Index) Scan(settings Object, force bool) Object {
 						entry.Codex = &codexReader{}
 					}
 					entry.Codex.update(path, st)
-					entry.Meta = entry.Codex.Meta
 				}
-				dirty = true
 				entry.Size, entry.Stamp = size, stamp
 			}
-			if entry.Meta == nil || entry.Codex != nil && (entry.Codex.Child || entry.Codex.Archived) {
+			meta := entry.Meta
+			if entry.Codex != nil {
+				meta = entry.Codex.Meta
+			}
+			if meta == nil || entry.Codex != nil && (entry.Codex.Child || entry.Codex.Archived) {
 				continue
 			}
-			s := Obj(Clone(entry.Meta))
+			s := maps.Clone(meta)
 			if n := names[Str(s["id"])]; provider == "codex" && n != "" {
 				s["label"] = n
 				s["labelSource"] = "agentName"
@@ -420,7 +434,7 @@ func (idx *Index) Scan(settings Object, force bool) Object {
 		_ = Save(idx.CachePath, struct {
 			Version int
 			Files   map[string]*cachedSession
-		}{2, idx.cache})
+		}{3, idx.cache})
 	}
 	sort.Slice(sessions, func(i, j int) bool { return newerFirst(sessions[i], sessions[j]) })
 	unique := []Object{}
@@ -448,12 +462,18 @@ func newerFirst(a, b Object) bool {
 func BuildProjects(sessions []Object, settings Object) Object {
 	projects := map[string]Object{}
 	order := map[string]int64{}
+	resolved := map[string]string{}
 	add := func(path string) Object {
 		k := "\x00unknown"
 		name := "Unknown"
 		var p any
 		if path != "" {
-			path = Resolve(path)
+			r, ok := resolved[path]
+			if !ok {
+				r = Resolve(path)
+				resolved[path] = r
+			}
+			path = r
 			k = PathKey(path)
 			name = filepath.Base(path)
 			p = path

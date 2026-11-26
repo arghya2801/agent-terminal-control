@@ -6,6 +6,23 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+### Fixed
+- Chats no longer all freeze when one tab sends a large image prompt while another streams.
+- Archive old sessions with a cost cap no longer archives sessions whose costs have not loaded yet.
+- Closing a terminal tab while its shell starts no longer leaves the shell running.
+- Closing a chat whose CLI already exited no longer stalls for 5 seconds.
+- A crashed agent sidecar, or a closed Codex chat, no longer leaves `codex.exe` running.
+- A chat whose CLI fails to start, or a Claude model list that never arrives, now shows an error instead of hanging.
+- After a failed send, the next message with images no longer shows the old images.
+- Transcript search finds Windows paths and quoted text, and no longer crashes on some non-English letters.
+- The command palette keeps its highlight while agents work.
+- Usage refresh interval changes apply without reopening the usage page.
+- Reloading the page with many terminal tabs restores them without a delay per tab.
+
+### Changed
+- Lower CPU and memory while agents work: title spinners, transcript writes and long chats no longer trigger full rescans or re-renders, and usage history keeps only token counts.
+- The `@` file list loads once per chat tab.
+
 ## [0.7.7] - 2026-11-20
 
 ### Added

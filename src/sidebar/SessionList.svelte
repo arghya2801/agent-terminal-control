@@ -3,7 +3,7 @@
   import { agentCommand, openInExplorer, renameSession, searchTranscripts } from '../lib/ipc';
   import ConfirmDialog from '../lib/ConfirmDialog.svelte';
   import SessionPreview from './SessionPreview.svelte';
-  import { formatUsd, sessionStats } from '../lib/costs';
+  import { formatUsd } from '../lib/costs';
   import { loadCosts, planState } from '../lib/limits.svelte';
   import { relativeTime } from '../lib/format';
   import ProjectNode from './ProjectNode.svelte';
@@ -72,13 +72,24 @@
   }
   /** "Archive old sessions…": older than `days`, and with a cost cap, cheaper than it. */
   let bulk = $state<{ project: Project; days: number; maxCost: number | null } | null>(null);
+  /** Until costs load, a cost cap matches nothing rather than counting every session as $0. */
+  let costsReady = $state(false);
+  /** Each session's cost, summed as `sessionStats` does. */
+  const costByKey = $derived.by(() => {
+    const m = new Map<string, number>();
+    for (const r of planState.costRows) {
+      const k = `${r.provider}:${r.sessionId}`;
+      m.set(k, (m.get(k) ?? 0) + (r.costUsd ?? 0));
+    }
+    return m;
+  });
   const bulkKeys = $derived.by(() => {
     if (!bulk) return [];
     const before = Date.now() - bulk.days * 86_400_000;
     const cap = bulk.maxCost;
     return bulk.project.sessions
       .filter((s) => s.mtimeMs < before && !archived.has(sessionKey(s)))
-      .filter((s) => cap === null || (sessionStats(planState.costRows, sessionKey(s))?.cost ?? 0) <= cap)
+      .filter((s) => cap === null || (costsReady && (costByKey.get(sessionKey(s)) ?? 0) <= cap))
       .map(sessionKey);
   });
 
@@ -212,7 +223,8 @@
           disabled: p.sessions.length === 0,
           run: () => {
             bulk = { project: p, days: 30, maxCost: null };
-            void loadCosts();
+            costsReady = false;
+            void loadCosts().then(() => (costsReady = planState.today !== null));
           },
         },
       ],

@@ -41,20 +41,22 @@ const SETTINGS_SAVE_DEBOUNCE_MS = 400;
 
 /// Named `appState`, not `state`: an import called `state` shadows the `$state` rune
 /// in any component that uses it, which fails to compile in confusing ways.
-export const appState = $state({
-  index: { projects: [], sessionCount: 0 } as IndexSnapshot,
-  settings: null as Settings | null,
+/// A class so `index` can be raw: it is only ever replaced, and proxying every session is slow.
+class AppState {
+  index = $state.raw<IndexSnapshot>({ projects: [], sessionCount: 0 });
+  settings = $state<Settings | null>(null);
   /** notes.md, the Open view's notes pad (#132). */
-  notes: '',
-  loading: true,
+  notes = $state('');
+  loading = $state(true);
   /** A failed index load: the only error that hides the session list. */
-  loadError: null as string | null,
+  loadError = $state<string | null>(null);
   /** Any other failure; shown as a dismissable line above the list. */
-  error: null as string | null,
+  error = $state<string | null>(null);
   /** Bumped on every applied snapshot, so the debug overlay can show whether the
    *  watcher is causing a re-render storm. */
-  indexRevision: 0,
-});
+  indexRevision = $state(0);
+}
+export const appState = new AppState();
 
 /** Tracked as the set of *collapsed* keys, so everything is expanded by default —
  *  including projects that appear while the app is running. Deliberately not persisted:

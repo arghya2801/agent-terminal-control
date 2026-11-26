@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -52,6 +53,19 @@ func TestTranscriptsPreviewAndSearch(t *testing.T) {
 	}
 	if len(hits) != 2 || got["claude:c1"] != "Fix the Login redirect" || got["codex:t9"] != "why does login fail" {
 		t.Fatal(hits)
+	}
+}
+
+func TestSearchSnippetsSurviveCaseFoldingAndJSONEscapes(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "c1.jsonl")
+	// The Kelvin sign lowercases to one byte from three, which used to shift the snippet off the match.
+	kelvin := strings.Repeat("K", 60) + " hello " + strings.Repeat("x", 200)
+	for _, c := range []struct{ text, q string }{{kelvin, "HELLO"}, {`run "a\b" now`, `"a\b"`}} {
+		line, _ := json.Marshal(core.Object{"type": "user", "sessionId": "c1", "message": core.Object{"content": c.text}})
+		os.WriteFile(p, append(line, '\n'), 0600)
+		if h, ok := newSearch(c.q).file(p, "claude"); !ok || !strings.Contains(strings.ToLower(h.Snippet), strings.ToLower(c.q)) {
+			t.Fatal(c.q, h, ok)
+		}
 	}
 }
 

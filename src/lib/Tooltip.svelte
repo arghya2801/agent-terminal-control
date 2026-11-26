@@ -88,16 +88,18 @@
     };
     document.addEventListener('pointerdown', down, true);
     document.addEventListener('keydown', hide, true);
-    document.addEventListener('focusout', hide);
-    window.addEventListener('blur', hide);
+    // Removing a focused element fires focusout mid-teardown, where writing state throws.
+    const later = () => queueMicrotask(hide);
+    document.addEventListener('focusout', later);
+    window.addEventListener('blur', later);
     document.addEventListener('scroll', hide, true);
     return () => {
       document.removeEventListener('pointerover', over);
       document.removeEventListener('focusin', focus);
       document.removeEventListener('pointerdown', down, true);
       document.removeEventListener('keydown', hide, true);
-      document.removeEventListener('focusout', hide);
-      window.removeEventListener('blur', hide);
+      document.removeEventListener('focusout', later);
+      window.removeEventListener('blur', later);
       document.removeEventListener('scroll', hide, true);
     };
   });

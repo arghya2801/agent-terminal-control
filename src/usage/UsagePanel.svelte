@@ -4,7 +4,7 @@
   import Page from '../lib/Page.svelte';
   import SectionNav from '../lib/SectionNav.svelte';
   import { saveText } from '../lib/desktop';
-  import { usageCosts } from '../lib/ipc';
+  import { loadCosts, planState } from '../lib/limits.svelte';
   import { appState, refreshMs } from '../lib/stores.svelte';
   import { sessionStats, formatTokens, formatUsd, monetary, localDay, owningProject, summarize, toCsv, type Split } from '../lib/costs';
   import {
@@ -18,7 +18,7 @@
     type Dates,
     type Selection,
   } from '../lib/range';
-  import type { AgentProvider, CostRow } from '../types';
+  import type { AgentProvider } from '../types';
   import PlanLimits from './PlanLimits.svelte';
   import SpendBars from './SpendBars.svelte';
   import WeekHeat from './WeekHeat.svelte';
@@ -33,29 +33,23 @@
     $props();
 
   // --- spend
-  let rows = $state<CostRow[]>([]);
+  const rows = $derived(planState.costRows);
   let provider = $state<'all' | AgentProvider>('all');
   const filteredRows = $derived(provider === 'all' ? rows : rows.filter(r => r.provider === provider));
-  let costError = $state<string | null>(null);
+  const costError = $derived(planState.costError);
   let costLoading = $state(false);
   /** Until the first scan lands, sections that depend on it hold their space. */
-  let costsLoaded = $state(false);
+  let costsLoaded = $state(planState.costRows.length > 0);
   const today = localDay(new Date());
   const initial = presetDates(30);
   let from = $state(initial.from);
   let to = $state(initial.to);
 
-  async function loadCosts() {
+  async function rescan() {
     costLoading = true;
-    try {
-      rows = await usageCosts();
-      costError = null;
-    } catch (e) {
-      costError = String(e);
-    } finally {
-      costLoading = false;
-      costsLoaded = true;
-    }
+    await loadCosts();
+    costLoading = false;
+    costsLoaded = true;
   }
 
   // The chosen range is remembered per machine, along with the last range picked by hand
@@ -179,8 +173,10 @@
 
   onMount(() => {
     restoreRange();
-    void loadCosts();
-    const poll = setInterval(() => void loadCosts(), refreshMs('claude'));
+    void rescan();
+  });
+  $effect(() => {
+    const poll = setInterval(() => void rescan(), refreshMs('claude'));
     return () => clearInterval(poll);
   });
 </script>
@@ -229,7 +225,7 @@
   <div class="head">
     <h2 id="u-local">Local usage</h2>
     <span class="actions">
-      <button class="btn quiet" onclick={loadCosts} disabled={costLoading}>{costLoading ? 'Scanning…' : 'Rescan'}</button>
+      <button class="btn quiet" onclick={rescan} disabled={costLoading}>{costLoading ? 'Scanning…' : 'Rescan'}</button>
       <button class="btn quiet" onclick={exportCsv} disabled={exporting || rows.length === 0}>Export CSV</button>
     </span>
   </div>

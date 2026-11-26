@@ -10,10 +10,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"atc/internal/core"
 	"atc/internal/pty"
@@ -191,10 +193,11 @@ type Hit struct {
 // one hit per session (#159). A search the user has typed past stops scanning (#229).
 func (a *App) SearchTranscripts(query string) ([]Hit, error) {
 	this := a.searches.Add(1)
-	q := strings.ToLower(strings.TrimSpace(query))
+	q := strings.TrimSpace(query)
 	if len([]rune(q)) < 2 {
 		return []Hit{}, nil
 	}
+	s := newSearch(q)
 	claude, codex := core.Roots(a.getSettings())
 	type file struct {
 		path, provider string
@@ -216,14 +219,45 @@ func (a *App) SearchTranscripts(query string) ([]Hit, error) {
 		if len(hits) >= 50 || a.searches.Load() != this {
 			break
 		}
-		if h, ok := searchFile(f.path, f.provider, q); ok {
+		if h, ok := s.file(f.path, f.provider); ok {
 			hits = append(hits, h)
 		}
 	}
 	return hits, nil
 }
 
-func searchFile(path, provider, q string) (Hit, bool) {
+// search holds one query's matcher and the buffers reused across its files.
+type search struct {
+	re       *regexp.Regexp
+	needles  [][]byte // lowercased query, raw and as escaped inside a JSON string
+	buf, low []byte
+}
+
+func newSearch(q string) *search {
+	var esc bytes.Buffer
+	enc := json.NewEncoder(&esc)
+	enc.SetEscapeHTML(false)
+	enc.Encode(q)
+	e := strings.TrimSpace(esc.String())
+	return &search{re: regexp.MustCompile("(?i)" + regexp.QuoteMeta(q)), needles: [][]byte{[]byte(strings.ToLower(q)), []byte(strings.ToLower(e[1 : len(e)-1]))}, buf: make([]byte, 1<<20)}
+}
+
+// lower lowercases line into s.low, copying only lines with non-ASCII bytes.
+func (s *search) lower(line []byte) []byte {
+	s.low = s.low[:0]
+	for _, c := range line {
+		if c >= utf8.RuneSelf {
+			return bytes.ToLower(line)
+		}
+		if 'A' <= c && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		s.low = append(s.low, c)
+	}
+	return s.low
+}
+
+func (s *search) file(path, provider string) (Hit, bool) {
 	fh, e := os.Open(path)
 	if e != nil {
 		return Hit{}, false
@@ -231,7 +265,7 @@ func searchFile(path, provider, q string) (Hit, bool) {
 	defer fh.Close()
 	id := strings.TrimSuffix(filepath.Base(path), ".jsonl")
 	sc := bufio.NewScanner(fh)
-	sc.Buffer(make([]byte, 1<<20), 64<<20)
+	sc.Buffer(s.buf, 64<<20)
 	for sc.Scan() {
 		line := sc.Bytes()
 		var v core.Object
@@ -239,22 +273,22 @@ func searchFile(path, provider, q string) (Hit, bool) {
 			id = core.Str(core.Obj(v["payload"])["id"])
 		}
 		// Cheap reject before parsing: the query must appear somewhere in the line.
-		if !bytes.Contains(bytes.ToLower(line), []byte(q)) || json.Unmarshal(line, &v) != nil {
+		low := s.lower(line)
+		if !bytes.Contains(low, s.needles[0]) && !bytes.Contains(low, s.needles[1]) || json.Unmarshal(line, &v) != nil {
 			continue
 		}
 		for _, t := range lineTurns(v) {
 			if t.Role == "tool" {
 				continue
 			}
-			lower := strings.ToLower(t.Text)
-			i := strings.Index(lower, q)
-			if i < 0 {
+			m := s.re.FindStringIndex(t.Text)
+			if m == nil {
 				continue
 			}
 			if provider == "claude" && core.Str(v["sessionId"]) != "" {
 				id = core.Str(v["sessionId"])
 			}
-			return Hit{provider + ":" + id, t.Role, snippet(t.Text, i, len(q)), core.Str(v["timestamp"])}, true
+			return Hit{provider + ":" + id, t.Role, snippet(t.Text, m[0], m[1]-m[0]), core.Str(v["timestamp"])}, true
 		}
 	}
 	return Hit{}, false

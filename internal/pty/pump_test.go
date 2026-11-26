@@ -54,6 +54,9 @@ func TestInvalidBytesBecomeReplacementCharsAndDoNotDesyncTheStream(t *testing.T)
 	if out, c := Decode(nil, []byte{'a', 0xFF, 'b'}, false); out != "a�b" || len(c) != 0 {
 		t.Fatal(out, c)
 	}
+	if out, c := Decode(nil, []byte{'a', 0xFF, 0xFE, 'b', 0xE2}, false); out != "a��b" || len(c) != 1 {
+		t.Fatal(out, c)
+	}
 }
 func TestCarryNeverExceedsThreeBytes(t *testing.T) {
 	var c []byte

@@ -36,9 +36,10 @@ export function resolveSessions(tabs: TabRef[], projects: Project[]): Map<TabKey
     if (id) { out.set(tab.key, id); claimed.add(id); }
   }
   const sessions = projects.flatMap((project) => project.sessions.map((session) => ({ project, session })));
+  const plain = sessions.map(({ session }) => session);
   for (const tab of tabs) {
     const bound = out.get(tab.key);
-    const moved = bound ? resumedInto(tab, bound, sessions.map(({ session }) => session), claimed) : null;
+    const moved = bound ? resumedInto(tab, bound, plain, claimed) : null;
     if (moved) { out.set(tab.key, moved); claimed.add(moved); }
   }
   const candidates = new Map<TabKey, string[]>();

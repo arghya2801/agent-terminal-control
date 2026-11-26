@@ -83,14 +83,16 @@
     // The app polls Claude's limits already; only a stale answer is refreshed here.
     if (Date.now() - planState.claudeAt > refreshMs('claude')) void loadClaudeLimits();
     if (Date.now() - planState.codexAt > refreshMs('codex')) void loadCodexLimits();
-    // Each Codex read starts a `codex app-server` process, so it refreshes less often.
-    const codexPoll = setInterval(() => !document.hidden && void loadCodexLimits(), refreshMs('codex'));
     const tick = setInterval(() => (now = Date.now()), 30_000);
     return () => {
       void codexUsageStop();
-      clearInterval(codexPoll);
       clearInterval(tick);
     };
+  });
+  // Each Codex read starts a `codex app-server` process, so it refreshes less often.
+  $effect(() => {
+    const codexPoll = setInterval(() => !document.hidden && void loadCodexLimits(), refreshMs('codex'));
+    return () => clearInterval(codexPoll);
   });
 </script>
 

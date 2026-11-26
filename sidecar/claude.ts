@@ -33,9 +33,12 @@ const toModel = (m: ModelInfo): Model => ({
 export async function claudeCatalog(id: string, o: Launch): Promise<Model[]> {
   const inbox = new Inbox<SDKUserMessage>();
   const q = query({ prompt: inbox, options: launchOptions(id, o) });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error("Claude didn't list its models within 30 seconds")), 30_000)));
   try {
-    return (await q.initializationResult()).models.map(toModel);
+    return (await Promise.race([q.initializationResult(), late])).models.map(toModel);
   } finally {
+    clearTimeout(timer);
     inbox.end();
     q.close();
   }
@@ -102,6 +105,8 @@ export class Claude {
   private bg = new Map<string, BackgroundTask>();
   private n = 0;
   private closing = false;
+  /** The current query's loop has finished and said exit. */
+  private ended = false;
   private rewinding = false;
   /** The permission mode now, and the one an approved plan returns to. */
   private current = 'default';
@@ -113,7 +118,7 @@ export class Claude {
     this.id = id;
     this.o = { ...o };
     this.session = o.resume ?? '';
-    void this.start(o);
+    this.start(o).catch((e) => this.live({ t: 'exit', message: String(e?.message ?? e) }));
   }
 
   /** A query on a fresh inbox. A rewind opens a new one at `at` and keeps the mode. */
@@ -176,8 +181,9 @@ export class Claude {
     }
     // A resumed tab is often only read. Its history comes from disk, and the CLI, which
     // holds about 370 MB, starts when there is something to send.
-    if (o.resume) this.live({ t: 'dormant' });
-    else this.wake();
+    // A mode, model or effort change during the history load may have started it already.
+    if (!o.resume) this.wake();
+    else if (!this.q) this.live({ t: 'dormant' });
   }
 
   /** Start the CLI, once. */
@@ -211,6 +217,7 @@ export class Claude {
     } catch (e) {
       if (q === this.q) this.live({ t: 'exit', message: this.closing ? undefined : String((e as Error)?.message ?? e) });
     }
+    if (q === this.q) this.ended = true;
   }
 
   private chain(uuid: string | undefined, parent: string | null, prompt = false) {
@@ -370,7 +377,12 @@ export class Claude {
     this.chain(uuid, null, !priority);
     this.live({ t: 'item', item: { id: uuid, kind: 'user', text, ...(images.length ? { sentImages: images.length } : {}) } });
     this.live({ t: 'working', on: true });
-    this.wake();
+    try {
+      this.wake();
+    } catch (e) {
+      this.live({ t: 'working', on: false });
+      return this.live({ t: 'error', message: String((e as Error)?.message ?? e) });
+    }
     const content = images.length
       ? [...images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mediaType, data: i.data } })), ...(text ? [{ type: 'text', text }] : [])]
       : text;
@@ -473,8 +485,8 @@ export class Claude {
   close() {
     this.closing = true;
     for (const resolve of this.waiting.values()) resolve({ allow: false, message: 'Session closed' });
-    // A session that never started has no CLI to end it, so it says it ended itself.
-    if (!this.q) return this.live({ t: 'exit' });
+    // A session that never started, or whose CLI already ended, has nothing left to say exit.
+    if (!this.q || this.ended) return this.live({ t: 'exit' });
     this.inbox.end();
     this.q.close();
   }

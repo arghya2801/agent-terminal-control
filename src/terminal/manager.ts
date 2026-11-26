@@ -52,6 +52,7 @@ import {
 /** Ack once this many unacked bytes accumulate. Matches the Go backpressure window. */
 const ACK_BATCH = 64 * 1024;
 const RESIZE_DEBOUNCE_MS = 50;
+const utf8 = new TextEncoder();
 
 export interface Tab {
   provider: AgentProvider | null;
@@ -99,6 +100,8 @@ export interface Tab {
   dims: Dims | null;
   /** Bytes written but not yet acked to Go, which releases backpressure. */
   unacked: number;
+  /** PTY events; disposed on close so Go's late output and exit are dropped. */
+  channel?: Channel<PtyEvent>;
   /** The state the sidebar shows, and since when: "waiting 12m", and who waited longest. */
   mark: TabMark;
   markSince: number;
@@ -526,15 +529,16 @@ export async function openTab(
 
   term.onTitleChange((t) => {
     const claude = claudeTitle(t);
+    const { autoTitle, activity: was, claudeName } = tab;
     // The status glyph is drawn by StatusDot; keeping it here showed it twice.
     tab.autoTitle = claude?.name || usableTitle(t);
-    if (tab.provider === 'codex') { watchBlocked(tab); notify(); return; }
-    const was = tab.activity;
+    if (tab.provider === 'codex') { watchBlocked(tab); if (tab.autoTitle !== autoTitle) notify(); return; }
     tab.activity = claude?.activity ?? null;
     if (was === 'working' && tab.activity === 'idle') finishing.add(tab.key);
     watchBlocked(tab);
     tab.claudeName = claude?.name ?? null;
-    notify();
+    // Claude's spinner retitles many times a second; only a real change needs a sync.
+    if (tab.autoTitle !== autoTitle || tab.activity !== was || tab.claudeName !== claudeName) notify();
   });
 
   // Must be visible and laid out before measuring: FitAddon reads zero from a hidden
@@ -542,6 +546,7 @@ export async function openTab(
   // spawns at the wrong width and garbles a replaying session on the resize that follows.
   activate(key);
   await nextLayout();
+  if (tabs.get(key) !== tab) return tab;
   const dims = measure(tab);
   // Size the emulator to match what the PTY is about to be spawned with. Without this
   // the Terminal keeps xterm's 80x24 default while the shell writes at the pane's real
@@ -558,7 +563,7 @@ export async function openTab(
   });
 
   // --- output path
-  const channel = new Channel<PtyEvent>();
+  const channel = tab.channel = new Channel<PtyEvent>();
   channel.onmessage = (msg) => {
     if (msg.t === 'o') {
       tab.lastOutputAt = Date.now();
@@ -567,11 +572,11 @@ export async function openTab(
       if (tab.provider || tab.activity !== null) watchBlocked(tab);
       // The callback fires once xterm has parsed the payload: the honest ack point.
       term.write(msg.d, () => {
-        tab.unacked += new TextEncoder().encode(msg.d).byteLength;
+        tab.unacked += utf8.encode(msg.d).byteLength;
         if (tab.unacked >= ACK_BATCH && tab.ptyId) {
           const n = tab.unacked;
           tab.unacked = 0;
-          void ptyAck(tab.ptyId, n);
+          void ptyAck(tab.ptyId, n).catch(() => {});
         }
       });
     } else if (msg.t === 'x') {
@@ -585,7 +590,14 @@ export async function openTab(
     }
   };
 
-  tab.ptyId = await ptySpawn({ ...opts, cols: dims.cols, rows: dims.rows, shell: termOptions.shell, noProfile: !termOptions.loadProfile || !!opts.initialCommand }, channel);
+  const ptyId = await ptySpawn({ ...opts, cols: dims.cols, rows: dims.rows, shell: termOptions.shell, noProfile: !termOptions.loadProfile || !!opts.initialCommand }, channel);
+  // Closed while spawning: closeTab had no id to kill.
+  if (tabs.get(key) !== tab) {
+    channel.dispose();
+    void ptyKill(ptyId).catch(() => {});
+    return tab;
+  }
+  tab.ptyId = ptyId;
   notify();
   return tab;
 }
@@ -884,9 +896,13 @@ export function activate(key: TabKey) {
   notify();
 }
 
+/** Tabs waiting on ptyKill; a second close in that gap is dropped. */
+const closing = new Set<TabKey>();
+
 export async function closeTab(key: TabKey) {
   const tab = tabs.get(key);
-  if (!tab) return;
+  if (!tab || closing.has(key)) return;
+  closing.add(key);
 
   if (tab.ptyId) {
     try {
@@ -895,8 +911,10 @@ export async function closeTab(key: TabKey) {
       // Already gone; closing the tab is still the right outcome.
     }
   }
+  closing.delete(key);
   webgl.get(key)?.dispose();
   webgl.delete(key);
+  tab.channel?.dispose();
   tab.term?.dispose();
   for (const l of closeListeners) l(key);
   tab.container.remove();
