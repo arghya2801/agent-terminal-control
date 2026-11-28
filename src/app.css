@@ -31,8 +31,10 @@
   --glass-chrome: color-mix(in srgb, var(--bg-chrome) 70%, transparent);
   --glass-bg: color-mix(in srgb, var(--bg) 75%, transparent);
   --shadow-pop: 0 10px 32px rgb(0 0 0 / 0.35), 0 1px 3px rgb(0 0 0 / 0.2);
-  font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
-  font-size: 13px;
+  --claude: #d97757;
+  --codex: #10a37f;
+  font-family: var(--ui-font, 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif);
+  font-size: calc(13px * var(--ui-scale, 1));
   /* Set from the theme's background by `applyPalette`; inherited, so native controls
      (date pickers, number spinners, scrollbars) follow a light theme too. */
   color-scheme: dark;
@@ -101,7 +103,7 @@ button {
   display: inline-block;
   height: 1em;
   vertical-align: -0.15em;
-  border-radius: 3px;
+  border-radius: calc(3px * var(--radius-scale, 1));
   background: var(--bg-surface);
   animation: atc-pulse 1.4s ease-in-out infinite;
 }

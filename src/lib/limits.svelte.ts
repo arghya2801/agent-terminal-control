@@ -7,27 +7,32 @@ import type { CostRow } from '../types';
  * Plan limits for the whole app. The tab bar's chip, its hover peek and the usage page
  * all read this one answer, so the rate-limited endpoint is asked once, not per view.
  */
-export const planState = $state({
-  claude: null as Record<string, unknown> | null,
-  claudeError: null as string | null,
-  claudeLoading: false,
-  claudeAt: 0,
-  codex: null as Record<string, unknown> | null,
+/// A class so the big, only-replaced fields can be raw.
+class PlanState {
+  claude = $state<Record<string, unknown> | null>(null);
+  claudeError = $state<string | null>(null);
+  claudeLoading = $state(false);
+  claudeAt = $state(0);
+  codex = $state<Record<string, unknown> | null>(null);
   /** The last read found no Codex installed. */
-  codexMissing: false,
-  codexError: null as string | null,
-  codexLoading: false,
-  codexAt: 0,
+  codexMissing = $state(false);
+  codexError = $state<string | null>(null);
+  codexLoading = $state(false);
+  codexAt = $state(0);
   /** Today's API-equivalent spend, for the peek; null until read or when unreadable. */
-  today: null as number | null,
+  today = $state<number | null>(null);
   /** Every transcript's usage by hour, for the header's session stats. */
-  costRows: [] as CostRow[],
+  costRows = $state.raw<CostRow[]>([]);
+  costError = $state<string | null>(null);
   /** Past readings, for how fast each limit fills (#27, #161). */
-  claudeHistory: [] as { t: number; limits: PlanLimit[] }[],
-  codexHistory: [] as { t: number; limits: PlanLimit[] }[],
+  claudeHistory = $state.raw<{ t: number; limits: PlanLimit[] }[]>([]);
+  codexHistory = $state.raw<{ t: number; limits: PlanLimit[] }[]>([]);
   /** How full each session's context window is, by `provider:sessionId`. */
-  context: {} as Record<string, { used: number; window: number; first?: number }>,
-});
+  context = $state.raw<Record<string, { used: number; window: number; first?: number }>>({});
+}
+export const planState = new PlanState();
+
+let costsLoading: Promise<void> | null = null;
 
 export async function loadClaudeLimits() {
   if (planState.claudeLoading) return;
@@ -81,11 +86,19 @@ export async function loadContext() {
   }
 }
 
-export async function loadCosts() {
-  try {
-    planState.costRows = await usageCosts();
-    planState.today = dailyTotals(planState.costRows, 'cost').get(localDay(new Date())) ?? 0;
-  } catch {
-    planState.today = null;
-  }
+/** Callers that arrive during a read share it. */
+export function loadCosts(): Promise<void> {
+  costsLoading ??= (async () => {
+    try {
+      planState.costRows = await usageCosts();
+      planState.today = dailyTotals(planState.costRows, 'cost').get(localDay(new Date())) ?? 0;
+      planState.costError = null;
+    } catch (e) {
+      planState.today = null;
+      planState.costError = String(e);
+    } finally {
+      costsLoading = null;
+    }
+  })();
+  return costsLoading;
 }

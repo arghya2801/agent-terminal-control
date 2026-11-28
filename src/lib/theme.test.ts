@@ -160,3 +160,17 @@ describe('findTheme', () => {
     expect(findTheme(only, 'nope').name).toBe('Only');
   });
 });
+
+describe('theme ui block', () => {
+  it('keeps only safe CSS variables and applies them over the mixed ones', () => {
+    const p = parsePalette({ ...minimal, name: 'X', ui: { '--bg-surface': '#123456', color: 'red', '--x': 'a;b', '--y': 'red}' } })!;
+    expect(p.ui).toEqual({ '--bg-surface': '#123456' });
+    expect(cssVariables(p)['--bg-surface']).toBe('#123456');
+  });
+  it('removes the variables only a previous theme set', () => {
+    const root = document.createElement('div');
+    applyPalette(parsePalette({ ...minimal, name: 'A', ui: { '--claude': '#ff0000' } })!, root);
+    applyPalette(parsePalette({ ...minimal, name: 'B' })!, root);
+    expect(root.style.getPropertyValue('--claude')).toBe('');
+  });
+});

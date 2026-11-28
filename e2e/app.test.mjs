@@ -1,4 +1,4 @@
-// Runs under `npm run test:e2e` (see run.mjs), against the fixture playground.
+// Runs under `bun run test:e2e` (see run.mjs), against the fixture playground.
 import { after, afterEach, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Key, remote } from 'webdriverio';
@@ -29,7 +29,6 @@ after(async () => {
     try { await browser.saveScreenshot(join(process.cwd(), 'benchmarks', 'e2e-last.png')); } catch {}
     try { console.log('Final page:', await browser.getUrl()); } catch {}
   }
-  if (browser && process.env.E2E_HOST === 'wails') { try { await browser.execute(() => window.runtime.Quit()); } catch {} }
   try { await browser?.deleteSession(); } catch {}
 });
 

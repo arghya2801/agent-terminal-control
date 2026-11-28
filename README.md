@@ -5,9 +5,9 @@
 <p align="center">Agent Terminal Control<br>
 A Windows terminal for Claude Code and Codex sessions.</p>
 
-<p align="center"><b>Download v0.7.7:</b>
-<a href="https://github.com/arghya2801/agent-terminal-control/releases/download/v0.7.7/ATC_0.7.7_x64_en-US.msi">MSI installer</a> (recommended) |
-<a href="https://github.com/arghya2801/agent-terminal-control/releases/download/v0.7.7/ATC_0.7.7_x64-setup.exe">Setup exe</a> |
+<p align="center"><b>Download v0.8.0:</b>
+<a href="https://github.com/arghya2801/agent-terminal-control/releases/download/v0.8.0/ATC_0.8.0_x64_en-US.msi">MSI installer</a> (recommended) |
+<a href="https://github.com/arghya2801/agent-terminal-control/releases/download/v0.8.0/ATC_0.8.0_x64-setup.exe">Setup exe</a> |
 <a href="https://github.com/arghya2801/agent-terminal-control/releases/latest/download/atc.exe">Portable atc.exe</a><br>
 <a href="https://github.com/arghya2801/agent-terminal-control/releases">Release notes and older versions</a></p>
 
@@ -42,8 +42,9 @@ colours and Ctrl+C work as they do there.
   starts faster; the Shell setting picks PowerShell 7 instead
 - Claude Code or the Codex CLI for the corresponding agent features. Either can be
   absent without disabling shells or the other provider.
-- Node.js 18 or later on `PATH` for agent tabs, which run in a small Node process.
-  Without it, sessions still open in a terminal.
+- Nothing else for agent chat tabs. They run in a small Bun process: `bun` from `PATH`
+  when it is 1.4 or later, else ATC downloads Bun 1.4.5 (about 54 MB) on the first chat,
+  else `node` 18 or later. Without any of them, sessions still open in a terminal.
 
 ## Install
 
@@ -87,14 +88,14 @@ not remove them; delete that folder by hand if you want them gone.
 ### From source
 
 ```
-go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
-npm ci
-npm run desktop:dev      # Go reload + Vite HMR
-npm run desktop:build    # portable executable
-npm run desktop:package  # executable + MSI + NSIS installers
+go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
+bun install
+bun run desktop:dev      # Go reload + Vite HMR
+bun run desktop:build    # portable executable
+bun run desktop:package  # executable + MSI + NSIS installers
 ```
 
-Requires Go 1.26 or later, Node 24, and WebView2. Packaging also requires NSIS and
+Requires Go 1.26 or later, Bun 1.4 or later, and WebView2. Packaging also requires NSIS and
 WiX Toolset 3.x. Output lands in `build/bin/`.
 
 The desktop host moved from Rust/Tauri to Go/Wails in 0.4.0 and kept the Svelte UI.
@@ -410,7 +411,9 @@ Beside it:
   read.
 - **`themes/`** takes extra themes as JSON files, in the shape Windows Terminal and VS Code
   terminal themes use (16 ANSI colours plus foreground, background, cursor and selection).
-  A file named like a built-in theme replaces it.
+  A file named like a built-in theme replaces it. A `ui` block sets the app's own colours;
+  see [docs/CUSTOMIZING.md](docs/CUSTOMIZING.md).
+- **`user.css`** is your own stylesheet, applied after the app's and reloaded on save.
 - **`prices-latest.json`** is the price table, downloaded from the repository's `main`
   branch at launch. Delete it to fall back to the table built into the app.
 - **`pricing.json`** adds or corrects model prices yourself. Its entries win over the
@@ -447,7 +450,7 @@ coalesces output on an 8 ms tick and sends it through Wails events. The frontend
 acknowledges bytes once xterm has parsed them, which slows the shell down instead of
 dropping output.
 
-Agent chat tabs run in one Node process, the sidecar, which drives Claude through the
+Agent chat tabs run in one Bun process, the sidecar, which drives Claude through the
 Agent SDK and Codex through `codex app-server`.
 
 Session metadata comes from the head of each transcript, which holds the label, working
@@ -465,23 +468,25 @@ never decodes it from the directory name, which is lossy.
   Rust/Tauri to Go/Wails in 0.4.0
 - [docs/CODEX-VALIDATION.md](docs/CODEX-VALIDATION.md): the check of the Codex
   integration in September 2026
+- [docs/REVIEW-2026-11.md](docs/REVIEW-2026-11.md): the bug, CPU and memory review of
+  November 2026, and what is still open
 
 ## Development
 
 ```
-npm run build    # frontend assets, required before Go tests on a fresh checkout
-npm test         # Vitest + Go tests, including native ConPTY integration
-npm run lint     # go vet + svelte-check
+bun run build       # frontend assets, required before Go tests on a fresh checkout
+bun run test        # Vitest + Go tests, including native ConPTY integration
+bun run lint        # go vet + svelte-check
 go test -race ./... # requires a C compiler compatible with Go
-npm run play     # run against fixtures, leaving real data alone
-npm run test:e2e # build the app and drive it through WebDriver
+bun run play        # run against fixtures, leaving real data alone
+bun run test:e2e    # build the app and drive it through WebDriver
 ```
 
 CI runs `test` and `lint` on pull requests from `develop` to `main` and on pushes to
 `main`. Releases are built by
 `.github/workflows/release.yml` from a `v*` tag, which leaves a draft release to publish.
 
-`npm run test:e2e` downloads the msedgedriver matching WebView2, builds a test-only
+`bun run test:e2e` downloads the msedgedriver matching WebView2, builds a test-only
 executable in `build/e2e`, and drives the real desktop application. It uses throwaway
 fixtures and echo commands for the agents. It requires an interactive Windows desktop.
 The test loader enables a loopback debugging port in a local copy of its dependency;
@@ -493,12 +498,12 @@ without taking focus, and the gotchas that cost time once.
 
 ### Isolated playground
 
-For testing with your existing logins, histories and theme, use `npm run desktop:dev`.
+For testing with your existing logins, histories and theme, use `bun run desktop:dev`.
 The playground is for synthetic discovery and UI tests: fixture IDs are not resumable CLI
 conversations, and its CLI homes start signed out. Playground tabs use separate saved
 state from normal development tabs.
 
-`npm run play` copies synthetic Claude and Codex histories into `playground/config`. It
+`bun run play` copies synthetic Claude and Codex histories into `playground/config`. It
 creates sample project directories, points both discovery roots there, and sets
 `CODEX_HOME` and `CLAUDE_CONFIG_DIR` for launched CLIs. It does not load personal
 histories or copy credentials. Fixtures cover current and older metadata, renames,

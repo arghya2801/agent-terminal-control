@@ -161,12 +161,12 @@
   .hint {
     padding: 10px 12px;
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   .section {
     padding: 10px 10px 4px;
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   .section .n {
     margin-left: 2px;
@@ -184,7 +184,7 @@
     background: transparent;
     color: var(--fg-dim);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     text-align: left;
     cursor: pointer;
   }
@@ -223,7 +223,7 @@
     min-width: 0;
     gap: 6px;
     color: var(--fg-faint);
-    font-size: 10px;
+    font-size: calc(10px * var(--ui-scale, 1));
     white-space: nowrap;
   }
   .meta > * + *::before {
@@ -270,11 +270,11 @@
     place-items: center;
     padding: 2px 4px;
     border: 1px solid var(--border);
-    border-radius: 5px;
+    border-radius: calc(5px * var(--radius-scale, 1));
     background: var(--bg-chrome);
     color: var(--fg-dim);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
     line-height: 1.2;
     cursor: pointer;
     opacity: 0;
@@ -296,7 +296,7 @@
     gap: 2px;
     padding: 0 10px 6px 42px;
     color: var(--accent);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   .queued span {
     min-width: 0;
@@ -310,7 +310,7 @@
     place-items: center;
     padding: 2px;
     border: none;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     background: transparent;
     color: var(--fg-faint);
     cursor: pointer;
@@ -325,11 +325,11 @@
     min-width: 0;
     padding: 4px 8px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     background: var(--bg);
     color: var(--fg-bright);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   input:focus {
     border-color: var(--accent);

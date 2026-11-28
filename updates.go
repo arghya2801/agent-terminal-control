@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	wr "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 const releaseDownloads = "https://github.com/arghya2801/agent-terminal-control/releases/download/"
@@ -138,6 +136,6 @@ func (a *App) InstallUpdate() error {
 	if e := cmd.Start(); e != nil {
 		return e
 	}
-	go wr.Quit(a.ctx)
+	go a.wapp.Quit()
 	return nil
 }

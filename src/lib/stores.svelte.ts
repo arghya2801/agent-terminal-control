@@ -15,6 +15,7 @@ import {
   settingsGet,
   settingsSet,
   notesGet,
+  userCss,
   notesSet,
   renameSession,
   suggestSessionName,
@@ -36,25 +37,32 @@ import type { Account, IndexSnapshot, SessionMeta, Settings } from '../types';
 const EVENT_INDEX_UPDATED = 'index://updated';
 const EVENT_SETTINGS_UPDATED = 'settings://updated';
 const EVENT_NOTES_UPDATED = 'notes://updated';
+const EVENT_USER_CSS_UPDATED = 'usercss://updated';
+const EVENT_RUNTIME_PROGRESS = 'runtime://progress';
+
+/** ATC downloading its own Bun for the first agent chat. */
+export const runtimeDownload = $state({ received: 0, total: 0 });
 /** Holding a zoom key should not write settings.json on every step. */
 const SETTINGS_SAVE_DEBOUNCE_MS = 400;
 
 /// Named `appState`, not `state`: an import called `state` shadows the `$state` rune
 /// in any component that uses it, which fails to compile in confusing ways.
-export const appState = $state({
-  index: { projects: [], sessionCount: 0 } as IndexSnapshot,
-  settings: null as Settings | null,
+/// A class so `index` can be raw: it is only ever replaced, and proxying every session is slow.
+class AppState {
+  index = $state.raw<IndexSnapshot>({ projects: [], sessionCount: 0 });
+  settings = $state<Settings | null>(null);
   /** notes.md, the Open view's notes pad (#132). */
-  notes: '',
-  loading: true,
+  notes = $state('');
+  loading = $state(true);
   /** A failed index load: the only error that hides the session list. */
-  loadError: null as string | null,
+  loadError = $state<string | null>(null);
   /** Any other failure; shown as a dismissable line above the list. */
-  error: null as string | null,
+  error = $state<string | null>(null);
   /** Bumped on every applied snapshot, so the debug overlay can show whether the
    *  watcher is causing a re-render storm. */
-  indexRevision: 0,
-});
+  indexRevision = $state(0);
+}
+export const appState = new AppState();
 
 /** Tracked as the set of *collapsed* keys, so everything is expanded by default —
  *  including projects that appear while the app is running. Deliberately not persisted:
@@ -71,12 +79,29 @@ export const themeState = $state({ themes: [] as Palette[] });
  * unstyled one.
  */
 function applyThemeByName(name: string, accent = '') {
+  const own = activeProject && appState.settings?.ui.projectThemes?.[activeProject];
+  if (own) {
+    name = own.theme || name;
+    accent = own.accent || accent;
+  }
   const palette = findTheme(themeState.themes, name);
   // The accent setting colours the chrome only; terminals keep the theme's blue.
-  const chrome = /^#[0-9a-f]{6}$/i.test(accent) ? { ...palette, blue: accent, brightBlue: accent } : palette;
+  const chrome = /^#[0-9a-f]{6}$/i.test(accent)
+    ? { ...palette, blue: accent, brightBlue: accent, ui: { ...palette.ui, '--accent': accent, '--accent-strong': accent } }
+    : palette;
   applyPalette(chrome, document.documentElement);
   setWindowTheme(isLight(palette));
   applyTheme(palette);
+}
+
+let activeProject = '';
+/** The focused tab's project picks its own theme from `projectThemes`, if it has one. */
+export function setThemeProject(path: string) {
+  if (path === activeProject) return;
+  const before = activeProject && appState.settings?.ui.projectThemes?.[activeProject];
+  activeProject = path;
+  const now = path && appState.settings?.ui.projectThemes?.[path];
+  if ((before || now) && appState.settings) applyThemeByName(appState.settings.ui.theme, appState.settings.ui.accent);
 }
 
 export function isExpanded(key: string): boolean {
@@ -118,6 +143,21 @@ function applyUi(ui: Settings['ui']) {
   root.toggleAttribute('data-solid', ui.backdrop === 'solid');
   root.toggleAttribute('data-shapes', ui.stateShapes);
   root.toggleAttribute('data-compact', ui.sidebarDensity === 'compact');
+  const set = (name: string, value: string | false) => (value ? root.style.setProperty(name, value) : root.style.removeProperty(name));
+  set('--ui-font', ui.fontFamily?.trim() || false);
+  set('--ui-scale', String(Math.min(24, Math.max(9, ui.fontSize || 13)) / 13));
+  set('--radius-scale', String({ square: 0, default: 1, round: 1.75 }[ui.corners] ?? 1));
+  set('--chat-width', ui.chatWidth > 0 ? `${ui.chatWidth}px` : '100vw');
+  set('--chat-line', String(ui.chatLineHeight || 1.6));
+  set('--chat-gap', String({ compact: 0.5, comfortable: 1, spacious: 1.5 }[ui.chatSpacing] ?? 1));
+  set('--user-width', `${Math.min(100, Math.max(30, ui.userBubbleWidth || 85))}%`);
+  root.toggleAttribute('data-user-left', ui.userBubble === 'left');
+  root.toggleAttribute('data-code-wrap', !!ui.codeWrap);
+  root.toggleAttribute('data-sidebar-right', ui.sidebarSide === 'right');
+  root.toggleAttribute('data-tabbar-bottom', ui.tabBarPosition === 'bottom');
+  root.dataset.tabClose = ui.tabClose || 'hover';
+  for (const a of [...root.attributes]) if (a.name.startsWith('data-hide-')) root.removeAttribute(a.name);
+  for (const id of ui.hide ?? []) if (/^[a-z0-9-]+$/.test(id)) root.setAttribute(`data-hide-${id}`, '');
   setBlockedDetection(ui.blockedDetection !== false);
   setKeyOverrides(ui.keys ?? {});
 }
@@ -179,6 +219,7 @@ export async function initStores() {
     appState.settings.ui.sidebarView = appState.settings.ui.defaultSidebarView === 'sessions' ? 'sessions' : 'open';
     applySettings(appState.settings);
     appState.notes = await notesGet();
+    applyUserCss(await userCss());
     await loadAccounts();
     applySnapshot(await indexSnapshot());
     appState.loadError = null;
@@ -201,6 +242,25 @@ export async function initStores() {
 
   // notes.md edited outside the app.
   await listen<string>(EVENT_NOTES_UPDATED, (t) => (appState.notes = t));
+  await listen<{ received: number; total: number }>(EVENT_RUNTIME_PROGRESS, (p) => Object.assign(runtimeDownload, p));
+  await listen<string>(EVENT_USER_CSS_UPDATED, applyUserCss);
+}
+
+/** user.css goes last in <head>, so its rules win over the app's at equal specificity. */
+function applyUserCss(css: string) {
+  let el = document.getElementById('atc-user-css');
+  if (!el) {
+    el = document.createElement('style');
+    el.id = 'atc-user-css';
+  }
+  el.textContent = css;
+  document.head.append(el);
+}
+
+/** Re-read theme files, e.g. after the theme editor saved one. */
+export async function reloadThemes() {
+  themeState.themes = await loadThemes();
+  if (appState.settings) applyThemeByName(appState.settings.ui.theme, appState.settings.ui.accent);
 }
 
 export async function refresh(force = false) {
@@ -279,6 +339,7 @@ export async function saveSettings(next: Settings) {
     prev?.ui.zoom !== next.ui.zoom ||
     prev?.ui.theme !== next.ui.theme ||
     prev?.ui.accent !== next.ui.accent ||
+    JSON.stringify(prev?.ui.projectThemes) !== JSON.stringify(next.ui.projectThemes) ||
     JSON.stringify(prev?.terminal) !== JSON.stringify(next.terminal)
   ) {
     applySettings(next);

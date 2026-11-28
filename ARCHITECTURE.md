@@ -1,6 +1,6 @@
 # Architecture
 
-ATC is a Windows app: a Go and Wails host with a Svelte 5 and xterm.js 6 frontend. Go
+ATC is a Windows app: a Go and Wails v3 host with a Svelte 5 and xterm.js 6 frontend. Go
 owns the ConPTY processes, transcript discovery, usage accounting, settings and notes.
 The frontend owns terminal rendering, the sidebar, tab state and saved tab descriptions.
 
@@ -17,19 +17,25 @@ graph LR
   Core <--> App
   App <-->|Wails binding + events| Transport[src/lib/desktop.ts]
   Transport <--> UI[Svelte + xterm.js]
-  App <-->|JSON lines| Sidecar[sidecar: Node]
+  App <-->|JSON lines| Sidecar[sidecar: Bun]
   Sidecar <-->|Agent SDK| Claude[claude]
   Sidecar <-->|app-server| Codex[codex]
 ```
 
 ## Desktop boundary
 
-`main.go` embeds `dist/`, creates the Wails window, and starts and stops `App`. Every
-exported method on `App` is a command. Wails generates typed bindings for them in
-`wailsjs/go/` (`npm run bindings`), which are committed, and CI fails if they drift from
-the Go methods. `src/lib/ipc.ts` wraps them with the app's types; `src/lib/desktop.ts`
-does events, PTY channels, notifications, save dialogs and zoom. A failed command
-rejects its promise with the Go error.
+`main.go` embeds `dist/`, creates the Wails application and its one window, and registers
+`App` and the notifications service as Wails services; `App.ServiceStartup` and
+`ServiceShutdown` start and stop it. Every exported method on `App` is a command.
+`wails3 generate bindings` (`bun run bindings`) writes typed TypeScript for them to
+`src/bindings/`, which is committed, and CI fails if it drifts from the Go methods. The
+page calls them over Wails' in-process IPC (`@wailsio/runtime`). `src/lib/bound.ts` makes a
+failed command reject with the Go error's message, as Wails v2 did; `src/lib/ipc.ts` wraps
+the commands with the app's types; `src/lib/desktop.ts` does events (`Events.On`, whose
+payload is `ev.data`), PTY channels, notifications, save dialogs and zoom. Closing the
+window calls `app.Quit()`, because Wails v3 skips the shutdown hooks when the last window
+closes (wails#6368). Wails v3 has no runtime theme switch, so `SetWindowTheme` sets the
+window's dark mode directly (`w32.SetTheme`).
 
 `ReadTextFile` and `WriteTextFile` back the Edit file button on Edit and Write calls. Both
 take an absolute local path (no UNC) to an existing regular file, not a symlink, of at most
@@ -38,7 +44,7 @@ mode and ACLs stay. The page re-reads before saving and refuses if the file chan
 runs the file in an iframe with `sandbox="allow-scripts"` (never `allow-same-origin`) and a
 CSP that blocks remote loads.
 
-One copy runs per exe path (Wails' `SingleInstanceLock`, keyed on a hash of the path), so
+One copy runs per exe path (Wails' `SingleInstance`, keyed on a hash of the path), so
 `atc-dev` and the installed `atc.exe` run side by side. A second launch hands its arguments
 to the running copy and exits. `atc --open <dir>` opens a shell tab in `<dir>`: `main.go`
 makes the path absolute first, since the running copy has another working directory. A
@@ -55,7 +61,8 @@ failed spawn. The other events are `index://updated`, `settings://updated` and
 |---|---|
 | `app.go` | Lifecycle, command dispatch, PTY registry, file watching, migration |
 | `agents.go` | The agent sidecar: starting it, routing its sessions, the CLI each one runs |
-| `sidecar/` | Node: `claude.ts` (Agent SDK), `codex.ts` (app-server), `protocol.ts` (the events) |
+| `runtime.go` | What runs the sidecar: Bun on PATH, ATC's own pinned Bun (downloaded and checked), or Node |
+| `sidecar/` | Bun: `claude.ts` (Agent SDK), `codex.ts` (app-server), `protocol.ts` (the events) |
 | `limits.go` | Claude's plan-limit HTTP request and Codex's app-server limits |
 | `sessions.go` | Session preview, transcript search and Rename with Haiku or Luna |
 | `accounts.go` | Claude accounts: DPAPI storage and the env each launch gets |
@@ -94,15 +101,22 @@ process tree. Quitting stops the limit helpers, the watchers and every owned PTY
 
 ## Agent sessions
 
-Claude and Codex tabs have no terminal. One Node process, the sidecar in `sidecar/`, runs
+Claude and Codex tabs have no terminal. One Bun process, the sidecar in `sidecar/`, runs
 every session: Claude through the Agent SDK's `query()`, Codex through `codex app-server`.
 Both become the same events (`sidecar/protocol.ts`): `ready` with commands, skills,
 models and modes; `item`, `delta`, `output`, `result` and `progress` for the chat;
 `request` and `resolved` for permissions, questions and plans; `working`; `exit`.
 
-`agents.go` starts Node on the first session. It needs `node` on PATH, 18 or later. The
-sidecar is `ATC_SIDECAR` when set (the dev host points it at `sidecar/agent.ts`, which
-Node runs with types stripped), else the bundle `npm run build` puts in
+`agents.go` starts the sidecar on the first session, with the runtime `runtime.go` picks
+from Settings > Agents > Runtime (`agent.runtime`). `auto` takes `bun` on PATH when it is
+at least `bunMin`, else ATC's own Bun (`bunVersion`), else `node` 18 or later on PATH; `bun`
+skips the Node fallback, `node` uses only Node, and anything else is a path. ATC's own Bun
+is downloaded on the first chat that needs it into `<config>/runtime/bun-<version>/`: the
+zip is checked against the SHA-256 pinned in `runtime.go`, only `bun.exe` is unpacked, and
+older versions are deleted. The baseline build is used on CPUs without AVX2. Progress
+reaches the chat as `runtime://progress`. `bun scripts/pin-bun.mjs <version>` prints the
+constants for a new Bun. The sidecar is `ATC_SIDECAR` when set (the dev host points it at
+`sidecar/agent.ts`, which Bun runs directly), else the bundle `bun run build` puts in
 `dist/sidecar/agent.mjs`, embedded with `dist/` and written to `<config>/sidecar/`.
 `AgentOpen` resolves the CLI from settings (npm's `claude.cmd` and `codex.cmd` become the
 scripts beside them, so no shell parses the arguments), passes the `args` and, for chats, `chatArgs` settings, and gives Codex `CODEX_HOME`.
@@ -279,8 +293,8 @@ and idle) comes first: blocked, then whichever started waiting most recently. Wo
 open and exited follow, each longest in its state first, and tabs marked done sit
 between shells and exited.
 
-The UI zooms with CSS `zoom` on the page, because Wails cannot change WebView2's zoom
-after startup. The terminal area undoes that zoom and scales its font, or xterm measures
+The UI zooms with CSS `zoom` on the page. Wails v2 could not change WebView2's zoom after
+startup; v3 can, but the terminal measurements below assume CSS zoom. The terminal area undoes that zoom and scales its font, or xterm measures
 wrong. Pointer and `getBoundingClientRect` positions are on-screen pixels, while a fixed
 element's `left` and `top` are zoomed again, so menus, tooltips and drags divide by
 `pageZoom()` from `src/lib/desktop.ts`.
@@ -369,8 +383,8 @@ Things that cost time once. Add to this list.
   arrive.
 - Codex's first shell command can take half a minute when `pwsh` loads a heavy profile.
   The tool line shows it running; nothing is stuck.
-- The first `npm run play` after a lockfile change makes Vite re-optimize dependencies,
-  past the 10 s Wails waits for its URL. Run it again, or start `npx vite` once first.
+- The first `bun run play` after a lockfile change makes Vite re-optimize dependencies and
+  reload the page once. Vite listens on 127.0.0.1, because Wails v3's dev proxy dials IPv4.
 
 **Transcripts**
 - `~/.claude/projects/<dir>` names are lossy: `D:\Coding\game_tracker_app` becomes
@@ -401,27 +415,48 @@ Things that cost time once. Add to this list.
 
 ## Development
 
-`npm run play` runs the dev app on synthetic histories in `playground/config`;
-`npm run desktop:dev` runs it on your real ones. Go edits rebuild the host, frontend
-edits go through Vite. The launcher mirrors the Go sources into `wails-dev-work/` so Wails
-does not scan WebView profiles and build output; that folder is generated. If the dev app
-fails with "Timed out waiting for Vite", an earlier run left Vite on port 1420. Stop
-that process and start again. `npm run desktop:build` writes `build/bin/atc.exe`, and
-`npm run desktop:package` adds the MSI and NSIS installers.
+`bun run play` runs the dev app on synthetic histories in `playground/config`;
+`bun run desktop:dev` runs it on your real ones. Go edits rebuild the host, frontend
+edits go through Vite. `scripts/dev-host.mjs` runs Vite and `build/bin/atc-dev.exe`, a build
+without the `production` tag, which loads its page from `FRONTEND_DEVSERVER_URL`; saving a
+Go file rebuilds and restarts it, and closing the window ends the session. If Vite fails
+because port 1420 is taken, an earlier run left it there: stop that process. `bun run
+desktop:build` writes `build/bin/atc.exe`: `wails3 generate syso` turns `build/windows`
+and `wails.json`'s `info` into Windows resources, then `go build -tags production`.
+`bun run desktop:package` adds the MSI and NSIS installers.
 
 `scripts/shot.ps1` captures the window with `PrintWindow`, which works while it is covered
 and never grabs another app. A capture taken mid-scroll can show torn glyphs; take another
-before believing it. `scripts/sendkeys.ps1` sends real keys but takes focus. To drive the
-UI without taking focus, open the dev server's page (`http://localhost:34115`) in headless
-Edge with a remote-debugging port, and use the DevTools protocol to click, type and read.
-Import the manager module the app already loaded (its URL ends in `manager.ts?t=…`) to
-read terminal text with `screenText`; WebGL canvases hide it from the DOM. Reloading that
-page breaks its terminals, so start a new headless Edge instead.
+before believing it. `scripts/sendkeys.ps1` sends real keys but takes focus.
 
-`npm test` runs Vitest and the Go tests, including native ConPTY tests; on a fresh
-checkout run `npm run build` first, since `main.go` embeds `dist/`. `npm run test:e2e`
+`scripts/drive.mjs` drives the UI without focus or OS input, for agents and scripts:
+
+```
+bun scripts/drive.mjs start            # fixtures in a throwaway config; --real for ~/.claude
+bun scripts/drive.mjs eval "atc.set({ ui: { corners: 'round' } })"
+bun scripts/drive.mjs eval "(await atc.mod('terminal/manager.ts')).screenText(key)"
+bun scripts/drive.mjs shot out.png
+bun scripts/drive.mjs logs             # console errors, exceptions, rejections since load
+bun scripts/drive.mjs stop
+```
+
+`start` runs Vite and builds `build/bin/atc-server.exe` with Wails v3's `server` tag: no
+window, and the page and its bindings served over HTTP at `http://localhost:34115`,
+proxied to Vite. Go's build cache makes an unchanged tree build in about a second, so a
+start takes about 15 s. A headless Edge opens that page and talks to the same Go backend.
+A hidden desktop window would not do: it renders no frames, so `requestAnimationFrame`,
+which opening a terminal waits for, never fires. Native dialogs and notifications are
+no-ops in the server build; check them in the desktop build. Edge opens `about:blank` first, so a prelude runs before the app's
+scripts: it records errors and adds `window.atc` helpers. `atc.mod(path)` imports the
+module instance the app already loaded rather than a second copy. If Vite reloads the
+page while it finds dependencies, `start` replaces the Edge page, because a reload cuts
+off its terminals; a later reload drops the prelude, and the next command puts it back. State lives in `%TEMP%\atc-drive`; `stop` kills only what `start`
+started, and anything on ports 1420 and 34115 that runs from this checkout.
+
+`bun run test` runs Vitest and the Go tests, including native ConPTY tests; on a fresh
+checkout run `bun run build` first, since `main.go` embeds `dist/`. `bun run test:e2e`
 builds a test binary in `build/e2e` and drives a real WebView2 window over WebDriver with
 throwaway fixtures. It needs a desktop, and two of its tests (clipboard, Save dialog) take
-focus. It saves screenshots and memory samples in `benchmarks/`. CI runs `npm test` and
-`npm run lint` on pull requests from `develop` to `main` and on pushes to `main`; other
-branches skip it. Releases build from `v*` tags.
+focus. It saves screenshots and memory samples in `benchmarks/`. CI runs `bun run test` and
+`bun run lint` on pull requests from `develop` to `main` and on pushes to `main`; other
+branches skip it. Releases build from `v*` tags, then merge the tagged commit into `develop`.

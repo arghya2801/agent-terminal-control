@@ -92,7 +92,7 @@
   .rate-label {
     position: absolute;
     left: 0;
-    font-size: 10px;
+    font-size: calc(10px * var(--ui-scale, 1));
   }
   .hit {
     position: relative;

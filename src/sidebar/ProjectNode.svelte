@@ -194,7 +194,7 @@
     background: transparent;
     color: var(--fg);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     font-weight: 500;
     text-align: left;
     cursor: pointer;
@@ -222,13 +222,13 @@
   .pin {
     flex-shrink: 0;
     color: var(--accent);
-    font-size: 8px;
+    font-size: calc(8px * var(--ui-scale, 1));
   }
   .count {
     flex-shrink: 0;
     margin-left: auto;
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
     font-weight: 400;
     font-variant-numeric: tabular-nums;
   }
@@ -240,7 +240,7 @@
     height: 22px;
     place-items: center;
     border: none;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     background: transparent;
     color: var(--fg-faint);
     cursor: pointer;
@@ -262,7 +262,7 @@
     padding: 5px 10px 2px 40px;
     color: var(--info);
     font-family: ui-monospace, monospace;
-    font-size: 10px;
+    font-size: calc(10px * var(--ui-scale, 1));
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -279,7 +279,7 @@
     background: transparent;
     color: var(--fg-faint);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
     text-align: left;
   }
   .more {

@@ -183,6 +183,7 @@ class Server {
   }
 
   private send(method: string, params: Obj): Promise<any> {
+    if (this.dead) return Promise.reject(new Error('Codex exited'));
     const id = this.next++;
     this.write({ id, method, params });
     return new Promise((resolve, reject) => this.calls.set(id, { resolve, reject }));
@@ -233,8 +234,11 @@ class Server {
     return this.exited;
   }
 
+  /** On Windows kill() ends only codex.js (or cmd.exe), which never forwards it, and the
+   *  native codex.exe would keep holding its threads. */
   kill() {
-    this.proc.kill();
+    if (process.platform !== 'win32' || !this.proc.pid) return void this.proc.kill();
+    spawn('taskkill', ['/T', '/F', '/PID', String(this.proc.pid)], { windowsHide: true }).on('error', () => this.proc.kill());
   }
 }
 
@@ -410,7 +414,9 @@ export class Codex {
           this.echoed.set(item.id, this.echo);
           this.echo = '';
         }
-        if (item) this.live({ t: 'item', item: item.kind === 'user' ? { ...rest, id: this.echoed.get(item.id) ?? item.id, turn: p.turnId, ...(images?.length ? { sentImages: images.length } : {}) } as ChatItem : item });
+        const echo = item?.kind === 'user' ? this.echoed.get(item.id) : undefined;
+        if (echo && method === 'item/completed') this.echoed.delete(item!.id);
+        if (item) this.live({ t: 'item', item: item.kind === 'user' ? { ...(echo ? rest : item), id: echo ?? item.id, turn: p.turnId, ...(echo && images?.length ? { sentImages: images.length } : {}) } as ChatItem : item });
         else this.seen(`item ${p.item?.type}`);
         if (item?.kind === 'tool' && item.done) this.live({ t: 'result', id: item.id, output: item.output ?? '', error: !!item.error, declined: item.declined });
         return;

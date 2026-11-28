@@ -79,10 +79,15 @@ function run(op: AgentOp) {
 
 createInterface({ input: process.stdin })
   .on('line', (line) => {
+    let op: AgentOp | undefined;
     try {
-      run(JSON.parse(line));
+      op = JSON.parse(line) as AgentOp;
+      run(op);
     } catch (e) {
       log('bad op:', String(e), line.slice(0, 200));
+      // A session that failed to open, or a catalog, waits on an exit; anything else hears an error.
+      const message = String((e as Error)?.message ?? e);
+      if (op?.id) emit(op.id, op.op === 'open' || op.op === 'catalog' ? { t: 'exit', message } : { t: 'error', message });
     }
   })
   // Go closes stdin when ATC quits.

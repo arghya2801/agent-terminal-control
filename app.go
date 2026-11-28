@@ -20,8 +20,9 @@ import (
 	"atc/internal/core"
 	"atc/internal/pty"
 	"github.com/fsnotify/fsnotify"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	wr "github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/services/notifications"
+	"github.com/wailsapp/wails/v3/pkg/w32"
 	"golang.org/x/sys/windows"
 )
 
@@ -29,11 +30,17 @@ type App struct {
 	pageID       string
 	diskMu       sync.Mutex
 	watchMu      sync.Mutex
+	claudeRoot   string // claudeRoot and codexRoot are set by arm, under watchMu
+	codexRoot    string
 	ctx          context.Context
+	wapp         *application.App
+	win          *application.WebviewWindow
+	notifier     *notifications.NotificationService
 	config       string
 	mu           sync.Mutex
 	settings     core.Object
 	notes        string
+	userCSS      string
 	ptys         map[string]*pty.Session
 	index        core.Index
 	costs        core.Costs
@@ -59,8 +66,8 @@ func (a *App) TakeOpen() string {
 
 // secondLaunch runs when ATC starts while this copy runs: this one comes forward and opens
 // the folder the other was given, which then exits.
-func (a *App) secondLaunch(d options.SecondInstanceData) {
-	wr.WindowShow(a.ctx)
+func (a *App) secondLaunch(d application.SecondInstanceData) {
+	a.bringForward()
 	if dir := openArg(d.Args); dir != "" {
 		a.emit("open://dir", dir)
 	}
@@ -87,6 +94,28 @@ func openArg(args []string) string {
 func NewApp(config string) *App {
 	return &App{config: config, ptys: map[string]*pty.Session{}, index: core.Index{CachePath: filepath.Join(config, "index-go.json")}}
 }
+
+// bringForward shows the window without changing its size: a maximised window stays
+// maximised (#281).
+func (a *App) bringForward() {
+	if a.win == nil {
+		return
+	}
+	if a.win.IsMinimised() {
+		a.win.Restore()
+	}
+	a.win.Show()
+	a.win.Focus()
+}
+
+func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+	a.startup(ctx)
+	return nil
+}
+func (a *App) ServiceShutdown() error {
+	a.shutdown()
+	return nil
+}
 func (a *App) startup(ctx context.Context) {
 	a.ctx, a.cancel = context.WithCancel(ctx)
 	a.load()
@@ -101,19 +130,7 @@ func (a *App) startup(ctx context.Context) {
 		go a.watch()
 	}
 }
-func (a *App) ready(ctx context.Context) {
-	_ = wr.InitializeNotifications(ctx)
-	// A click on a notification brings ATC forward on the tab it came from.
-	wr.OnNotificationResponse(ctx, func(r wr.NotificationResult) {
-		if r.Error != nil || r.Response.ID == "" {
-			return
-		}
-		// Show restores only a minimised window; Unminimise also un-maximised it (#281).
-		wr.WindowShow(ctx)
-		a.emit("notification://clicked", r.Response.ID)
-	})
-}
-func (a *App) shutdown(ctx context.Context) {
+func (a *App) shutdown() {
 	a.cancel()
 	if a.watcher != nil {
 		a.watcher.Close()
@@ -121,7 +138,6 @@ func (a *App) shutdown(ctx context.Context) {
 	a.limits.stop()
 	a.agents.stop()
 	a.killAll()
-	wr.CleanupNotifications(ctx)
 }
 
 // killAll ends every terminal, waiting briefly for each to finish.
@@ -133,6 +149,9 @@ func (a *App) killAll() {
 		delete(a.ptys, id)
 	}
 	a.mu.Unlock()
+	killWait(sessions)
+}
+func killWait(sessions []*pty.Session) {
 	for _, p := range sessions {
 		p.Kill()
 	}
@@ -171,8 +190,8 @@ func (a *App) getSettings() core.Object {
 	return core.Obj(core.Clone(a.settings))
 }
 func (a *App) emit(name string, value any) {
-	if a.ctx != nil {
-		wr.EventsEmit(a.ctx, name, value)
+	if a.wapp != nil {
+		a.wapp.Event.Emit(name, value)
 	}
 }
 func (a *App) arm() {
@@ -181,13 +200,15 @@ func (a *App) arm() {
 	}
 	a.watchMu.Lock()
 	defer a.watchMu.Unlock()
-	s := a.getSettings()
-	c, x := core.Roots(s)
+	c, x := core.Roots(a.getSettings())
+	a.claudeRoot, a.codexRoot = c, x
 	desired := map[string]bool{}
+	// Claude sessions are <root>/<project>/<session>.jsonl, so watching one level down is enough.
 	for _, target := range []struct {
 		path      string
 		recursive bool
-	}{{a.config, false}, {c, true}, {x, false}, {filepath.Join(x, "sessions"), true}} {
+		shallow   bool
+	}{{a.config, false, false}, {c, true, true}, {x, false, false}, {filepath.Join(x, "sessions"), true, false}} {
 		root := target.path
 		if !core.IsDir(root) {
 			for !core.IsDir(root) {
@@ -205,6 +226,9 @@ func (a *App) arm() {
 			_ = filepath.WalkDir(root, func(p string, d os.DirEntry, e error) error {
 				if e == nil && d.IsDir() {
 					desired[p] = true
+					if target.shallow && p != root {
+						return filepath.SkipDir
+					}
 				}
 				return nil
 			})
@@ -241,10 +265,15 @@ func (a *App) watch() {
 			if !ok {
 				return
 			}
+			a.watchMu.Lock()
+			c, x := a.claudeRoot, a.codexRoot
+			a.watchMu.Unlock()
 			if e.Has(fsnotify.Create) && core.IsDir(e.Name) {
-				a.arm()
+				if rest, ok := strings.CutPrefix(core.PathKey(e.Name), core.PathKey(c)+`\`); !ok || !strings.Contains(rest, `\`) {
+					a.arm()
+				}
 			}
-			if c, x := core.Roots(a.getSettings()); !refreshNeeded(e, a.config, c, x) {
+			if !refreshNeeded(e, a.config, c, x) {
 				continue
 			}
 			if timer == nil {
@@ -274,7 +303,7 @@ func refreshNeeded(e fsnotify.Event, config, claude, codex string) bool {
 	}
 	onPathTo := func(root string) bool { r := core.PathKey(root); return r == p || strings.HasPrefix(r, p+`\`) }
 	structural := e.Has(fsnotify.Create) || e.Has(fsnotify.Remove) || e.Has(fsnotify.Rename)
-	if rest, ok := under(config); ok && (rest == "settings.json" || rest == "notes.md") {
+	if rest, ok := under(config); ok && (rest == "settings.json" || rest == "notes.md" || rest == "user.css") {
 		return true
 	}
 	if rest, ok := under(claude); ok && rest != "" {
@@ -314,6 +343,14 @@ func (a *App) refreshFiles() {
 			a.emit("notes://updated", string(b))
 		}
 	}
+	css := a.UserCSS()
+	a.mu.Lock()
+	cssChanged := css != a.userCSS
+	a.userCSS = css
+	a.mu.Unlock()
+	if cssChanged {
+		a.emit("usercss://updated", css)
+	}
 	a.diskMu.Unlock()
 	snap := a.index.Scan(a.getSettings(), false)
 	text := core.ProjectionKey(snap)
@@ -336,7 +373,7 @@ func (a *App) session(id string) (*pty.Session, error) {
 }
 
 // The frontend's command surface. Wails binds every exported method on App and generates
-// typed TypeScript for it in wailsjs/go/main, so a wrong name or argument fails the build.
+// typed TypeScript for it in src/bindings, so a wrong name or argument fails the build.
 
 // FrontendReady kills the shells and agent sessions of a page that was replaced by a full
 // reload.
@@ -355,13 +392,7 @@ func (a *App) FrontendReady(pageID string) {
 	if replaced {
 		a.agents.stop()
 	}
-	for _, p := range old {
-		p.Kill()
-		select {
-		case <-p.Done():
-		case <-time.After(2 * time.Second):
-		}
-	}
+	killWait(old)
 }
 
 func (a *App) SettingsGet() core.Object { return a.getSettings() }
@@ -390,6 +421,22 @@ func (a *App) SettingsSet(settings any) error {
 		a.emit("index://updated", a.index.Scan(next, false))
 	}
 	return nil
+}
+
+// UserCSS is the user's own stylesheet, user.css in the config folder, applied after the app's.
+func (a *App) UserCSS() string {
+	b, _ := os.ReadFile(filepath.Join(a.config, "user.css"))
+	return string(b)
+}
+
+// SaveTheme writes a theme to the themes folder under a name made safe for a file name.
+func (a *App) SaveTheme(name string, theme core.Object) (string, error) {
+	stem := strings.Trim(regexp.MustCompile(`[^\w -]+`).ReplaceAllString(name, ""), " .")
+	if stem == "" {
+		return "", fmt.Errorf("a theme needs a name")
+	}
+	theme["name"] = name
+	return stem, core.Save(filepath.Join(a.config, "themes", stem+".json"), theme)
 }
 
 func (a *App) NotesGet() string {
@@ -443,7 +490,7 @@ func (a *App) AppendLog(line string) error {
 		}
 	}
 	keep = append(keep, now.Format(layout)+" "+strings.ReplaceAll(line, "\n", " "))
-	return os.WriteFile(path, []byte(strings.Join(keep, "\n")+"\n"), 0o600)
+	return core.WriteFile(path, []byte(strings.Join(keep, "\n")+"\n"))
 }
 
 func (a *App) AgentCommand(provider, sessionID string, chat bool) (string, error) {
@@ -460,13 +507,23 @@ func (a *App) PtySpawn(opts pty.Options, channel string) (string, error) {
 	}
 	opts.Env = a.accountEnv(opts.Account)
 	id := pty.ID()
+	a.mu.Lock()
+	page := a.pageID
+	a.mu.Unlock()
 	p, e := pty.Spawn(opts, func(event pty.Event) { a.emit(channel, event) })
 	if e != nil {
 		return "", e
 	}
 	a.mu.Lock()
-	a.ptys[id] = p
+	stale := a.pageID != page
+	if !stale {
+		a.ptys[id] = p
+	}
 	a.mu.Unlock()
+	if stale {
+		p.Kill()
+		return "", fmt.Errorf("page reloaded during spawn")
+	}
 	return id, nil
 }
 
@@ -669,6 +726,7 @@ func (a *App) ConfigFiles(project string) []ConfigFile {
 	add("Claude instructions", filepath.Join(claude, "CLAUDE.md"), true)
 	add("Codex config", filepath.Join(codex, "config.toml"), true)
 	add("Codex instructions", filepath.Join(codex, "AGENTS.md"), true)
+	add("ATC styles", filepath.Join(a.config, "user.css"), true)
 	if filepath.IsAbs(project) {
 		add("Project settings", filepath.Join(project, ".claude", "settings.json"), false)
 		add("Project local settings", filepath.Join(project, ".claude", "settings.local.json"), false)
@@ -708,15 +766,15 @@ type FileFilter struct {
 // SaveTextFile asks where to save contents and writes them there, returning the path, or
 // null when cancelled. The page never names the path, so it can't write anywhere else (#230).
 func (a *App) SaveTextFile(defaultPath string, filters []FileFilter, contents string) (any, error) {
-	wf := []wr.FileFilter{}
+	wf := []application.FileFilter{}
 	for _, f := range filters {
 		patterns := []string{}
 		for _, ext := range f.Extensions {
 			patterns = append(patterns, "*."+ext)
 		}
-		wf = append(wf, wr.FileFilter{DisplayName: f.Name, Pattern: strings.Join(patterns, ";")})
+		wf = append(wf, application.FileFilter{DisplayName: f.Name, Pattern: strings.Join(patterns, ";")})
 	}
-	path, e := wr.SaveFileDialog(a.ctx, wr.SaveDialogOptions{DefaultFilename: defaultPath, Filters: wf})
+	path, e := a.wapp.Dialog.SaveFileWithOptions(&application.SaveFileDialogOptions{Filename: defaultPath, Filters: wf}).PromptForSingleSelection()
 	if e != nil || path == "" {
 		return nil, e
 	}
@@ -725,17 +783,31 @@ func (a *App) SaveTextFile(defaultPath string, filters []FileFilter, contents st
 
 // FolderDialog returns the chosen folder, or null when cancelled.
 func (a *App) FolderDialog() (any, error) {
-	path, e := wr.OpenDirectoryDialog(a.ctx, wr.OpenDialogOptions{Title: "Open a folder"})
+	path, e := a.wapp.Dialog.OpenFileWithOptions(&application.OpenFileDialogOptions{Title: "Open a folder", CanChooseDirectories: true}).PromptForSingleSelection()
 	return core.Nullable(path), e
 }
 
-func (a *App) NotificationPermission() (bool, error) { return wr.CheckNotificationAuthorization(a.ctx) }
+func (a *App) NotificationPermission() (bool, error) {
+	return a.notifier.CheckNotificationAuthorization()
+}
 
-func (a *App) NotificationRequest() (bool, error) { return wr.RequestNotificationAuthorization(a.ctx) }
+func (a *App) NotificationRequest() (bool, error) {
+	return a.notifier.RequestNotificationAuthorization()
+}
 
 // NotificationSend shows a Windows notification; id comes back on a click, as the tab to open.
 func (a *App) NotificationSend(title, body, id string) error {
-	return wr.SendNotification(a.ctx, wr.NotificationOptions{ID: id, Title: title, Body: body})
+	return a.notifier.SendNotification(notifications.NotificationOptions{ID: id, Title: title, Body: body})
+}
+
+// SetWindowTheme matches the title bar and backdrop to a light or dark palette. Wails v3 has
+// no runtime theme switch, so this goes to the window directly.
+func (a *App) SetWindowTheme(light bool) {
+	if a.win != nil {
+		if h := a.win.NativeWindow(); h != nil {
+			w32.SetTheme(uintptr(h), !light)
+		}
+	}
 }
 
 // GitChanges is what `git diff HEAD` and untracked files say changed in dir, or null when

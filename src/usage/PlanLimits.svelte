@@ -83,14 +83,16 @@
     // The app polls Claude's limits already; only a stale answer is refreshed here.
     if (Date.now() - planState.claudeAt > refreshMs('claude')) void loadClaudeLimits();
     if (Date.now() - planState.codexAt > refreshMs('codex')) void loadCodexLimits();
-    // Each Codex read starts a `codex app-server` process, so it refreshes less often.
-    const codexPoll = setInterval(() => !document.hidden && void loadCodexLimits(), refreshMs('codex'));
     const tick = setInterval(() => (now = Date.now()), 30_000);
     return () => {
       void codexUsageStop();
-      clearInterval(codexPoll);
       clearInterval(tick);
     };
+  });
+  // Each Codex read starts a `codex app-server` process, so it refreshes less often.
+  $effect(() => {
+    const codexPoll = setInterval(() => !document.hidden && void loadCodexLimits(), refreshMs('codex'));
+    return () => clearInterval(codexPoll);
   });
 </script>
 
@@ -219,7 +221,7 @@
   .tag {
     margin-left: 6px;
     padding: 1px 6px;
-    border-radius: 8px;
+    border-radius: calc(8px * var(--radius-scale, 1));
     background: var(--bg-surface);
     color: var(--fg-dim);
     letter-spacing: 0;
@@ -237,7 +239,7 @@
     gap: 4px 12px;
     margin-bottom: 5px;
     color: var(--fg);
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale, 1));
   }
   .pct.hot {
     color: var(--warn);
@@ -264,7 +266,7 @@
   }
   .pace {
     color: var(--fg-dim);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   .pace.hot {
     color: var(--warn);

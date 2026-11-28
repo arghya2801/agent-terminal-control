@@ -215,21 +215,30 @@ func Start(args []string, opts Options, emit func(Event)) (*Session, error) {
 
 // Decode preserves incomplete UTF-8 between pipe reads, replacing malformed bytes.
 func Decode(carry, data []byte, final bool) (string, []byte) {
-	b := append(carry, data...)
-	var out strings.Builder
-	for len(b) > 0 {
-		if !utf8.FullRune(b) && !final {
-			return out.String(), append([]byte(nil), b...)
-		}
-		r, n := utf8.DecodeRune(b)
-		if !utf8.FullRune(b) && final {
-			out.WriteRune(utf8.RuneError)
+	b := data
+	if len(carry) > 0 {
+		b = append(carry, data...)
+	}
+	cut := len(b)
+	for i := len(b) - 1; i >= 0 && i > len(b)-utf8.UTFMax; i-- {
+		if utf8.RuneStart(b[i]) {
+			if !utf8.FullRune(b[i:]) {
+				cut = i
+			}
 			break
 		}
-		out.WriteRune(r)
-		b = b[n:]
 	}
-	return out.String(), nil
+	out := string(b[:cut])
+	if !utf8.ValidString(out) {
+		out = string([]rune(out))
+	}
+	if cut == len(b) {
+		return out, nil
+	}
+	if final {
+		return out + string(utf8.RuneError), nil
+	}
+	return out, append([]byte(nil), b[cut:]...)
 }
 func (s *Session) stream(emit func(Event)) {
 	defer close(s.done)
@@ -295,19 +304,19 @@ func (s *Session) stream(emit func(Event)) {
 			s.stats.Sends++
 			s.mu.Unlock()
 			emit(Event{T: "o", D: piece})
-			if !cprArmed && strings.Contains(piece, "\x1b[6n") {
-				cprArmed = true
-				before := s.Stats().BytesOut
-				go func() {
-					select {
-					case <-time.After(1200 * time.Millisecond):
-						if s.Stats().BytesOut == before {
-							_ = s.Write("\x1b[1;1R")
-						}
-					case <-s.done:
+		}
+		if !cprArmed && strings.Contains(text, "\x1b[6n") {
+			cprArmed = true
+			before := s.Stats().BytesOut
+			go func() {
+				select {
+				case <-time.After(1200 * time.Millisecond):
+					if s.Stats().BytesOut == before {
+						_ = s.Write("\x1b[1;1R")
 					}
-				}()
-			}
+				case <-s.done:
+				}
+			}()
 		}
 	}
 	consume := func(b []byte) { txt, rest := Decode(carry, b, false); carry = rest; pending.WriteString(txt) }
@@ -366,11 +375,12 @@ func (s *Session) cleanup() {
 	s.mu.Lock()
 	s.closed = true
 	s.cond.Broadcast()
+	windows.CloseHandle(s.process)
+	s.process = 0
 	s.mu.Unlock()
 	close(s.stop) // releases a reader blocked on `data` once stream has stopped draining it
 	s.input.Close()
 	s.output.Close()
-	windows.CloseHandle(s.process)
 }
 func (s *Session) Write(data string) error {
 	s.writeMu.Lock()
@@ -409,7 +419,11 @@ func (s *Session) Kill() {
 		s.cond.Broadcast()
 		s.mu.Unlock()
 		KillTree(s.PID)
-		windows.TerminateProcess(s.process, 1)
+		s.mu.Lock()
+		if s.process != 0 {
+			windows.TerminateProcess(s.process, 1)
+		}
+		s.mu.Unlock()
 		go s.closeConsole()
 	})
 }

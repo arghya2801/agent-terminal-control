@@ -88,16 +88,18 @@
     };
     document.addEventListener('pointerdown', down, true);
     document.addEventListener('keydown', hide, true);
-    document.addEventListener('focusout', hide);
-    window.addEventListener('blur', hide);
+    // Removing a focused element fires focusout mid-teardown, where writing state throws.
+    const later = () => queueMicrotask(hide);
+    document.addEventListener('focusout', later);
+    window.addEventListener('blur', later);
     document.addEventListener('scroll', hide, true);
     return () => {
       document.removeEventListener('pointerover', over);
       document.removeEventListener('focusin', focus);
       document.removeEventListener('pointerdown', down, true);
       document.removeEventListener('keydown', hide, true);
-      document.removeEventListener('focusout', hide);
-      window.removeEventListener('blur', hide);
+      document.removeEventListener('focusout', later);
+      window.removeEventListener('blur', later);
       document.removeEventListener('scroll', hide, true);
     };
   });
@@ -119,11 +121,11 @@
     gap: 8px;
     padding: 4px 8px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     background: var(--bg-chrome);
     box-shadow: var(--shadow-pop);
     color: var(--fg);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     line-height: 1.4;
     white-space: pre-line;
     /* A long command or path has no spaces to break at (#267). */
@@ -136,11 +138,11 @@
     padding: 0 5px;
     border: 1px solid var(--border);
     border-bottom-width: 2px;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     background: var(--bg-surface);
     color: var(--fg-dim);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
     white-space: nowrap;
   }
 </style>

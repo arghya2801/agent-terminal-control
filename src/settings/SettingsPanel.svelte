@@ -12,7 +12,11 @@
   import AccountsSection from './AccountsSection.svelte';
   import ConfigSection from './ConfigSection.svelte';
   import KeysSection from './KeysSection.svelte';
-  import { appVersion, openSettingsFile, openUrl, shells } from '../lib/ipc';
+  import ProfilesRow from './ProfilesRow.svelte';
+  import ThemeEditor from './ThemeEditor.svelte';
+  import { findTheme } from '../lib/themes';
+  import { HIDEABLE } from '../lib/hide';
+  import { agentRuntimeInUse, appVersion, openSettingsFile, openUrl, shells } from '../lib/ipc';
   import { accountState, appState, refresh, saveSettings, themeState } from '../lib/stores.svelte';
   import { cssVariables } from '../lib/theme';
   import type { Account, Settings } from '../types';
@@ -23,6 +27,8 @@
     { id: 's-general', label: 'General' },
     { id: 's-accounts', label: 'Accounts' },
     { id: 's-appearance', label: 'Appearance' },
+    { id: 's-chat', label: 'Chat' },
+    { id: 's-show', label: 'Show' },
     { id: 's-terminal', label: 'Terminal' },
     { id: 's-sidebar', label: 'Sidebar' },
     { id: 's-agents', label: 'Agents' },
@@ -44,6 +50,8 @@
   onMount(() => void shells().then((s) => (installed = s), () => {}));
   let version = $state('');
   onMount(() => void appVersion().then((v) => (version = v), () => {}));
+  let runtimeInUse = $state('');
+  onMount(() => void agentRuntimeInUse().then((r) => (runtimeInUse = r), () => {}));
   const shellName = (v: string) =>
     v === 'powershell' || /WindowsPowerShell/i.test(v) ? 'Windows PowerShell 5.1'
     : /7-preview/i.test(v) ? 'PowerShell 7 Preview'
@@ -65,6 +73,7 @@
   let claudeChatArgs = $state(joinArgs(appState.settings?.claude.chatArgs));
   let codexChatArgs = $state(joinArgs(appState.settings?.codex.chatArgs));
   let saved = $state(false);
+  let editingTheme = $state(false);
   const projects = $derived(appState.index.projects.filter((p) => p.path && p.exists));
 
   /** Three swatches per theme: the chrome, the accent and the foreground. */
@@ -90,6 +99,10 @@
         limitsRefreshSec: clamp(draft.ui.limitsRefreshSec, 15, 3600, 300),
         codexRefreshSec: clamp(draft.ui.codexRefreshSec, 15, 3600, 300),
         chatFontSize: clamp(draft.ui.chatFontSize, 9, 24, 13),
+        fontSize: clamp(draft.ui.fontSize, 9, 24, 13),
+        chatWidth: draft.ui.chatWidth ? clamp(draft.ui.chatWidth, 400, 2000, 0) : 0,
+        chatLineHeight: Number.isFinite(draft.ui.chatLineHeight) ? Math.min(2.2, Math.max(1.2, draft.ui.chatLineHeight)) : 1.6,
+        userBubbleWidth: clamp(draft.ui.userBubbleWidth, 30, 100, 85),
       },
       terminal: {
         ...draft.terminal,
@@ -306,20 +319,10 @@
           <input id="srf" type="checkbox" bind:checked={draft.ui.slashRecentFirst} />
           <span class="muted">The / menu lists the commands you used last at the top</span>
         </label>
-        <label for="mkh">Mode key hint</label>
-        <label class="check">
-          <input id="mkh" type="checkbox" bind:checked={draft.ui.showModeKeyHint} />
-          <span class="muted">Show Alt+M beside the permission mode chip</span>
-        </label>
         <label for="aap">Always allow in project</label>
         <label class="check">
           <input id="aap" type="checkbox" bind:checked={draft.agent.alwaysAllowProject} />
           <span class="muted">Claude's permission cards offer a button that saves the rule to the project's .claude/settings.local.json</span>
-        </label>
-        <label for="ssa">Subagent steps</label>
-        <label class="check">
-          <input id="ssa" type="checkbox" bind:checked={draft.agent.showSubagents} />
-          <span class="muted">A Claude subagent's own steps show under its Agent call. From the next session</span>
         </label>
       </div>
 
@@ -336,12 +339,15 @@
             {/each}
           </select>
           <span class="swatches" aria-hidden="true">
-            {#each swatches(draft.ui.theme) as colour (colour)}
+            {#each swatches(draft.ui.theme) as colour, i (i)}
               <span class="swatch" style="background: {colour}"></span>
             {/each}
           </span>
+          <button class="btn" onclick={() => (editingTheme = true)}>Edit…</button>
           <div class="muted hint">Applies as you pick. More themes: any terminal palette in <code>themes/</code> beside <code>settings.json</code>.</div>
         </div>
+        <label for="pf">Profiles</label>
+        <ProfilesRow bind:ui={draft.ui} />
         <label for="an">Animations</label>
         <div>
           <select id="an" bind:value={draft.ui.animations}>
@@ -359,23 +365,34 @@
             <button class="btn" onclick={() => draft && (draft.ui.animationSpeed = 1)}>Reset</button>
           {/if}
         </div>
-        <label for="urt">Usage reset time</label>
-        <label class="check">
-          <input id="urt" type="checkbox" bind:checked={draft.ui.usageResetTime} />
-          <span class="muted">Show when the 5-hour limit resets, beside the usage chip</span>
-        </label>
-        <label for="htc">Tool calls</label>
-        <label class="check">
-          <input id="htc" type="checkbox" bind:checked={draft.ui.hideToolCalls} />
-          <span class="muted">Hide tool calls in chat and show only the agent's text</span>
-        </label>
-        <label for="stb">Tab bar</label>
-        <label class="check">
-          <input id="stb" type="checkbox" bind:checked={draft.ui.showTabBar} />
-          <span class="muted">Show tabs across the top, as well as in the sidebar's Open view</span>
-        </label>
         <label for="zm">Zoom</label>
         <input id="zm" type="number" min="0.5" max="3" step="0.1" bind:value={draft.ui.zoom} />
+        <label for="uf">App font</label>
+        <input id="uf" class="wide" placeholder="Segoe UI" bind:value={draft.ui.fontFamily} />
+        <label for="ufs">Text size</label>
+        <input id="ufs" type="number" min="9" max="24" bind:value={draft.ui.fontSize} />
+        <label for="crn">Corners</label>
+        <select id="crn" bind:value={draft.ui.corners}>
+          <option value="square">Square</option>
+          <option value="default">Default</option>
+          <option value="round">Round</option>
+        </select>
+        <label for="sbs">Sidebar side</label>
+        <select id="sbs" bind:value={draft.ui.sidebarSide}>
+          <option value="left">Left</option>
+          <option value="right">Right</option>
+        </select>
+        <label for="tbp">Tab bar position</label>
+        <select id="tbp" disabled={!draft.ui.showTabBar} bind:value={draft.ui.tabBarPosition}>
+          <option value="top">Top</option>
+          <option value="bottom">Bottom</option>
+        </select>
+        <label for="tcb">Tab close button</label>
+        <select id="tcb" bind:value={draft.ui.tabClose}>
+          <option value="always">Always</option>
+          <option value="hover">On hover</option>
+          <option value="never">Never</option>
+        </select>
         <label for="ac">Accent colour</label>
         <div class="check">
           <input id="ac" type="color" value={draft.ui.accent || swatches(draft.ui.theme)[1] || '#539bf5'} oninput={(e) => draft && (draft.ui.accent = e.currentTarget.value)} />
@@ -399,10 +416,108 @@
           <input id="ss" type="checkbox" bind:checked={draft.ui.stateShapes} />
           <span class="muted">A shape for each tab state as well as a colour: square working, triangle stopped, diamond asking, ring idle</span>
         </label>
+      </div>
+
+      <h2 id="s-chat">Chat</h2>
+      <div class="grid">
         <label for="cfs2">Chat text size</label>
         <input id="cfs2" type="number" min="9" max="24" bind:value={draft.ui.chatFontSize} />
         <label for="cff">Chat font</label>
         <input id="cff" class="wide" placeholder="The app's font" bind:value={draft.ui.chatFontFamily} />
+        <label for="cw">Chat width</label>
+        <div>
+          <input id="cw" type="number" min="0" max="2000" step="50" bind:value={draft.ui.chatWidth} />
+          <span class="muted hint">px. 0 uses the full width</span>
+        </div>
+        <label for="clh">Line height</label>
+        <input id="clh" type="number" min="1.2" max="2.2" step="0.05" bind:value={draft.ui.chatLineHeight} />
+        <label for="csp">Spacing</label>
+        <select id="csp" bind:value={draft.ui.chatSpacing}>
+          <option value="compact">Compact</option>
+          <option value="comfortable">Comfortable</option>
+          <option value="spacious">Spacious</option>
+        </select>
+        <label for="ub">Your messages</label>
+        <select id="ub" bind:value={draft.ui.userBubble}>
+          <option value="right">Right</option>
+          <option value="left">Left</option>
+        </select>
+        <label for="ubw">Your message width</label>
+        <div>
+          <input id="ubw" type="number" min="30" max="100" step="5" bind:value={draft.ui.userBubbleWidth} />
+          <span class="muted hint">%</span>
+        </div>
+        <label for="cwr">Wrap code</label>
+        <label class="check">
+          <input id="cwr" type="checkbox" bind:checked={draft.ui.codeWrap} />
+          <span class="muted">Wrap long lines in code blocks instead of scrolling</span>
+        </label>
+        <label for="cdf">Code font</label>
+        <input id="cdf" class="wide" placeholder="The terminal's font" bind:value={draft.ui.codeFontFamily} />
+        <label for="cto">Tool calls start open</label>
+        <label class="check">
+          <input id="cto" type="checkbox" bind:checked={draft.ui.toolsOpen} />
+        </label>
+        <label for="cth">Thinking starts open</label>
+        <label class="check">
+          <input id="cth" type="checkbox" bind:checked={draft.ui.thinkingOpen} />
+        </label>
+      </div>
+
+      <h2 id="s-show">Show</h2>
+      <div class="grid">
+        <label for="stb">Tab bar</label>
+        <label class="check">
+          <input id="stb" type="checkbox" bind:checked={draft.ui.showTabBar} />
+          <span class="muted">Show tabs across the top, as well as in the sidebar's Open view</span>
+        </label>
+        <label for="urt">Usage reset time</label>
+        <label class="check">
+          <input id="urt" type="checkbox" bind:checked={draft.ui.usageResetTime} />
+          <span class="muted">Show when the 5-hour limit resets, beside the usage chip</span>
+        </label>
+        <label for="mkh">Mode key hint</label>
+        <label class="check">
+          <input id="mkh" type="checkbox" bind:checked={draft.ui.showModeKeyHint} />
+          <span class="muted">Show Alt+M beside the permission mode chip</span>
+        </label>
+        <label for="htc">Tool calls</label>
+        <label class="check">
+          <input id="htc" type="checkbox" bind:checked={draft.ui.hideToolCalls} />
+          <span class="muted">Hide tool calls in chat and show only the agent's text</span>
+        </label>
+        <label for="ssa">Subagent steps</label>
+        <label class="check">
+          <input id="ssa" type="checkbox" bind:checked={draft.agent.showSubagents} />
+          <span class="muted">A Claude subagent's own steps show under its Agent call. From the next session</span>
+        </label>
+        <label for="og">Output graph</label>
+        <label class="check">
+          <input id="og" type="checkbox" bind:checked={draft.ui.outputGraph} />
+          <span class="muted">Five minutes of output beside each row in the Open view</span>
+        </label>
+        <label for="rp">Open view rows show</label>
+        <div class="check">
+          <label class="check"><input id="rp" type="checkbox" bind:checked={draft.ui.rowProject} /> Project</label>
+          <label class="check"><input type="checkbox" bind:checked={draft.ui.rowState} /> State and time</label>
+          <label class="check"><input type="checkbox" bind:checked={draft.ui.rowContext} /> Context used</label>
+        </div>
+        {#each HIDEABLE as g (g.area)}
+          <label for="hide-{g.items[0].id}">{g.area}</label>
+          <div class="check wrap">
+            {#each g.items as it, i (it.id)}
+              <label class="check">
+                <input
+                  id={i === 0 ? `hide-${it.id}` : undefined}
+                  type="checkbox"
+                  checked={!draft.ui.hide.includes(it.id)}
+                  onchange={(e) => draft && (draft.ui.hide = e.currentTarget.checked ? draft.ui.hide.filter((x) => x !== it.id) : [...draft.ui.hide, it.id])}
+                />
+                {it.label}
+              </label>
+            {/each}
+          </div>
+        {/each}
       </div>
 
       <h2 id="s-terminal">Terminal</h2>
@@ -457,17 +572,6 @@
           <input id="gb" type="checkbox" bind:checked={draft.ui.groupByBranch} />
           <span class="muted">Group each project's sessions by git branch</span>
         </label>
-        <label for="og">Output graph</label>
-        <label class="check">
-          <input id="og" type="checkbox" bind:checked={draft.ui.outputGraph} />
-          <span class="muted">Five minutes of output beside each row in the Open view</span>
-        </label>
-        <label for="rp">Open view rows show</label>
-        <div class="check">
-          <label class="check"><input id="rp" type="checkbox" bind:checked={draft.ui.rowProject} /> Project</label>
-          <label class="check"><input type="checkbox" bind:checked={draft.ui.rowState} /> State and time</label>
-          <label class="check"><input type="checkbox" bind:checked={draft.ui.rowContext} /> Context used</label>
-        </div>
         <label for="ta">Task box</label>
         <div class="check">
           <select id="ta" aria-label="Task box agent" bind:value={draft.ui.taskAgent}>
@@ -511,6 +615,9 @@
         <span></span>
       </div>
       <div class="grid folders">
+        <label for="art">Runtime<span class="muted hint">What runs agent chats. Auto uses Bun on PATH, else downloads Bun, else Node. {runtimeInUse ? `In use: ${runtimeInUse}` : ''}</span></label>
+        <input id="art" class="wide" list="art-list" placeholder="auto" bind:value={draft.agent.runtime} />
+        <datalist id="art-list"><option value="auto"></option><option value="bun"></option><option value="node"></option></datalist>
         <label for="pd">Claude projects</label>
         <input
           id="pd"
@@ -709,6 +816,17 @@
     </SectionNav>
     </div>
   {/if}
+  {#if editingTheme && draft}
+    <ThemeEditor
+      base={findTheme(themeState.themes, draft.ui.theme)}
+      saved={draft.ui.theme}
+      onClose={() => (editingTheme = false)}
+      onSaved={(name) => {
+        if (draft) draft.ui.theme = name;
+        editingTheme = false;
+      }}
+    />
+  {/if}
 </Page>
 
 <style>
@@ -725,7 +843,7 @@
   }
   .col {
     color: var(--fg-dim);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     font-weight: 600;
   }
   .folders {
@@ -744,11 +862,11 @@
     box-sizing: border-box;
     padding: 0 10px;
     font: inherit;
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale, 1));
     color: var(--fg);
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: calc(7px * var(--radius-scale, 1));
   }
   .search::placeholder {
     color: var(--fg-faint);
@@ -777,7 +895,7 @@
   }
   label {
     color: var(--fg);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   input[type='number'] {
     width: 90px;
@@ -791,13 +909,17 @@
   .speed {
     min-width: 4ch;
     color: var(--fg-bright);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     font-variant-numeric: tabular-nums;
   }
   .check {
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+  .check.wrap {
+    flex-wrap: wrap;
+    gap: 6px 16px;
   }
   .wide {
     width: 100%;
@@ -806,23 +928,23 @@
   }
   .hint {
     margin-top: 3px;
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   select {
     padding: 5px 8px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     background: var(--bg);
     color: var(--fg-bright);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   .swatches {
     display: inline-flex;
     margin-left: 8px;
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     vertical-align: -3px;
   }
   .swatch {
@@ -831,7 +953,7 @@
   }
   code {
     padding: 0 3px;
-    border-radius: 3px;
+    border-radius: calc(3px * var(--radius-scale, 1));
     background: var(--bg-chrome);
   }
   .rename-row {

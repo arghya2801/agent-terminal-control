@@ -3,10 +3,11 @@
   import { agentCommand, openInExplorer, renameSession, searchTranscripts } from '../lib/ipc';
   import ConfirmDialog from '../lib/ConfirmDialog.svelte';
   import SessionPreview from './SessionPreview.svelte';
-  import { formatUsd, sessionStats } from '../lib/costs';
+  import { formatUsd } from '../lib/costs';
   import { loadCosts, planState } from '../lib/limits.svelte';
   import { relativeTime } from '../lib/format';
   import ProjectNode from './ProjectNode.svelte';
+  import ProjectTheme from './ProjectTheme.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import Icon from '../lib/Icon.svelte';
   import { filterProjects } from '../lib/filter';
@@ -72,13 +73,24 @@
   }
   /** "Archive old sessions…": older than `days`, and with a cost cap, cheaper than it. */
   let bulk = $state<{ project: Project; days: number; maxCost: number | null } | null>(null);
+  /** Until costs load, a cost cap matches nothing rather than counting every session as $0. */
+  let costsReady = $state(false);
+  /** Each session's cost, summed as `sessionStats` does. */
+  const costByKey = $derived.by(() => {
+    const m = new Map<string, number>();
+    for (const r of planState.costRows) {
+      const k = `${r.provider}:${r.sessionId}`;
+      m.set(k, (m.get(k) ?? 0) + (r.costUsd ?? 0));
+    }
+    return m;
+  });
   const bulkKeys = $derived.by(() => {
     if (!bulk) return [];
     const before = Date.now() - bulk.days * 86_400_000;
     const cap = bulk.maxCost;
     return bulk.project.sessions
       .filter((s) => s.mtimeMs < before && !archived.has(sessionKey(s)))
-      .filter((s) => cap === null || (sessionStats(planState.costRows, sessionKey(s))?.cost ?? 0) <= cap)
+      .filter((s) => cap === null || (costsReady && (costByKey.get(sessionKey(s)) ?? 0) <= cap))
       .map(sessionKey);
   });
 
@@ -159,6 +171,7 @@
   }
 
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  let themed = $state<Project | null>(null);
 
   async function copy(text: string) {
     try {
@@ -205,6 +218,7 @@
           run: () => path && void openInExplorer(path),
         },
         { label: 'Copy path', icon: 'copy', disabled: !path, run: () => path && void copy(path) },
+        { label: 'Project theme…', icon: 'pencil', disabled: !path, run: () => (themed = p) },
         {
           label: 'Archive old sessions…',
           icon: 'collapse',
@@ -212,7 +226,8 @@
           disabled: p.sessions.length === 0,
           run: () => {
             bulk = { project: p, days: 30, maxCost: null };
-            void loadCosts();
+            costsReady = false;
+            void loadCosts().then(() => (costsReady = planState.today !== null));
           },
         },
       ],
@@ -409,6 +424,10 @@
   </ConfirmDialog>
 {/if}
 
+{#if themed}
+  <ProjectTheme path={themed.path!} name={themed.name} onClose={() => (themed = null)} />
+{/if}
+
 {#if menu}
   <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => (menu = null)} />
 {/if}
@@ -418,15 +437,15 @@
     margin: 10px;
     padding: 14px;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: calc(8px * var(--radius-scale, 1));
     color: var(--fg-dim);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     line-height: 1.5;
   }
   h3 {
     margin: 0 0 4px;
     color: var(--fg-bright);
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale, 1));
     font-weight: 600;
   }
   .first-run p {
@@ -443,7 +462,7 @@
     gap: 8px;
     padding: 6px 10px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     background: var(--bg-surface);
     color: var(--fg);
     font: inherit;
@@ -462,7 +481,7 @@
     grid-template-columns: 1fr auto;
     gap: 6px 8px;
     margin: 14px 0 0;
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   dd {
     margin: 0;
@@ -471,23 +490,23 @@
     padding: 0 5px;
     border: 1px solid var(--border);
     border-bottom-width: 2px;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     background: var(--bg-surface);
     font: inherit;
   }
   /* Paddings match ProjectNode's row and SessionNode's indent. */
   .sk-project {
     padding: 7px 8px 7px 26px;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   .sk-session {
     padding: 4px 10px 4px 62px;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   .hint {
     padding: 10px 12px;
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
     line-height: 1.5;
   }
   /* Lines up with a project row's name. */
@@ -497,7 +516,7 @@
   .hint strong {
     display: block;
     color: var(--fg);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     font-weight: 500;
   }
   .hint.err {
@@ -509,7 +528,7 @@
     border: none;
     background: transparent;
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
     text-align: left;
     cursor: pointer;
   }
@@ -520,7 +539,7 @@
   .found-head {
     padding: 10px 10px 4px;
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   .found-head span {
     margin-left: 2px;
@@ -536,7 +555,7 @@
     background: transparent;
     color: var(--fg-dim);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     text-align: left;
     cursor: pointer;
   }
@@ -559,13 +578,13 @@
   .hit-head small {
     flex: none;
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   .snippet {
     display: -webkit-box;
     overflow: hidden;
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
     line-height: 1.4;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -578,7 +597,7 @@
     background: none;
     color: var(--fg-faint);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
     cursor: pointer;
   }
   .toggle-archived:hover {
@@ -591,7 +610,7 @@
   .bulk-text {
     margin: 0 0 12px;
     color: var(--fg-dim);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   .bulk-field {
     display: flex;
@@ -599,7 +618,7 @@
     gap: 6px;
     margin: 0 0 8px;
     color: var(--fg);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   .bulk-field input[type='number'] {
     width: 5em;

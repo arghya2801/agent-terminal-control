@@ -161,6 +161,19 @@ func TestALineStillBeingWrittenIsCountedOnceWhenItCompletes(t *testing.T) {
 		t.Fatal("counted twice", n)
 	}
 }
+func TestAConsumedFinalLineIsNotKeptTwice(t *testing.T) {
+	root := t.TempDir()
+	p := filepath.Join(root, "s.jsonl")
+	a, b := claudeLine("m1", "r1", "claude-opus-5", ""), claudeLine("m2", "r2", "claude-opus-5", "")
+	write(t, p, a+"\n"+b)
+	var c Costs
+	claudeCosts(&c, root)
+	write(t, p, a+"\n"+b+"\n")
+	claudeCosts(&c, root)
+	if n := len(c.files[p].claude); n != 2 {
+		t.Fatal(n)
+	}
+}
 func TestAShrunkenTranscriptIsReadAgainFromTheStart(t *testing.T) {
 	root := t.TempDir()
 	p := filepath.Join(root, "s.jsonl")

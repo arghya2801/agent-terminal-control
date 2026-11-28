@@ -152,7 +152,7 @@
     color: var(--fg-dim);
     background: var(--bg-surface);
     border: 1px solid transparent;
-    border-radius: 7px;
+    border-radius: calc(7px * var(--radius-scale, 1));
     padding: 3px 8px 3px 9px;
     cursor: pointer;
     white-space: nowrap;
@@ -176,7 +176,7 @@
     padding: 4px;
     background: var(--bg-chrome);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: calc(10px * var(--radius-scale, 1));
     box-shadow: var(--shadow-pop);
   }
   .panel {
@@ -221,7 +221,7 @@
     flex: 1;
     min-width: 0;
     padding: 4px 8px;
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     cursor: pointer;
   }
   .flyout .item {
@@ -244,7 +244,7 @@
     place-items: center;
     width: 22px;
     flex: none;
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     font-size: calc(14px * var(--chat-scale, 1));
     color: var(--fg-faint);
     cursor: pointer;

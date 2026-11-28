@@ -12,6 +12,8 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
   },
   server: {
+    // Wails v3's dev proxy dials IPv4; Vite alone would listen on ::1 only.
+    host: '127.0.0.1',
     port: 1420,
     strictPort: true,
     watch: {

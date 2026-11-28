@@ -326,8 +326,9 @@ func TestIncrementalCachePreservesNativeIDAndRetriesPartialRecords(t *testing.T)
 	if second["activity"] != "idle" || number(second["activitySequence"]) != 2 {
 		t.Fatal(second)
 	}
+	// A resumed read does not rewrite the cache; the next start resumes from the saved offset.
 	reloaded := Index{CachePath: cache}
-	if got := onlySession(t, reloaded.Scan(s, false)); !reflect.DeepEqual(Clone(got), Clone(second)) || reloaded.Hits != 1 {
+	if got := onlySession(t, reloaded.Scan(s, false)); !reflect.DeepEqual(Clone(got), Clone(second)) || reloaded.Hits != 0 {
 		t.Fatal(got, reloaded.Hits)
 	}
 }

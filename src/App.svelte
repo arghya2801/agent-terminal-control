@@ -46,6 +46,7 @@
     sidebarOpen,
     toggleSidebar,
     setSidebarView,
+    setThemeProject,
     sidebarView,
     themeState,
   } from './lib/stores.svelte';
@@ -115,11 +116,12 @@
 
   /** Which sidebar session each tab is showing. See `resolveSessions` for how. */
   const tabToSession = $derived(resolveSessions(tabSessions, appState.index.projects));
+  const allSessions = $derived(appState.index.projects.flatMap((p) => p.sessions));
+  const sessionLabels = $derived(new Map(allSessions.filter((s) => s.labelSource !== 'uuid').map((s) => [sessionKey(s), s.label] as const)));
   // A chat tab takes its session's name once the index has one: Claude's title, a rename.
   $effect(() => {
-    const labels = new Map(appState.index.projects.flatMap((p) => p.sessions.filter((s) => s.labelSource !== 'uuid').map((s) => [sessionKey(s), s.label] as const)));
     for (const t of tabs) {
-      const label = t.provider && !t.terminal ? labels.get(tabToSession.get(t.key) ?? '') : undefined;
+      const label = t.provider && !t.terminal ? sessionLabels.get(tabToSession.get(t.key) ?? '') : undefined;
       if (label) setAgentTitle(t.key, label);
     }
   });
@@ -344,6 +346,7 @@
   /** Live width while the edge is being dragged; saved once, when the drag ends. */
   let dragWidth = $state<number | null>(null);
   const width = $derived(dragWidth ?? appState.settings?.ui.sidebarWidth ?? SIDEBAR_DEFAULT);
+  const right = $derived(appState.settings?.ui.sidebarSide === 'right');
 
   function saveSidebarWidth(w: number) {
     if (!appState.settings || appState.settings.ui.sidebarWidth === w) return;
@@ -358,7 +361,7 @@
     const startX = e.clientX;
     const startWidth = width;
     const move = (ev: PointerEvent) => {
-      const w = Math.round(startWidth + (ev.clientX - startX) / pageZoom());
+      const w = Math.round(startWidth + (right ? startX - ev.clientX : ev.clientX - startX) / pageZoom());
       dragWidth = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w));
     };
     const end = () => {
@@ -621,24 +624,35 @@
   const shownSession = $derived(shown ? (tabToSession.get(shown.key) ?? null) : null);
   const shownWhere = $derived.by(() => {
     if (!shown) return [];
-    const branch = appState.index.projects.flatMap((p) => p.sessions).find((s) => sessionKey(s) === shownSession)?.gitBranch;
+    const branch = allSessions.find((s) => sessionKey(s) === shownSession)?.gitBranch;
     return [appState.index.projects.find((p) => p.key === shown.projectKey)?.name, branch].filter((x): x is string => !!x);
   });
+  $effect(() => setThemeProject(activeProject()?.path ?? ''));
   // The index updates whenever a transcript is written, which is when context changes.
+  const hasAgentTab = $derived(tabs.some((t) => t.provider));
   $effect(() => {
     void appState.index;
-    if (tabs.some((t) => t.provider)) void untrack(loadContext);
+    if (hasAgentTab) void untrack(loadContext);
   });
   // What each tab's agent has changed, read when it stops working rather than on a timer (#162).
   let changes = $state<Record<TabKey, GitChanges | null>>({});
   const lastMark = new Map<TabKey, string>();
+  // Per tab, so a slow reply cannot overwrite a newer one.
+  const changeSeq = new Map<TabKey, number>();
   $effect(() => {
+    const open = new Set<string>(tabs.map((t) => t.key));
+    for (const k of lastMark.keys()) if (!open.has(k)) (lastMark.delete(k), changeSeq.delete(k));
+    untrack(() => {
+      if (Object.keys(changes).some((k) => !open.has(k))) changes = Object.fromEntries(Object.entries(changes).filter(([k]) => open.has(k)));
+    });
     for (const t of tabs) {
       const mark = tabMark(t);
       const was = lastMark.get(t.key);
       lastMark.set(t.key, mark);
       if (!t.cwd || mark === 'working' || mark === was) continue;
-      void gitChanges(t.cwd).then((c) => (changes = { ...changes, [t.key]: c }), () => {});
+      const seq = (changeSeq.get(t.key) ?? 0) + 1;
+      changeSeq.set(t.key, seq);
+      void gitChanges(t.cwd).then((c) => void (changeSeq.get(t.key) === seq && (changes = { ...changes, [t.key]: c })), () => {});
     }
   });
   const sessionMtimes = $derived(new Map(appState.index.projects.flatMap((p) => p.sessions.map((x) => [sessionKey(x), x.mtimeMs] as const))));
@@ -747,8 +761,8 @@
       if (p) void open(p);
     };
     return [
-      { label: 'Claude', glyph: '✳', colour: '#d97757', run: go((p) => newAgentIn(p, 'claude')) },
-      { label: 'Codex', icon: 'codex', colour: '#10a37f', run: go((p) => newAgentIn(p, 'codex')) },
+      { label: 'Claude', glyph: '✳', colour: 'var(--claude)', run: go((p) => newAgentIn(p, 'claude')) },
+      { label: 'Codex', icon: 'codex', colour: 'var(--codex)', run: go((p) => newAgentIn(p, 'codex')) },
       { label: 'Shell', icon: 'terminal', colour: 'var(--accent)', run: go(newShellIn) },
     ];
   }
@@ -849,7 +863,7 @@
     openAgent(`session:${sessionKey(s)}`, s.label, cwd, p.key, s.provider, { session: s.id });
   }
 
-  $effect(() => { bindSessions(tabToSession, appState.index.projects.flatMap(p => p.sessions)); });
+  $effect(() => { bindSessions(tabToSession, allSessions); });
 
   /**
    * Every close goes through here, button or chord. A tab at a bare prompt closes at
@@ -1177,14 +1191,14 @@
     if (untrack(() => restoring)) return refit();
     refitNow();
     const ms = enterMs();
-    const w = untrack(() => width);
+    const w = untrack(() => (right ? -width : width));
     if (ms) main.animate([{ transform: `translateX(${isOpen ? -w : w}px)` }, { transform: 'none' }], { duration: ms, easing: DRAWER_EASE });
   });
 </script>
 
 <!-- Shared by the pane header and, when the setting shows it, the tab bar. -->
 {#snippet barStart()}
-  <button class="bar-btn" class:on={open} onclick={() => toggleSidebar()} title="Toggle sidebar (Ctrl+Shift+B)" aria-label="Toggle sidebar">
+  <button class="bar-btn sidebar-toggle" class:on={open} onclick={() => toggleSidebar()} title="Toggle sidebar (Ctrl+Shift+B)" aria-label="Toggle sidebar">
     <Icon name="sidebar" />
   </button>
 {/snippet}
@@ -1208,7 +1222,7 @@
     <button class="bar-btn" onclick={() => requestSwitch(shown.key)} title="{label} ({chord('toggleAgentView') ?? 'no shortcut'})" aria-label={label}><Icon name={shown.terminal ? 'chat' : 'terminal'} size={14} /></button>
   {/if}
   {@render actions?.()}
-  <button class="bar-btn" onclick={moreMenu} title="Usage, settings and shortcuts" aria-label="More"><Icon name="more" /></button>
+  <button class="bar-btn more" onclick={moreMenu} title="Usage, settings and shortcuts" aria-label="More"><Icon name="more" /></button>
 {/snippet}
 
 <div class="app" style="--panel: {open ? width : 0}px">
@@ -1218,7 +1232,7 @@
       <div
         class="drawer"
         style="width: {width}px"
-        transition:fly={{ x: -width, opacity: 1, duration: restoring ? 0 : enterMs(), easing: cubicOut }}
+        transition:fly={{ x: right ? width : -width, opacity: 1, duration: restoring ? 0 : enterMs(), easing: cubicOut }}
       >
       <div
         class="resize"
@@ -1345,7 +1359,7 @@
       <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenu.items} dropdown={contextMenu.dropdown} onClose={() => (contextMenu = null)} />
     {/if}
     {#if paletteOpen}
-      {@const cmds = paletteCommands()}
+      {@const cmds = untrack(paletteCommands)}
       <CommandPalette commands={cmds.all} initial={cmds.initial} onClose={() => (paletteOpen = false)} />
     {/if}
     {#if launcher}
@@ -1437,6 +1451,20 @@
   .panel {
     position: relative;
   }
+  :global([data-sidebar-right]) .app {
+    grid-template-columns: 1fr var(--panel);
+  }
+  :global([data-sidebar-right]) .panel {
+    order: 1;
+  }
+  :global([data-sidebar-right]) .drawer {
+    right: 0;
+    left: auto;
+  }
+  :global([data-sidebar-right]) .resize {
+    right: auto;
+    left: -4px;
+  }
   .bar {
     display: flex;
     flex: none;
@@ -1458,7 +1486,7 @@
     padding: 0 6px;
     overflow: hidden;
     color: var(--fg-bright);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     white-space: nowrap;
   }
   .shown b {
@@ -1495,7 +1523,7 @@
     gap: 8px;
     margin-top: 12px;
     color: var(--fg-dim);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     cursor: pointer;
   }
   .facts.waiting {
@@ -1509,7 +1537,7 @@
     align-self: center;
     place-items: center;
     border: none;
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     background: transparent;
     color: var(--fg-dim);
     cursor: pointer;
@@ -1528,7 +1556,7 @@
     width: auto;
     padding: 0 6px;
     color: var(--accent);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   /* New shell, and beside it the choice of what to start. One rounded piece: hovering
      either half lights the whole of it, the half under the pointer a shade more. */
@@ -1537,11 +1565,16 @@
     align-self: center;
     margin-left: 4px;
     overflow: hidden;
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     transition: background-color var(--fast);
   }
   .new-split:hover {
     background: var(--bg-hover);
+  }
+  :global([data-hide-sidebar-toggle]) .sidebar-toggle,
+  :global([data-hide-new-split]) .new-split,
+  :global([data-hide-more-menu]) .more {
+    display: none;
   }
   .new-split .bar-btn {
     border-radius: 0;
@@ -1609,7 +1642,7 @@
     width: 6px;
     height: 32px;
     margin-top: -16px;
-    border-radius: 3px;
+    border-radius: calc(3px * var(--radius-scale, 1));
   }
   .resize:hover::before,
   .resize:hover::after,
@@ -1697,9 +1730,9 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    border-radius: 8px;
+    border-radius: calc(8px * var(--radius-scale, 1));
     box-shadow: var(--shadow-pop);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     pointer-events: auto;
     animation: atc-rise var(--enter) var(--ease-out);
   }
@@ -1716,7 +1749,7 @@
     gap: 2px;
     padding: 4px 8px;
     border: none;
-    border-radius: 5px;
+    border-radius: calc(5px * var(--radius-scale, 1));
     background: transparent;
     color: var(--fg-dim);
     font: inherit;
@@ -1742,7 +1775,7 @@
   .dismiss {
     padding: 2px;
     border: none;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     background: transparent;
     color: inherit;
     cursor: pointer;

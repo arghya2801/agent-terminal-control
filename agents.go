@@ -27,6 +27,7 @@ import (
 // sidecar's lines to that session's channel.
 type sidecar struct {
 	mu       sync.Mutex
+	wmu      sync.Mutex // orders writes to stdin
 	cmd      *exec.Cmd
 	stdin    io.WriteCloser
 	channels map[string]string        // session id -> its event channel
@@ -148,14 +149,18 @@ func (a *App) AgentSend(id string, op core.Object) error {
 func (a *App) AgentClose(id string) error {
 	s, done := &a.agents, make(chan struct{})
 	s.mu.Lock()
+	// A session whose CLI already exited has had its exit; none follows to wait for.
+	_, live := s.channels[id]
 	delete(s.channels, id)
-	if s.closing == nil {
-		s.closing = map[string]chan struct{}{}
+	if live {
+		if s.closing == nil {
+			s.closing = map[string]chan struct{}{}
+		}
+		s.closing[id] = done
 	}
-	s.closing[id] = done
 	s.mu.Unlock()
 	e := s.write(core.Object{"op": "close", "id": id})
-	if e == nil {
+	if e == nil && live {
 		select {
 		case <-done:
 		case <-time.After(5 * time.Second):
@@ -185,13 +190,20 @@ func agentExe(provider, command string) (string, error) {
 
 func (s *sidecar) start(a *App) error {
 	s.mu.Lock()
+	running := s.cmd != nil
+	s.mu.Unlock()
+	if running {
+		return nil
+	}
+	// Outside the lock: the first chat may download Bun, and other agent calls must not wait on it.
+	runtime, e := a.agentRuntime()
+	if e != nil {
+		return e
+	}
+	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cmd != nil {
 		return nil
-	}
-	node, e := exec.LookPath("node")
-	if e != nil {
-		return fmt.Errorf("Agent sessions need Node.js 18 or later. Install it from https://nodejs.org, or open the session in a terminal")
 	}
 	script := os.Getenv("ATC_SIDECAR")
 	if script == "" {
@@ -199,7 +211,7 @@ func (s *sidecar) start(a *App) error {
 			return e
 		}
 	}
-	cmd := exec.Command(node, script)
+	cmd := exec.Command(runtime, script)
 	cmd.Env = pty.ChildEnv()
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
 	// The last run's log says why it stopped; the next chat or Resume starts a new one.
@@ -248,8 +260,9 @@ func (s *sidecar) read(a *App, cmd *exec.Cmd, stdout io.Reader) {
 		if json.Unmarshal(line, &m) == nil {
 			s.mu.Lock()
 			channel := s.channels[m.ID]
-			// A session's last event: nothing more goes to its channel.
-			if json.Unmarshal(m.Ev, &ev) == nil && ev.T == "exit" {
+			// A session's last event: nothing more goes to its channel. Only a line naming
+			// "exit" is worth a second parse.
+			if bytes.Contains(m.Ev, []byte(`"exit"`)) && json.Unmarshal(m.Ev, &ev) == nil && ev.T == "exit" {
 				delete(s.channels, m.ID)
 				if done, ok := s.closing[m.ID]; ok {
 					close(done)
@@ -269,12 +282,17 @@ func (s *sidecar) read(a *App, cmd *exec.Cmd, stdout io.Reader) {
 	s.mu.Lock()
 	// After stop, a newer sidecar may own the state; this one's end must not wipe it (#226).
 	var gone map[string]string
-	if s.cmd == cmd {
+	crashed := s.cmd == cmd
+	if crashed {
 		gone = s.channels
 		s.cmd, s.stdin, s.channels = nil, nil, map[string]string{}
 		s.releaseClosing()
 	}
 	s.mu.Unlock()
+	// Codex app-servers the dead sidecar started still name it as their parent.
+	if crashed {
+		pty.KillTree(uint32(cmd.Process.Pid))
+	}
 	for _, channel := range gone {
 		a.emit(channel, core.Object{"t": "exit", "message": "The agent sidecar stopped. sidecar.log in the config folder says why."})
 	}
@@ -286,11 +304,15 @@ func (s *sidecar) write(v any) error {
 		return e
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.stdin == nil {
+	stdin := s.stdin
+	s.mu.Unlock()
+	if stdin == nil {
 		return fmt.Errorf("the agent sidecar is not running")
 	}
-	_, e = s.stdin.Write(append(b, '\n'))
+	// Not under mu: a full stdin pipe would block read, which needs mu for every line.
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	_, e = stdin.Write(append(b, '\n'))
 	return e
 }
 
@@ -331,7 +353,7 @@ func (s *sidecar) releaseClosing() {
 func extractSidecar(config string) (string, error) {
 	b, e := fs.ReadFile(assets, "dist/sidecar/agent.mjs")
 	if e != nil {
-		return "", fmt.Errorf("this build has no agent sidecar; build it with npm run build")
+		return "", fmt.Errorf("this build has no agent sidecar; build it with bun run build")
 	}
 	path := filepath.Join(config, "sidecar", "agent.mjs")
 	if old, e := os.ReadFile(path); e == nil && bytes.Equal(old, b) {

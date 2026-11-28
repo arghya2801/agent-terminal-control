@@ -286,7 +286,7 @@
     position: relative;
     background: var(--bg-chrome);
     border: 1px solid var(--border);
-    border-radius: 16px;
+    border-radius: calc(16px * var(--radius-scale, 1));
     box-shadow: 0 8px 28px rgb(0 0 0 / 0.22), 0 1px 2px rgb(0 0 0 / 0.12);
     transition: border-color var(--fast) var(--ease-out);
   }
@@ -310,7 +310,7 @@
     height: 56px;
     max-width: 120px;
     object-fit: cover;
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     border: 1px solid var(--border);
   }
   .remove {
@@ -384,6 +384,10 @@
     gap: 6px;
     margin-left: auto;
   }
+  :global([data-hide-composer-hints]) .keys,
+  :global([data-hide-attach-button]) .attach {
+    display: none;
+  }
   .attach {
     display: grid;
     place-items: center;
@@ -391,7 +395,7 @@
     height: 30px;
     padding: 0;
     border: none;
-    border-radius: 8px;
+    border-radius: calc(8px * var(--radius-scale, 1));
     background: transparent;
     color: var(--fg-dim);
     cursor: pointer;
@@ -444,7 +448,7 @@
     bottom: calc(100% + 6px);
     background: var(--bg-chrome);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: calc(12px * var(--radius-scale, 1));
     box-shadow: var(--shadow-pop);
     overflow: hidden;
     z-index: 2;
@@ -479,7 +483,7 @@
     height: 34px;
     padding: 0 10px;
     align-items: center;
-    border-radius: 8px;
+    border-radius: calc(8px * var(--radius-scale, 1));
     cursor: pointer;
     white-space: nowrap;
   }
@@ -502,7 +506,7 @@
     text-align: center;
     border: 1px solid var(--border);
     border-bottom-width: 2px;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     color: var(--fg-dim);
   }
   kbd + kbd {

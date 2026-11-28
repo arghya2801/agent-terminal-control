@@ -6,6 +6,37 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-28
+
+### Fixed
+- Chats no longer all freeze when one tab sends a large image prompt while another streams.
+- Archive old sessions with a cost cap no longer archives sessions whose costs have not loaded yet.
+- Closing a terminal tab while its shell starts no longer leaves the shell running.
+- Closing a chat whose CLI already exited no longer stalls for 5 seconds.
+- A crashed agent sidecar, or a closed Codex chat, no longer leaves `codex.exe` running.
+- A chat whose CLI fails to start, or a Claude model list that never arrives, now shows an error instead of hanging.
+- After a failed send, the next message with images no longer shows the old images.
+- Transcript search finds Windows paths and quoted text, and no longer crashes on some non-English letters.
+- The command palette keeps its highlight while agents work.
+- Usage refresh interval changes apply without reopening the usage page.
+- Reloading the page with many terminal tabs restores them without a delay per tab.
+
+### Added
+- Settings > Appearance: app font, text size, corners, sidebar side, tab bar position and when tabs show their close button.
+- Settings > Chat: chat width, line height, spacing, which side and how wide your messages sit, code wrapping and font, and whether tool calls and thinking start open.
+- Settings > Show hides parts of the title bar, tab bar, sidebar, session rows, chat and composer.
+- A theme editor with live preview, and import of VS Code colour themes.
+- A theme and accent per project, from the project's menu.
+- Appearance profiles: save, switch, export and import.
+- Theme files take a `ui` block of CSS variables, and `user.css` in the config folder restyles anything. See docs/CUSTOMIZING.md.
+
+### Changed
+- Lower CPU and memory while agents work: title spinners, transcript writes and long chats no longer trigger full rescans or re-renders, and usage history keeps only token counts.
+- The `@` file list loads once per chat tab.
+- Agent chat tabs run on Bun instead of Node. ATC uses `bun` from PATH, else downloads a checked copy of Bun (about 54 MB) on the first chat, else falls back to Node. Nothing to install for chats. Settings > Agents > Runtime picks Bun, Node or a path. See docs/MIGRATION-BUN.md.
+- Building ATC needs Bun instead of Node and npm: `bun install`, `bun run …`.
+- The desktop host runs on Wails v3.1.0 instead of v2. The app looks and behaves the same. Building ATC needs the `wails3` CLI. See docs/MIGRATION-WAILS3.md.
+
 ## [0.7.7] - 2026-11-20
 
 ### Added

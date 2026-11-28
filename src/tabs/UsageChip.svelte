@@ -38,6 +38,7 @@
   let peek = $state(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let spendAt = 0;
+  onMount(() => () => clearTimeout(timer));
 
   function enter() {
     clearTimeout(timer);
@@ -110,6 +111,9 @@
 {/if}
 
 <style>
+  :global([data-hide-usage-chip]) .wrap {
+    display: none;
+  }
   .wrap {
     position: relative;
     display: flex;
@@ -122,7 +126,7 @@
     gap: 6px;
     padding: 0 8px;
     border: none;
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     background: transparent;
     color: var(--fg-dim);
     font: inherit;
@@ -134,12 +138,12 @@
   }
   .reset {
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
   .chip .pct {
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   .chip .meter {
     width: 32px;
@@ -157,13 +161,13 @@
   .meter {
     display: block;
     overflow: hidden;
-    border-radius: 2px;
+    border-radius: calc(2px * var(--radius-scale, 1));
     background: var(--bg-surface);
   }
   .fill {
     display: block;
     height: 100%;
-    border-radius: 2px;
+    border-radius: calc(2px * var(--radius-scale, 1));
     background: var(--accent);
     transition: width var(--enter) var(--ease-out);
   }
@@ -181,17 +185,17 @@
     width: 320px;
     padding: 10px 12px;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: calc(8px * var(--radius-scale, 1));
     background: var(--bg-chrome);
     box-shadow: var(--shadow-pop);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     animation: atc-pop var(--enter) var(--ease-out);
     transform-origin: top right;
   }
   h3 {
     margin: 8px 0 6px;
     color: var(--fg-bright);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     font-weight: 600;
   }
   h3:first-child {
@@ -213,7 +217,7 @@
   .when {
     grid-column: 1 / -1;
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   .foot {
     display: flex;
@@ -227,7 +231,7 @@
   .btn {
     padding: 4px 10px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     background: var(--bg-surface);
     color: var(--fg);
     font: inherit;
