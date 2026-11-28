@@ -76,14 +76,14 @@
     width: min(420px, calc(100vw - 32px));
     padding: 18px 20px 16px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: calc(10px * var(--radius-scale, 1));
     background: var(--bg-chrome);
     box-shadow: var(--shadow-pop);
     animation: atc-pop var(--enter) var(--ease-out);
   }
   .message {
     color: var(--fg);
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale, 1));
     line-height: 1.5;
   }
   .message :global(strong) {
@@ -98,11 +98,11 @@
   button {
     padding: 5px 12px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     background: var(--bg-surface);
     color: var(--fg);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     cursor: pointer;
   }
   button:hover {
@@ -132,6 +132,6 @@
     margin-left: 4px;
     opacity: 0.6;
     font: inherit;
-    font-size: 10px;
+    font-size: calc(10px * var(--ui-scale, 1));
   }
 </style>

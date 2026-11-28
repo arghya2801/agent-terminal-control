@@ -57,12 +57,12 @@
     height: 32px;
     padding: 0 14px;
     font: inherit;
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale, 1));
     font-weight: 500;
     color: var(--fg);
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: calc(8px * var(--radius-scale, 1));
     cursor: pointer;
   }
   .btn:hover {

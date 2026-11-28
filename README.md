@@ -411,7 +411,9 @@ Beside it:
   read.
 - **`themes/`** takes extra themes as JSON files, in the shape Windows Terminal and VS Code
   terminal themes use (16 ANSI colours plus foreground, background, cursor and selection).
-  A file named like a built-in theme replaces it.
+  A file named like a built-in theme replaces it. A `ui` block sets the app's own colours;
+  see [docs/CUSTOMIZING.md](docs/CUSTOMIZING.md).
+- **`user.css`** is your own stylesheet, applied after the app's and reloaded on save.
 - **`prices-latest.json`** is the price table, downloaded from the repository's `main`
   branch at launch. Delete it to fall back to the table built into the app.
 - **`pricing.json`** adds or corrects model prices yourself. Its entries win over the

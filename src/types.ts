@@ -209,6 +209,32 @@ export interface Settings {
     /** Title a new session with the rename model after its first turn. */
     autoName: boolean;
     sidebarDensity: 'compact' | 'comfortable';
+    /** The app's font; '' keeps Segoe UI. */
+    fontFamily: string;
+    /** Base text size in px; 13 is the size the app was designed at. */
+    fontSize: number;
+    corners: 'square' | 'default' | 'round';
+    /** Ids of parts of the UI to hide; `HIDEABLE` in lib/hide.ts lists them. */
+    hide: string[];
+    tabClose: 'always' | 'hover' | 'never';
+    sidebarSide: 'left' | 'right';
+    tabBarPosition: 'top' | 'bottom';
+    /** Chat column width in px; 0 fills the pane. */
+    chatWidth: number;
+    chatLineHeight: number;
+    chatSpacing: 'compact' | 'comfortable' | 'spacious';
+    userBubble: 'right' | 'left';
+    /** Your messages' widest share of the column, in percent. */
+    userBubbleWidth: number;
+    codeWrap: boolean;
+    /** Chat code font; '' uses the terminal's. */
+    codeFontFamily: string;
+    toolsOpen: boolean;
+    thinkingOpen: boolean;
+    /** Theme and accent by project path, over the global ones. */
+    projectThemes: Record<string, { theme: string; accent: string }>;
+    /** Saved appearance settings by name. */
+    profiles: Record<string, Partial<Settings['ui']>>;
   };
   /** `runtime`: what runs the agent sidecar: auto (Bun on PATH, else ATC's own Bun, else Node), bun, node, or a path. */
   agent: { alwaysAllowProject: boolean; showSubagents: boolean; runtime: string };

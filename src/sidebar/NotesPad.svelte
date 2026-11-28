@@ -94,7 +94,7 @@
     min-height: 0;
     overflow-y: auto;
     color: var(--fg);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     line-height: 1.6;
     cursor: text;
   }
@@ -123,13 +123,13 @@
     line-height: 1.3;
   }
   .notes :global(h1) {
-    font-size: 15px;
+    font-size: calc(15px * var(--ui-scale, 1));
   }
   .notes :global(h2) {
-    font-size: 13.5px;
+    font-size: calc(13.5px * var(--ui-scale, 1));
   }
   .notes :global(:is(h3, h4)) {
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   .notes :global(:is(ul, ol)) {
     padding-left: 18px;
@@ -157,7 +157,7 @@
     width: 12px;
     height: 12px;
     border: 1px solid var(--fg-faint);
-    border-radius: 3px;
+    border-radius: calc(3px * var(--radius-scale, 1));
     content: '';
     cursor: pointer;
   }
@@ -178,13 +178,13 @@
   }
   .notes :global(code) {
     padding: 0 4px;
-    border-radius: 3px;
+    border-radius: calc(3px * var(--radius-scale, 1));
     background: var(--bg-surface);
     font-family: ui-monospace, monospace;
   }
   .notes :global(pre) {
     padding: 6px 8px;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     background: var(--bg-surface);
     white-space: pre-wrap;
   }

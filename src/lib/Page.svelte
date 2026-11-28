@@ -98,7 +98,7 @@
     width: min(920px, calc(100vw - 48px));
     height: min(680px, calc(100vh - 48px));
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: calc(12px * var(--radius-scale, 1));
     box-shadow: var(--shadow-pop);
     animation: atc-pop var(--enter) var(--ease-out);
   }
@@ -120,7 +120,7 @@
   h1 {
     margin: 0;
     color: var(--fg-bright);
-    font-size: 15px;
+    font-size: calc(15px * var(--ui-scale, 1));
     font-weight: 600;
   }
   .close {
@@ -129,7 +129,7 @@
     height: 28px;
     place-items: center;
     border: none;
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     background: transparent;
     color: var(--fg-dim);
     cursor: pointer;
@@ -150,25 +150,25 @@
   .body :global(h2) {
     margin: 24px 0 10px;
     color: var(--fg-bright);
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale, 1));
     font-weight: 600;
   }
   .page :global(.muted) {
     color: var(--fg-faint);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   .body :global(.err) {
     color: var(--danger);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   .page :global(button.btn) {
     padding: 5px 12px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     background: var(--bg-surface);
     color: var(--fg);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     cursor: pointer;
   }
   .page :global(button.btn:hover:not(:disabled)) {
@@ -193,11 +193,11 @@
   .body :global(textarea) {
     padding: 5px 8px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     background: var(--bg);
     color: var(--fg-bright);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   .body :global(input:focus),
   .body :global(select:focus),

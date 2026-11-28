@@ -47,7 +47,8 @@ func main() {
 	if s, _ := core.LoadSettings(filepath.Join(core.ConfigDir(), "settings.json")); core.Str(core.Obj(s["ui"])["backdrop"]) == "acrylic" {
 		backdrop = windows.Acrylic
 	}
-	err := wails.Run(&options.App{Title: "ATC — Agent Terminal Control", Width: 1280, Height: 800, MinWidth: 640, MinHeight: 400, BackgroundColour: &options.RGBA{R: 11, G: 13, B: 16, A: 0}, AssetServer: &assetserver.Options{Assets: assets}, OnStartup: app.startup, OnShutdown: app.shutdown, OnDomReady: func(ctx context.Context) { app.ready(ctx) }, Bind: []interface{}{app}, SingleInstanceLock: lock, Windows: &windows.Options{Theme: windows.Dark, WebviewIsTransparent: true, WindowIsTranslucent: true, BackdropType: backdrop, WebviewUserDataPath: filepath.Join(core.ConfigDir(), "webview-wails"), DisablePinchZoom: true}})
+	// scripts/drive.mjs drives the page from headless Edge; the window would only take focus.
+	err := wails.Run(&options.App{Title: "ATC — Agent Terminal Control", Width: 1280, Height: 800, MinWidth: 640, MinHeight: 400, StartHidden: os.Getenv("ATC_HIDE_WINDOW") != "", BackgroundColour: &options.RGBA{R: 11, G: 13, B: 16, A: 0}, AssetServer: &assetserver.Options{Assets: assets}, OnStartup: app.startup, OnShutdown: app.shutdown, OnDomReady: func(ctx context.Context) { app.ready(ctx) }, Bind: []interface{}{app}, SingleInstanceLock: lock, Windows: &windows.Options{Theme: windows.Dark, WebviewIsTransparent: true, WindowIsTranslucent: true, BackdropType: backdrop, WebviewUserDataPath: filepath.Join(core.ConfigDir(), "webview-wails"), DisablePinchZoom: true}})
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -91,6 +91,11 @@
 {/if}
 
 <style>
+  :global([data-hide-session-age]) .age,
+  :global([data-hide-session-branch]) .branch,
+  :global([data-hide-session-meta]) .meta {
+    display: none;
+  }
   .session.archived {
     opacity: 0.55;
   }
@@ -107,16 +112,16 @@
     background: transparent;
     color: var(--fg-dim);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     text-align: left;
     cursor: pointer;
   }
   .sub {
     padding: 0 4px;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     background: var(--bg-surface);
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   .session:hover:not(.disabled) {
     background: var(--bg-hover);
@@ -150,7 +155,7 @@
     display: flex;
     flex-shrink: 0;
     gap: 6px;
-    font-size: 10px;
+    font-size: calc(10px * var(--ui-scale, 1));
     opacity: 0.75;
   }
   .branch {

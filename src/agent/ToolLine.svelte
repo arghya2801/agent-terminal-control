@@ -153,7 +153,7 @@
     min-height: 28px;
     padding: 0 8px;
     margin-left: -8px;
-    border-radius: 7px;
+    border-radius: calc(7px * var(--radius-scale, 1));
     cursor: pointer;
     white-space: nowrap;
   }
@@ -210,7 +210,7 @@
     flex: none;
     padding: 0 7px;
     line-height: 18px;
-    border-radius: 9px;
+    border-radius: calc(9px * var(--radius-scale, 1));
     color: var(--danger);
     background: color-mix(in srgb, var(--danger) 12%, transparent);
     border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
@@ -238,7 +238,7 @@
   .detail {
     margin: 4px 0 8px 24px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: calc(10px * var(--radius-scale, 1));
     background: var(--bg-chrome);
     overflow: hidden;
   }
@@ -296,7 +296,7 @@
     color: var(--fg);
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: calc(8px * var(--radius-scale, 1));
     cursor: pointer;
   }
   .btn:hover:not(:disabled) {

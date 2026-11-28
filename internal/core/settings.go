@@ -49,7 +49,10 @@ func Defaults() Object {
 			"hideToolCalls":    false,
 			"warmAtReset":      false,
 			"blockedDetection": true, "checkUpdates": true, "rowProject": true, "rowState": true, "rowContext": true, "keys": Object{},
-			"slashFocus": true, "showModeKeyHint": true, "slashRecentFirst": true, "defaultSidebarView": "open", "showScratchGroup": true, "autoName": true, "sidebarDensity": "comfortable"},
+			"slashFocus": true, "showModeKeyHint": true, "slashRecentFirst": true, "defaultSidebarView": "open", "showScratchGroup": true, "autoName": true, "sidebarDensity": "comfortable",
+			"fontFamily": "", "fontSize": 13, "corners": "default", "hide": []any{}, "tabClose": "hover", "sidebarSide": "left", "tabBarPosition": "top",
+			"chatWidth": 680, "chatLineHeight": 1.6, "chatSpacing": "comfortable", "userBubble": "right", "userBubbleWidth": 85,
+			"codeWrap": false, "codeFontFamily": "", "toolsOpen": false, "thinkingOpen": false, "projectThemes": Object{}, "profiles": Object{}},
 		"agent":  Object{"alwaysAllowProject": true, "showSubagents": true, "runtime": "auto"},
 		"prices": Object{"litellm": true},
 		"terminal": Object{"fontFamily": "\"FiraCode Nerd Font Mono\", \"Cascadia Mono\", Consolas, monospace", "fontSize": 13, "scrollback": 10000,
@@ -70,7 +73,7 @@ func Merge(dst, src Object) {
 		}
 		if m, ok := v.(map[string]any); ok {
 			if d, ok := dst[k].(map[string]any); ok {
-				if k == "names" || k == "sessionNames" || k == "sessionAccounts" || k == "keys" {
+				if k == "names" || k == "sessionNames" || k == "sessionAccounts" || k == "keys" || k == "projectThemes" || k == "profiles" {
 					dst[k] = m
 				} else {
 					Merge(d, m)

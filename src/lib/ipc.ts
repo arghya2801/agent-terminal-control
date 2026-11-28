@@ -117,6 +117,10 @@ export function modelInputPrices(models: string[]): Promise<Record<string, numbe
 export function agentRuntimeInUse(): Promise<string> { return App.AgentRuntimeInUse(); }
 
 export function listThemes(): Promise<{ stem: string; palette: unknown }[]> { return App.ListThemes(); }
+/** Saves a theme as themes/<name>.json and returns the file's stem. */
+export function saveTheme(name: string, theme: Record<string, unknown>): Promise<string> { return App.SaveTheme(name, theme); }
+/** user.css from the config directory, '' when there is none. */
+export function userCss(): Promise<string> { return App.UserCSS(); }
 
 /** Plan limits as `/usage` shows them. Shape belongs to the API, so kept loose. */
 export function claudeUsage(): Promise<Record<string, unknown>> { return App.ClaudeUsage(); }

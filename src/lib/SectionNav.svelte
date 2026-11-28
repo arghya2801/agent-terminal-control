@@ -118,11 +118,11 @@
   button {
     padding: 6px 10px;
     border: none;
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     background: transparent;
     color: var(--fg-dim);
     font: inherit;
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale, 1));
     text-align: left;
     cursor: pointer;
   }

@@ -175,11 +175,11 @@
      theme surface. light-dark() follows the color-scheme the theme sets on the root. */
   .chart,
   .legend {
-    --series-1: light-dark(#2a78d6, #3987e5);
-    --series-2: light-dark(#eb6834, #d95926);
-    --series-3: light-dark(#1baf7a, #199e70);
-    --series-4: light-dark(#eda100, #c98500);
-    --series-5: light-dark(#e87ba4, #d55181);
+    --series-1: var(--chart-1, light-dark(#2a78d6, #3987e5));
+    --series-2: var(--chart-2, light-dark(#eb6834, #d95926));
+    --series-3: var(--chart-3, light-dark(#1baf7a, #199e70));
+    --series-4: var(--chart-4, light-dark(#eda100, #c98500));
+    --series-5: var(--chart-5, light-dark(#e87ba4, #d55181));
     --series-other: var(--fg-faint);
   }
   .tip {
@@ -191,10 +191,10 @@
     gap: 2px;
     padding: 6px 8px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     background: var(--bg-chrome);
     box-shadow: var(--shadow-pop);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
     white-space: nowrap;
     pointer-events: none;
   }
@@ -204,7 +204,7 @@
   }
   .tip-total {
     color: var(--fg-bright);
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale, 1));
     font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
@@ -225,7 +225,7 @@
     margin: 0 0 16px;
     padding: 0;
     color: var(--fg-dim);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     list-style: none;
   }
   .swatch {
@@ -233,7 +233,7 @@
     width: 10px;
     height: 10px;
     margin-right: 6px;
-    border-radius: 2px;
+    border-radius: calc(2px * var(--radius-scale, 1));
     vertical-align: -1px;
   }
   .swatch.line {
@@ -314,7 +314,7 @@
     flex-direction: column-reverse;
     gap: 2px;
     overflow: hidden;
-    border-radius: 4px 4px 0 0;
+    border-radius: calc(4px * var(--radius-scale, 1)) calc(4px * var(--radius-scale, 1)) 0 0;
     transition: height var(--enter) var(--ease-out), opacity var(--fast);
   }
   .seg {

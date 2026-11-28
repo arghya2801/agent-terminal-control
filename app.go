@@ -36,6 +36,7 @@ type App struct {
 	mu           sync.Mutex
 	settings     core.Object
 	notes        string
+	userCSS      string
 	ptys         map[string]*pty.Session
 	index        core.Index
 	costs        core.Costs
@@ -289,7 +290,7 @@ func refreshNeeded(e fsnotify.Event, config, claude, codex string) bool {
 	}
 	onPathTo := func(root string) bool { r := core.PathKey(root); return r == p || strings.HasPrefix(r, p+`\`) }
 	structural := e.Has(fsnotify.Create) || e.Has(fsnotify.Remove) || e.Has(fsnotify.Rename)
-	if rest, ok := under(config); ok && (rest == "settings.json" || rest == "notes.md") {
+	if rest, ok := under(config); ok && (rest == "settings.json" || rest == "notes.md" || rest == "user.css") {
 		return true
 	}
 	if rest, ok := under(claude); ok && rest != "" {
@@ -328,6 +329,14 @@ func (a *App) refreshFiles() {
 		if changed {
 			a.emit("notes://updated", string(b))
 		}
+	}
+	css := a.UserCSS()
+	a.mu.Lock()
+	cssChanged := css != a.userCSS
+	a.userCSS = css
+	a.mu.Unlock()
+	if cssChanged {
+		a.emit("usercss://updated", css)
 	}
 	a.diskMu.Unlock()
 	snap := a.index.Scan(a.getSettings(), false)
@@ -399,6 +408,22 @@ func (a *App) SettingsSet(settings any) error {
 		a.emit("index://updated", a.index.Scan(next, false))
 	}
 	return nil
+}
+
+// UserCSS is the user's own stylesheet, user.css in the config folder, applied after the app's.
+func (a *App) UserCSS() string {
+	b, _ := os.ReadFile(filepath.Join(a.config, "user.css"))
+	return string(b)
+}
+
+// SaveTheme writes a theme to the themes folder under a name made safe for a file name.
+func (a *App) SaveTheme(name string, theme core.Object) (string, error) {
+	stem := strings.Trim(regexp.MustCompile(`[^\w -]+`).ReplaceAllString(name, ""), " .")
+	if stem == "" {
+		return "", fmt.Errorf("a theme needs a name")
+	}
+	theme["name"] = name
+	return stem, core.Save(filepath.Join(a.config, "themes", stem+".json"), theme)
 }
 
 func (a *App) NotesGet() string {
@@ -688,6 +713,7 @@ func (a *App) ConfigFiles(project string) []ConfigFile {
 	add("Claude instructions", filepath.Join(claude, "CLAUDE.md"), true)
 	add("Codex config", filepath.Join(codex, "config.toml"), true)
 	add("Codex instructions", filepath.Join(codex, "AGENTS.md"), true)
+	add("ATC styles", filepath.Join(a.config, "user.css"), true)
 	if filepath.IsAbs(project) {
 		add("Project settings", filepath.Join(project, ".claude", "settings.json"), false)
 		add("Project local settings", filepath.Join(project, ".claude", "settings.local.json"), false)

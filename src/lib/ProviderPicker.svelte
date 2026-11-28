@@ -71,7 +71,7 @@
     margin: 12vh auto auto;
     padding: 0;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: calc(10px * var(--radius-scale, 1));
     background: var(--bg-chrome);
     color: var(--fg);
     box-shadow: var(--shadow-pop);
@@ -97,7 +97,7 @@
   }
   h2 {
     margin: 0;
-    font-size: 14px;
+    font-size: calc(14px * var(--ui-scale, 1));
     font-weight: 600;
     color: var(--fg-bright);
   }
@@ -105,7 +105,7 @@
     margin: 3px 0 0;
     overflow: hidden;
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -113,11 +113,11 @@
   kbd {
     padding: 1px 6px;
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     background: var(--bg);
     color: var(--fg-faint);
     font-family: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
     line-height: 16px;
   }
   .esc {
@@ -136,11 +136,11 @@
     gap: 12px;
     padding: 10px 12px;
     border: none;
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     background: transparent;
     color: var(--fg);
     font: inherit;
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale, 1));
     text-align: left;
     cursor: pointer;
   }
@@ -156,7 +156,7 @@
   .glyph {
     width: 20px;
     color: var(--fg-dim);
-    font-size: 18px;
+    font-size: calc(18px * var(--ui-scale, 1));
     line-height: 1;
     text-align: center;
   }

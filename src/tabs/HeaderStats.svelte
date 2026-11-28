@@ -59,6 +59,9 @@
 </div>
 
 <style>
+  :global([data-hide-header-stats]) .stats {
+    display: none;
+  }
   .stats {
     display: flex;
     flex: none;
@@ -66,7 +69,7 @@
     gap: 14px;
     padding: 0 10px;
     color: var(--fg-dim);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
