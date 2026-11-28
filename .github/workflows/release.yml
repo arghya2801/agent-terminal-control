@@ -18,7 +18,7 @@ permissions:
   actions: read
 
 env:
-  WAILS_VERSION: v2.17.1
+  WAILS_VERSION: v3.1.0
 
 jobs:
   windows:
@@ -60,10 +60,10 @@ jobs:
         id: wails
         uses: actions/cache@v6
         with:
-          path: ~/go/bin/wails.exe
+          path: ~/go/bin/wails3.exe
           key: wails-${{ env.WAILS_VERSION }}-${{ runner.os }}
       - if: steps.wails.outputs.cache-hit != 'true'
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS_VERSION }}
       - run: choco install nsis wixtoolset -y --no-progress
       - run: bun run desktop:package
 

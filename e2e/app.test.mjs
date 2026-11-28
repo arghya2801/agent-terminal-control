@@ -29,7 +29,6 @@ after(async () => {
     try { await browser.saveScreenshot(join(process.cwd(), 'benchmarks', 'e2e-last.png')); } catch {}
     try { console.log('Final page:', await browser.getUrl()); } catch {}
   }
-  if (browser && process.env.E2E_HOST === 'wails') { try { await browser.execute(() => window.runtime.Quit()); } catch {} }
   try { await browser?.deleteSession(); } catch {}
 });
 

@@ -3,8 +3,9 @@
  * from App's methods (`bun run bindings`), so a renamed command or argument fails the check.
  */
 
-import * as App from '../../wailsjs/go/main/App';
-import { core, pty } from '../../wailsjs/go/models';
+import { App } from './bound';
+import { Account as AccountModel } from '../bindings/atc/internal/core/models';
+import { Options } from '../bindings/atc/internal/pty/models';
 import { Channel } from './desktop';
 import { localPath } from './links';
 import type { Account, AgentProvider, ConfigFile, CostRow, IndexSnapshot, PtyEvent, Settings, SpawnOpts, StatsSnapshot } from '../types';
@@ -14,13 +15,13 @@ export { Channel };
 
 export function ptySpawn(opts: SpawnOpts, onEvent: Channel<PtyEvent>): Promise<string> {
   onEvent.attach();
-  return App.PtySpawn(pty.Options.createFrom(opts), onEvent.name).catch((error) => { onEvent.dispose(); throw error; });
+  return App.PtySpawn(Options.createFrom(opts), onEvent.name).catch((error) => { onEvent.dispose(); throw error; });
 }
 
 /** Claude accounts (#252); secrets come back masked, except from `accountSecret`. */
-export function accountList(): Promise<Account[]> { return App.AccountList() as Promise<Account[]>; }
+export function accountList(): Promise<Account[]> { return App.AccountList() as unknown as Promise<Account[]>; }
 export function accountSecret(id: string): Promise<string> { return App.AccountSecret(id); }
-export function accountSave(a: Account): Promise<Account> { return App.AccountSave(core.Account.createFrom(a)) as Promise<Account>; }
+export function accountSave(a: Account): Promise<Account> { return App.AccountSave(AccountModel.createFrom(a)) as Promise<Account>; }
 export function accountRemove(id: string): Promise<void> { return App.AccountRemove(id); }
 
 export function ptyWrite(id: string, data: string): Promise<void> { return App.PtyWrite(id, data); }
@@ -57,7 +58,7 @@ export function indexSnapshot(): Promise<IndexSnapshot> { return App.IndexScan(f
 
 export function indexRefresh(force = false): Promise<IndexSnapshot> { return App.IndexScan(force); }
 
-export function settingsGet(): Promise<Settings> { return App.SettingsGet() as Promise<Settings>; }
+export function settingsGet(): Promise<Settings> { return App.SettingsGet() as unknown as Promise<Settings>; }
 
 export function settingsSet(settings: Settings): Promise<void> { return App.SettingsSet(settings); }
 

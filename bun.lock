@@ -11,6 +11,7 @@
         "@milkdown/preset-commonmark": "7.23.0",
         "@milkdown/preset-gfm": "7.23.0",
         "@milkdown/utils": "7.23.0",
+        "@wailsio/runtime": "3.1.0",
         "@xterm/addon-fit": "0.11.0",
         "@xterm/addon-search": "0.16.0",
         "@xterm/addon-unicode11": "0.9.0",
@@ -204,6 +205,8 @@
     "@vitest/mocker": ["@vitest/mocker@5.1.2", "", { "dependencies": { "@jridgewell/trace-mapping": "0.3.31", "@vitest/spy": "5.1.2", "estree-walker": "^3.0.3", "magic-string": "^1.4.5" }, "peerDependencies": { "msw": "^2.4.9 || ^3.0.0", "vite": "^6.0.0 || ^7.0.0 || ^8.0.0" }, "optionalPeers": ["msw", "vite"] }, "sha512-UGc97wUIy0Ji2+9GxzHEJiOhiwkaukgE7VYcUNnjpX3sWnwQ8XogmNXX4WyOukxYgKb8Nh2XFa7KId0ZjpmVhQ=="],
 
     "@vitest/spy": ["@vitest/spy@5.1.2", "", {}, "sha512-PQl0/3+p9GaY71+MHywN6oyHfLhVDD5kcbm7oNRldA2F0ExMU3S8RQdnpteJ9gFAdK5P6KCgE6LqCpUgy57KzA=="],
+
+    "@wailsio/runtime": ["@wailsio/runtime@3.1.0", "", {}, "sha512-noEAedvRyO8TLCrqhGwzrp+mbMxAIDa2rYmdJQOzvJV9MxgaZeXAJGNBiMiKMTSSy4ESOtQi4VH/5heSzi6ZmA=="],
 
     "@wdio/config": ["@wdio/config@10.2.0", "", { "dependencies": { "@wdio/logger": "10.2.0", "@wdio/types": "10.2.0", "@wdio/utils": "10.2.0", "deepmerge-ts": "^8.0.0", "glob": "^14.0.2", "import-meta-resolve": "^4.0.0", "jiti": "^2.6.1" } }, "sha512-dCsMVpgmyL8fLRQVcxVyYXBG/pgtJeY897+LUxU/Vw+JvJOV2iTycHn5xUD5EehbNsstfxgJwkLCVunhJcbXdg=="],
 

@@ -20,8 +20,9 @@ import (
 	"atc/internal/core"
 	"atc/internal/pty"
 	"github.com/fsnotify/fsnotify"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	wr "github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/services/notifications"
+	"github.com/wailsapp/wails/v3/pkg/w32"
 	"golang.org/x/sys/windows"
 )
 
@@ -32,6 +33,9 @@ type App struct {
 	claudeRoot   string // claudeRoot and codexRoot are set by arm, under watchMu
 	codexRoot    string
 	ctx          context.Context
+	wapp         *application.App
+	win          *application.WebviewWindow
+	notifier     *notifications.NotificationService
 	config       string
 	mu           sync.Mutex
 	settings     core.Object
@@ -62,8 +66,8 @@ func (a *App) TakeOpen() string {
 
 // secondLaunch runs when ATC starts while this copy runs: this one comes forward and opens
 // the folder the other was given, which then exits.
-func (a *App) secondLaunch(d options.SecondInstanceData) {
-	wr.WindowShow(a.ctx)
+func (a *App) secondLaunch(d application.SecondInstanceData) {
+	a.bringForward()
 	if dir := openArg(d.Args); dir != "" {
 		a.emit("open://dir", dir)
 	}
@@ -90,6 +94,28 @@ func openArg(args []string) string {
 func NewApp(config string) *App {
 	return &App{config: config, ptys: map[string]*pty.Session{}, index: core.Index{CachePath: filepath.Join(config, "index-go.json")}}
 }
+
+// bringForward shows the window without changing its size: a maximised window stays
+// maximised (#281).
+func (a *App) bringForward() {
+	if a.win == nil {
+		return
+	}
+	if a.win.IsMinimised() {
+		a.win.Restore()
+	}
+	a.win.Show()
+	a.win.Focus()
+}
+
+func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+	a.startup(ctx)
+	return nil
+}
+func (a *App) ServiceShutdown() error {
+	a.shutdown()
+	return nil
+}
 func (a *App) startup(ctx context.Context) {
 	a.ctx, a.cancel = context.WithCancel(ctx)
 	a.load()
@@ -104,19 +130,7 @@ func (a *App) startup(ctx context.Context) {
 		go a.watch()
 	}
 }
-func (a *App) ready(ctx context.Context) {
-	_ = wr.InitializeNotifications(ctx)
-	// A click on a notification brings ATC forward on the tab it came from.
-	wr.OnNotificationResponse(ctx, func(r wr.NotificationResult) {
-		if r.Error != nil || r.Response.ID == "" {
-			return
-		}
-		// Show restores only a minimised window; Unminimise also un-maximised it (#281).
-		wr.WindowShow(ctx)
-		a.emit("notification://clicked", r.Response.ID)
-	})
-}
-func (a *App) shutdown(ctx context.Context) {
+func (a *App) shutdown() {
 	a.cancel()
 	if a.watcher != nil {
 		a.watcher.Close()
@@ -124,7 +138,6 @@ func (a *App) shutdown(ctx context.Context) {
 	a.limits.stop()
 	a.agents.stop()
 	a.killAll()
-	wr.CleanupNotifications(ctx)
 }
 
 // killAll ends every terminal, waiting briefly for each to finish.
@@ -177,8 +190,8 @@ func (a *App) getSettings() core.Object {
 	return core.Obj(core.Clone(a.settings))
 }
 func (a *App) emit(name string, value any) {
-	if a.ctx != nil {
-		wr.EventsEmit(a.ctx, name, value)
+	if a.wapp != nil {
+		a.wapp.Event.Emit(name, value)
 	}
 }
 func (a *App) arm() {
@@ -360,7 +373,7 @@ func (a *App) session(id string) (*pty.Session, error) {
 }
 
 // The frontend's command surface. Wails binds every exported method on App and generates
-// typed TypeScript for it in wailsjs/go/main, so a wrong name or argument fails the build.
+// typed TypeScript for it in src/bindings, so a wrong name or argument fails the build.
 
 // FrontendReady kills the shells and agent sessions of a page that was replaced by a full
 // reload.
@@ -753,15 +766,15 @@ type FileFilter struct {
 // SaveTextFile asks where to save contents and writes them there, returning the path, or
 // null when cancelled. The page never names the path, so it can't write anywhere else (#230).
 func (a *App) SaveTextFile(defaultPath string, filters []FileFilter, contents string) (any, error) {
-	wf := []wr.FileFilter{}
+	wf := []application.FileFilter{}
 	for _, f := range filters {
 		patterns := []string{}
 		for _, ext := range f.Extensions {
 			patterns = append(patterns, "*."+ext)
 		}
-		wf = append(wf, wr.FileFilter{DisplayName: f.Name, Pattern: strings.Join(patterns, ";")})
+		wf = append(wf, application.FileFilter{DisplayName: f.Name, Pattern: strings.Join(patterns, ";")})
 	}
-	path, e := wr.SaveFileDialog(a.ctx, wr.SaveDialogOptions{DefaultFilename: defaultPath, Filters: wf})
+	path, e := a.wapp.Dialog.SaveFileWithOptions(&application.SaveFileDialogOptions{Filename: defaultPath, Filters: wf}).PromptForSingleSelection()
 	if e != nil || path == "" {
 		return nil, e
 	}
@@ -770,17 +783,31 @@ func (a *App) SaveTextFile(defaultPath string, filters []FileFilter, contents st
 
 // FolderDialog returns the chosen folder, or null when cancelled.
 func (a *App) FolderDialog() (any, error) {
-	path, e := wr.OpenDirectoryDialog(a.ctx, wr.OpenDialogOptions{Title: "Open a folder"})
+	path, e := a.wapp.Dialog.OpenFileWithOptions(&application.OpenFileDialogOptions{Title: "Open a folder", CanChooseDirectories: true}).PromptForSingleSelection()
 	return core.Nullable(path), e
 }
 
-func (a *App) NotificationPermission() (bool, error) { return wr.CheckNotificationAuthorization(a.ctx) }
+func (a *App) NotificationPermission() (bool, error) {
+	return a.notifier.CheckNotificationAuthorization()
+}
 
-func (a *App) NotificationRequest() (bool, error) { return wr.RequestNotificationAuthorization(a.ctx) }
+func (a *App) NotificationRequest() (bool, error) {
+	return a.notifier.RequestNotificationAuthorization()
+}
 
 // NotificationSend shows a Windows notification; id comes back on a click, as the tab to open.
 func (a *App) NotificationSend(title, body, id string) error {
-	return wr.SendNotification(a.ctx, wr.NotificationOptions{ID: id, Title: title, Body: body})
+	return a.notifier.SendNotification(notifications.NotificationOptions{ID: id, Title: title, Body: body})
+}
+
+// SetWindowTheme matches the title bar and backdrop to a light or dark palette. Wails v3 has
+// no runtime theme switch, so this goes to the window directly.
+func (a *App) SetWindowTheme(light bool) {
+	if a.win != nil {
+		if h := a.win.NativeWindow(); h != nil {
+			w32.SetTheme(uintptr(h), !light)
+		}
+	}
 }
 
 // GitChanges is what `git diff HEAD` and untracked files say changed in dir, or null when

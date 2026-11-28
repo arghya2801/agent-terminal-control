@@ -42,7 +42,7 @@ mkdirSync(join(root, 'benchmarks'), { recursive: true });
 const config = mkdtempSync(join(root, 'playground', 'e2e-'));
 const env = preparePlayground(config, { claude: { command: 'Write-Output' }, codex: { command: 'Write-Output' }, ui: { restoreTabs: false, notifications: false } });
 const driver = spawn(await edgeDriver(), ['--port=4444'], { stdio: 'inherit', windowsHide: true, env: { ...process.env, ...env, ATC_SHELL_NO_PROFILE: '1' } });
-const appChild = spawn(app, [], { stdio: 'inherit', windowsHide: false, env: { ...process.env, ...env, ATC_SHELL_NO_PROFILE: '1', WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=9224' } });
+const appChild = spawn(app, [], { stdio: 'inherit', windowsHide: false, env: { ...process.env, ...env, ATC_SHELL_NO_PROFILE: '1', ATC_DEBUG_PORT: '9224' } });
 let tests;
 const cleanup = async () => {
   if (appChild.exitCode === null) await Promise.race([new Promise(r => appChild.once("exit", r)), new Promise(r => setTimeout(r, 2000))]);

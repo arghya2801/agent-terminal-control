@@ -1,6 +1,6 @@
 # Architecture
 
-ATC is a Windows app: a Go and Wails host with a Svelte 5 and xterm.js 6 frontend. Go
+ATC is a Windows app: a Go and Wails v3 host with a Svelte 5 and xterm.js 6 frontend. Go
 owns the ConPTY processes, transcript discovery, usage accounting, settings and notes.
 The frontend owns terminal rendering, the sidebar, tab state and saved tab descriptions.
 
@@ -24,12 +24,18 @@ graph LR
 
 ## Desktop boundary
 
-`main.go` embeds `dist/`, creates the Wails window, and starts and stops `App`. Every
-exported method on `App` is a command. Wails generates typed bindings for them in
-`wailsjs/go/` (`bun run bindings`), which are committed, and CI fails if they drift from
-the Go methods. `src/lib/ipc.ts` wraps them with the app's types; `src/lib/desktop.ts`
-does events, PTY channels, notifications, save dialogs and zoom. A failed command
-rejects its promise with the Go error.
+`main.go` embeds `dist/`, creates the Wails application and its one window, and registers
+`App` and the notifications service as Wails services; `App.ServiceStartup` and
+`ServiceShutdown` start and stop it. Every exported method on `App` is a command.
+`wails3 generate bindings` (`bun run bindings`) writes typed TypeScript for them to
+`src/bindings/`, which is committed, and CI fails if it drifts from the Go methods. The
+page calls them over Wails' in-process IPC (`@wailsio/runtime`). `src/lib/bound.ts` makes a
+failed command reject with the Go error's message, as Wails v2 did; `src/lib/ipc.ts` wraps
+the commands with the app's types; `src/lib/desktop.ts` does events (`Events.On`, whose
+payload is `ev.data`), PTY channels, notifications, save dialogs and zoom. Closing the
+window calls `app.Quit()`, because Wails v3 skips the shutdown hooks when the last window
+closes (wails#6368). Wails v3 has no runtime theme switch, so `SetWindowTheme` sets the
+window's dark mode directly (`w32.SetTheme`).
 
 `ReadTextFile` and `WriteTextFile` back the Edit file button on Edit and Write calls. Both
 take an absolute local path (no UNC) to an existing regular file, not a symlink, of at most
@@ -38,7 +44,7 @@ mode and ACLs stay. The page re-reads before saving and refuses if the file chan
 runs the file in an iframe with `sandbox="allow-scripts"` (never `allow-same-origin`) and a
 CSP that blocks remote loads.
 
-One copy runs per exe path (Wails' `SingleInstanceLock`, keyed on a hash of the path), so
+One copy runs per exe path (Wails' `SingleInstance`, keyed on a hash of the path), so
 `atc-dev` and the installed `atc.exe` run side by side. A second launch hands its arguments
 to the running copy and exits. `atc --open <dir>` opens a shell tab in `<dir>`: `main.go`
 makes the path absolute first, since the running copy has another working directory. A
@@ -287,8 +293,8 @@ and idle) comes first: blocked, then whichever started waiting most recently. Wo
 open and exited follow, each longest in its state first, and tabs marked done sit
 between shells and exited.
 
-The UI zooms with CSS `zoom` on the page, because Wails cannot change WebView2's zoom
-after startup. The terminal area undoes that zoom and scales its font, or xterm measures
+The UI zooms with CSS `zoom` on the page. Wails v2 could not change WebView2's zoom after
+startup; v3 can, but the terminal measurements below assume CSS zoom. The terminal area undoes that zoom and scales its font, or xterm measures
 wrong. Pointer and `getBoundingClientRect` positions are on-screen pixels, while a fixed
 element's `left` and `top` are zoomed again, so menus, tooltips and drags divide by
 `pageZoom()` from `src/lib/desktop.ts`.
@@ -377,8 +383,8 @@ Things that cost time once. Add to this list.
   arrive.
 - Codex's first shell command can take half a minute when `pwsh` loads a heavy profile.
   The tool line shows it running; nothing is stuck.
-- The first `bun run play` after a lockfile change makes Vite re-optimize dependencies,
-  past the 10 s Wails waits for its URL. Run it again, or start `bunx vite` once first.
+- The first `bun run play` after a lockfile change makes Vite re-optimize dependencies and
+  reload the page once. Vite listens on 127.0.0.1, because Wails v3's dev proxy dials IPv4.
 
 **Transcripts**
 - `~/.claude/projects/<dir>` names are lossy: `D:\Coding\game_tracker_app` becomes
@@ -411,10 +417,12 @@ Things that cost time once. Add to this list.
 
 `bun run play` runs the dev app on synthetic histories in `playground/config`;
 `bun run desktop:dev` runs it on your real ones. Go edits rebuild the host, frontend
-edits go through Vite. The launcher mirrors the Go sources into `wails-dev-work/` so Wails
-does not scan WebView profiles and build output; that folder is generated. If the dev app
-fails with "Timed out waiting for Vite", an earlier run left Vite on port 1420. Stop
-that process and start again. `bun run desktop:build` writes `build/bin/atc.exe`, and
+edits go through Vite. `scripts/dev-host.mjs` runs Vite and `build/bin/atc-dev.exe`, a build
+without the `production` tag, which loads its page from `FRONTEND_DEVSERVER_URL`; saving a
+Go file rebuilds and restarts it, and closing the window ends the session. If Vite fails
+because port 1420 is taken, an earlier run left it there: stop that process. `bun run
+desktop:build` writes `build/bin/atc.exe`: `wails3 generate syso` turns `build/windows`
+and `wails.json`'s `info` into Windows resources, then `go build -tags production`.
 `bun run desktop:package` adds the MSI and NSIS installers.
 
 `scripts/shot.ps1` captures the window with `PrintWindow`, which works while it is covered
@@ -432,16 +440,17 @@ bun scripts/drive.mjs logs             # console errors, exceptions, rejections 
 bun scripts/drive.mjs stop
 ```
 
-`start` runs Vite and builds `build/bin/atc-drive.exe` with the `dev` tag, which is what
-`wails dev` does without its full rebuild; Go's build cache makes an unchanged tree
-build in about a second, so a start takes about 15 s. The exe runs with
-`ATC_HIDE_WINDOW=1`, so its window never shows, and serves the page at
-`http://localhost:34115`, proxied to Vite. A headless Edge opens that page and talks to
-the same Go backend. Edge opens `about:blank` first, so a prelude runs before the app's
+`start` runs Vite and builds `build/bin/atc-server.exe` with Wails v3's `server` tag: no
+window, and the page and its bindings served over HTTP at `http://localhost:34115`,
+proxied to Vite. Go's build cache makes an unchanged tree build in about a second, so a
+start takes about 15 s. A headless Edge opens that page and talks to the same Go backend.
+A hidden desktop window would not do: it renders no frames, so `requestAnimationFrame`,
+which opening a terminal waits for, never fires. Native dialogs and notifications are
+no-ops in the server build; check them in the desktop build. Edge opens `about:blank` first, so a prelude runs before the app's
 scripts: it records errors and adds `window.atc` helpers. `atc.mod(path)` imports the
 module instance the app already loaded rather than a second copy. If Vite reloads the
 page while it finds dependencies, `start` replaces the Edge page, because a reload cuts
-off its terminals. State lives in `%TEMP%\atc-drive`; `stop` kills only what `start`
+off its terminals; a later reload drops the prelude, and the next command puts it back. State lives in `%TEMP%\atc-drive`; `stop` kills only what `start`
 started, and anything on ports 1420 and 34115 that runs from this checkout.
 
 `bun run test` runs Vitest and the Go tests, including native ConPTY tests; on a fresh
