@@ -84,7 +84,7 @@
   }
   .cal-days {
     padding-right: 4px;
-    font-size: 9px;
+    font-size: calc(9px * var(--ui-scale, 1));
     line-height: 10px;
   }
   .cal-week .cell {
@@ -98,7 +98,7 @@
   }
   .cal-month {
     overflow: visible;
-    font-size: 9px;
+    font-size: calc(9px * var(--ui-scale, 1));
     white-space: nowrap;
   }
 </style>

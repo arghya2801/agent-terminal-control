@@ -85,10 +85,10 @@
     max-height: 400px;
     flex-direction: column;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: calc(8px * var(--radius-scale, 1));
     background: var(--bg-chrome);
     box-shadow: var(--shadow-pop);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     animation: atc-pop var(--enter) var(--ease-out);
     transform-origin: top left;
   }
@@ -110,7 +110,7 @@
   header span {
     flex: none;
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   .turns {
     display: flex;
@@ -130,7 +130,7 @@
     align-self: flex-end;
     max-width: 85%;
     padding: 6px 10px;
-    border-radius: 8px;
+    border-radius: calc(8px * var(--radius-scale, 1));
     background: var(--bg-surface);
     color: var(--fg-bright);
   }
@@ -139,7 +139,7 @@
   }
   .tool {
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   p {
     margin: 0;

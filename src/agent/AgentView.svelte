@@ -289,6 +289,7 @@
     setMode(tabKey, s.modes[(s.modes.indexOf(s.mode) + 1) % s.modes.length]);
   }
   const hideTools = $derived(!!appState.settings?.ui.hideToolCalls);
+  const hideTurnUsage = $derived(!!appState.settings?.ui.hide?.includes('turn-usage'));
   const hidden = (x: ChatItem) => hideTools && (!!x.parent || (x.kind === 'tool' && !STANDALONE.test(x.tool ?? '')));
   const shown = (steps: ChatItem[]) => steps.filter((x) => !hidden(x));
   function toggleTools() {
@@ -354,7 +355,7 @@
 <div
   class="agent"
   onkeydown={jumpPrompt}
-  style:--mono={appState.settings?.terminal.fontFamily}
+  style:--mono={appState.settings?.ui.codeFontFamily?.trim() || appState.settings?.terminal.fontFamily}
   style:--mono-size="{Math.max(11, (appState.settings?.terminal.fontSize ?? 13) - 1)}px"
   style:--chat-scale={(appState.settings?.ui.chatFontSize || 13) / 13}
   style:font-family={appState.settings?.ui.chatFontFamily?.trim() || null}
@@ -398,7 +399,7 @@
             <div class="work">
               {#each all as b, bi (b.kind === 'group' ? `g:${b.id}` : b.item.id)}
                 {#if b.kind === 'group'}
-                  {@const open = opened[b.id] ?? (live && bi === all.length - 1)}
+                  {@const open = opened[b.id] ?? (!!appState.settings?.ui.toolsOpen || (live && bi === all.length - 1))}
                   {@const st = groupStatus(b, live)}
                   {@const failed = b.items.filter((x) => x.done && x.error && !x.declined).length}
                   {@const declined = b.items.filter((x) => x.declined).length}
@@ -423,7 +424,7 @@
                     {#if it.text}<div class="step text" class:sub={!!it.parent} class:final={fin.has(it.id)}><Markdown text={it.text} /></div>{/if}
                   {:else if it.kind === 'thinking'}
                     {#if it.text}
-                      <details class="step thinking" class:sub={!!it.parent}>
+                      <details class="step thinking" class:sub={!!it.parent} open={!!appState.settings?.ui.thinkingOpen}>
                         <summary class="row">
                           <span class="icon"><Icon name="sparkle" size={14} /></span>
                           <span class="what">{thoughtLine(it.text) || 'Thought'}</span>
@@ -451,8 +452,8 @@
                 </div>
               {/if}
               {#if !live && (turn.end || replyText)}
-                <div class="end" class:bare={!turn.end?.durationMs && !turn.end?.costUsd} title={usage(turn.end)}>
-                  {#if turn.end?.durationMs}<span>{interrupted(turn) ? 'Stopped after' : 'Worked for'} {clock(turn.end.durationMs)}</span>{/if}
+                <div class="end" class:bare={!turn.end?.durationMs && !turn.end?.costUsd} title={hideTurnUsage ? undefined : usage(turn.end)}>
+                  {#if turn.end?.durationMs}<span class="dur">{interrupted(turn) ? 'Stopped after' : 'Worked for'} {clock(turn.end.durationMs)}</span>{/if}
                   {#if turn.end?.costUsd}<span>{cost(turn.end.costUsd)}</span>{/if}
                   {#if replyText}<button class="act" onclick={() => copy(replyText, `r${i}`)} title="Copy the reply as Markdown"><Icon name={copied === `r${i}` ? 'check' : 'copy'} size={13} /><span>{copied === `r${i}` ? 'Copied' : 'Copy'}</span></button>{/if}
                 </div>
@@ -477,7 +478,7 @@
       {#if s.requests.length > 1}<p class="aside">{s.requests.length - 1} more waiting</p>{/if}
     {/if}
     {#if doneSteps < plan.length}
-      <div class="tasks">
+      <div class="tasks plan-list">
         <button class="head" aria-expanded={tasksOpen} onclick={() => (request ? (planWhileAsked = !planWhileAsked) : (planOpen = !planOpen))}>
           <span class="icon"><Icon name="list" size={14} /></span>
           <span>{doneSteps} of {plan.length} {provider === 'claude' ? 'tasks' : 'steps'} done</span>
@@ -575,13 +576,15 @@
     >
       {#snippet toolbar()}
         {#if s?.models.length}
+          <span class="model-chip">
           <ChipMenu title="Model and effort" sections={modelSections} value="{provider}:{model}" onPick={pick} footer={modelFooter} width={380}>
             {#snippet label()}
               <ProviderIcon {provider} />
               <span>{chipLabel}</span>
-              {#if s?.effort}<span class="faint">{effortName(s.effort).toLowerCase()}</span>{/if}
+              {#if s?.effort}<span class="faint effort-chip">{effortName(s.effort).toLowerCase()}</span>{/if}
             {/snippet}
           </ChipMenu>
+          </span>
         {/if}
         {#if s?.modes.length && s.mode}
           <ChipMenu title="{provider === 'codex' ? 'Sandbox and approvals, from the next message' : 'Permission mode'}{s.modes.length > 1 ? ' (Alt+M)' : ''}" sections={[{ items: s.modes.map((m) => ({ value: m, label: MODES[m] ?? m, description: MODE_HELP[m] })) }]} value={s.mode ?? 'default'} onPick={(m) => setMode(tabKey, m)} width={340}>
@@ -619,19 +622,19 @@
     background: var(--bg);
     color: var(--fg);
     font-size: calc(14px * var(--chat-scale, 1));
-    line-height: 1.6;
+    line-height: var(--chat-line, 1.6);
   }
   .list {
     flex: 1;
     overflow-y: auto;
     /* The same gutter on both sides keeps the column centred over the dock. */
     scrollbar-gutter: stable both-edges;
-    padding: 32px 24px 16px;
+    padding: calc(32px * var(--chat-gap, 1)) 24px calc(16px * var(--chat-gap, 1));
   }
   .column,
   .dock {
     width: 100%;
-    max-width: 680px;
+    max-width: var(--chat-width, 680px);
     margin: 0 auto;
     box-sizing: border-box;
   }
@@ -652,7 +655,7 @@
     place-items: center;
     width: 40px;
     height: 40px;
-    border-radius: 12px;
+    border-radius: calc(12px * var(--radius-scale, 1));
     background: var(--bg-surface);
     margin-bottom: 6px;
   }
@@ -667,12 +670,12 @@
     padding: 0 5px;
     border: 1px solid var(--border);
     border-bottom-width: 2px;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     color: var(--fg);
   }
 
   .turn + .turn {
-    margin-top: 32px;
+    margin-top: calc(32px * var(--chat-gap, 1));
   }
   /* Whole turns skip layout offscreen. */
   .turn {
@@ -686,19 +689,23 @@
     justify-content: flex-end;
     align-items: flex-end;
     gap: 6px;
-    margin-bottom: 16px;
+    margin-bottom: calc(16px * var(--chat-gap, 1));
+  }
+  :global([data-user-left]) .you {
+    flex-direction: row-reverse;
+    justify-content: flex-end;
   }
   .bubble {
     position: relative;
     /* Leaves room beside it for Copy and Rewind, even in a narrow pane. */
-    max-width: min(85%, calc(100% - 64px));
+    max-width: min(var(--user-width, 85%), calc(100% - 64px));
     box-sizing: border-box;
     padding: 10px 14px;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: calc(12px * var(--radius-scale, 1));
     background: color-mix(in srgb, var(--bg-surface) 60%, var(--bg));
     color: var(--fg-bright);
-    line-height: 1.55;
+    line-height: calc(var(--chat-line, 1.6) - 0.05);
     overflow-wrap: anywhere;
   }
   /* On the text alone: on the box, the template's own whitespace shows as a blank line. */
@@ -718,7 +725,7 @@
   .pics img {
     max-height: 180px;
     max-width: 280px;
-    border-radius: 10px;
+    border-radius: calc(10px * var(--radius-scale, 1));
     object-fit: cover;
   }
   .actions {
@@ -741,7 +748,7 @@
     gap: 5px;
     height: 24px;
     padding: 0 7px;
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     font-size: calc(12px * var(--chat-scale, 1));
     color: var(--fg-faint);
     cursor: pointer;
@@ -790,7 +797,7 @@
     min-height: 28px;
     padding: 0 8px;
     margin-left: -8px;
-    border-radius: 7px;
+    border-radius: calc(7px * var(--radius-scale, 1));
     font-size: calc(13px * var(--chat-scale, 1));
     color: var(--fg-dim);
     cursor: pointer;
@@ -824,7 +831,7 @@
   .badge {
     padding: 0 7px;
     line-height: 18px;
-    border-radius: 9px;
+    border-radius: calc(9px * var(--radius-scale, 1));
     font-size: calc(11px * var(--chat-scale, 1));
     color: var(--danger);
     background: color-mix(in srgb, var(--danger) 12%, transparent);
@@ -887,7 +894,7 @@
     display: block;
     margin: 8px 0;
     padding: 10px 14px;
-    border-radius: 10px;
+    border-radius: calc(10px * var(--radius-scale, 1));
     background: var(--bg-chrome);
     border: 1px solid var(--border);
     font-family: var(--mono);
@@ -905,7 +912,7 @@
     align-items: flex-start;
     margin: 8px 0;
     padding: 9px 12px;
-    border-radius: 10px;
+    border-radius: calc(10px * var(--radius-scale, 1));
     font-size: calc(13px * var(--chat-scale, 1));
     color: var(--danger);
     background: color-mix(in srgb, var(--danger) 9%, transparent);
@@ -1016,7 +1023,7 @@
     flex-direction: column;
     gap: 10px;
     padding: 8px 24px 18px;
-    max-width: calc(680px + 48px);
+    max-width: calc(var(--chat-width, 680px) + 48px);
     /* A short window keeps some conversation: the request card gives way and scrolls. */
     max-height: 80vh;
   }
@@ -1046,7 +1053,7 @@
     flex-shrink: 0;
     padding: 3px;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: calc(12px * var(--radius-scale, 1));
     background: var(--bg-chrome);
     font-size: calc(13px * var(--chat-scale, 1));
   }
@@ -1059,7 +1066,7 @@
     width: 100%;
     min-height: 30px;
     padding: 0 9px;
-    border-radius: 9px;
+    border-radius: calc(9px * var(--radius-scale, 1));
     color: var(--fg);
     cursor: pointer;
   }
@@ -1077,14 +1084,14 @@
     flex: 0 0 72px;
     height: 4px;
     margin-left: auto;
-    border-radius: 2px;
+    border-radius: calc(2px * var(--radius-scale, 1));
     background: var(--border);
     overflow: hidden;
   }
   .progress span {
     display: block;
     height: 100%;
-    border-radius: 2px;
+    border-radius: calc(2px * var(--radius-scale, 1));
     background: var(--ok);
     transition: width var(--enter) var(--ease-out);
   }
@@ -1161,7 +1168,7 @@
     padding: 8px 12px;
     margin: 0;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: calc(10px * var(--radius-scale, 1));
     background: var(--bg-chrome);
     font-size: calc(13px * var(--chat-scale, 1));
   }
@@ -1175,7 +1182,7 @@
     font-size: calc(12.5px * var(--chat-scale, 1));
     font-weight: 600;
     border: none;
-    border-radius: 7px;
+    border-radius: calc(7px * var(--radius-scale, 1));
     background: var(--accent);
     color: var(--on-accent);
     cursor: pointer;
@@ -1192,7 +1199,7 @@
     padding: 6px 10px;
     margin: 0;
     border: 1px dashed var(--border);
-    border-radius: 10px;
+    border-radius: calc(10px * var(--radius-scale, 1));
   }
   .queued span {
     flex: 1;
@@ -1226,7 +1233,7 @@
     color: var(--fg);
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: calc(14px * var(--radius-scale, 1));
     box-shadow: var(--shadow-pop);
     cursor: pointer;
   }
@@ -1252,7 +1259,18 @@
     color: var(--fg-faint);
   }
   .keyhint {
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
+  }
+  .model-chip {
+    display: contents;
+  }
+  :global([data-hide-model-chip]) .model-chip,
+  :global([data-hide-effort-chip]) .effort-chip,
+  :global([data-hide-turn-timing]) .end .dur,
+  :global([data-hide-progress-shimmer]) .step.live .shimmer,
+  :global([data-hide-task-list]) .plan-list,
+  :global([data-hide-jump-latest]) .jump {
+    display: none;
   }
   .plan {
     color: var(--info);
@@ -1277,7 +1295,7 @@
     color: var(--fg-dim);
     background: transparent;
     border: 1px solid var(--border);
-    border-radius: 5px;
+    border-radius: calc(5px * var(--radius-scale, 1));
     padding: 1px 6px;
     cursor: pointer;
   }
@@ -1320,7 +1338,7 @@
     width: 26px;
     height: 26px;
     border: none;
-    border-radius: 7px;
+    border-radius: calc(7px * var(--radius-scale, 1));
     background: transparent;
     color: var(--fg-dim);
     cursor: pointer;

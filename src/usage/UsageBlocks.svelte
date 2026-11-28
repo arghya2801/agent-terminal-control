@@ -43,7 +43,7 @@
   .now {
     margin-left: 6px;
     color: var(--accent);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   .bar-cell {
     width: 30%;
@@ -51,7 +51,7 @@
   .hbar {
     display: block;
     height: 6px;
-    border-radius: 0 3px 3px 0;
+    border-radius: 0 calc(3px * var(--radius-scale, 1)) calc(3px * var(--radius-scale, 1)) 0;
     background: var(--accent);
   }
 </style>

@@ -75,7 +75,7 @@
     flex: none;
     width: 170px;
     color: var(--fg);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   .path {
     flex: 1;
@@ -95,11 +95,11 @@
     flex: none;
     padding: 4px 12px;
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     color: var(--fg);
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     cursor: pointer;
   }
   .btn:hover {

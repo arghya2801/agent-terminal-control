@@ -333,7 +333,7 @@
     gap: 8px 10px;
     margin: 14px 0 18px;
     color: var(--fg-dim);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   /* The usage page's groups sit in their own rows; in the toolbar they share one. */
   .range :global(.group) {

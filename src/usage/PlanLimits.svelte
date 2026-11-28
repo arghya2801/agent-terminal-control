@@ -221,7 +221,7 @@
   .tag {
     margin-left: 6px;
     padding: 1px 6px;
-    border-radius: 8px;
+    border-radius: calc(8px * var(--radius-scale, 1));
     background: var(--bg-surface);
     color: var(--fg-dim);
     letter-spacing: 0;
@@ -239,7 +239,7 @@
     gap: 4px 12px;
     margin-bottom: 5px;
     color: var(--fg);
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale, 1));
   }
   .pct.hot {
     color: var(--warn);
@@ -266,7 +266,7 @@
   }
   .pace {
     color: var(--fg-dim);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   .pace.hot {
     color: var(--warn);

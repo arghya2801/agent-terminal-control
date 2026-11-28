@@ -82,7 +82,7 @@
     gap: 4px;
     padding: 5px 6px 5px 10px;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: calc(8px * var(--radius-scale, 1));
     background: var(--bg-chrome);
     box-shadow: var(--shadow-pop);
     animation: atc-drop var(--enter) var(--ease-out);
@@ -96,14 +96,14 @@
     background: transparent;
     color: var(--fg-bright);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     outline: none;
   }
   .count {
     min-width: 48px;
     margin-right: 2px;
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
     font-variant-numeric: tabular-nums;
     text-align: right;
   }
@@ -116,7 +116,7 @@
     height: 24px;
     place-items: center;
     border: none;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     background: transparent;
     color: var(--fg-dim);
     cursor: pointer;

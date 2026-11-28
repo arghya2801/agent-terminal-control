@@ -10,7 +10,7 @@
 
 <style>
   mark {
-    border-radius: 2px;
+    border-radius: calc(2px * var(--radius-scale, 1));
     background: color-mix(in srgb, var(--accent) 30%, transparent);
     color: inherit;
   }

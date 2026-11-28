@@ -32,7 +32,7 @@
   /* A diamond, not a dot: it asks a question, so it reads apart from "finished" without colour. */
   .blocked {
     background: var(--accent);
-    border-radius: 1px;
+    border-radius: calc(1px * var(--radius-scale, 1));
     transform: rotate(45deg);
     animation: ping 0.9s var(--ease-out) 2;
   }
@@ -55,7 +55,7 @@
   }
   /* Settings > Appearance > State shapes: each state its own outline, for reading without colour. */
   :global([data-shapes]) .working {
-    border-radius: 1px;
+    border-radius: calc(1px * var(--radius-scale, 1));
   }
   :global([data-shapes]) .interrupted {
     border-radius: 0;

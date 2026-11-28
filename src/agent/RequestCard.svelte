@@ -130,7 +130,7 @@
     --tone: var(--accent);
     padding: 12px 14px 12px;
     border: 1px solid color-mix(in srgb, var(--tone) 35%, var(--border));
-    border-radius: 14px;
+    border-radius: calc(14px * var(--radius-scale, 1));
     background: var(--bg-chrome);
     box-shadow: 0 8px 28px rgb(0 0 0 / 0.22);
     animation: card-in var(--enter) var(--ease-out);
@@ -191,7 +191,7 @@
     place-items: center;
     width: 26px;
     height: 26px;
-    border-radius: 8px;
+    border-radius: calc(8px * var(--radius-scale, 1));
     color: var(--tone);
     background: color-mix(in srgb, var(--tone) 14%, transparent);
   }
@@ -206,7 +206,7 @@
     padding: 9px 12px;
     max-height: 14em;
     overflow: auto;
-    border-radius: 9px;
+    border-radius: calc(9px * var(--radius-scale, 1));
     border: 1px solid var(--border);
     background: var(--bg);
     font-family: var(--mono);
@@ -257,7 +257,7 @@
     gap: 10px;
     padding: 8px 12px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: calc(10px * var(--radius-scale, 1));
     cursor: pointer;
     transition: border-color var(--fast) var(--ease-out), background var(--fast) var(--ease-out);
   }
@@ -285,7 +285,7 @@
     color: var(--on-accent);
   }
   .mark.square {
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
   }
   .on .mark {
     border-color: var(--accent);
@@ -313,7 +313,7 @@
     color: var(--fg);
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: calc(8px * var(--radius-scale, 1));
     padding: 0 10px;
   }
   .question .field {
@@ -344,7 +344,7 @@
     color: var(--fg);
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: calc(8px * var(--radius-scale, 1));
     cursor: pointer;
   }
   .btn:hover:not(:disabled) {
@@ -387,7 +387,7 @@
     color: var(--fg-faint);
     border: 1px solid var(--border);
     border-bottom-width: 2px;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     padding: 0 5px;
   }
 </style>

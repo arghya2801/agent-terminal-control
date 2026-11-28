@@ -203,7 +203,7 @@
     padding: 0;
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: calc(10px * var(--radius-scale, 1));
     background: var(--bg-chrome);
     color: var(--fg);
     box-shadow: var(--shadow-pop);
@@ -223,7 +223,7 @@
     flex-shrink: 0;
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
   }
   .swatches span {
     width: 12px;
@@ -244,7 +244,7 @@
     background: transparent;
     color: var(--fg-bright);
     font: inherit;
-    font-size: 14px;
+    font-size: calc(14px * var(--ui-scale, 1));
     outline: none;
   }
   .list {
@@ -257,7 +257,7 @@
     align-items: center;
     gap: 10px;
     padding: 6px 10px;
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     cursor: pointer;
   }
   .row[aria-selected='true'] {
@@ -286,22 +286,22 @@
     white-space: nowrap;
   }
   .label {
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale, 1));
   }
   .detail {
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   kbd {
     flex-shrink: 0;
     padding: 0 5px;
     border: 1px solid var(--border);
     border-bottom-width: 2px;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     background: var(--bg-surface);
     color: var(--fg-dim);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   .act {
     display: grid;
@@ -311,11 +311,11 @@
     place-items: center;
     padding: 0;
     border: 1px solid transparent;
-    border-radius: 5px;
+    border-radius: calc(5px * var(--radius-scale, 1));
     background: transparent;
     color: var(--c);
     font: inherit;
-    font-size: 14px;
+    font-size: calc(14px * var(--ui-scale, 1));
     cursor: pointer;
   }
   .act:hover,
@@ -326,12 +326,12 @@
   .group {
     padding: 8px 10px 4px;
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   .empty {
     margin: 0;
     padding: 14px 10px;
     color: var(--fg-faint);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
 </style>

@@ -174,6 +174,10 @@ export function SaveTextFile(arg1, arg2, arg3) {
   return window['go']['main']['App']['SaveTextFile'](arg1, arg2, arg3);
 }
 
+export function SaveTheme(arg1, arg2) {
+  return window['go']['main']['App']['SaveTheme'](arg1, arg2);
+}
+
 export function ScratchDir() {
   return window['go']['main']['App']['ScratchDir']();
 }
@@ -212,6 +216,10 @@ export function UsageContext() {
 
 export function UsageCosts() {
   return window['go']['main']['App']['UsageCosts']();
+}
+
+export function UserCSS() {
+  return window['go']['main']['App']['UserCSS']();
 }
 
 export function Version() {

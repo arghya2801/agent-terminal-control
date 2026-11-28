@@ -424,7 +424,7 @@ func TestConfigFiles(t *testing.T) {
 	a := NewApp(t.TempDir())
 	os.WriteFile(filepath.Join(proj, "CLAUDE.md"), nil, 0600)
 	got := a.ConfigFiles(proj)
-	if len(got) != 5 || got[0].Path != filepath.Join(claude, "settings.json") || got[0].Exists || got[4].Path != filepath.Join(proj, "CLAUDE.md") || !got[4].Exists {
+	if len(got) != 6 || got[0].Path != filepath.Join(claude, "settings.json") || got[0].Exists || got[4].Label != "ATC styles" || got[5].Path != filepath.Join(proj, "CLAUDE.md") || !got[5].Exists {
 		t.Fatal(got)
 	}
 	if e := a.CreateConfigFile(got[0].Path); e != nil {
@@ -492,5 +492,20 @@ func TestOpenPathRefusesBadTargets(t *testing.T) {
 		if a.OpenPath(p) == nil {
 			t.Errorf("OpenPath(%q) did not fail", p)
 		}
+	}
+}
+
+func TestSaveThemeKeepsTheFileInThemes(t *testing.T) {
+	dir := t.TempDir()
+	a := NewApp(dir)
+	stem, e := a.SaveTheme(`..\..\evil: "x"`, core.Object{"background": "#000000"})
+	if e != nil || stem != "evil x" {
+		t.Fatalf("%q %v", stem, e)
+	}
+	if _, e := os.Stat(filepath.Join(dir, "themes", "evil x.json")); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := a.SaveTheme("..", core.Object{}); e == nil {
+		t.Fatal("saved a theme with no usable name")
 	}
 }

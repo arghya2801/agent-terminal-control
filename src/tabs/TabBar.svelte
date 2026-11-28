@@ -223,11 +223,11 @@
     max-width: 220px;
     padding: 0 6px 0 12px;
     border: none;
-    border-radius: 6px 6px 0 0;
+    border-radius: calc(6px * var(--radius-scale, 1)) calc(6px * var(--radius-scale, 1)) 0 0;
     background: transparent;
     color: var(--fg-dim);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     cursor: pointer;
     white-space: nowrap;
     animation: atc-fade var(--enter) var(--ease-out);
@@ -241,7 +241,7 @@
     right: 8px;
     left: 8px;
     height: 2px;
-    border-radius: 0 0 2px 2px;
+    border-radius: 0 0 calc(2px * var(--radius-scale, 1)) calc(2px * var(--radius-scale, 1));
     content: '';
     transform: scaleX(0);
     transition: transform var(--enter) var(--ease-out);
@@ -270,7 +270,7 @@
     width: 18px;
     height: 18px;
     place-items: center;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     opacity: 0;
     transition: opacity var(--fast), background-color var(--fast);
   }
@@ -278,6 +278,19 @@
   .tab:focus-visible .close,
   .tab.active .close { opacity: 0.6; }
   .tab .close:hover { background: var(--border); opacity: 1; }
+  :global([data-tab-close='always']) .tab .close { opacity: 0.6; }
+  :global([data-tab-close='always']) .tab .close:hover { opacity: 1; }
+  :global([data-tab-close='never']) .tab .close { display: none; }
+  :global([data-hide-tab-provider-icon]) .tab :global(.provider),
+  :global([data-hide-tab-state-dot]) .tab :global(.dot) { display: none; }
+  :global([data-tabbar-bottom]) .bar {
+    order: 1;
+    padding: 0 6px 4px;
+    border-top: 1px solid var(--border);
+    border-bottom: none;
+  }
+  :global([data-tabbar-bottom]) .tab { border-radius: 0 0 calc(6px * var(--radius-scale, 1)) calc(6px * var(--radius-scale, 1)); }
+  :global([data-tabbar-bottom]) .tab::before { top: auto; bottom: 0; }
   .scroll {
     display: grid;
     flex: 0 0 24px;

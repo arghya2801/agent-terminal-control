@@ -465,13 +465,23 @@
     background: var(--glass-bg);
     overflow: hidden;
   }
+  :global([data-sidebar-right]) .panel {
+    border-right: none;
+    border-left: 1px solid var(--border);
+  }
+  :global([data-hide-view-switcher]) .views,
+  :global([data-hide-sidebar-search]) .search,
+  :global([data-hide-notes-pane]) .notes-pane,
+  :global([data-hide-update-banner]) footer .update {
+    display: none;
+  }
   header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 10px 8px 8px 10px;
     color: var(--fg-faint);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     font-weight: 600;
   }
   .actions {
@@ -504,7 +514,7 @@
     bottom: 0;
     left: 0;
     height: 2px;
-    border-radius: 1px;
+    border-radius: calc(1px * var(--radius-scale, 1));
     background: var(--accent);
     content: '';
     transform: scaleX(0);
@@ -525,7 +535,7 @@
     height: 22px;
     place-items: center;
     border: none;
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     background: transparent;
     color: var(--fg-faint);
     cursor: pointer;
@@ -557,11 +567,11 @@
     box-sizing: border-box;
     padding: 4px 8px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     background: var(--bg);
     color: var(--fg-bright);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   .search input:focus {
     border-color: var(--accent);
@@ -609,7 +619,7 @@
     background: transparent;
     color: var(--fg-dim);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     font-weight: 600;
     text-align: left;
     cursor: pointer;
@@ -624,7 +634,7 @@
   .notes-head em {
     margin-left: auto;
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
     font-style: normal;
     font-weight: 400;
   }
@@ -661,7 +671,7 @@
     padding: 6px 10px;
     border-top: 1px solid var(--border);
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
     font-variant-numeric: tabular-nums;
   }
   .update {

@@ -70,11 +70,11 @@
     min-width: 190px;
     padding: 8px 10px;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: calc(8px * var(--radius-scale, 1));
     background: color-mix(in srgb, var(--bg-chrome) 94%, transparent);
     box-shadow: var(--shadow-pop);
     font-family: ui-monospace, Consolas, monospace;
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
     color: var(--fg-dim);
     pointer-events: none;
     animation: atc-rise var(--enter) var(--ease-out);

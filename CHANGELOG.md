@@ -19,6 +19,15 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 - Usage refresh interval changes apply without reopening the usage page.
 - Reloading the page with many terminal tabs restores them without a delay per tab.
 
+### Added
+- Settings > Appearance: app font, text size, corners, sidebar side, tab bar position and when tabs show their close button.
+- Settings > Chat: chat width, line height, spacing, which side and how wide your messages sit, code wrapping and font, and whether tool calls and thinking start open.
+- Settings > Show hides parts of the title bar, tab bar, sidebar, session rows, chat and composer.
+- A theme editor with live preview, and import of VS Code colour themes.
+- A theme and accent per project, from the project's menu.
+- Appearance profiles: save, switch, export and import.
+- Theme files take a `ui` block of CSS variables, and `user.css` in the config folder restyles anything. See docs/CUSTOMIZING.md.
+
 ### Changed
 - Lower CPU and memory while agents work: title spinners, transcript writes and long chats no longer trigger full rescans or re-renders, and usage history keeps only token counts.
 - The `@` file list loads once per chat tab.
