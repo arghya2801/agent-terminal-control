@@ -6,6 +6,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-28
+
 ### Fixed
 - Chats no longer all freeze when one tab sends a large image prompt while another streams.
 - Archive old sessions with a cost cap no longer archives sessions whose costs have not loaded yet.
