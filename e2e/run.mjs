@@ -60,6 +60,7 @@ try {
     try { if ((await fetch('http://127.0.0.1:9224/json/version')).ok) break; } catch {}
     await new Promise((r) => setTimeout(r, 100));
   }
-  tests = spawn(process.execPath, ['--test', ...(process.env.E2E_TEST ? ['--test-name-pattern', process.env.E2E_TEST] : []), join(root, 'e2e', 'app.test.mjs')], { stdio: 'inherit', windowsHide: true, env: { ...process.env, E2E_APP: app, E2E_CONFIG: config, E2E_HOST: 'wails', E2E_DEBUGGER: '127.0.0.1:9224', E2E_PID: String(appChild.pid) } });
+  // bun test runs node:test suites; its 5 s default timeout is far too short for a desktop app.
+  tests = spawn(process.execPath, ['test', '--timeout', '600000', ...(process.env.E2E_TEST ? ['--test-name-pattern', process.env.E2E_TEST] : []), join(root, 'e2e', 'app.test.mjs')], { stdio: 'inherit', windowsHide: true, env: { ...process.env, E2E_APP: app, E2E_CONFIG: config, E2E_HOST: 'wails', E2E_DEBUGGER: '127.0.0.1:9224', E2E_PID: String(appChild.pid) } });
   process.exitCode = await new Promise((resolve, reject) => { tests.on('exit', (code) => resolve(code ?? 1)); tests.on('error', reject); });
 } finally { await cleanup(); }

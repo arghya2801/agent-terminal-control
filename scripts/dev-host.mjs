@@ -8,7 +8,7 @@ import { root } from './playground.mjs';
 import { ensureConpty } from './conpty.mjs';
 await ensureConpty();
 export function startDev(env = process.env, args = []) {
-  if (!existsSync(join(root, 'node_modules/vite/bin/vite.js'))) throw new Error('Run npm ci first.');
+  if (!existsSync(join(root, 'node_modules/vite/bin/vite.js'))) throw new Error('Run bun install first.');
   // The staged dist/ has no sidecar bundle; Node runs the source, types stripped.
   env = { ...env, ATC_SIDECAR: join(root, 'sidecar', 'agent.ts') };
   const stage = join(root, 'wails-dev-work');

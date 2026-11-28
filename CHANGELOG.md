@@ -22,6 +22,8 @@ Add a line under **Unreleased** in each PR. When cutting a release, rename that 
 ### Changed
 - Lower CPU and memory while agents work: title spinners, transcript writes and long chats no longer trigger full rescans or re-renders, and usage history keeps only token counts.
 - The `@` file list loads once per chat tab.
+- Agent chat tabs run on Bun instead of Node. ATC uses `bun` from PATH, else downloads a checked copy of Bun (about 54 MB) on the first chat, else falls back to Node. Nothing to install for chats. Settings > Agents > Runtime picks Bun, Node or a path. See docs/MIGRATION-BUN.md.
+- Building ATC needs Bun instead of Node and npm: `bun install`, `bun run …`.
 
 ## [0.7.7] - 2026-11-20
 

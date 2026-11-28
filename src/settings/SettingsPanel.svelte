@@ -12,7 +12,7 @@
   import AccountsSection from './AccountsSection.svelte';
   import ConfigSection from './ConfigSection.svelte';
   import KeysSection from './KeysSection.svelte';
-  import { appVersion, openSettingsFile, openUrl, shells } from '../lib/ipc';
+  import { agentRuntimeInUse, appVersion, openSettingsFile, openUrl, shells } from '../lib/ipc';
   import { accountState, appState, refresh, saveSettings, themeState } from '../lib/stores.svelte';
   import { cssVariables } from '../lib/theme';
   import type { Account, Settings } from '../types';
@@ -44,6 +44,8 @@
   onMount(() => void shells().then((s) => (installed = s), () => {}));
   let version = $state('');
   onMount(() => void appVersion().then((v) => (version = v), () => {}));
+  let runtimeInUse = $state('');
+  onMount(() => void agentRuntimeInUse().then((r) => (runtimeInUse = r), () => {}));
   const shellName = (v: string) =>
     v === 'powershell' || /WindowsPowerShell/i.test(v) ? 'Windows PowerShell 5.1'
     : /7-preview/i.test(v) ? 'PowerShell 7 Preview'
@@ -511,6 +513,9 @@
         <span></span>
       </div>
       <div class="grid folders">
+        <label for="art">Runtime<span class="muted hint">What runs agent chats. Auto uses Bun on PATH, else downloads Bun, else Node. {runtimeInUse ? `In use: ${runtimeInUse}` : ''}</span></label>
+        <input id="art" class="wide" list="art-list" placeholder="auto" bind:value={draft.agent.runtime} />
+        <datalist id="art-list"><option value="auto"></option><option value="bun"></option><option value="node"></option></datalist>
         <label for="pd">Claude projects</label>
         <input
           id="pd"

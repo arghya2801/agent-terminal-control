@@ -23,7 +23,7 @@ func TestConPTYFallsBackWithoutBothFiles(t *testing.T) {
 }
 
 // Opt-in: ATC_TEST_CONPTY names a folder holding conpty.dll and OpenConsole.exe
-// (build/bin after npm run desktop:build).
+// (build/bin after bun run desktop:build).
 func TestBundledConPTYHostsTheShellAndForwardsColourQueries(t *testing.T) {
 	dir := os.Getenv("ATC_TEST_CONPTY")
 	if dir == "" {

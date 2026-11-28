@@ -20,6 +20,8 @@ export function AgentCommand(arg1:string,arg2:string,arg3:boolean):Promise<strin
 
 export function AgentOpen(arg1:string,arg2:string,arg3:string,arg4:boolean,arg5:string,arg6:string,arg7:string,arg8:string):Promise<string>;
 
+export function AgentRuntimeInUse():Promise<string>;
+
 export function AgentSend(arg1:string,arg2:Record<string, any>):Promise<void>;
 
 export function AppendLog(arg1:string):Promise<void>;

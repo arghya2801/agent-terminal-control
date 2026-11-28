@@ -17,7 +17,7 @@ graph LR
   Core <--> App
   App <-->|Wails binding + events| Transport[src/lib/desktop.ts]
   Transport <--> UI[Svelte + xterm.js]
-  App <-->|JSON lines| Sidecar[sidecar: Node]
+  App <-->|JSON lines| Sidecar[sidecar: Bun]
   Sidecar <-->|Agent SDK| Claude[claude]
   Sidecar <-->|app-server| Codex[codex]
 ```
@@ -26,7 +26,7 @@ graph LR
 
 `main.go` embeds `dist/`, creates the Wails window, and starts and stops `App`. Every
 exported method on `App` is a command. Wails generates typed bindings for them in
-`wailsjs/go/` (`npm run bindings`), which are committed, and CI fails if they drift from
+`wailsjs/go/` (`bun run bindings`), which are committed, and CI fails if they drift from
 the Go methods. `src/lib/ipc.ts` wraps them with the app's types; `src/lib/desktop.ts`
 does events, PTY channels, notifications, save dialogs and zoom. A failed command
 rejects its promise with the Go error.
@@ -55,7 +55,8 @@ failed spawn. The other events are `index://updated`, `settings://updated` and
 |---|---|
 | `app.go` | Lifecycle, command dispatch, PTY registry, file watching, migration |
 | `agents.go` | The agent sidecar: starting it, routing its sessions, the CLI each one runs |
-| `sidecar/` | Node: `claude.ts` (Agent SDK), `codex.ts` (app-server), `protocol.ts` (the events) |
+| `runtime.go` | What runs the sidecar: Bun on PATH, ATC's own pinned Bun (downloaded and checked), or Node |
+| `sidecar/` | Bun: `claude.ts` (Agent SDK), `codex.ts` (app-server), `protocol.ts` (the events) |
 | `limits.go` | Claude's plan-limit HTTP request and Codex's app-server limits |
 | `sessions.go` | Session preview, transcript search and Rename with Haiku or Luna |
 | `accounts.go` | Claude accounts: DPAPI storage and the env each launch gets |
@@ -94,15 +95,22 @@ process tree. Quitting stops the limit helpers, the watchers and every owned PTY
 
 ## Agent sessions
 
-Claude and Codex tabs have no terminal. One Node process, the sidecar in `sidecar/`, runs
+Claude and Codex tabs have no terminal. One Bun process, the sidecar in `sidecar/`, runs
 every session: Claude through the Agent SDK's `query()`, Codex through `codex app-server`.
 Both become the same events (`sidecar/protocol.ts`): `ready` with commands, skills,
 models and modes; `item`, `delta`, `output`, `result` and `progress` for the chat;
 `request` and `resolved` for permissions, questions and plans; `working`; `exit`.
 
-`agents.go` starts Node on the first session. It needs `node` on PATH, 18 or later. The
-sidecar is `ATC_SIDECAR` when set (the dev host points it at `sidecar/agent.ts`, which
-Node runs with types stripped), else the bundle `npm run build` puts in
+`agents.go` starts the sidecar on the first session, with the runtime `runtime.go` picks
+from Settings > Agents > Runtime (`agent.runtime`). `auto` takes `bun` on PATH when it is
+at least `bunMin`, else ATC's own Bun (`bunVersion`), else `node` 18 or later on PATH; `bun`
+skips the Node fallback, `node` uses only Node, and anything else is a path. ATC's own Bun
+is downloaded on the first chat that needs it into `<config>/runtime/bun-<version>/`: the
+zip is checked against the SHA-256 pinned in `runtime.go`, only `bun.exe` is unpacked, and
+older versions are deleted. The baseline build is used on CPUs without AVX2. Progress
+reaches the chat as `runtime://progress`. `bun scripts/pin-bun.mjs <version>` prints the
+constants for a new Bun. The sidecar is `ATC_SIDECAR` when set (the dev host points it at
+`sidecar/agent.ts`, which Bun runs directly), else the bundle `bun run build` puts in
 `dist/sidecar/agent.mjs`, embedded with `dist/` and written to `<config>/sidecar/`.
 `AgentOpen` resolves the CLI from settings (npm's `claude.cmd` and `codex.cmd` become the
 scripts beside them, so no shell parses the arguments), passes the `args` and, for chats, `chatArgs` settings, and gives Codex `CODEX_HOME`.
@@ -369,8 +377,8 @@ Things that cost time once. Add to this list.
   arrive.
 - Codex's first shell command can take half a minute when `pwsh` loads a heavy profile.
   The tool line shows it running; nothing is stuck.
-- The first `npm run play` after a lockfile change makes Vite re-optimize dependencies,
-  past the 10 s Wails waits for its URL. Run it again, or start `npx vite` once first.
+- The first `bun run play` after a lockfile change makes Vite re-optimize dependencies,
+  past the 10 s Wails waits for its URL. Run it again, or start `bunx vite` once first.
 
 **Transcripts**
 - `~/.claude/projects/<dir>` names are lossy: `D:\Coding\game_tracker_app` becomes
@@ -401,13 +409,13 @@ Things that cost time once. Add to this list.
 
 ## Development
 
-`npm run play` runs the dev app on synthetic histories in `playground/config`;
-`npm run desktop:dev` runs it on your real ones. Go edits rebuild the host, frontend
+`bun run play` runs the dev app on synthetic histories in `playground/config`;
+`bun run desktop:dev` runs it on your real ones. Go edits rebuild the host, frontend
 edits go through Vite. The launcher mirrors the Go sources into `wails-dev-work/` so Wails
 does not scan WebView profiles and build output; that folder is generated. If the dev app
 fails with "Timed out waiting for Vite", an earlier run left Vite on port 1420. Stop
-that process and start again. `npm run desktop:build` writes `build/bin/atc.exe`, and
-`npm run desktop:package` adds the MSI and NSIS installers.
+that process and start again. `bun run desktop:build` writes `build/bin/atc.exe`, and
+`bun run desktop:package` adds the MSI and NSIS installers.
 
 `scripts/shot.ps1` captures the window with `PrintWindow`, which works while it is covered
 and never grabs another app. A capture taken mid-scroll can show torn glyphs; take another
@@ -418,10 +426,10 @@ Import the manager module the app already loaded (its URL ends in `manager.ts?t=
 read terminal text with `screenText`; WebGL canvases hide it from the DOM. Reloading that
 page breaks its terminals, so start a new headless Edge instead.
 
-`npm test` runs Vitest and the Go tests, including native ConPTY tests; on a fresh
-checkout run `npm run build` first, since `main.go` embeds `dist/`. `npm run test:e2e`
+`bun run test` runs Vitest and the Go tests, including native ConPTY tests; on a fresh
+checkout run `bun run build` first, since `main.go` embeds `dist/`. `bun run test:e2e`
 builds a test binary in `build/e2e` and drives a real WebView2 window over WebDriver with
 throwaway fixtures. It needs a desktop, and two of its tests (clipboard, Save dialog) take
-focus. It saves screenshots and memory samples in `benchmarks/`. CI runs `npm test` and
-`npm run lint` on pull requests from `develop` to `main` and on pushes to `main`; other
+focus. It saves screenshots and memory samples in `benchmarks/`. CI runs `bun run test` and
+`bun run lint` on pull requests from `develop` to `main` and on pushes to `main`; other
 branches skip it. Releases build from `v*` tags, then merge the tagged commit into `develop`.
