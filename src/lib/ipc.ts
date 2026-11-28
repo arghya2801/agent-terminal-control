@@ -1,6 +1,6 @@
 /**
  * Typed wrappers over the Go command surface. The calls are the bindings Wails generates
- * from App's methods (`npm run bindings`), so a renamed command or argument fails the check.
+ * from App's methods (`bun run bindings`), so a renamed command or argument fails the check.
  */
 
 import * as App from '../../wailsjs/go/main/App';
@@ -113,6 +113,9 @@ export function usageContext(): Promise<Record<string, { used: number; window: n
 export function modelInputPrices(models: string[]): Promise<Record<string, number>> { return App.ModelInputPrices(models); }
 
 /** Theme files in the config directory's `themes/` folder, unvalidated. */
+/** The program running the agent sidecar, or '' before the first chat. */
+export function agentRuntimeInUse(): Promise<string> { return App.AgentRuntimeInUse(); }
+
 export function listThemes(): Promise<{ stem: string; palette: unknown }[]> { return App.ListThemes(); }
 /** Saves a theme as themes/<name>.json and returns the file's stem. */
 export function saveTheme(name: string, theme: Record<string, unknown>): Promise<string> { return App.SaveTheme(name, theme); }

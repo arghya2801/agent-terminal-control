@@ -20,26 +20,30 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v7
+      # Same Bun as runtime.go pins for agent chats.
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 24
-          cache: npm
+          bun-version: 1.4.5
+      - uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
 
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
 
-      - run: npm ci
+      - run: bun install --frozen-lockfile
       # main.go embeds dist/, so the frontend must exist before Go compiles.
-      - run: npm run build
-      - run: npm run test:ts
+      - run: bun run build
+      - run: bun run test:ts
       - run: go test -race ./...
-      - run: npm run lint
+      - run: bun run lint
       - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
-      - run: npm run desktop:build
+      - run: bun run desktop:build
       # The committed bindings must match App's methods.
-      - run: npm run bindings && git diff --exit-code wailsjs/go
+      - run: bun run bindings && git diff --exit-code wailsjs/go
 
-# End-to-end tests (npm run test:e2e, #97) drive native WebView2 windows with real input,
+# End-to-end tests (bun run test:e2e, #97) drive native WebView2 windows with real input,
 # which needs an interactive Windows desktop, so they run locally only.

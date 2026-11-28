@@ -1,4 +1,4 @@
-// Runs under `npm run test:e2e` (see run.mjs), against the fixture playground.
+// Runs under `bun run test:e2e` (see run.mjs), against the fixture playground.
 import { after, afterEach, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Key, remote } from 'webdriverio';

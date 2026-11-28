@@ -26,10 +26,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v7
+      # Same Bun as runtime.go pins for agent chats.
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 24
-          cache: npm
+          bun-version: 1.4.5
+      - uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
 
       - uses: actions/setup-go@v6
         with:
@@ -43,13 +47,13 @@ jobs:
         shell: bash
         run: |
           tag="${GITHUB_REF_NAME#v}"
-          pkg=$(node -p "require('./package.json').version")
-          exe=$(node -p "require('./wails.json').info.productVersion")
+          pkg=$(bun -p "require('./package.json').version")
+          exe=$(bun -p "require('./wails.json').info.productVersion")
           [ "$tag" = "$pkg" ] && [ "$tag" = "$exe" ] || { echo "tag $tag, package.json $pkg, wails.json $exe"; exit 1; }
 
-      - run: npm ci
+      - run: bun install --frozen-lockfile
       # main.go embeds dist/, so the frontend must exist before Go compiles.
-      - run: npm run build
+      - run: bun run build
 
       # Compiling the Wails CLI took about 20 s a release; it only changes with WAILS_VERSION.
       - name: Cache the Wails CLI
@@ -61,7 +65,7 @@ jobs:
       - if: steps.wails.outputs.cache-hit != 'true'
         run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
       - run: choco install nsis wixtoolset -y --no-progress
-      - run: npm run desktop:package
+      - run: bun run desktop:package
 
       # atc.exe is the portable build users expect alongside the installers.
       - uses: actions/upload-artifact@v7

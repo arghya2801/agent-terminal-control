@@ -15,7 +15,8 @@
   import { providerName } from '../lib/agents';
   import { cacheTtl, formatTokens, switchNote } from '../lib/costs';
   import { modelInputPrices } from '../lib/ipc';
-  import { accountLabel, accountState, appState, saveSettings } from '../lib/stores.svelte';
+  import { accountLabel, accountState, appState, runtimeDownload, saveSettings } from '../lib/stores.svelte';
+  const mb = (n: number) => Math.round(n / 1e6);
   import type { Answer, BackgroundTask, ChatItem, Model } from '../../sidecar/protocol';
   import type { AgentProvider, TabKey } from '../types';
 
@@ -369,7 +370,14 @@
           <p>Type <kbd>/</kbd> for {provider === 'codex' ? 'commands, ' : 'commands and skills, '}{#if provider === 'codex'}<kbd>$</kbd> for skills, {/if}<kbd>@</kbd> for files. <kbd>Enter</kbd> sends, <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line. <kbd>Alt</kbd>+<kbd>↑</kbd> and <kbd>↓</kbd> jump between your messages.{#if (s?.modes.length ?? 0) > 1} <kbd>Shift</kbd>+<kbd>Tab</kbd> changes the permission mode.{/if}</p>
         </div>
       {:else if !s?.ready && !s?.dormant && !s?.exited && !turns.length}
-        <div class="empty"><p class="lead">Starting {name}</p></div>
+        <div class="empty">
+          <p class="lead">Starting {name}</p>
+          {#if runtimeDownload.received < runtimeDownload.total}
+            <p>Downloading the agent runtime, {mb(runtimeDownload.received)} of {mb(runtimeDownload.total)} MB</p>
+          {:else if runtimeDownload.total}
+            <p>Unpacking the agent runtime</p>
+          {/if}
+        </div>
       {/if}
 
       {#each turns as turn, i (i)}

@@ -1,5 +1,5 @@
 // A writable copy of the fixtures, with settings pointing ATC at it. Shared by
-// `npm run play` and the end-to-end tests, so both see the same projects and sessions.
+// `bun run play` and the end-to-end tests, so both see the same projects and sessions.
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';

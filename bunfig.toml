@@ -1,0 +1,3 @@
+# Scripts and package bins (Vite, Vitest, svelte-check, tsc) run on Bun even where Node is installed.
+[run]
+bun = true

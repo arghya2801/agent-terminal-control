@@ -11,7 +11,7 @@ function launchOptions(id: string, o: Launch) {
   return {
     cwd: o.cwd,
     pathToClaudeCodeExecutable: o.exe,
-    executable: o.exe.endsWith('.js') ? ('node' as const) : undefined,
+    executable: o.exe.endsWith('.js') ? (process.versions.bun ? ('bun' as const) : ('node' as const)) : undefined,
     settingSources: ['user' as const, 'project' as const, 'local' as const],
     extraArgs: extraArgs(o.args),
     // The host sets CLAUDE_CODE_ENTRYPOINT=atc unless Settings turns it off; without it the

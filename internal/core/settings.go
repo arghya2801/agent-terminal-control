@@ -53,7 +53,7 @@ func Defaults() Object {
 			"fontFamily": "", "fontSize": 13, "corners": "default", "hide": []any{}, "tabClose": "hover", "sidebarSide": "left", "tabBarPosition": "top",
 			"chatWidth": 680, "chatLineHeight": 1.6, "chatSpacing": "comfortable", "userBubble": "right", "userBubbleWidth": 85,
 			"codeWrap": false, "codeFontFamily": "", "toolsOpen": false, "thinkingOpen": false, "projectThemes": Object{}, "profiles": Object{}},
-		"agent":  Object{"alwaysAllowProject": true, "showSubagents": true},
+		"agent":  Object{"alwaysAllowProject": true, "showSubagents": true, "runtime": "auto"},
 		"prices": Object{"litellm": true},
 		"terminal": Object{"fontFamily": "\"FiraCode Nerd Font Mono\", \"Cascadia Mono\", Consolas, monospace", "fontSize": 13, "scrollback": 10000,
 			"cursorStyle": "bar", "cursorBlink": true, "lineHeight": 1.0, "shell": "auto", "loadProfile": true, "gpuTabs": 4},

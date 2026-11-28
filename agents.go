@@ -190,13 +190,20 @@ func agentExe(provider, command string) (string, error) {
 
 func (s *sidecar) start(a *App) error {
 	s.mu.Lock()
+	running := s.cmd != nil
+	s.mu.Unlock()
+	if running {
+		return nil
+	}
+	// Outside the lock: the first chat may download Bun, and other agent calls must not wait on it.
+	runtime, e := a.agentRuntime()
+	if e != nil {
+		return e
+	}
+	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cmd != nil {
 		return nil
-	}
-	node, e := exec.LookPath("node")
-	if e != nil {
-		return fmt.Errorf("Agent sessions need Node.js 18 or later. Install it from https://nodejs.org, or open the session in a terminal")
 	}
 	script := os.Getenv("ATC_SIDECAR")
 	if script == "" {
@@ -204,7 +211,7 @@ func (s *sidecar) start(a *App) error {
 			return e
 		}
 	}
-	cmd := exec.Command(node, script)
+	cmd := exec.Command(runtime, script)
 	cmd.Env = pty.ChildEnv()
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
 	// The last run's log says why it stopped; the next chat or Resume starts a new one.
@@ -346,7 +353,7 @@ func (s *sidecar) releaseClosing() {
 func extractSidecar(config string) (string, error) {
 	b, e := fs.ReadFile(assets, "dist/sidecar/agent.mjs")
 	if e != nil {
-		return "", fmt.Errorf("this build has no agent sidecar; build it with npm run build")
+		return "", fmt.Errorf("this build has no agent sidecar; build it with bun run build")
 	}
 	path := filepath.Join(config, "sidecar", "agent.mjs")
 	if old, e := os.ReadFile(path); e == nil && bytes.Equal(old, b) {

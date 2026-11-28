@@ -236,7 +236,8 @@ export interface Settings {
     /** Saved appearance settings by name. */
     profiles: Record<string, Partial<Settings['ui']>>;
   };
-  agent: { alwaysAllowProject: boolean; showSubagents: boolean };
+  /** `runtime`: what runs the agent sidecar: auto (Bun on PATH, else ATC's own Bun, else Node), bun, node, or a path. */
+  agent: { alwaysAllowProject: boolean; showSubagents: boolean; runtime: string };
   terminal: TerminalSettings;
   /** `extraFiles`: more files for Settings to edit, by absolute path. */
   config: { extraFiles: string[] };

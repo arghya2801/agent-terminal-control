@@ -34,6 +34,10 @@ export function AgentOpen(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
   return window['go']['main']['App']['AgentOpen'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
 }
 
+export function AgentRuntimeInUse() {
+  return window['go']['main']['App']['AgentRuntimeInUse']();
+}
+
 export function AgentSend(arg1, arg2) {
   return window['go']['main']['App']['AgentSend'](arg1, arg2);
 }

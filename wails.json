@@ -3,9 +3,9 @@
   "name": "ATC",
   "outputfilename": "atc",
   "frontend:dir": ".",
-  "frontend:install": "npm ci",
-  "frontend:build": "npm run build",
-  "frontend:dev:watcher": "npm run dev",
+  "frontend:install": "bun install --frozen-lockfile",
+  "frontend:build": "bun run build",
+  "frontend:dev:watcher": "bun run dev",
   "frontend:dev:serverUrl": "auto",
   "info": {
     "companyName": "atc",

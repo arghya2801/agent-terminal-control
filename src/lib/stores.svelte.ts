@@ -38,6 +38,10 @@ const EVENT_INDEX_UPDATED = 'index://updated';
 const EVENT_SETTINGS_UPDATED = 'settings://updated';
 const EVENT_NOTES_UPDATED = 'notes://updated';
 const EVENT_USER_CSS_UPDATED = 'usercss://updated';
+const EVENT_RUNTIME_PROGRESS = 'runtime://progress';
+
+/** ATC downloading its own Bun for the first agent chat. */
+export const runtimeDownload = $state({ received: 0, total: 0 });
 /** Holding a zoom key should not write settings.json on every step. */
 const SETTINGS_SAVE_DEBOUNCE_MS = 400;
 
@@ -238,6 +242,7 @@ export async function initStores() {
 
   // notes.md edited outside the app.
   await listen<string>(EVENT_NOTES_UPDATED, (t) => (appState.notes = t));
+  await listen<{ received: number; total: number }>(EVENT_RUNTIME_PROGRESS, (p) => Object.assign(runtimeDownload, p));
   await listen<string>(EVENT_USER_CSS_UPDATED, applyUserCss);
 }
 

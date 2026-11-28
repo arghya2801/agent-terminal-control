@@ -1,5 +1,5 @@
 // Drive the dev app from the command line, for agents and scripts: no window focus, no OS input.
-// `node scripts/drive.mjs help` lists the commands. ARCHITECTURE.md, Development, explains the setup.
+// `bun scripts/drive.mjs help` lists the commands. ARCHITECTURE.md, Development, explains the setup.
 import { spawn, execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -189,7 +189,7 @@ async function stop() {
 }
 
 async function withPage(fn) {
-  if (!readState()) throw new Error('not started: run `node scripts/drive.mjs start` first');
+  if (!readState()) throw new Error('not started: run `bun scripts/drive.mjs start` first');
   const c = await cdp();
   try { return await fn(c); } finally { c.close(); }
 }
@@ -214,7 +214,7 @@ const commands = {
     writeFileSync(file, Buffer.from(data, 'base64'));
     out({ ok: true, file });
   }),
-  help: () => out(`node scripts/drive.mjs <command>
+  help: () => out(`bun scripts/drive.mjs <command>
   start [--real]   Start the dev app (fixtures, or --real for ~/.claude with a throwaway config) and a headless page on it
   eval <js>        Run JS in the page and print the result. eval -f <file> runs a file. Helpers on window.atc:
                    mod(path), settings(), set(patch), until(fn, ms), sleep(ms), css(name, el), $(sel), $$(sel), log
