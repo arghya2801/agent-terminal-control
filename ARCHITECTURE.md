@@ -411,12 +411,30 @@ that process and start again. `npm run desktop:build` writes `build/bin/atc.exe`
 
 `scripts/shot.ps1` captures the window with `PrintWindow`, which works while it is covered
 and never grabs another app. A capture taken mid-scroll can show torn glyphs; take another
-before believing it. `scripts/sendkeys.ps1` sends real keys but takes focus. To drive the
-UI without taking focus, open the dev server's page (`http://localhost:34115`) in headless
-Edge with a remote-debugging port, and use the DevTools protocol to click, type and read.
-Import the manager module the app already loaded (its URL ends in `manager.ts?t=…`) to
-read terminal text with `screenText`; WebGL canvases hide it from the DOM. Reloading that
-page breaks its terminals, so start a new headless Edge instead.
+before believing it. `scripts/sendkeys.ps1` sends real keys but takes focus.
+
+`scripts/drive.mjs` drives the UI without focus or OS input, for agents and scripts:
+
+```
+node scripts/drive.mjs start            # fixtures in a throwaway config; --real for ~/.claude
+node scripts/drive.mjs eval "atc.set({ ui: { corners: 'round' } })"
+node scripts/drive.mjs eval "(await atc.mod('terminal/manager.ts')).screenText(key)"
+node scripts/drive.mjs shot out.png
+node scripts/drive.mjs logs             # console errors, exceptions, rejections since load
+node scripts/drive.mjs stop
+```
+
+`start` runs Vite and builds `build/bin/atc-drive.exe` with the `dev` tag, which is what
+`wails dev` does without its full rebuild; Go's build cache makes an unchanged tree
+build in about a second, so a start takes about 15 s. The exe runs with
+`ATC_HIDE_WINDOW=1`, so its window never shows, and serves the page at
+`http://localhost:34115`, proxied to Vite. A headless Edge opens that page and talks to
+the same Go backend. Edge opens `about:blank` first, so a prelude runs before the app's
+scripts: it records errors and adds `window.atc` helpers. `atc.mod(path)` imports the
+module instance the app already loaded rather than a second copy. If Vite reloads the
+page while it finds dependencies, `start` replaces the Edge page, because a reload cuts
+off its terminals. State lives in `%TEMP%\atc-drive`; `stop` kills only what `start`
+started, and anything on ports 1420 and 34115 that runs from this checkout.
 
 `npm test` runs Vitest and the Go tests, including native ConPTY tests; on a fresh
 checkout run `npm run build` first, since `main.go` embeds `dist/`. `npm run test:e2e`
