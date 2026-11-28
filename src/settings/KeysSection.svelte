@@ -68,7 +68,7 @@
   }
   .name {
     color: var(--fg);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   .row {
     display: flex;
@@ -83,24 +83,24 @@
   kbd {
     padding: 1px 6px;
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     background: var(--bg-chrome);
     color: var(--fg-bright);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   .rec {
     color: var(--accent);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   .warn {
     color: var(--warn);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   .hint {
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
 </style>

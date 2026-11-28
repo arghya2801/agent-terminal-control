@@ -89,6 +89,9 @@
 {/if}
 
 <style>
+  :global([data-hide-task-box]) .task {
+    display: none;
+  }
   .task {
     padding: 0 8px 8px;
     border-bottom: 1px solid var(--border);
@@ -97,7 +100,7 @@
     display: flex;
     align-items: center;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     background: var(--bg);
   }
   .field:focus-within {
@@ -111,7 +114,7 @@
     place-items: center;
     border: none;
     border-right: 1px solid var(--border);
-    border-radius: 5px 0 0 5px;
+    border-radius: calc(5px * var(--radius-scale, 1)) 0 0 calc(5px * var(--radius-scale, 1));
     background: transparent;
     cursor: pointer;
   }
@@ -126,7 +129,7 @@
     background: transparent;
     color: var(--fg-bright);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     outline: none;
   }
   .where {
@@ -139,7 +142,7 @@
     background: transparent;
     color: var(--fg-faint);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
     cursor: pointer;
   }
   .where:hover,

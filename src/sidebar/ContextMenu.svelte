@@ -140,7 +140,7 @@
     overflow-y: auto;
     padding: 4px;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: calc(8px * var(--radius-scale, 1));
     background: var(--bg-chrome);
     box-shadow: var(--shadow-pop);
     animation: atc-pop var(--enter) var(--ease-out);
@@ -158,11 +158,11 @@
     width: 100%;
     padding: 6px 10px;
     border: none;
-    border-radius: 5px;
+    border-radius: calc(5px * var(--radius-scale, 1));
     background: transparent;
     color: var(--fg);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
     text-align: left;
     cursor: pointer;
     white-space: nowrap;
@@ -188,7 +188,7 @@
     margin-left: 16px;
     color: var(--fg-faint);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   .item:hover:not(.disabled),
   .item:focus-visible {
@@ -219,6 +219,6 @@
   .heading {
     padding: 4px 10px 2px 32px;
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
 </style>

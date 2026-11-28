@@ -85,7 +85,7 @@
 
 <style>
   .md {
-    line-height: 1.55;
+    line-height: calc(var(--chat-line, 1.6) - 0.05);
     overflow-wrap: anywhere;
   }
   .md :global(:is(p, ul, ol, pre, blockquote, .table, h3, h4, h5)) {
@@ -124,16 +124,20 @@
     font-family: var(--mono);
     font-size: 0.9em;
     background: var(--bg-surface);
-    border-radius: 5px;
+    border-radius: calc(5px * var(--radius-scale, 1));
     padding: 0.1em 0.35em;
   }
   .md :global(pre) {
     background: var(--bg-chrome);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: calc(10px * var(--radius-scale, 1));
     padding: 12px 14px;
     overflow-x: auto;
     line-height: 1.5;
+  }
+  :global([data-code-wrap]) .md :global(pre) {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
   .md :global(pre code) {
     background: none;
@@ -156,7 +160,7 @@
     color: var(--fg-dim);
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     padding: 1px 8px;
     cursor: pointer;
     opacity: 0;
@@ -183,7 +187,7 @@
     width: fit-content;
     max-width: 100%;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: calc(10px * var(--radius-scale, 1));
   }
   .md :global(table) {
     border-collapse: collapse;

@@ -37,6 +37,17 @@ export interface Palette extends Record<AnsiName, string> {
   foreground: string;
   cursor: string;
   selection: string;
+  /** CSS variables set after the mixed ones, e.g. `{"--bg-surface": "#1e1e2e"}`. */
+  ui?: Record<string, string>;
+}
+
+/** A theme's `ui` block: `--name` keys with values that cannot break out of a declaration. */
+export function parseUi(raw: unknown): Record<string, string> | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const ui = Object.fromEntries(
+    Object.entries(raw).filter(([k, v]) => /^--[\w-]+$/.test(k) && typeof v === 'string' && !/[;{}<>]/.test(v)),
+  ) as Record<string, string>;
+  return Object.keys(ui).length ? ui : undefined;
 }
 
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
@@ -83,6 +94,7 @@ export function parsePalette(raw: unknown, fallbackName = ''): Palette | null {
     foreground,
     cursor: pick('cursor', 'cursorColor') ?? foreground,
     selection: pick('selection', 'selectionBackground') ?? colours.brightBlack,
+    ...(parseUi(o.ui) ? { ui: parseUi(o.ui) } : {}),
   };
 }
 
@@ -120,6 +132,7 @@ export function cssVariables(p: Palette): Record<string, string> {
     '--info': p.brightMagenta,
     '--selection': p.selection,
     '--on-selection': onSelection(p),
+    ...p.ui,
   };
 }
 
@@ -163,7 +176,11 @@ function rgb(hex: string): [number, number, number] {
 }
 
 /** Write the palette onto the document, replacing whatever theme was applied before. */
+let extra: string[] = [];
 export function applyPalette(p: Palette, root: HTMLElement) {
+  // A previous theme's `ui` block may have set variables this one does not.
+  for (const name of extra) root.style.removeProperty(name);
+  extra = Object.keys(p.ui ?? {});
   for (const [name, value] of Object.entries(cssVariables(p))) {
     root.style.setProperty(name, value);
   }

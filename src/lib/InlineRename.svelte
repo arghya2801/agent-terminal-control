@@ -46,11 +46,11 @@
     flex: 1;
     padding: 1px 4px;
     border: 1px solid var(--accent);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--radius-scale, 1));
     outline: none;
     background: var(--bg);
     color: var(--fg-bright);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
 </style>

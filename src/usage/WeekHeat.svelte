@@ -55,6 +55,6 @@
   }
   .heat-hour,
   .heat-day {
-    font-size: 10px;
+    font-size: calc(10px * var(--ui-scale, 1));
   }
 </style>

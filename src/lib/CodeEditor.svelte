@@ -24,7 +24,7 @@
     resize: vertical;
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--radius-scale, 1));
     background: var(--bg);
   }
   .editor pre,

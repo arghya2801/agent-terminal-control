@@ -90,6 +90,8 @@ export function RenameSession(arg1:string,arg2:string):Promise<void>;
 
 export function SaveTextFile(arg1:string,arg2:Array<main.FileFilter>,arg3:string):Promise<any>;
 
+export function SaveTheme(arg1:string,arg2:Record<string, any>):Promise<string>;
+
 export function ScratchDir():Promise<string>;
 
 export function SearchTranscripts(arg1:string):Promise<Array<main.Hit>>;
@@ -109,6 +111,8 @@ export function TakeOpen():Promise<string>;
 export function UsageContext():Promise<Record<string, any>>;
 
 export function UsageCosts():Promise<Array<any>>;
+
+export function UserCSS():Promise<string>;
 
 export function Version():Promise<string>;
 

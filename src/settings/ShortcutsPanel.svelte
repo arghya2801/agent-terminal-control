@@ -101,7 +101,7 @@
   th {
     padding: 5px 0;
     color: var(--fg);
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale, 1));
     font-weight: 400;
     text-align: left;
   }
@@ -114,15 +114,15 @@
     padding: 2px 7px;
     border: 1px solid var(--border);
     border-bottom-width: 2px;
-    border-radius: 5px;
+    border-radius: calc(5px * var(--radius-scale, 1));
     background: var(--bg-surface);
     color: var(--fg);
     font-family: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   .or {
     margin: 0 6px;
     color: var(--fg-faint);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
 </style>

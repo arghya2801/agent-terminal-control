@@ -139,7 +139,7 @@
     grid-template-columns: auto minmax(80px, 160px) 90px minmax(0, 1fr) auto;
     align-items: center;
     gap: 10px;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale, 1));
   }
   label.row {
     grid-template-columns: auto minmax(80px, 160px) minmax(0, 1fr);
@@ -171,11 +171,11 @@
   }
   .hint {
     margin: 0;
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale, 1));
   }
   code {
     padding: 0 3px;
-    border-radius: 3px;
+    border-radius: calc(3px * var(--radius-scale, 1));
     background: var(--bg-chrome);
   }
 </style>
