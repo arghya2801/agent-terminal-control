@@ -88,7 +88,7 @@ not remove them; delete that folder by hand if you want them gone.
 ### From source
 
 ```
-go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
 bun install
 bun run desktop:dev      # Go reload + Vite HMR
 bun run desktop:build    # portable executable

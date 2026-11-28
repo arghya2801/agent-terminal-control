@@ -35,8 +35,7 @@ const PRELUDE = `(() => {
   if (window.atc) return;
   performance.setResourceTimingBufferSize(100000);
   const log = [];
-  // Wails' ipc.js looks for its own window, which headless Edge doesn't have; harmless.
-  const keep = (kind, text) => { if (/reading 'nodes'/.test(text) && /wails\\/ipc\\.js/.test(text)) return; log.push({ kind, text: String(text), at: Date.now() }); if (log.length > 500) log.shift(); };
+  const keep = (kind, text) => { log.push({ kind, text: String(text), at: Date.now() }); if (log.length > 500) log.shift(); };
   for (const kind of ['error', 'warn']) {
     const orig = console[kind].bind(console);
     console[kind] = (...a) => { keep(kind, a.map((x) => x instanceof Error ? x.stack : typeof x === 'object' ? JSON.stringify(x) : x).join(' ')); orig(...a); };
@@ -130,7 +129,7 @@ async function start(args) {
   const log = join(config, 'host.log');
   const host = spawn(process.execPath, [join(root, 'scripts', 'drive.mjs'), '__host'], {
     cwd: root, detached: true, windowsHide: true, stdio: ['ignore', openSync(log, 'a'), openSync(log, 'a')],
-    env: { ...process.env, ...env, ATC_HIDE_WINDOW: '1' },
+    env: { ...process.env, ...env },
   });
   host.unref();
   const state = { root, config, real, host: host.pid, log, url: `http://localhost:${APP}/`, edgePort: EDGE };
@@ -148,28 +147,28 @@ async function start(args) {
   }
 }
 
-// What `wails dev` does, minus its rebuild on every start: Go's build cache makes an
-// unchanged tree build in under a second. The `dev` tag makes the exe serve :34115 and
-// proxy the page to Vite.
+// Wails v3's `server` build: no window, the page and its bindings over HTTP on :34115, proxied
+// to Vite. A hidden desktop window would not do: it renders no frames, so requestAnimationFrame
+// never fires. Go's build cache makes an unchanged tree build in about a second.
 async function host() {
   const vite = spawn(process.execPath, [join(root, 'node_modules', 'vite', 'bin', 'vite.js')], { cwd: root, stdio: 'inherit', windowsHide: true });
   process.on('exit', () => vite.kill());
   const bin = join(root, 'build', 'bin');
-  const exe = join(bin, 'atc-drive.exe');
+  const exe = join(bin, 'atc-server.exe');
   // main.go embeds dist/; the page itself comes from Vite.
   if (!existsSync(join(root, 'dist', 'index.html'))) {
     mkdirSync(join(root, 'dist'), { recursive: true });
     writeFileSync(join(root, 'dist', 'index.html'), '<!doctype html><title>ATC</title>');
   }
   const t = Date.now();
-  execFileSync('go', ['build', '-tags', 'dev,wv2runtime.download', '-o', exe, '.'], { cwd: root, stdio: 'inherit', windowsHide: true });
+  execFileSync('go', ['build', '-tags', 'server', '-o', exe, '.'], { cwd: root, stdio: 'inherit', windowsHide: true });
   console.log(`go build: ${Date.now() - t} ms`);
   const { ensureConpty } = await import(pathToFileURL(join(root, 'scripts', 'conpty.mjs')).href);
   await ensureConpty(bin);
   await until('Vite', () => listening(VITE), 120000);
   const app = spawn(exe, [], {
     cwd: root, stdio: 'inherit', windowsHide: true,
-    env: { ...process.env, devserver: `localhost:${APP}`, frontenddevserverurl: `http://localhost:${VITE}`, ATC_SIDECAR: join(root, 'sidecar', 'agent.ts') },
+    env: { ...process.env, WAILS_SERVER_PORT: String(APP), FRONTEND_DEVSERVER_URL: `http://127.0.0.1:${VITE}`, ATC_SIDECAR: join(root, 'sidecar', 'agent.ts') },
   });
   app.on('exit', (code) => process.exit(code ?? 1));
 }
@@ -191,6 +190,8 @@ async function stop() {
 async function withPage(fn) {
   if (!readState()) throw new Error('not started: run `bun scripts/drive.mjs start` first');
   const c = await cdp();
+  // A reload after start (Vite finishing its dependency scan) drops the prelude; put it back.
+  if (!(await c.evaluate('!!window.atc'))) await c.evaluate(PRELUDE);
   try { return await fn(c); } finally { c.close(); }
 }
 

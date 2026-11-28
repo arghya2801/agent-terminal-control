@@ -40,10 +40,10 @@ jobs:
       - run: bun run test:ts
       - run: go test -race ./...
       - run: bun run lint
-      - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.1
+      - run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
       - run: bun run desktop:build
       # The committed bindings must match App's methods.
-      - run: bun run bindings && git diff --exit-code wailsjs/go
+      - run: bun run bindings && git diff --exit-code src/bindings
 
 # End-to-end tests (bun run test:e2e, #97) drive native WebView2 windows with real input,
 # which needs an interactive Windows desktop, so they run locally only.
