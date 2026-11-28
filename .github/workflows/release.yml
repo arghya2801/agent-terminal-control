@@ -18,7 +18,7 @@ permissions:
   actions: read
 
 env:
-  WAILS_VERSION: v2.16.0
+  WAILS_VERSION: v2.17.1
 
 jobs:
   windows:
@@ -35,7 +35,7 @@ jobs:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
